@@ -27,17 +27,15 @@ if ($Version -notmatch '^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$
 if (-not $Version.StartsWith('v')) { $Version = 'v' + $Version }
 $commit = Read-Git -Arguments @('rev-parse', '--short=12', 'HEAD')
 $date = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
-$name = "OpenSubRosa24-server-$Version"
+$name = "SubVulpes-server-$Version"
 $output = Join-Path $repo 'build\package'
 $package = Join-Path $output $name
 $zip = Join-Path $output "$name.zip"
 $checksum = "$zip.sha256"
 $sources = [ordered]@{
-    'opensubrosa24_server.exe' = 'build\hook\opensubrosa24_server.exe'
-    'opensubrosa24_server_record.exe' = 'build\hook\opensubrosa24_server_record.exe'
-    'opensubrosa24_launcher.exe' = 'build\launcher\opensubrosa24_launcher.exe'
+    'subvulpes_server.exe' = 'build\server\subvulpes_server.exe'
+    'subvulpes_launcher.exe' = 'build\launcher\subvulpes_launcher.exe'
     'LEIA-ME.txt' = 'tools\release\LEIA-ME.txt'
-    'record_focus.txt' = 'instrumentation\recording\record_focus.txt'
     'config.txt' = 'tools\release\default-config.ini'
     'readme.txt' = 'tools\release\newspaper.txt'
 }
@@ -102,7 +100,7 @@ if (@(Get-ChildItem -LiteralPath $package -Force -Recurse -File).Count -ne $allo
 }
 
 # Reject game binaries even if someone renames them as a package executable.
-$gameHashes = @(Get-Content -LiteralPath (Join-Path $repo 'original\MANIFEST.sha256') |
+$gameHashes = @(Get-Content -LiteralPath (Join-Path $repo 'tools\ci\game_binary_hashes.txt') |
     ForEach-Object { if ($_ -match '^([0-9a-fA-F]{64})\s') { $Matches[1] } })
 foreach ($file in Get-ChildItem -LiteralPath $package -File) {
     if ((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -in $gameHashes) {

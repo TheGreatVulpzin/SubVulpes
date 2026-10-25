@@ -14,7 +14,7 @@ if ($Version -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$'
     throw 'Use a version tag such as v0.1.0 or v0.1.0-rc1.'
 }
 $line = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Checksum)).Trim()
-if ($line -cnotmatch "^([0-9a-fA-F]{64})  OpenSubRosa24-server-$([regex]::Escape($Version))\.zip$") {
+if ($line -cnotmatch "^([0-9a-fA-F]{64})  SubVulpes-server-$([regex]::Escape($Version))\.zip$") {
     throw 'The package checksum does not match the version tag.'
 }
 $hash = $Matches[1].ToLowerInvariant()

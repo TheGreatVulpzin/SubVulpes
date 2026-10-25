@@ -1,46 +1,54 @@
-"""Check that the repository holds no proprietary or private files.
+"""Reject private files, game assets, binaries, and verification tooling.
 
-Rules (see CLAUDE.md):
-- original/ holds only README.md and MANIFEST.sha256. The game files are proprietary.
-- No config.txt: the server config files have passwords.
-- No build/ and no Ghidra project: they are local and large, and build/recordings has
-  player names and chat.
-- No game data or executables, except the plugin DLLs of the friend's server manager.
-
-Usage: python -I tools/ci/check_repo.py    (exit code 1 when a rule fails)
+Run with python -I tools/ci/check_repo.py from the repository root.
 """
 import re
 import subprocess
-import sys
+from pathlib import Path
 
-ALLOWED_ORIGINAL = {'original/README.md', 'original/MANIFEST.sha256'}
-BINARY = re.compile(r'\.(exe|dll|so|dylib|bin|srk|sbl|sbb|sbc|csm|pak|ogg|wav|gbf|gpr)$', re.I)
-ALLOWED_BINARY = re.compile(r'^third_party/server-manager/plugins/native/[^/]+\.dll$')
-LEGACY_INSTRUMENTATION = ('hook/', 'src/tests/', 'tools/ghidra/', 'tools/recording/')
+ROOT = Path(__file__).resolve().parents[2]
+FORBIDDEN = ('original/', 'build/', 'out/', 'data/', 'user/', 'logs/', 'backup/',
+             'third_party/', 'instrumentation/', 'hook/', 'ghidra-project/',
+             'tools/lift/', 'tools/ghidra/', 'tools/recording/')
+BINARY = re.compile(r'\.(exe|dll|so|dylib|bin|dmp|zip|7z|rar|srk|sbl|sbb|sbc|csm|pak|ogg|wav|gbf|gpr|wasm)$', re.I)
+PRIVATE_NAME = re.compile(r'^(config\.txt|launcher\.ini|\.env(?:\..*)?|id_rsa|id_ed25519|credentials|settings\.json)$', re.I)
+SECRET = re.compile(r'-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{40,}')
+PASSWORD = re.compile(r'(?im)^[ \t]*(?:serverpassword|password|passwd|token|secret|api_key)[ \t]*[=:][ \t]*(?!["\']?\s*$)\S+')
 
 
 def main():
-    files = subprocess.run(['git', 'ls-files'], capture_output=True, text=True, check=True).stdout.split('\n')
+    result = subprocess.run(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+                            cwd=ROOT, capture_output=True, check=True)
+    files = sorted(set(result.stdout.decode('utf-8').strip('\0').split('\0')) - {''})
     bad = []
-    for f in filter(None, files):
-        if f.startswith('original/') and f not in ALLOWED_ORIGINAL:
-            bad.append((f, 'proprietary game file in original/'))
-        elif f.split('/')[-1].lower() == 'config.txt':
-            bad.append((f, 'server config (passwords)'))
-        elif f.startswith(('build/', 'ghidra-project/')) or '.rep/' in f:
-            bad.append((f, 'local build or Ghidra project'))
-        elif (f.startswith(LEGACY_INSTRUMENTATION)
-              or (f.startswith('tools/lift/') and f != 'tools/lift/pipeline.sh')
-              or f in ('src/platform/plat_test.c', 'src/platform/plat_test.h',
-                       'src/standalone/record_shim.c')):
-            bad.append((f, 'verification source outside instrumentation/'))
-        elif BINARY.search(f) and not ALLOWED_BINARY.match(f):
-            bad.append((f, 'binary or game data'))
-    for f, why in bad:
-        print(f'{f}: {why}')
-    print(f'{len(files) - 1} files checked, {len(bad)} problem(s)')
-    sys.exit(1 if bad else 0)
+    for name in files:
+        lower = name.lower()
+        reason = None
+        if lower.startswith(FORBIDDEN) or '.rep/' in lower:
+            reason = 'private, local, or excluded directory'
+        elif lower.startswith('analysis/') and not lower.startswith('analysis/structs/'):
+            reason = 'only type metadata belongs in analysis/structs/'
+        elif PRIVATE_NAME.match(name.rsplit('/', 1)[-1]):
+            reason = 'private settings or credentials'
+        elif BINARY.search(name):
+            reason = 'binary or game data'
+        elif (ROOT / name).is_symlink():
+            reason = 'symbolic link'
+        elif (ROOT / name).is_file() and name != 'tools/ci/check_repo.py':
+            data = (ROOT / name).read_bytes()
+            if data.startswith((b'MZ', b'\x7fELF', b'PK\x03\x04')) or b'\0' in data:
+                reason = 'binary content'
+            else:
+                text = data.decode('utf-8-sig', errors='replace')
+                if SECRET.search(text) or PASSWORD.search(text):
+                    reason = 'possible private credential (value omitted)'
+        if reason:
+            bad.append((name, reason))
+    for name, reason in bad:
+        print(f'{name}: {reason}')
+    print(f'{len(files)} files checked, {len(bad)} problem(s)')
+    return bool(bad)
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

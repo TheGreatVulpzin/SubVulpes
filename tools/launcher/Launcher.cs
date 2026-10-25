@@ -779,7 +779,7 @@ namespace SubVulpes
             if (settingCaptures)
                 return;
             captures = new Captures {
-                Profile = profileBox.Checked, Timers = timersBox.Checked, Packets = packetsBox.Checked,
+                Profile = profileBox.Checked, Timers = timersBox.Checked, Packets = packetsBox.Checked, FreezeDump = freezeBox.Checked,
                 CrashDump = dumpFull.Checked ? "full" : dumpSmall.Checked ? "small" : "none"
             };
             var match = Presets.FirstOrDefault(p => p.Captures != null && p.Captures.Same(captures)) ?? Presets[Presets.Length - 1];

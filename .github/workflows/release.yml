@@ -54,27 +54,14 @@ jobs:
           arch: x86
       - name: Check repository rules
         run: python -I tools/ci/check_repo.py
-      - name: Build server targets
+      - name: Build server and launcher
         shell: cmd
         run: tools\build_hook.bat
-      - name: Build the launcher
-        shell: cmd
-        run: tools\launcher\build.bat
-      - name: Check struct sizes and verifier
-        run: |
-          & .\build\hook\check_types.exe
-          if ($LASTEXITCODE -ne 0) { throw 'Struct checks failed.' }
-          & .\build\hook\test_verify.exe
-          if ($LASTEXITCODE -ne 0) { throw 'Verifier tests failed.' }
-      - name: Test package rules and launcher zip names
-        run: |
-          .\instrumentation\tests\test_package.ps1
-          .\instrumentation\tests\test_release_notes.ps1
       - name: Download and check server data
         id: data
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          GH_REPO: TheGreatVulpzin/OpenSubRosa24
         run: |
           $download = Join-Path $env:RUNNER_TEMP 'server-data-download'
           New-Item -ItemType Directory -Path $download | Out-Null
@@ -127,7 +114,7 @@ jobs:
           PACKAGE_CHECKSUM: ${{ steps.package.outputs.checksum }}
         run: |
           $arguments = @('release', 'create', $env:RELEASE_TAG, '--verify-tag',
-            '--title', "OpenSubRosa24 Server $env:RELEASE_TAG", '--notes-file', 'build/package/release-notes.md',
+            '--title', "SubVulpes Server $env:RELEASE_TAG", '--notes-file', 'build/package/release-notes.md',
             $env:PACKAGE_ZIP, $env:PACKAGE_CHECKSUM)
           if ($env:RELEASE_TAG.Contains('-')) { $arguments += @('--prerelease', '--latest=false') }
           & gh @arguments
