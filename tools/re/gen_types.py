@@ -1,0 +1,939 @@
+"""Generate src/include/sr_types.h and src/include/sr_globals_024d.h.
+
+Inputs:
+  analysis/structs/names.csv     named fields (hand-reviewed, with evidence)
+  analysis/structs/mac/*.csv     accessed offsets (tools/re/struct_fields.py)
+  analysis/024d/globals.csv      addresses (RVA) of the globals in the 024d
+
+Unnamed fields become unk_XXXX. Gaps become pad_XXXX. The header uses
+pack(1) and a static_assert on every named field, so any offset error
+breaks the build.
+
+Usage: python -I tools/re/gen_types.py
+"""
+import csv
+import re
+from collections import defaultdict
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+# Record sizes (equal in the i386 Mach-O and in the 024d PE).
+STRUCTS = {
+    'Player': ('player', 0x2408),
+    'Human': ('human', 0x2b64),
+    'Item': ('item', 0x1ac),
+    'Object': ('object', 0x8230),
+    'Connection': ('connection', 0xf170),
+    'ItemType': ('itemtype', 0x198),
+    'ObjectType': ('objecttype', 0x828c),
+    'Bond': ('bond', 0xec),
+    'Event': ('event', 0x80),
+    'Bullet': ('bullet', 0x5c),
+    'Body': ('body', 0x40),
+    # Match state, a single struct (not an array). Fields: analysis/structs/names.csv, and
+    # analysis/structs/024d/game.csv (InferFields.java) for the rest.
+    'Game': ('game', 0x25d64),
+    # Regions with a known size and few or no known fields (Phase 4, batch 2). The size is
+    # the symbol size of the Linux 0.24c server when the region has no pointer (the i386
+    # Mach-O size has alignment padding), else the 32-bit size from the code.
+    'Particle': ('particle', 0xf0),  # createparticle memsets 0xf0 bytes
+    'Timer': ('timer', 0x58),
+    'AreaBlock': ('area_block', 0x84),
+    'Area': ('area', 0x100d6c),
+    'Option': ('option', 0x150),
+    'Server': ('server', 0x84),
+    'Stats': ('stats', 0x8),
+    'Config': ('config', 0x24),  # the client window settings that config.txt sets
+    'SysInfo': ('sysinfo', 0x418),
+    'SoundList': ('soundlist', 0x13c),
+    'BlockList': ('blocklist', 0x40354),
+    'City': ('city', 0xa0b99c),
+    'MaterialList': ('materiallist', 0x580),
+    'Intersect': ('intersect', 0x84),
+    'TimerList': ('timerlist', 0xa0),  # 0x54 in Linux 0.24c; the 024d profiler uses up to +0x94
+    'Speex': ('speex', 0x931000),
+    'BsdSocket': ('bsdsocket', 0x20070),
+    'Debug': ('debug', 0x523c8),
+    'FileList': ('filelist', 0x80020),
+    'Parser': ('parser', 0x10010c),
+    # Phase 4, batch 3: tools/re/map_regions.py candidates whose Linux 0.24c size fits the
+    # gap to the next known global (analysis/024d/manual_globals.csv has the evidence).
+    'CityObjectType': ('cityobjecttype', 0x241800),
+    'CityObject': ('cityobject', 0x15000),
+    'MasterServer': ('masterserver', 0x208),
+    'BuildBlockTypeRec': ('buildblocktype', 0x1a8),
+    'BuildingType': ('buildingtype', 0x100d804),
+    'Market': ('market', 0x204),
+    'Scenario': ('scenario', 0x134),
+    'Radix': ('radix', 0x400804),
+    'GameWorld': ('game_world', 0x1c),
+    # Phase 4, batch 4.
+    'LevelEditor': ('level_editor', 0x1c6898),
+    'BlockTemp': ('blocktemp', 0x7606c),
+    'BondOpt': ('bondopt', 0x40),  # one record for each bond: 0x100000 / 0x40 = 16384
+    'BondParticle': ('bondparticle', 0x20),
+    'BondHuman': ('bondhuman', 0x810),
+    'TempMesh': ('tempmesh', 0x2d1850),
+    'Track': ('track', 0x578000),
+    # Phase 4, batch 5.
+    'Building': ('building', 0x36168f8),
+    'AreaSector': ('area_sector', 0xc0d0000),
+    # Phase 4, batch 6.
+    'ObjectPacket': ('objectpacket', 0xce14),
+}
+# Capacity of each array (size of the global in the 0.24c ELF / record size).
+COUNTS = {'player': 256, 'human': 512, 'item': 1024, 'object': 1024, 'connection': 256,
+          'bond': 16384, 'bullet': 16384, 'event': 65536, 'particle': 16384,
+          'objecttype': 128, 'bondopt': 16384, 'bondparticle': 16384, 'bondhuman': 512, 'itemtype': 64, 'body': 32, 'account': 65536,
+          'buildblocktype': 16, 'area_block': 65536, 'area': 4, 'timer': 256}
+TYPE_SIZE = {'int': 4, 'uint32_t': 4, 'float': 4, 'char': 1, 'int16_t': 2, 'vec3': 12, 'double': 8, 'uint8_t': 1,
+             'Bone': 0xe0, 'InventorySlot': 0x24, 'HumanJoint': 0xc, 'HumanMuscle': 0x30, 'BondBone': 0x80, 'BondAxis': 0x10, 'WheelBody': 0xe8, 'HandGrip': 0x10, 'RotorPoint': 0x24, 'TypeQuad': 0x20, 'TypeParticle': 0x14, 'TypeBond': 0xc, 'TypeFace': 0x40, 'TypeWheel': 0x44, 'MaterialRec': 0x58, 'AiWaypoint': 0x1c, 'CityIntersection': 0x68, 'CityRoad': 0x4c, 'Wheel': 0x98, 'CityObjectRec': 0x54, 'ObjectFace': 0x40, 'ObjectVertex': 0x10, 'TrackPiece': 0x578, 'CityFace': 0x18, 'CityObjectTypeRec': 0x2418, 'AreaChunk': 0x804, 'BlockSector': 0x6068,
+             'CityBlock': 0x30, 'LevelIntersection': 0xc, 'LevelStreet': 0x34,
+             'LevelBuilding': 0x54, 'MeshQuad': 0x10, 'MeshTri': 0xc,
+             'BlockSurface': 0x15c, 'BlockBox': 0x7c, 'BuildPiece': 0x1c,
+             'BuildingCell': 0x48, 'FloorplanCell': 0x48, 'BuildingArea': 0x18,
+             'BuildPieceCopy': 0x18, 'BuildingPart': 0x300,
+             'VoiceSlot': 0x20, 'NetPriority': 0x1c, 'PlayerAction': 0x54, 'NetEntry': 8, 'NetCandidate': 0xc, 'DoorBlock': 0x10,
+             'Stock': 0x14, 'Mission': 0x40, 'TeamCarSpot': 0x34, 'SavedItem': 0xc,
+             'SavedSlot': 0x64, 'Threat': 0x18, 'GuardSpot': 0x10,
+             'VoiceRing': 0x9210, 'FileListSlot': 0x10004, 'void*': 4}
+CSV_TYPE = {'float': 'float', 'char': 'char', 'short': 'int16_t', 'undefined1': 'char',
+            'byte': 'char', 'undefined2': 'int16_t', 'ushort': 'int16_t'}
+
+HEADER = '''/* Generated by tools/re/gen_types.py. Do not edit by hand:
+ * edit analysis/structs/names.csv and run the generator again.
+ *
+ * 32-bit layout of Sub Rosa 0.24 (equal in the i386 Mach-O and in the 024d PE).
+ * unk_XXXX fields: the game accesses the offset, but the meaning is not known yet.
+ *
+ * Each record is a union of its fields and lf_raw, the raw bytes. Ghidra keeps the unknown
+ * bytes (pad_ and byte arrays) without a field and prints "&x->field_0x28" for them. The
+ * lifter prints lf_raw[0x28] (instrumentation/ghidra/ApplyTypes.java, LiftExport.java).
+ */
+#ifndef SR_TYPES_H
+#define SR_TYPES_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+#define SR_STATIC_ASSERT static_assert
+#else
+#define SR_STATIC_ASSERT _Static_assert
+#endif
+
+#pragma pack(push, 1)
+
+typedef struct vec3 { float x, y, z; } vec3;
+
+/* Body bone (ragdoll). 15 per Human, starting at Human+0xc8.
+ * Source: createhuman and bondsimulation2 (Mach-O). */
+typedef union Bone { struct {
+    vec3 pos;           /* +0x00 createhuman: position */
+    vec3 pos_prev;      /* +0x0c createhuman: copy of the position */
+    vec3 vel;           /* +0x18 bondsetupcopy copies it to BondBone.vel */
+    uint8_t unk_24[0xc];
+    vec3 rot[3];        /* +0x30 createhuman: matrix from parameter 2; bondsimulation2 uses all 3 rows */
+    vec3 ang_momentum;  /* +0x54 the angular momentum; bondsetupcopy copies it to BondBone.ang_momentum */
+    vec3 w;             /* +0x60 the angular velocity; bondsetupcopy copies it to BondBone.w */
+    uint8_t unk_6c[0xc];
+    float radius;       /* +0x78 createhuman: Body.radius */
+    float fixed_7c;     /* +0x7c createhuman writes 0.3125; no other code reads it */
+    vec3 half_size;     /* +0x80 createhuman: Body.half_size */
+    float mass;         /* +0x8c bondsimulation2: mass ratio with Item.mass */
+    vec3 inertia;       /* +0x90 along each row of rot: humansimulation makes ang_momentum = inertia * w */
+    vec3 inv_inertia;   /* +0x9c bondsetupcopy copies it to the BondBone axes: bondtest makes w from ang_momentum */
+    vec3 target_rot[3]; /* +0xa8 bondsetup type 9: the rotation the muscle holds; identity for a dead human */
+    float in_solver;    /* +0xcc humansimulation writes 1 (0 for some bones in a vehicle); bondsetupcopy: in BondHuman.mask when above 0 */
+    vec3 joint_angles;  /* +0xd0 humansimulation: the turn from the parent bone (atan2 of the relative rotation) */
+    int bond;           /* +0xdc deletebond: the type 9 bond of the bone */
+}; uint8_t lf_raw[0xe0]; } Bone;
+
+/* Joint bond of a Human (createjointbond): the bond, the bone and the body it holds. */
+typedef union HumanJoint { struct {
+    int bond;       /* +0x00 index into bond[] */
+    int bone;       /* +0x04 createjointbond: parameter 2 */
+    int body;       /* +0x08 createjointbond: parameter 3, index into body[] */
+}; uint8_t lf_raw[0xc]; } HumanJoint;
+
+/* Muscle of a Human (human_createmuscleball). Only the bond is known. */
+typedef union HumanMuscle { struct {
+    int bond;       /* +0x00 index into bond[] */
+    int parent;     /* +0x04 human_createmuscleball: the parent bone */
+    int bone;       /* +0x08 human_createmuscleball: parameter 3; humansimulation: a bone index (0 to 14) */
+    uint8_t unk_0c[0x18];
+    vec3 pos;       /* +0x24 human_createmuscleball: the joint, in the frame of the parent bone */
+}; uint8_t lf_raw[0x30]; } HumanMuscle;
+
+/* The target of a hand on a held door (Human.hand_grips). */
+typedef union HandGrip { struct {
+    vec3 pos;           /* +0x00 human_itemsimulation: the hand target in world space */
+    float axis;         /* +0x0c human_itemsimulation: input_axes[0] */
+}; uint8_t lf_raw[0x10]; } HandGrip;
+
+/* A solid wheel of an object (Object.wheel_bodies, a car with wheel bodies). */
+typedef union WheelBody { struct {
+    vec3 pos;           /* +0x00 objectwheelsimulation2: the center of the body */
+    vec3 vel;           /* +0x0c bondsimulation2 type 15: the velocity of the body */
+    vec3 dv;            /* +0x18 bondsimulation2 clears it at the start of each pass */
+    vec3 rot[3];        /* +0x24 bondsimulation2 projects ang_momentum on each row */
+    vec3 ang_momentum;  /* +0x48 bondsimulation2 adds dw to it each pass */
+    vec3 w;             /* +0x54 the angular velocity: bondsimulation2 makes it from ang_momentum, rot and inv_inertia */
+    vec3 dw;            /* +0x60 bondsimulation2 clears it at the start of each pass */
+    float axle_inv_inertia; /* +0x6c objectwheelsimulation2: the inverse inertia of the axle */
+    float axle_inv_inertia_y; /* +0x70 createobject writes the three values of the axle */
+    float axle_inv_inertia_z; /* +0x74 */
+    vec3 inv_inertia;   /* +0x78 bondsimulation2: the factor of each row of rot */
+    float mass;         /* +0x84 objectwheelsimulation2: the mass of the body */
+    float radius;       /* +0x88 objectwheelcollision2: the radius of the tire */
+    float half_width;   /* +0x8c objectwheelcollision2: half the width of the tire */
+    int particles[4];   /* +0x90 indexes into Object.particles: the hub */
+    float weights[4];   /* +0xa0 the weight of each hub particle */
+    float side;         /* +0xb0 createobject: the side of the hub anchor, -0.125 for an even body */
+    uint8_t unused_b4[8];
+    int steer_particles[4]; /* +0xbc createobject: the particles of the steered anchor */
+    float steer_weights[4]; /* +0xcc objectsimulation_car: the weights of a steered body (no server code reads them) */
+    float steer_side;   /* +0xdc objectsimulation_car: 0.125 for body 0, -0.125 for body 1 */
+    uint8_t unk_e0[8];
+}; uint8_t lf_raw[0xe8]; } WheelBody;
+
+/* A point of a rotor (Object.rotor): the blade tips, the hub and the tail. */
+typedef union RotorPoint { struct {
+    vec3 pos;           /* +0x00 object_rotorsimulation: the place of the point */
+    vec3 vel;           /* +0x0c object_rotorsimulation: the velocity */
+    vec3 vel_prev;      /* +0x18 object_rotorsimulation: the velocity of the last pass */
+}; uint8_t lf_raw[0x24]; } RotorPoint;
+
+/* A point made of 4 particles of an object type (ObjectType.quads). */
+typedef union TypeQuad { struct {
+    int particles[4];   /* +0x00 objectsimulation: indexes into Object.particles */
+    float weights[4];   /* +0x10 objectsimulation: the weight of each particle */
+}; uint8_t lf_raw[0x20]; } TypeQuad;
+
+/* A particle of an object type (ObjectType.particles). */
+typedef union TypeParticle { struct {
+    uint8_t pad_00[4];
+    vec3 pos;           /* +0x04 objecttype_addparticle */
+    float mass;         /* +0x10 setupobjecttypeweight divides it by the sum */
+}; uint8_t lf_raw[0x14]; } TypeParticle;
+
+/* A bond of an object type (ObjectType.bonds). createobject makes a Bond from it. */
+typedef union TypeBond { struct {
+    int subtype;        /* +0x00 */
+    int particle_a;     /* +0x04 */
+    int particle_b;     /* +0x08 */
+}; uint8_t lf_raw[0xc]; } TypeBond;
+
+/* A face of an object type (ObjectType.faces). */
+typedef union TypeFace { struct {
+    int corners;        /* +0x00 3 or 4 */
+    int verts[4];       /* +0x04 */
+    int links[4];       /* +0x14 -1 none. The setups write them after objecttype_addface */
+    float link_weights[4]; /* +0x24 */
+    float extra;        /* +0x34 objecttype_addface parameter 7, always 1.0. createobject does not copy it */
+    float armor;        /* +0x38 createobject copies it to ObjectFace.armor */
+    int is_window;      /* +0x3c createobject copies it to ObjectFace.is_window */
+}; uint8_t lf_raw[0x40]; } TypeFace;
+
+/* A wheel of an object type (ObjectType.wheels). createobject copies it to Object.wheels. */
+typedef union TypeWheel { struct {
+    int popped;         /* +0x00 */
+    int particle_a;     /* +0x04 */
+    int particle_b;     /* +0x08 */
+    float weight_a;     /* +0x0c */
+    float weight_b;     /* +0x10 */
+    float mass;         /* +0x14 */
+    float radius;       /* +0x18 */
+    float inv_inertia;  /* +0x1c */
+    vec3 pos;           /* +0x20 objecttype_addwheel: on the line between the two particles. setupobjecttypeweight centers it */
+    float ride_height;  /* +0x2c objecttype_addwheel adds it to pos.y. createobject copies it to Wheel.ride_height */
+    float suspension[3]; /* +0x30 createobject copies it to Wheel.spring, damper and vertical */
+    uint8_t pad_3c[4];
+    int deflated;       /* +0x40 createobject copies it to Wheel.deflated */
+}; uint8_t lf_raw[0x44]; } TypeWheel;
+
+/* A road point of an AI car (Player.waypoints). */
+/* Parameters and a name for one surface material. */
+typedef union MaterialRec { struct {
+    float parameters[4];
+    int flags;
+    char name[68];
+}; uint8_t lf_raw[0x58]; } MaterialRec;
+SR_STATIC_ASSERT(sizeof(MaterialRec) == 0x58, "MaterialRec");
+SR_STATIC_ASSERT(offsetof(MaterialRec, name) == 0x14, "MaterialRec.name");
+
+typedef union AiWaypoint { struct {
+    vec3 pos;           /* +0x00 playerai walks to this position */
+    int road;           /* +0x0c index into City.roads, -1 none */
+    int dir;            /* +0x10 0: from ends[0] to ends[1] */
+    int lane;           /* +0x14 */
+    int turn;           /* +0x18 -1, 0 or 1 */
+}; uint8_t lf_raw[0x1c]; } AiWaypoint;
+
+/* A crossing of the city (City.intersections). */
+typedef union CityIntersection { struct {
+    int x;              /* +0x00 block */
+    int y;              /* +0x04 */
+    int z;              /* +0x08 */
+    vec3 pos;           /* +0x0c x * 4, (y + 1) * 4, z * 4 */
+    int roads[4];       /* +0x18 index into City.roads, -1 none */
+    int extent[4];      /* +0x28 how far the roads reach on each side, same order as roads */
+    int light;          /* +0x38 */
+    int light_max;      /* +0x3c */
+    int light_timer;    /* +0x40 */
+    uint8_t pad_44[4];
+    int red[4];         /* +0x48 nonzero: cars stop at this side */
+    uint8_t pad_58[0x10];
+}; uint8_t lf_raw[0x68]; } CityIntersection;
+
+/* A road of the city (City.roads). */
+typedef union CityRoad { struct {
+    int ends[2];        /* +0x00 index into City.intersections */
+    int kind;           /* +0x08 0 along x, 1 along z */
+    int width[2];       /* +0x0c lanes on the two sides */
+    vec3 dir;           /* +0x14 unit vector from ends[0] to ends[1] */
+    vec3 side;          /* +0x20 */
+    char name[32];      /* +0x2c */
+}; uint8_t lf_raw[0x4c]; } CityRoad;
+
+/* A city block and its inner dimensions. */
+typedef struct CityBlock {
+    int x, z;
+    int size_x, height, size_z;
+    int inner_x, inner_z;
+    uint8_t pad_1c[0x14];
+} CityBlock;
+
+/* Records of the level editor. */
+typedef struct LevelIntersection {
+    int x, y, z;
+} LevelIntersection;
+
+typedef struct LevelStreet {
+    int a, b;
+    int axis;
+    int lanes_a, lanes_b;
+    char name[32];
+} LevelStreet;
+
+typedef struct LevelBuilding {
+    char name[64];
+    int x, y, z;
+    int turns;
+    uint8_t unsaved[4];
+} LevelBuilding;
+
+/* Vertex indices of the temporary mesh. */
+typedef struct MeshQuad { int verts[4]; } MeshQuad;
+typedef struct MeshTri { int verts[3]; } MeshTri;
+
+/* A wheel of an object (Object.wheels). Two particles of the object hold the hub. */
+typedef union Wheel { struct {
+    int popped;         /* +0x00 bulletsimulation writes 1 when health is gone; objectwheelcollision then uses friction 0.3 */
+    int deflated;       /* +0x04 bulletsimulation writes 1 with popped (likely: the client) */
+    int health;         /* +0x08 bulletsimulation subtracts the damage of a hit */
+    int particle_a;     /* +0x0c index into Object.particles */
+    int particle_b;     /* +0x10 index into Object.particles */
+    float weight_a;     /* +0x14 objectwheelcollision copies it to Bond.weights[0] */
+    float weight_b;     /* +0x18 objectwheelcollision copies it to Bond.weights[1] */
+    float mass;         /* +0x1c objectwheelsimulation2: share = mass / (mass + the mass of the particles) */
+    float radius;       /* +0x20 objectwheelcollision: the circle against the level; bulletsimulation writes 0.25 for a popped tire */
+    float inv_inertia;  /* +0x24 objectenginesimulation2: spin += inv_inertia * dspin */
+    float dspin;        /* +0x28 bondsimulation2 type 5 subtracts the push along Bond.roll_dir times the radius */
+    float spin;         /* +0x2c the angular speed: bondsimulation2 type 5 rolls the ground contact with spin * radius */
+    float angle;        /* +0x30 the turn of the wheel; objectsimulation_heli turns wheel 0 as the rotor; the packets send it */
+    float steer;        /* +0x34 objectwheelcollision turns the axle around Object.rot[1] by this angle */
+    vec3 pos;           /* +0x38 objectwheelcollision: the center of the circle */
+    vec3 vel;           /* +0x44 bondsimulation2 type 5: the velocity of the hub */
+    vec3 dv;            /* +0x50 bondsimulation2 type 5 adds the change of vel */
+    float travel;       /* +0x5c objectsimulation: the offset of the hub along rot[1]; the packets send it as a signed scalar of 6 bits */
+    float ride_height;  /* +0x60 objectwheelsimulation2: the height of the hub above the body */
+    float spring;       /* +0x64 objectwheelsimulation2: the spring force of the wheel */
+    float damper;       /* +0x68 objectwheelsimulation2: the damping force of the wheel */
+    float vertical;     /* +0x6c objectwheelsimulation2: the gain of the spring and the damper along rot[1] */
+    float slip;         /* +0x70 bondsimulation2 type 5 adds the return of calculatefriction; the packets send it */
+    uint8_t unk_74[0x10];
+    float share_wheel;  /* +0x84 objectwheelsimulation2: the share of the wheel in the push (pass 0 writes it) */
+    float share_body;   /* +0x88 objectwheelsimulation2: the share of the particles in the push (pass 0 writes it) */
+    vec3 spring_offset; /* +0x8c objectwheelsimulation2: the spring offset of the hub (pass 0 writes it) */
+}; uint8_t lf_raw[0x98]; } Wheel;
+
+/* A city object (an elevator, a door): the global cityobject holds 1024 records of 0x54 bytes. */
+typedef union CityObjectRec { struct {
+    int active;         /* +0x00 createcityobject writes 1; the line tests skip a record with 0 */
+    int type;           /* +0x04 index into the cityobjecttype records */
+    vec3 pos;           /* +0x08 lineintersectcityobject: the mesh of the type moves to it */
+    vec3 vel;           /* +0x14 lineintersectlevel copies it to Intersect.surface_vel on a hit */
+    vec3 rot[3];        /* +0x20 lineintersectcityobject: the mesh of the type turns by it */
+    int building;       /* +0x44 index of the city building record (0x9dc bytes) */
+    int floor;          /* +0x48 human_itemsimulation writes the target floor when it is below num_floors */
+    int num_floors;     /* +0x4c */
+    float net_scalar;    /* +0x50 the packets send it as a signed scalar of 6 bits */
+}; uint8_t lf_raw[0x54]; } CityObjectRec;
+
+/* A face of the mesh of an object (Object.faces): a triangle or a quad of Object.verts. */
+typedef union ObjectFace { struct {
+    int corners;        /* +0x00 3 or 4 */
+    int verts[4];       /* +0x04 indexes into Object.verts */
+    int links[4];       /* +0x14 createobject copies it from the type: a particle of a neighbor face, -1 none */
+    float link_weights[4]; /* +0x24 the weight of each link */
+    float armor;        /* +0x34 bulletsimulation: a window face loses 8 - armor health per hit when armor < 8 */
+    int is_window;      /* +0x38 bulletsimulation, playerai: 1 for a window face */
+    int health;         /* +0x3c createobject writes 8; bullets lower it; an object of type 12 skips a face at 0 */
+}; uint8_t lf_raw[0x40]; } ObjectFace;
+
+/* A piece of the track (the rails): the global track holds 4096 records of 0x578 bytes. */
+typedef union TrackPiece { struct {
+    int type;           /* +0x00 createtrack; lineintersecttrack tests all the triangles of type 1, else the first 14 */
+    vec3 pos;           /* +0x04 the center: lineintersecttrackrail tests only a line that starts within 64 of it */
+    int num_verts;      /* +0x10 the number of vertices */
+    vec3 verts[48];     /* +0x14 createtrack: the corners of the triangles */
+    int num_tris;       /* +0x254 createtrack: the number of triangles */
+    int tris[48][3];    /* +0x258 indexes into verts; triangles 14 on are the rails */
+    vec3 center[8];     /* +0x498 the midpoint between the two edges */
+    vec3 across[8];     /* +0x4f8 the unit direction from edge B to edge A */
+    uint8_t pad_558[8];
+    vec3 box_min;       /* +0x560 createtrack: the box of the corners; objecttrainsimulation tests it */
+    vec3 box_max;       /* +0x56c createtrack: the box of the corners */
+}; uint8_t lf_raw[0x578]; } TrackPiece;
+
+/* A face of the mesh of a city object type (CityObjectTypeRec.faces). */
+typedef union CityFace { struct {
+    int corners;        /* +0x00 3 or 4 */
+    int verts[4];       /* +0x04 indexes into CityObjectTypeRec.verts */
+    int grid;           /* +0x14 lineintersectcityobject: above 0, a hit gets Intersect.face_u and face_v */
+}; uint8_t lf_raw[0x18]; } CityFace;
+
+/* A city object type (an elevator, a door): the global cityobjecttype holds 256 records of
+ * 0x2418 bytes. The mesh is in the frame of the object. */
+typedef union CityObjectTypeRec { struct {
+    float radius;       /* +0x00 sphereintersectcityobjecttype: the half size of the box around the mesh */
+    int num_verts;      /* +0x04 */
+    vec3 verts[256];    /* +0x08 the corners of the faces */
+    int num_faces;      /* +0xc08 */
+    CityFace faces[256]; /* +0xc0c */
+    vec3 block_offset;  /* +0x240c the place of the mesh in a block of an area */
+}; uint8_t lf_raw[0x2418]; } CityObjectTypeRec;
+
+/* A byte view of the complete block-type table. */
+typedef union BuildBlockType { struct {
+    uint8_t pad_0000[0x1a80];
+}; uint8_t lf_raw[0x1a80]; } BuildBlockType;
+
+/* A window or parking opening within one block. */
+typedef union BuildPiece { struct {
+    int kind;
+    float x, width, y, height;
+    int flags;
+    int index;
+}; uint8_t lf_raw[0x1c]; } BuildPiece;
+SR_STATIC_ASSERT(sizeof(BuildPiece) == 0x1c, "BuildPiece");
+SR_STATIC_ASSERT(offsetof(BuildPiece, flags) == 0x14, "BuildPiece.flags");
+SR_STATIC_ASSERT(offsetof(BuildPiece, index) == 0x18, "BuildPiece.index");
+
+/* A cell in a building file and its working copies. */
+typedef union BuildingCell { struct {
+    uint32_t outer, inner;
+    int wall_row, wall_col;
+    int interior_bit18, interior_bit16;
+    int16_t tex_outer[8], tex_inner[8];
+    int spare, color, guard_dir, prize;
+}; uint8_t lf_raw[0x48]; } BuildingCell;
+
+/* A cell ready for placement in the world. */
+typedef union FloorplanCell { struct {
+    uint32_t outer, inner;
+    int wall_row, wall_col;
+    int interior_bit18, interior_bit16, interior_bit17;
+    int16_t tex_outer[8], tex_inner[8];
+    int color, guard_dir, prize;
+}; uint8_t lf_raw[0x48]; } FloorplanCell;
+
+typedef union BuildingArea { struct {
+    int x, y, z;
+    int size_x, size_y, size_z;
+}; uint8_t lf_raw[0x18]; } BuildingArea;
+
+typedef union BuildPieceCopy { struct {
+    int kind;
+    float x, width, y, height;
+    int flags;
+}; uint8_t lf_raw[0x18]; } BuildPieceCopy;
+
+typedef union BuildingPart { struct {
+    vec3 colors[3];
+    uint8_t pad_24[0xc];
+    float team_colors[15];
+}; uint8_t lf_raw[0x300]; } BuildingPart;
+
+typedef union Newspaper { struct {
+    int num_lines;
+    char lines[1024][256];
+    int unk_40004;
+}; uint8_t lf_raw[0x40008]; } Newspaper;
+
+SR_STATIC_ASSERT(sizeof(BuildingCell) == 0x48, "BuildingCell");
+SR_STATIC_ASSERT(offsetof(BuildingCell, tex_outer) == 0x18, "BuildingCell.tex_outer");
+SR_STATIC_ASSERT(sizeof(FloorplanCell) == 0x48, "FloorplanCell");
+SR_STATIC_ASSERT(offsetof(FloorplanCell, tex_inner) == 0x2c, "FloorplanCell.tex_inner");
+SR_STATIC_ASSERT(sizeof(BuildingArea) == 0x18, "BuildingArea");
+SR_STATIC_ASSERT(sizeof(BuildPieceCopy) == 0x18, "BuildPieceCopy");
+SR_STATIC_ASSERT(sizeof(BuildingPart) == 0x300, "BuildingPart");
+SR_STATIC_ASSERT(sizeof(Newspaper) == 0x40008, "Newspaper");
+
+typedef struct BlockSurface {
+    int unused_00;
+    int nu, nv, tu, tv;
+    vec3 ctrl[16];
+    float uv[16][2];
+    int slot, auto_side;
+} BlockSurface;
+
+typedef struct BlockBox {
+    vec3 verts[8];
+    int slots[6];
+    int faces;
+} BlockBox;
+
+/* A chunk of an area: 8 x 8 x 8 sectors (Area.chunks). */
+typedef union AreaChunk { struct {
+    int used;           /* +0x000 area_getnextchunk takes a chunk with 0 */
+    int sectors[512];   /* +0x004 the BlockSector of each sector, or -1: index x + 8 * z + 64 * y */
+}; uint8_t lf_raw[0x804]; } AreaChunk;
+
+/* A sector of 8 x 8 x 8 blocks of an area: the global area_sector holds 8192 records of
+ * 0x6068 bytes after its first 0x40 bytes. Each block list has index x + 8 * z + 64 * y.
+ * A block word: the high 3 bits give the kind (2 normal, 4 special, 6 link to the block at
+ * x - bits 0..7, y - bits 16..23, z - bits 8..15). */
+typedef union BlockSector { struct {
+    int used;           /* +0x0000 area_getnextsector takes a sector with 0 */
+    uint32_t blocks[512];           /* +0x0004 the outer blocks */
+    uint16_t textures[512][8];      /* +0x0804 area_getblocktexture: one for each face of a block */
+    uint32_t colors[512];
+    uint32_t interior[512];         /* +0x3004 the blocks of the interiors */
+    uint8_t interior_textures[512][8]; /* +0x3804 area_interior_getblocktexture */
+    uint32_t cityobjects[512];      /* +0x4804 above 0: a city object type in bits 0..9, a turn of 90 degrees times bits 10..11 */
+    int interior_models[4];
+    int area;           /* +0x5014 area_createsector: the area of the sector */
+    int pos[3];         /* +0x5018 area_createsector: the place of the sector in its chunk */
+    int dirty;
+    uint8_t unk_5028[0x20];
+    int num_meshes;
+    uint8_t unk_504c[0x800];
+    int unused_584c;
+    uint8_t unk_5850[0x818];
+}; uint8_t lf_raw[0x6068]; } BlockSector;
+
+/* A corner of the mesh of an object (Object.verts). */
+typedef union ObjectVertex { struct {
+    vec3 pos;           /* +0x00 the world position (objectsimulation moves it with the particle) */
+    int particle;       /* +0x0c index into Object.particles */
+}; uint8_t lf_raw[0x10]; } ObjectVertex;
+
+/* An axis of a BondBone: a row of Bone.rot and its Bone.axis_k. */
+typedef union BondAxis { struct {
+    vec3 dir;
+    float k;
+}; uint8_t lf_raw[0x10]; } BondAxis;
+
+/* Bone record of the bond solver (BondHuman.bones). The solver copies the velocities of the
+ * Bone here, adds the changes of each pass, and writes them back. */
+typedef union BondBone { struct {
+    vec3 vel;           /* +0x00 bondsimulation2 copies Bone+0x18 */
+    float pad_0c;
+    vec3 dv;            /* +0x10 bond_bodybody adds the change of vel */
+    float pad_1c;
+    vec3 ang_momentum;  /* +0x20 bondsetupcopy copies Bone.ang_momentum; the bonds add dw, bondhuman the balance turn */
+    float pad_2c;
+    vec3 w;             /* +0x30 the angular velocity: bondtest makes it from ang_momentum and the axes */
+    float pad_3c;
+    vec3 dw;            /* +0x40 bond_bodybody adds the change of w */
+    float pad_4c;
+    BondAxis axes[3];   /* +0x50 bondsetupcopy: Bone.rot[k] and Bone.axis_k[k] */
+}; uint8_t lf_raw[0x80]; } BondBone;
+
+/* Inventory slot. 8 per Human. */
+typedef union InventorySlot { struct {
+    int count;      /* +0x00 manager: quantity */
+    int items[8];   /* +0x04 item_addhumanlink writes items[count]; manager: index into items[] */
+}; uint8_t lf_raw[0x24]; } InventorySlot;
+
+/* Account saved in user/server.srk (docs/formatos.md). */
+typedef union Account { struct {
+    uint32_t id[2];     /* +0x00 equal to Player.account_id */
+    char name[32];      /* +0x08 */
+    int name_locked;    /* +0x28 not saved to the file; createaccount writes 5 */
+    int money;          /* +0x2c new account: 1000 */
+    int playtime;       /* +0x30 logicsimulation_world adds 5 for each human; the stats file shows it divided by 10 */
+    int look_a;        /* +0x34 rand() % 3 */
+    int look_b;         /* +0x38 rand() & 7 */
+    int look_c;         /* +0x3c rand() & 3 */
+    uint8_t unk_40[8];
+    int ban_time;       /* +0x48 serverrecv: above 0 drops the player. server_playermessage /bany writes it */
+}; uint8_t lf_raw[0x4c]; } Account;
+
+/* A voice slot of a Connection: one speaker that the client hears. */
+typedef union VoiceSlot { struct {
+    int active;         /* +0x00 */
+    int player;         /* +0x04 the speaker */
+    int human;          /* +0x08 the body of the speaker, -1 for a radio */
+    int item;           /* +0x0c the radio item, -1 for a direct voice */
+    uint8_t unk_10[0xc];
+    float distance;     /* +0x1c calculateplayervoice writes it, addvoice reads it */
+}; uint8_t lf_raw[0x20]; } VoiceSlot;
+
+/* The score of a human or an object for a connection: it grows each tick until the entry is sent. */
+typedef union NetPriority { struct {
+    int score;          /* +0x00 packobjectpacket */
+    uint8_t unk_04[0x18];
+}; uint8_t lf_raw[0x1c]; } NetPriority;
+
+/* An action of a player that the client sends: a menu choice, a chat text or an item action. */
+typedef union PlayerAction { struct {
+    int kind;           /* +0x00 0 menu, 1 chat, 2 item */
+    int arg_a;          /* +0x04 menu id (8 bits), text length (6 bits), item a (16 bits) */
+    int arg_b;          /* +0x08 menu value, chat mode (4 bits), item b (16 bits) */
+    uint8_t unk_0c[8];
+    char text[64];      /* +0x14 */
+}; uint8_t lf_raw[0x54]; } PlayerAction;
+
+/* An entry of a list of ObjectPacket: an id and the mode it is sent in. */
+typedef union NetEntry { struct {
+    int id;
+    int mode;
+}; uint8_t lf_raw[8]; } NetEntry;
+
+/* packobjectpacket2: a human or an object that can go in the packet. */
+typedef union NetCandidate { struct {
+    int kind;           /* +0x00 0 human, 1 object */
+    int id;
+    int score;
+}; uint8_t lf_raw[0xc]; } NetCandidate;
+
+/* A door of a team record: the block it opens and its turn. */
+typedef union DoorBlock { struct {
+    int x, y, z;
+    int turn;
+}; uint8_t lf_raw[0x10]; } DoorBlock;
+
+/* A stock of the market (createevent_updatestocks). */
+typedef union Stock { struct {
+    int shares;
+    float price;        /* +0x04 */
+    float open_price;
+    int price_int;      /* +0x0c createevent_updatestocks writes (int)price */
+    int stake;
+}; uint8_t lf_raw[0x14]; } Stock;
+
+/* A mission of a team. */
+typedef union Mission { struct {
+    int active;
+    int scenario;
+    int kind;
+    int item;
+    int partner;
+    int unk_14;
+    uint8_t pad_18[8];
+    int item_type;
+    int cash;
+    int expire;
+    int site;
+    int stake;
+    int stake_min;
+    float own_growth;
+    float other_growth;
+}; uint8_t lf_raw[0x40]; } Mission;
+
+/* A car place at a team base. */
+typedef union TeamCarSpot { struct {
+    int used;
+    vec3 pos;
+    vec3 rot[3];
+}; uint8_t lf_raw[0x34]; } TeamCarSpot;
+
+/* An item in a saved inventory slot. */
+typedef union SavedItem { struct {
+    int type;
+    int a;
+    int b;
+}; uint8_t lf_raw[0xc]; } SavedItem;
+
+typedef union SavedSlot { struct {
+    int count;
+    SavedItem items[8];
+}; uint8_t lf_raw[0x64]; } SavedSlot;
+
+/* A threat seen by an AI player. */
+typedef union Threat { struct {
+    int human;
+    vec3 pos;
+    float level;
+    int timer;
+}; uint8_t lf_raw[0x18]; } Threat;
+
+/* A guard place in a building. */
+typedef union GuardSpot { struct {
+    vec3 pos;
+    int dir;
+}; uint8_t lf_raw[0x10]; } GuardSpot;
+
+/* One list of file names (listfiles): up to 1024 names of 64 bytes. */
+typedef union FileListSlot { struct {
+    int count;
+    char name[1024][64];
+}; uint8_t lf_raw[0x10004]; } FileListSlot;
+
+/* The voice frames of one player (Speex.voice_ring): a ring of 64 frames that the client sends. */
+typedef union VoiceRing { struct {
+    uint8_t unk_0000[0x5000];
+    int head;           /* +0x5000 the next frame index */
+    int unk_5004;
+    int size[64];       /* +0x5008 */
+    int mode[64];       /* +0x5108 */
+    uint8_t data[64][256]; /* +0x5208 */
+    int unk_9208;
+    int voice_off;      /* +0x920c 1 bit from the client: a speaker with it set is not heard */
+}; uint8_t lf_raw[0x9210]; } VoiceRing;
+
+/* A voice channel of the client: one of the 8 speakers that the client plays (global at RVA
+ * 0xeca4bc0). The frames are in a ring of 64 as in VoiceRing. */
+typedef union VoiceChannel { struct {
+    int active;         /* +0x00 */
+    int unk_04;
+    int human;          /* +0x08 the body of the speaker, -1 for a radio */
+    int item;           /* +0x0c the radio item, -1 for a direct voice */
+    uint8_t unk_10[0x5010];
+    int head;           /* +0x5020 the next frame index */
+    int unk_5024;
+    int size[64];       /* +0x5028 */
+    int mode[64];       /* +0x5128 */
+    uint8_t data[64][256]; /* +0x5228 */
+    uint8_t unk_9228[0x20000];
+}; uint8_t lf_raw[0x29228]; } VoiceChannel;
+
+
+
+SR_STATIC_ASSERT(sizeof(vec3) == 12, "vec3");
+SR_STATIC_ASSERT(sizeof(Bone) == 0xe0, "Bone");
+SR_STATIC_ASSERT(offsetof(Bone, rot) == 0x30, "Bone.rot");
+SR_STATIC_ASSERT(offsetof(Bone, mass) == 0x8c, "Bone.mass");
+SR_STATIC_ASSERT(sizeof(InventorySlot) == 0x24, "InventorySlot");
+SR_STATIC_ASSERT(sizeof(HumanJoint) == 0xc, "HumanJoint");
+SR_STATIC_ASSERT(sizeof(HumanMuscle) == 0x30, "HumanMuscle");
+SR_STATIC_ASSERT(sizeof(BondBone) == 0x80, "BondBone");
+SR_STATIC_ASSERT(sizeof(BondAxis) == 0x10, "BondAxis");
+SR_STATIC_ASSERT(sizeof(WheelBody) == 0xe8, "WheelBody");
+SR_STATIC_ASSERT(sizeof(Wheel) == 0x98, "Wheel");
+SR_STATIC_ASSERT(sizeof(CityObjectRec) == 0x54, "CityObjectRec");
+SR_STATIC_ASSERT(sizeof(ObjectFace) == 0x40, "ObjectFace");
+SR_STATIC_ASSERT(sizeof(ObjectVertex) == 0x10, "ObjectVertex");
+SR_STATIC_ASSERT(sizeof(TrackPiece) == 0x578, "TrackPiece");
+SR_STATIC_ASSERT(sizeof(CityBlock) == 0x30, "CityBlock");
+SR_STATIC_ASSERT(sizeof(LevelIntersection) == 0xc, "LevelIntersection");
+SR_STATIC_ASSERT(sizeof(LevelStreet) == 0x34, "LevelStreet");
+SR_STATIC_ASSERT(sizeof(LevelBuilding) == 0x54, "LevelBuilding");
+SR_STATIC_ASSERT(sizeof(MeshQuad) == 0x10, "MeshQuad");
+SR_STATIC_ASSERT(sizeof(MeshTri) == 0xc, "MeshTri");
+SR_STATIC_ASSERT(sizeof(CityFace) == 0x18, "CityFace");
+SR_STATIC_ASSERT(sizeof(CityObjectTypeRec) == 0x2418, "CityObjectTypeRec");
+SR_STATIC_ASSERT(sizeof(AreaChunk) == 0x804, "AreaChunk");
+SR_STATIC_ASSERT(sizeof(BlockSector) == 0x6068, "BlockSector");
+SR_STATIC_ASSERT(offsetof(BlockSector, cityobjects) == 0x4804, "BlockSector.cityobjects");
+SR_STATIC_ASSERT(offsetof(BlockSector, area) == 0x5014, "BlockSector.area");
+SR_STATIC_ASSERT(offsetof(CityObjectTypeRec, faces) == 0xc0c, "CityObjectTypeRec.faces");
+SR_STATIC_ASSERT(offsetof(TrackPiece, tris) == 0x258, "TrackPiece.tris");
+SR_STATIC_ASSERT(offsetof(TrackPiece, center) == 0x498, "TrackPiece.center");
+SR_STATIC_ASSERT(offsetof(TrackPiece, across) == 0x4f8, "TrackPiece.across");
+SR_STATIC_ASSERT(offsetof(Wheel, slip) == 0x70, "Wheel.slip");
+SR_STATIC_ASSERT(sizeof(RotorPoint) == 0x24, "RotorPoint");
+SR_STATIC_ASSERT(offsetof(WheelBody, inv_inertia) == 0x78, "WheelBody.inv_inertia");
+SR_STATIC_ASSERT(offsetof(WheelBody, particles) == 0x90, "WheelBody.particles");
+SR_STATIC_ASSERT(offsetof(WheelBody, steer_side) == 0xdc, "WheelBody.steer_side");
+SR_STATIC_ASSERT(offsetof(TrackPiece, box_min) == 0x560, "TrackPiece.box_min");
+SR_STATIC_ASSERT(offsetof(TrackPiece, box_max) == 0x56c, "TrackPiece.box_max");
+SR_STATIC_ASSERT(sizeof(Account) == 0x4c, "Account");
+SR_STATIC_ASSERT(offsetof(Account, money) == 0x2c, "Account.money");
+SR_STATIC_ASSERT(sizeof(VoiceSlot) == 0x20, "VoiceSlot");
+SR_STATIC_ASSERT(sizeof(NetPriority) == 0x1c, "NetPriority");
+SR_STATIC_ASSERT(sizeof(PlayerAction) == 0x54, "PlayerAction");
+SR_STATIC_ASSERT(offsetof(PlayerAction, text) == 0x14, "PlayerAction.text");
+SR_STATIC_ASSERT(sizeof(NetEntry) == 8, "NetEntry");
+SR_STATIC_ASSERT(sizeof(NetCandidate) == 0xc, "NetCandidate");
+SR_STATIC_ASSERT(sizeof(DoorBlock) == 0x10, "DoorBlock");
+SR_STATIC_ASSERT(sizeof(Stock) == 0x14, "Stock");
+SR_STATIC_ASSERT(sizeof(Mission) == 0x40, "Mission");
+SR_STATIC_ASSERT(offsetof(Mission, item_type) == 0x20, "Mission.item_type");
+SR_STATIC_ASSERT(offsetof(Mission, other_growth) == 0x3c, "Mission.other_growth");
+SR_STATIC_ASSERT(sizeof(TeamCarSpot) == 0x34, "TeamCarSpot");
+SR_STATIC_ASSERT(sizeof(SavedItem) == 0xc, "SavedItem");
+SR_STATIC_ASSERT(sizeof(SavedSlot) == 0x64, "SavedSlot");
+SR_STATIC_ASSERT(sizeof(Threat) == 0x18, "Threat");
+SR_STATIC_ASSERT(sizeof(GuardSpot) == 0x10, "GuardSpot");
+SR_STATIC_ASSERT(sizeof(FileListSlot) == 0x10004, "FileListSlot");
+SR_STATIC_ASSERT(sizeof(VoiceRing) == 0x9210, "VoiceRing");
+SR_STATIC_ASSERT(offsetof(VoiceRing, voice_off) == 0x920c, "VoiceRing.voice_off");
+SR_STATIC_ASSERT(sizeof(VoiceChannel) == 0x29228, "VoiceChannel");
+SR_STATIC_ASSERT(offsetof(VoiceChannel, head) == 0x5020, "VoiceChannel.head");
+SR_STATIC_ASSERT(offsetof(VoiceSlot, distance) == 0x1c, "VoiceSlot.distance");
+SR_STATIC_ASSERT(offsetof(Account, ban_time) == 0x48, "Account.ban_time");
+'''
+
+
+def load_names():
+    names = defaultdict(dict)
+    with open(ROOT / 'analysis/structs/names.csv', encoding='utf-8') as fh:
+        for r in csv.DictReader(fh):
+            off = int(r['offset'], 16)
+            count = int(r['count']) if r['count'] else 0
+            names[r['struct']][off] = (r['name'], r['type'], count, r['evidence'])
+    return names
+
+
+def load_accessed(glob):
+    p = ROOT / f'analysis/structs/mac/{glob}.csv'
+    if not p.exists():
+        return load_inferred(glob)
+    out = {}
+    with open(p, encoding='utf-8') as fh:
+        for r in csv.DictReader(fh):
+            types = [t.split(':')[0] for t in r['types'].split()]
+            typ = next((CSV_TYPE[t] for t in types if t in CSV_TYPE), 'int')
+            out[int(r['offset'], 16)] = (typ, int(r['n_funcs']))
+    return out
+
+
+def load_inferred(glob):
+    """Fields read from the 024d instructions (instrumentation/ghidra/InferFields.java and
+    tools/re/infer_fields.py), for the structs that have no Mac access file."""
+    p = ROOT / f'analysis/structs/024d/{glob}.csv'
+    if not p.exists():
+        return {}
+    with open(p, encoding='utf-8') as fh:
+        return {int(r['offset'], 16): (r['type'], int(r['n_funcs'])) for r in csv.DictReader(fh)}
+
+
+def gen_struct(cname, glob, size, named, accessed):
+    fields = []  # (offset, size, decl, comment, asserted)
+    for off, (name, typ, count, ev) in named.items():
+        n = max(count, 1)
+        decl = f'{typ} {name}' + (f'[{count}]' if count else '')
+        fields.append((off, TYPE_SIZE[typ] * n, decl, ev, name))
+    covered = [(o, o + s) for o, s, *_ in fields]
+    for off, (typ, nf) in accessed.items():
+        sz = TYPE_SIZE[typ]
+        if off % min(sz, 4) or any(a <= off < b for a, b in covered) or off + sz > size:
+            continue
+        fields.append((off, sz, f'{typ} unk_{off:04x}', f'{nf} functions', None))
+        covered.append((off, off + sz))
+    fields.sort()
+
+    lines = [f'/* {glob}[]: record of 0x{size:x} bytes. */', f'typedef union {cname} {{ struct {{']
+    pos = 0
+    emitted = set()
+    for off, sz, decl, comment, name in fields:
+        if off < pos:
+            if name:
+                raise SystemExit(f'ERROR: {cname}.{name} (+0x{off:x}) overlaps the previous field. Fix names.csv.')
+            continue  # unk_ overlapping a named field: drop it
+        if off > pos:
+            lines.append(f'    uint8_t pad_{pos:04x}[0x{off - pos:x}];')
+        lines.append(f'    {decl};'.ljust(40) + f' /* +0x{off:04x} {comment} */')
+        emitted.add(name)
+        pos = off + sz
+    if pos < size:
+        lines.append(f'    uint8_t pad_{pos:04x}[0x{size - pos:x}];')
+    lines.append(f'}}; uint8_t lf_raw[0x{size:x}]; }} {cname};')
+    lines.append(f'SR_STATIC_ASSERT(sizeof({cname}) == 0x{size:x}, "{cname}");')
+    for off, _sz, _decl, _c, name in fields:
+        if name and name in emitted:
+            lines.append(f'SR_STATIC_ASSERT(offsetof({cname}, {name}) == 0x{off:x}, "{cname}.{name}");')
+    return '\n'.join(lines)
+
+
+def gen_globals():
+    # Globals confirmed by hand have priority over the automatic map.
+    rows = {}
+    with open(ROOT / 'analysis/024d/globals.csv', encoding='utf-8') as fh:
+        for r in csv.DictReader(fh):
+            rows[r['name']] = r
+    with open(ROOT / 'analysis/024d/manual_globals.csv', encoding='utf-8') as fh:
+        for r in csv.DictReader(fh):
+            rows[r['name']] = r
+    rows = list(rows.values())
+    types = {g: c for c, (g, _s) in STRUCTS.items()}
+    lines = ['/* Generated by tools/re/gen_types.py from analysis/024d/globals.csv.',
+             ' * RVAs of the global variables in subrosadedicated024d.exe',
+             ' * (SHA-256 11e006786d945d5731cb664fba718a094d8f02648b13fcc20c26c8614ea603fd).',
+             ' * Real address = module base + RVA.',
+             ' */',
+             '#ifndef SR_GLOBALS_024D_H', '#define SR_GLOBALS_024D_H', '']
+    for r in sorted(rows, key=lambda r: int(r['rva'], 16)):
+        t = types.get(r['name'])
+        note = f'  /* {t}[] */' if t else ''
+        lines.append(f'#define SR_RVA_{r["name"].upper():<20} {r["rva"]}u{note}')
+    lines.append('')
+    lines.append('/* Capacity of each array (size of the global in the 0.24c ELF / record size). */')
+    for g, n in COUNTS.items():
+        lines.append(f'#define SR_MAX_{g.upper():<20} {n}')
+    lines += ['', '#endif', '']
+    return '\n'.join(lines)
+
+
+def gen_global_table():
+    """Table {rva, name, record size, count} for the verifier log."""
+    rows = {}
+    for path in ('analysis/024d/globals.csv', 'analysis/024d/manual_globals.csv'):
+        with open(ROOT / path, encoding='utf-8') as fh:
+            for r in csv.DictReader(fh):
+                rows[r['name']] = int(r['rva'], 16)
+    sizes = {g: s for (g, s) in STRUCTS.values()}
+    sizes['account'] = 0x4c
+    lines = ['/* Generated by tools/re/gen_types.py. 024d globals for diagnostic messages. */',
+             '#ifndef SR_GLOBAL_TABLE_H', '#define SR_GLOBAL_TABLE_H', '',
+             'typedef struct SrGlobalInfo { unsigned rva; const char *name; unsigned elem_size; unsigned count; } SrGlobalInfo;',
+             '', 'static const SrGlobalInfo sr_global_table[] = {']
+    for name, rva in sorted(rows.items(), key=lambda x: x[1]):
+        size = sizes.get(name, 0)
+        count = COUNTS.get(name, 0)
+        if name == 'account':
+            rva += 8  # records after the key and the counter
+        lines.append(f'    {{ 0x{rva:x}u, "{name}", 0x{size:x}u, {count}u }},')
+    lines += ['};', '', '#endif', '']
+    return chr(10).join(lines)
+
+
+def check_frozen(header):
+    """Each record in the frozen header of the lifted C must have the same size as in the new header."""
+    pat = re.compile(r'\}; uint8_t lf_raw\[(0x[0-9a-f]+)\]; \} (\w+);')
+    frozen = ROOT / 'src/lifted/sr_types_lifted.h'
+    if not frozen.exists():
+        return
+    old = {name: int(size, 16) for size, name in pat.findall(frozen.read_text(encoding='utf-8'))}
+    new = {name: int(size, 16) for size, name in pat.findall(header)}
+    bad = [f'{n}: 0x{old[n]:x} in sr_types_lifted.h, 0x{new[n]:x} in sr_types.h'
+           for n in sorted(old) if n in new and old[n] != new[n]]
+    gone = [n for n in sorted(old) if n not in new]
+    if bad or gone:
+        raise SystemExit('the layout differs from the frozen header of the lifted C:\n  ' +
+                         '\n  '.join(bad + [f'{n}: not in sr_types.h' for n in gone]))
+
+
+def main():
+    names = load_names()
+    parts = [HEADER]
+    for cname, (glob, size) in STRUCTS.items():
+        parts.append(gen_struct(cname, glob, size, names.get(glob, {}), load_accessed(glob)))
+    parts.append('#pragma pack(pop)\n\n#endif /* SR_TYPES_H */\n')
+    out = ROOT / 'src/include'
+    out.mkdir(parents=True, exist_ok=True)
+    header = '\n\n'.join(parts)
+    check_frozen(header)
+    (out / 'sr_types.h').write_text(header, encoding='utf-8', newline='\n')
+    (out / 'sr_globals_024d.h').write_text(gen_globals(), encoding='utf-8', newline='\n')
+    (out / 'sr_global_table.h').write_text(gen_global_table(), encoding='utf-8', newline='\n')
+    print('generated: src/include/sr_types.h, src/include/sr_globals_024d.h')
+
+
+if __name__ == '__main__':
+    main()
