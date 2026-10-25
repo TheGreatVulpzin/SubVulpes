@@ -1,10 +1,6 @@
-/* opensubrosa24_server: the dedicated server without subrosadedicated024d.exe.
- *
- * Phase 5.1 (docs/plano.md). The game code is the lifted C and the hand-written C. Its
- * memory is a region with the layout of the 024d image: SR_VA() and the g_ globals work as
- * with the hooks. The game imports (MSVCR100, WSOCK32, KERNEL32) come from
- * src/platform/plat_imports.c (Phase 5.2): the server does not need MSVCR100.dll.
- * Run it in the folder of a server (config.txt, data/, user/).
+/* SubVulpes dedicated server.
+ * The initial tables and zero-filled memory use the 32-bit game layout.
+ * Run from a server folder with config.txt and data/.
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -25,34 +21,6 @@
 #include "sr_math.h"
 #include "platform.h"
 
-#ifdef SR_RECORD
-#include "record.h"
-void sv_record_start(void *vprintf_fn);
-
-/* The WinSock names of the ordinals of the game, for the record wrappers. */
-static const char *wsock_name(unsigned ordinal)
-{
-    switch (ordinal) {
-    case 2: return "bind";
-    case 3: return "closesocket";
-    case 4: return "connect";
-    case 7: return "getsockopt";
-    case 10: return "inet_addr";
-    case 12: return "ioctlsocket";
-    case 16: return "recv";
-    case 17: return "recvfrom";
-    case 18: return "select";
-    case 19: return "send";
-    case 20: return "sendto";
-    case 23: return "socket";
-    case 52: return "gethostbyname";
-    case 55: return "getservbyname";
-    case 115: return "WSAStartup";
-    case 151: return "__WSAFDIsSet";
-    }
-    return "";
-}
-#endif
 
 uintptr_t sr_base;  /* the image region (map_image) */
 void sr_fn_init(void);
@@ -202,9 +170,6 @@ void *sr_import(const char *dll, const char *name)
         sv_log("import not found: %s!%s", dll, name);
         ExitProcess(1);
     }
-#ifdef SR_RECORD
-    p = sv_record_wrap(dll, name, p);
-#endif
     return p;
 }
 
@@ -224,9 +189,6 @@ void *sr_import_ordinal(const char *dll, unsigned ordinal)
         *(void **)&g_sendto = p;
         p = (void *)capture_sendto;
     }
-#ifdef SR_RECORD
-    p = sv_record_wrap(dll, wsock_name(ordinal), p);
-#endif
     return p;
 }
 
@@ -299,12 +261,7 @@ static void start_sampler(void)
 static int map_image(void)
 {
     unsigned i;
-#ifdef SR_RECORD
-    /* The base of the fixed-base 024d of the hook recordings (tools/re/fixed_base.py). */
-    uint8_t *base = VirtualAlloc((void *)0x20000000, sr_image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-#else
     uint8_t *base = VirtualAlloc(NULL, sr_image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-#endif
     if (!base) {
         fprintf(stderr, "cannot allocate the image region (%u MiB, error %lu)\n", sr_image_size >> 20,
                 GetLastError());
@@ -348,7 +305,7 @@ static void write_dump(EXCEPTION_POINTERS *ep)
 }
 
 /* A crash: write where it happened, so that a test log is enough to find the line. The
- * address is given as module+offset (build/hook/opensubrosa24_server.map and .pdb), and as
+ * address is given as module+offset (build/hook/subvulpes_server.map and .pdb), and as
  * an image RVA when it is inside the 024d region (a game address used as code or data). */
 static LONG WINAPI on_crash(EXCEPTION_POINTERS *ep)
 {
@@ -403,9 +360,6 @@ int main(void)
     x87_init();
     open_packets();
     start_sampler();
-#ifdef SR_RECORD
-    sv_record_start((void *)sv_vprintf);
-#endif
     if (getenv("SV_TEST_CRASH"))
         CreateThread(NULL, 0, test_crash, (void *)(uintptr_t)atoi(getenv("SV_TEST_CRASH")), 0, NULL);
     sr_getpaths();

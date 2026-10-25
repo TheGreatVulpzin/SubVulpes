@@ -3,7 +3,7 @@
 // Build: tools\launcher\build.bat. It uses the C# compiler of .NET Framework 4, which is
 // part of Windows, so the testers do not install anything. C# 5 only (no $"" strings).
 // The exe is 32-bit, so that its dumps of the 32-bit server have the x86 view.
-// Put the exe in the server folder, next to opensubrosa24_server.exe.
+// Put the exe in the server folder, next to subvulpes_server.exe.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -43,7 +43,7 @@ namespace SubVulpes
 
     static class ReleaseUpdate
     {
-        const string Endpoint = "https://api.github.com/repos/TheGreatVulpzin/OpenSubRosa24/releases";
+        const string Endpoint = "https://api.github.com/repos/TheGreatVulpzin/SubVulpes/releases";
         static readonly Regex Tag = new Regex(@"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$");
 
         public static int CompareVersions(string left, string right)
@@ -90,7 +90,7 @@ namespace SubVulpes
                 throw new InvalidDataException("The download URL must use HTTPS.");
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2.
             var request = (HttpWebRequest)WebRequest.Create(url);
-            request.UserAgent = "OpenSubRosa24-launcher";
+            request.UserAgent = "SubVulpes-launcher";
             request.Accept = "application/vnd.github+json";
             request.Timeout = 15000;
             request.ReadWriteTimeout = 15000;
@@ -131,7 +131,7 @@ namespace SubVulpes
 
         public static string Download(ServerRelease release, string directory)
         {
-            string name = "OpenSubRosa24-server-" + release.tag_name + ".zip";
+            string name = "SubVulpes-server-" + release.tag_name + ".zip";
             var assets = release.assets ?? new ReleaseAsset[0];
             var zip = assets.FirstOrDefault(a => a.name == name);
             var hash = assets.FirstOrDefault(a => a.name == name + ".sha256");
@@ -208,14 +208,14 @@ namespace SubVulpes
     // The captures of one test. A preset is a named set of captures.
     class Captures
     {
-        public bool Profile, Timers, Packets, Record, FreezeDump;
+        public bool Profile, Timers, Packets, FreezeDump;
         public string CrashDump = "small";  // none, small or full
 
         public Captures Copy() { return (Captures)MemberwiseClone(); }
 
         public bool Same(Captures o)
         {
-            return Profile == o.Profile && Timers == o.Timers && Packets == o.Packets && Record == o.Record &&
+            return Profile == o.Profile && Timers == o.Timers && Packets == o.Packets &&
                    FreezeDump == o.FreezeDump && CrashDump == o.CrashDump;
         }
 
@@ -225,7 +225,6 @@ namespace SubVulpes
             if (Profile) parts.Add("speed profile");
             if (Timers) parts.Add("game timers");
             if (Packets) parts.Add("packets");
-            if (Record) parts.Add("harness recording");
             if (CrashDump != "none") parts.Add(CrashDump + " crash dump");
             if (FreezeDump) parts.Add("freeze dump");
             return parts.Count == 0 ? "no captures" : string.Join(", ", parts.ToArray());
@@ -294,17 +293,13 @@ namespace SubVulpes
         const int FreezeSeconds = 150;
         const int HotkeyId = 1;
         static readonly string[] UpdateFiles = {
-            "opensubrosa24_server.exe", "opensubrosa24_server_record.exe", "opensubrosa24_launcher.exe", "LEIA-ME.txt", "version.txt",
-            "record_focus.txt"
+            "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt"
         };
 
         static readonly Preset[] Presets = {
             new Preset("Normal Playtest",
                 "Captures a speed profile and small crash or freeze dumps.",
                 new Captures { Profile = true, FreezeDump = true }),
-            new Preset("Harness Recording",
-                "Records packets and function calls with a memory snapshot after 10 minutes.",
-                new Captures { Packets = true, Record = true }),
             new Preset("Playtest (For Speed Issues)",
                 "Captures a speed profile, game timers and small crash or freeze dumps.",
                 new Captures { Profile = true, Timers = true, FreezeDump = true }),
@@ -350,7 +345,7 @@ namespace SubVulpes
         TextBox console;
 
         // Captures page
-        CheckBox profileBox, timersBox, packetsBox, recordBox, freezeBox;
+        CheckBox profileBox, timersBox, packetsBox, freezeBox;
         RadioButton dumpNone, dumpSmall, dumpFull;
 
         // Past tests
@@ -381,7 +376,7 @@ namespace SubVulpes
             this.folder = settings.Get("server_folder", folder);
             if (!Directory.Exists(this.folder)) this.folder = folder;
             SetFolder(this.folder);
-            Text = "OpenSubRosa24 Server" + Version();
+            Text = "SubVulpes Server" + Version();
             Font = SystemFonts.MessageBoxFont;
             ForeColor = SystemColors.ControlText;
             AutoScaleMode = AutoScaleMode.Dpi;
@@ -468,11 +463,10 @@ namespace SubVulpes
             settings.Set("server_folder", folder);
             settings.Save();
             LoadSettings();
-            recordBox.Enabled = File.Exists(Path.Combine(folder, "opensubrosa24_server_record.exe"));
             logOffset = 0;
             pendingLog = "";
             console.Clear();
-            Text = "OpenSubRosa24 Server" + Version();
+            Text = "SubVulpes Server" + Version();
         }
 
         void ShowMissing(bool configCreated)
@@ -722,11 +716,9 @@ namespace SubVulpes
             profileBox = Option("Speed profile", "Samples code each millisecond to locate slow functions.");
             timersBox = Option("Game timers", "The time of each part of the game, in the log each minute.");
             packetsBox = Option("Packet capture", "Records network traffic, including player names and chat.");
-            recordBox = Option("Harness recording", "Records function calls with a memory snapshot after 10 minutes.");
-            recordBox.Enabled = File.Exists(Path.Combine(folder, "opensubrosa24_server_record.exe"));
             freezeBox = Option("Freeze dump", "A dump when the server writes no speed line for " + FreezeSeconds + " s.");
             page.Controls.Add(Group("Speed", profileBox, timersBox));
-            page.Controls.Add(Group("Session", packetsBox, recordBox));
+            page.Controls.Add(Group("Session", packetsBox));
 
             dumpNone = new RadioButton { Text = "None", AutoSize = true };
             dumpSmall = new RadioButton { Text = "Small: the stacks of the threads (about 1 MB)", AutoSize = true };
@@ -763,7 +755,6 @@ namespace SubVulpes
             profileBox.Checked = captures.Profile;
             timersBox.Checked = captures.Timers;
             packetsBox.Checked = captures.Packets;
-            recordBox.Checked = captures.Record;
             freezeBox.Checked = captures.FreezeDump;
             dumpNone.Checked = captures.CrashDump == "none";
             dumpSmall.Checked = captures.CrashDump == "small";
@@ -789,7 +780,6 @@ namespace SubVulpes
                 return;
             captures = new Captures {
                 Profile = profileBox.Checked, Timers = timersBox.Checked, Packets = packetsBox.Checked,
-                Record = recordBox.Checked, FreezeDump = freezeBox.Checked,
                 CrashDump = dumpFull.Checked ? "full" : dumpSmall.Checked ? "small" : "none"
             };
             var match = Presets.FirstOrDefault(p => p.Captures != null && p.Captures.Same(captures)) ?? Presets[Presets.Length - 1];
@@ -804,7 +794,6 @@ namespace SubVulpes
         Captures ReadCustomCaptures()
         {
             return new Captures {
-                Record = settings.Get("custom.record", "0") == "1",
                 Profile = settings.Get("custom.profile", "1") == "1", Timers = settings.Get("custom.timers", "0") == "1",
                 Packets = settings.Get("custom.packets", "0") == "1", FreezeDump = settings.Get("custom.freeze", "1") == "1",
                 CrashDump = settings.Get("custom.crashdump", "small")
@@ -816,7 +805,6 @@ namespace SubVulpes
             var preset = (Preset)presetBox.SelectedItem;
             settings.Set("preset", preset.Name);
             if (preset.Captures == null) {
-                settings.Set("custom.record", captures.Record ? "1" : "0");
                 settings.Set("custom.profile", captures.Profile ? "1" : "0");
                 settings.Set("custom.timers", captures.Timers ? "1" : "0");
                 settings.Set("custom.packets", captures.Packets ? "1" : "0");
@@ -833,7 +821,7 @@ namespace SubVulpes
             if (server != null) return;
             developerRun = debugModeBox.Checked;
             activeCaptures = developerRun ? captures.Copy() : new Captures { CrashDump = "none" };
-            string exe = Path.Combine(folder, activeCaptures.Record ? "opensubrosa24_server_record.exe" : "opensubrosa24_server.exe");
+            string exe = Path.Combine(folder, "subvulpes_server.exe");
             if (!Directory.Exists(Path.Combine(folder, "data"))) {
                 ShowMissing(false);
                 return;
@@ -849,7 +837,7 @@ namespace SubVulpes
                 testDir = developerRun ? Path.Combine(logsRoot, stamp) : logsRoot;
                 Directory.CreateDirectory(testDir);
                 logFile = Path.Combine(testDir, "server.log");
-                string eventName = @"Local\OpenSubRosa24-stop-" + Guid.NewGuid().ToString("N");
+                string eventName = @"Local\SubVulpes-stop-" + Guid.NewGuid().ToString("N");
                 stopEvent = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.ManualReset, eventName);
                 var start = new ProcessStartInfo(exe) {
                     WorkingDirectory = folder, UseShellExecute = false, CreateNoWindow = true,
@@ -863,10 +851,6 @@ namespace SubVulpes
                 if (activeCaptures.Profile) env["SV_SAMPLE"] = Path.Combine(testDir, "profile.txt");
                 if (activeCaptures.Timers) env["SV_TIMERS"] = "1";
                 if (activeCaptures.Packets) env["SV_PACKETS"] = Path.Combine(testDir, "packets.bin");
-                if (activeCaptures.Record) {
-                    env["SV_RECORD_DIR"] = testDir;
-                    env["SV_SNAPSHOT_AFTER"] = settings.Get("snapshot_after", "600");
-                }
                 if (activeCaptures.CrashDump != "none") {
                     env["SV_DUMP"] = Path.Combine(testDir, "crash.dmp");
                     env["SV_DUMP_TYPE"] = activeCaptures.CrashDump;
@@ -914,7 +898,7 @@ namespace SubVulpes
 
         string ServerVersion()
         {
-            var info = new FileInfo(Path.Combine(folder, "opensubrosa24_server.exe"));
+            var info = new FileInfo(Path.Combine(folder, "subvulpes_server.exe"));
             return info.Exists ? info.LastWriteTime.ToString("yyyy-MM-dd HH:mm") + ", " + info.Length + " bytes" : "?";
         }
 
@@ -994,8 +978,7 @@ namespace SubVulpes
             } else if (Regex.IsMatch(line, @"^Server started on port \d+\.$")) {
                 lastSpeedLine = DateTime.Now;
                 SetState("Running");
-            } else if (line.Contains("snapshot saved")) {
-                message.Text = "Recording complete. Memory snapshot saved.";
+
             } else if (line.Contains("CRASH")) {
                 crashed = true;
             }
@@ -1321,7 +1304,7 @@ namespace SubVulpes
         // Only the files of UpdateFiles come from the zip, from any folder inside it. The old
         // files go to backup\<time>. config.txt, data and user never change. The running
         // launcher cannot be overwritten, but Windows lets it be renamed: it becomes
-        // opensubrosa24_launcher.old, and the next start deletes it.
+        // subvulpes_launcher.old, and the next start deletes it.
         public async Task InstallUpdate(string zip, string releaseName = null)
         {
             if (updating) return;
@@ -1361,12 +1344,12 @@ namespace SubVulpes
                 bool newLauncher = false;
                 try {
                     foreach (var f in found) {
-                        string target = f.Key.Equals("opensubrosa24_launcher.exe", StringComparison.OrdinalIgnoreCase)
+                        string target = f.Key.Equals("subvulpes_launcher.exe", StringComparison.OrdinalIgnoreCase)
                             ? Application.ExecutablePath : Path.Combine(folder, f.Key);
                         if (File.Exists(target))
                             File.Copy(target, Path.Combine(backup, f.Key), true);
-                        if (f.Key.Equals("opensubrosa24_launcher.exe", StringComparison.OrdinalIgnoreCase)) {
-                            string old = Path.Combine(launcherFolder, "opensubrosa24_launcher.old");
+                        if (f.Key.Equals("subvulpes_launcher.exe", StringComparison.OrdinalIgnoreCase)) {
+                            string old = Path.Combine(launcherFolder, "subvulpes_launcher.old");
                             if (File.Exists(old))
                                 File.Delete(old);
                             File.Move(Application.ExecutablePath, old);
@@ -1386,7 +1369,7 @@ namespace SubVulpes
                     Close();
                     return;
                 }
-                Text = "OpenSubRosa24 Server" + Version();
+                Text = "SubVulpes Server" + Version();
                 updating = false;
                 message.Text = "Update installed" + version + ". Old files: backup\\" + Path.GetFileName(backup);
             }
@@ -1394,7 +1377,7 @@ namespace SubVulpes
 
         void CleanOldLauncher()
         {
-            string old = Path.Combine(launcherFolder, "opensubrosa24_launcher.old");
+            string old = Path.Combine(launcherFolder, "subvulpes_launcher.old");
             try {
                 if (File.Exists(old))
                     File.Delete(old);
