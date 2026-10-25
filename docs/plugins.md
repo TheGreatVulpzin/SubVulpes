@@ -1,13 +1,13 @@
 # Plugin system of the SubVulpes server (plan)
 
-Status: idea. Nothing is built. Do not change code for this during the decomp (see `docs/ideas.md`).
+Status: S4 design proposal. No plugin API or host exists in S0. See `plano.md`.
 
 Goal: a deep and integrated plugin system. A plugin can change almost any part of the server, not only react to a few events.
 
 ## Terms
 
 - Plugin: code that runs in the server. It has three kinds: native (C), Lua and WASM. It works with the original client.
-- Mod: assets for the client (models, textures, sounds). The server offers them and the SubVulpes client downloads them. They need a client with support for custom assets (Phase 7). A mod has no code, so it has less risk than a plugin.
+- Mod: assets for the client (models, textures, sounds). The server offers them and the OverRosa client downloads them. They need a client with support for custom assets (a later milestone). A mod has no code, so it has less risk than a plugin.
 - Package: a folder with a `manifest` (name, version, hash) and two parts: `plugin/` and `assets/`. A package can hold a plugin, a mod or both. The manager shows which parts it has.
 - A plugin can need a mod. An original client ignores the mods, so the plugin needs a fallback (for example, an item of the original game in place of a new item).
 - The hash warning below is for native plugins only. A mod has no code.
@@ -63,7 +63,7 @@ Cost: each new function of the API is work in three places. Keep the API small a
 
 Level 1 only:
 
-- The server calls the plugin inside a structured exception handler (SEH on Windows). A memory fault in the plugin removes the plugin. The server continues.
+- The server calls the plugin inside a structured exception handler (SEH on Windows). A memory fault in the plugin removes the plugin. A fault can corrupt shared state. SEH does not make native plugins safe.
 - A watchdog checks the time of each event. A plugin that runs over the limit (for example 5 ms) is marked bad.
 - Three failures remove the plugin from the list.
 - Limit: this does not find a plugin that writes wrong data without a crash. The damage shows later, in other code.
@@ -131,18 +131,12 @@ Places for a plugin:
 - Cars: change the path or the speed.
 - Creation: `bot.spawn(...)` with name, team and item.
 
-Care: a plugin that changes the number of `os_rand()` calls changes the simulation. This matters for the gate only.
+Care: a plugin that changes the number of `os_rand()` calls changes the simulation. This changes the simulation and needs explicit tests.
 
-## Gate
+## Tests
 
-The gate compares the server with the original `024d`. After a deliberate change of behavior, it has no meaning for SubVulpes.
-
-- OpenSubRosa keeps the gate. It protects optimizations and ports.
-- SubVulpes leaves the gate when the rewrite ends.
-- Before that, make a git tag at the last commit with 0 differences (for example `bit-exact-final`). It is the start of OpenSubRosa.
-- Keep the recordings and the `sv_args.min.txt` files.
-- Keep a "plugins off" mode. With no plugin loaded, SubVulpes must give the same result as the original. The harness can test this.
-- Tests for SubVulpes: tests of each event of the API, short synthetic tests (as `synth_*.py`) and a load test with bots to measure the cost of Lua for each tick.
+Test API events, invalid handles, cancellation, plugin failures and compatibility.
+Use synthetic inputs and a bot load test to measure host cost per tick.
 
 ## Server manager
 

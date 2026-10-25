@@ -1,38 +1,15 @@
 # Contributing
 
-Bug reports and pull requests are welcome.
+Report bugs and propose changes in the SubVulpes repository.
+For a large change, discuss the scope in an issue first.
+Read [the plan](docs/plano.md) and [development rules](CLAUDE.md).
 
-Download the server package from [Releases](https://github.com/TheGreatVulpzin/OpenSubRosa24/releases). See [the release process](docs/release.md).
+Write code, comments, docs and commits in English. Keep comments short and explain reasons.
+State any change to game rules or client compatibility. Add focused tests for that behavior.
+Build with `tools\build_hook.bat`. Run `python -I tools/ci/check_repo.py`.
+For runtime changes, run the server with public test data and check launcher Start and Stop.
+Include the commands and results in the pull request. State checks you could not run.
 
-## Bug reports
-
-Open an Issue. Say what you did, what you expected and what happened. Add the server log.
-
-## Pull requests
-
-- For a big change, open an Issue first.
-- Write code, comments and docs in English.
-- Keep comments short, please. Say why the code does something, not what the code already shows.
-
-## It must be bit-exact
-
-This project gives the same results as the original game.
-Fixes for invalid input are welcome.
-
-## Gate
-
-Run the gate before you open a pull request:
-
-```bash
-bash instrumentation/lift/pipeline.sh --full
-```
-
-The gate takes about 3 minutes. It needs the original game files and test recordings that are not in this repository. If you cannot run it, say so in the pull request, and the maintainer will run it.
-
-## Security problems
-
-Do not open a public Issue. Read [SECURITY.md](SECURITY.md).
-
-## Private data
-
-Never post passwords, `config.txt`, recordings or files of the original game.
+Use [the security policy](SECURITY.md) for vulnerabilities.
+Never post passwords, tokens, `config.txt`, accounts, captures, dumps or proprietary game files.
+Check and redact logs before sharing them.

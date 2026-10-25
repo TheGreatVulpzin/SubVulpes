@@ -1,6 +1,6 @@
 # Accounts
 
-An account keeps the money and the looks of a player between games. The server saves all accounts in `user/server.srk`. A player joins with two ids. The server finds the account by these ids. The file format is in [formatos.md](../formatos.md).
+An account keeps the money and the looks of a player between games. The server saves all accounts in `user/server.srk`. A player joins with two ids. The server finds the account by these ids. The account fields appear below.
 
 Only the load function is in clean C: `src/server/accounts.c`. The save, create and lookup functions still run as lifted C.
 

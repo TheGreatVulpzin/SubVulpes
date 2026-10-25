@@ -1,5 +1,9 @@
 # Game systems
 
+Based on OpenSubRosa24 at `svs-base` (`eb68519b0982583e188ceb619ff49f14f332e6d9`).
+Historical validation paths refer to the upstream checkout. Those tools are absent here.
+Use the SubVulpes build and focused runtime checks.
+
 This folder describes how each rewritten game system works. Each page lists the records, the flow of a tick or an event, the functions with their RVAs and the odd behavior that the code comments name.
 
 | Page | Files | System |
@@ -17,8 +21,6 @@ This folder describes how each rewritten game system works. Each page lists the 
 
 Related pages:
 
-- [protocol.md](../protocol.md): the wire format of the network.
-- [formatos.md](../formatos.md): the file formats.
-- [plano.md](../plano.md): the groups of the rewrite.
+- [plano.md](../plano.md): the SubVulpes milestones.
 
 The RVAs are relative to the module base of the 0.24d dedicated server. A function marked `static` in the code has no RVA in these tables.

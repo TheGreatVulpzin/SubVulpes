@@ -1,6 +1,6 @@
 # Network
 
-The network code has these parts: the packet code reads and writes the bit stream of one UDP packet, the event code makes the server events, and the server code receives from and sends to the clients. Files: `src/net/packet.c`, `events.c`, `server.c`, `netpack.c`, `commands.c`, `master.c` and `client.c`. The wire format is in [protocol.md](../protocol.md). This page does not repeat it.
+The network code has these parts: the packet code reads and writes the bit stream of one UDP packet, the event code makes the server events, and the server code receives from and sends to the clients. Files: `src/net/packet.c`, `events.c`, `server.c`, `netpack.c`, `commands.c`, `master.c` and `client.c`. This page summarizes the server packet flow.
 
 ## Records
 
@@ -140,7 +140,7 @@ The client gets the events from `event_ack` to `sr_numofevents`, at most 31. `pa
 - A user (not an admin) gets a message of a human or an item only when it is near. The value is `256 / d`, where `d` is the distance to the listener. Range mode 0 multiplies it by 0.25, mode 2 by 2, and an item by 0.25 more. Below 4 the event is a placeholder.
 - The player of a human gets its own chat text, the one before the word filter.
 
-The fields of each type are in [protocol.md](../protocol.md). Types 8 and 11 to 16 write whole 4-byte fields.
+The packet writers define the fields of each type. Types 8 and 11 to 16 write whole 4-byte fields.
 
 ## Priorities
 
