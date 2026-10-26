@@ -1,6 +1,8 @@
 # Game systems
 
-Based on OpenSubRosa24 at `svs-base` (`eb68519b0982583e188ceb619ff49f14f332e6d9`).
+Initially based on OpenSubRosa24 at `svs-base` (`eb68519b0982583e188ceb619ff49f14f332e6d9`).
+The server now includes upstream direct-call and typed-storage commits `ed4aef5` and `6e56d22`.
+See [synchronization evidence](../upstream-sync.md).
 Historical validation paths refer to the upstream checkout. Those tools are absent here.
 Use the SubVulpes build and focused runtime checks.
 

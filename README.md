@@ -5,10 +5,12 @@ It supports changes to core rules, admin tools and a future plugin API.
 The future modified client is OverRosa.
 
 Source: `svs-base`, commit `eb68519b0982583e188ceb619ff49f14f332e6d9`.
-This repository uses a one-time source import because `git filter-repo` was not installed.
+This repository started with a source import because `git filter-repo` was not installed.
+It now includes the direct-call and native-storage changes from upstream commits `ed4aef5` and `6e56d22`.
 It does not contain the upstream verification tools or proprietary binaries.
 
-Status: **S0**. Windows x86 server and launcher build. Local runtime checks are documented in [S0 results](docs/s0.md).
+Status: **S1 and S2 code migration imported**. The Windows x86 server uses direct C calls and owned typed storage.
+See [synchronization checks and limits](docs/upstream-sync.md). Earlier checks remain in [S0 results](docs/s0.md).
 Later milestones are in [the plan](docs/plano.md).
 
 ## Build and run
@@ -19,6 +21,8 @@ Open an x86 Native Tools prompt, or set `VCVARS` to your `vcvars32.bat` path.
 ```bat
 tools\build_hook.bat
 python -I tools\ci\check_repo.py
+python -I tools\re\gen_storage.py --check
+python -I tools\ci\check_native.py
 ```
 
 Outputs: `build/server/subvulpes_server.exe` and `build/launcher/subvulpes_launcher.exe`.

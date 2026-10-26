@@ -1,7 +1,9 @@
 # SubVulpes milestones
 
 SubVulpes is the modified server. OverRosa is the future modified client.
-The runtime base comes from `svs-base`, commit `eb68519b0982583e188ceb619ff49f14f332e6d9`.
+The initial base comes from `svs-base`, commit `eb68519b0982583e188ceb619ff49f14f332e6d9`.
+The direct-call and native-storage changes from OpenSubRosa24 commits `ed4aef5` and `6e56d22` are now imported.
+See [synchronization evidence](upstream-sync.md) for local checks and remaining validation limits.
 
 ## S0: Runnable base
 
@@ -12,13 +14,14 @@ Record observed results and limits in `docs/s0.md`. S0 does not prove full gamep
 
 ## S1: Direct calls
 
-Remove `src/standalone/fn_table.c` and `CODE(rva)` dispatch. Use direct C calls.
-Keep startup and normal gameplay working after each conversion.
+**Code complete.** The server calls C functions directly. The address dispatch table is removed.
+Build and startup/stop checks pass. Live gameplay equivalence remains outside the available local proof.
 
 ## S2: Global access
 
-Add an access layer for globals. Move globals into real C variables in later changes.
-Preserve initialization, sizes and dependencies during the transition.
+**Code complete.** The server owns 138 separate typed objects, with no reconstructed image region.
+Initial values, capacities, aliases and deterministic entity checks match the upstream migration tests.
+The type and storage generators run without a game executable. S3 work has not started.
 
 ## S3: Rules and administration
 
