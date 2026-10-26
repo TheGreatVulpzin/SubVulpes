@@ -10,6 +10,12 @@
 #include "objects.h"
 #include "player.h"
 #include "sr_server.h"
+#include "plugin_game_internal.h"
+
+_Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
+_Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
+_Static_assert(sizeof(SvEvent) == 12, "Preserve event ABI v1");
+_Static_assert(sizeof(SvPlugin) == 92, "Preserve plugin ABI v1");
 
 #define CHECK(test) do { if (!(test)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #test); exit(1); \
@@ -111,14 +117,55 @@ int main(void)
     CHECK(sv_entity_capacity(0) == 0);
     CHECK(sv_entity_capacity(UINT32_MAX) == 0);
     CHECK(sv_entity_at(0, 0) == 0);
-    CHECK(sv_game_start());
+    CHECK(sv_plugins_start());
     player_lifetime();
     body_lifetime();
     item_lifetime();
     object_lifetime();
     account_lifetime();
+    sr_players[0].money = 4242;
+    memset(sr_players[0].name, 'P', sizeof sr_players[0].name);
+    sr_players[0].account = 0;
+    sr_players[0].human_id = 0;
+    sr_humans[0].player_id = 0;
+    sr_humans[0].account = 0;
+    sr_humans[0].vehicle_id = 0;
+    sr_humans[0].health = 37;
+    sr_humans[0].inventory[0].count = 1;
+    sr_humans[0].inventory[0].items[0] = 0;
+    sr_items[0].parent_human = 0;
+    sr_items[0].parent_slot = 0;
+    sr_data_object[0].driver = 0;
+    sr_data_object[0].num_seats = 1;
+    sr_data_server.max_players = 128;
+    sr_data_game_world.clock = 123456;
+    CHECK(!sv_game_is_ready());
+    sv_game_ready();
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed());
+    sr_humans[0].inventory[0].count = 9;
+    sr_humans[0].vehicle_id = -1;
+    sr_items[0].num_children = -1;
+    sr_data_object[0].num_wheels = 33;
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed());
+    sr_humans[0].inventory[0].count = 0;
+    sr_items[0].num_children = 0;
+    sr_data_object[0].num_wheels = 0;
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed());
+    sv_game_reset();
+    sv_entities_clear(SV_ENTITY_HUMAN);
+    sv_entities_clear(SV_ENTITY_ITEM);
+    sv_entities_clear(SV_ENTITY_OBJECT);
+    sv_entities_clear(SV_ENTITY_ACCOUNT);
+    sv_entity_deleted(SV_ENTITY_PLAYER, 0);
+    sv_entity_created(SV_ENTITY_PLAYER, 0);
+    CHECK(sv_game_read.world(1, &(SvWorldState){ sizeof(SvWorldState) }) == SV_STATE);
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed());
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
-    sv_game_stop();
+    sv_plugins_stop();
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);
     CHECK(sv_game_start());
     sv_entity_created(SV_ENTITY_PLAYER, 0);

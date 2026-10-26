@@ -3,6 +3,7 @@
 #define SV_PLUGIN_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef _WIN32
 #define SV_CALL __cdecl
@@ -56,7 +57,10 @@ typedef struct SvHost {
     SvResult (SV_CALL *status)(SvOwner owner, SvStatus *status);
     SvResult (SV_CALL *command)(SvOwner owner, const char *name, uint32_t permission, SvCommandFn callback);
     SvResult (SV_CALL *subscribe)(SvOwner owner, uint32_t events, SvEventFn callback);
+    SvResult (SV_CALL *get_api)(SvOwner owner, uint32_t capability, uint32_t version, const void **api);
 } SvHost;
+
+#define SV_HOST_V1_SIZE ((uint32_t)offsetof(SvHost, get_api))
 
 typedef struct {
     uint32_t size;

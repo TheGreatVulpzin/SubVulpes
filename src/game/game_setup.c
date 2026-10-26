@@ -1,6 +1,7 @@
 /* Asset identifiers and game reset. */
 #include "logic.h"
 #include "plugin_entities.h"
+#include "plugin_host.h"
 #include "level.h"
 
 #include <string.h>
@@ -137,6 +138,7 @@ void resetgame(void)
     int i, j, round;
     const vec3 *start;
     vec3 pos, rot[3];
+    sv_game_reset();
     sr_serverinfo.ban_candidate = -1;
     if (sr_game.gametype == 3 && sr_server)
         saveaccountsserver();

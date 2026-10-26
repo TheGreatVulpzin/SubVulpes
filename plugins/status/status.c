@@ -25,7 +25,7 @@ static SvResult SV_CALL status_command(SvOwner owner, uint64_t actor, const char
 
 static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
 {
-    if (host->abi != SV_PLUGIN_ABI || host->size < sizeof *host)
+    if (host->abi != SV_PLUGIN_ABI || host->size < SV_HOST_V1_SIZE)
         return SV_INCOMPATIBLE;
     api = host;
     return api->command(owner, "status", SV_COMMAND_PUBLIC, status_command);

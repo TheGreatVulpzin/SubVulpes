@@ -28,6 +28,10 @@ void sv_control_stop(void);
 void sv_game_status(SvStatus *status);
 int sv_game_start(void);
 void sv_game_stop(void);
+void sv_game_ready(void);
+void sv_game_reset(void);
+SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
+int sv_plugins_context(SvOwner owner);
 int sv_game_actor_admin(uint64_t actor);
 void sv_log(const char *fmt, ...);
 

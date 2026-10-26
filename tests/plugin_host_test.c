@@ -8,6 +8,13 @@
 
 int sv_game_start(void) { return 1; }
 void sv_game_stop(void) {}
+SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api)
+{
+    (void)capability;
+    (void)version;
+    (void)api;
+    return SV_NOT_FOUND;
+}
 
 void sv_log(const char *format, ...)
 {

@@ -28,6 +28,21 @@ static SvModule *owner_module(SvOwner owner)
     return module->state == SV_MODULE_ACTIVE || module->enabling ? module : NULL;
 }
 
+int sv_plugins_context(SvOwner owner)
+{
+    return !stopping && owner_module(owner) != NULL;
+}
+
+static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_t version, const void **api)
+{
+    if (!sv_plugins_context(owner))
+        return SV_STATE;
+    if (!api)
+        return SV_INVALID;
+    *api = NULL;
+    return sv_game_api(capability, version, api);
+}
+
 static SvResult SV_CALL host_log(SvOwner owner, const char *text)
 {
     SvModule *module = owner_module(owner);
@@ -86,7 +101,7 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
 }
 
 static const SvHost host = {
-    sizeof(SvHost), SV_PLUGIN_ABI, host_log, host_status, host_command, host_subscribe
+    sizeof(SvHost), SV_PLUGIN_ABI, host_log, host_status, host_command, host_subscribe, host_get_api
 };
 
 static int find_module(const char *id)

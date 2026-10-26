@@ -190,6 +190,7 @@ void __cdecl sr_dedicatedserverloop(void)
     if (sr_option.gametype != 3 && sr_option.gametype != 4)
         sr_game.gametype = 3;
     resetgame();
+    sv_game_ready();
     g_dedicated = 1;
 
     /* 16 ms ticks. Behind by 16 ms or more: run up to 5 ticks, then wait again. After the

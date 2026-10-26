@@ -27,6 +27,10 @@ foreach(header sr_types.h sr_runtime.h sr_storage.h sr_storage_types.h sr_limits
 endforeach()
 set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c src/platform/x87_math.c
     APPEND PROPERTY OBJECT_DEPENDS "${SV_STORAGE_HEADERS}")
+file(GLOB SV_PLUGIN_HEADERS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/plugins/*.h")
+set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c plugins/status/status.c
+    tests/plugin_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c
+    APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
 target_link_options(subvulpes-server PRIVATE /LARGEADDRESSAWARE /MAP /DEBUG)
 set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 
@@ -109,9 +113,16 @@ if(BUILD_TESTING)
     target_compile_options(sv-game-test PRIVATE /W4 /WX /utf-8)
     target_link_options(sv-game-test PRIVATE /LARGEADDRESSAWARE)
     set_target_properties(sv-game-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/tests/game-api")
-    add_test(NAME game-api COMMAND sv-game-test)
-    set_tests_properties(game-api PROPERTIES WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests/game-api")
+    add_library(sv-game-read-fixture MODULE tests/plugin_game_fixture.c)
+    target_include_directories(sv-game-read-fixture PRIVATE src/plugins)
+    target_compile_definitions(sv-game-read-fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(sv-game-read-fixture PRIVATE /W4 /WX /utf-8)
+    target_link_options(sv-game-read-fixture PRIVATE /EXPORT:sv_plugin_entry)
+    set_target_properties(sv-game-read-fixture PROPERTIES PREFIX "" OUTPUT_NAME game-read-fixture
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME game-api COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/test_game_api.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-handle-test tests/plugin_handles_test.c src/plugins/plugin_handles.c)
     target_include_directories(sv-handle-test PRIVATE src/plugins)
     target_compile_options(sv-handle-test PRIVATE /W4 /WX /utf-8)
