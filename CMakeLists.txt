@@ -11,18 +11,22 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 file(GLOB SV_GAME_SOURCES CONFIGURE_DEPENDS src/common/*.c src/net/*.c src/game/*.c src/server/*.c)
 list(APPEND SV_GAME_SOURCES src/platform/os_calls.c)
 add_executable(subvulpes-server
-    src/standalone/main.c src/standalone/fn_table.c src/standalone/image_024d.c
-    src/lifted/lifted_024d.c src/lifted/lifted_table.c src/lifted/x87_intrinsics.c
+    src/standalone/main.c src/platform/x87_math.c
     src/platform/plat_imports.c ${SV_GAME_SOURCES})
 target_include_directories(subvulpes-server PRIVATE
-    src/include src/lifted src/standalone src/platform src/common src/net src/game)
+    src/include src/platform src/common src/net src/game)
 target_compile_definitions(subvulpes-server PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
 target_compile_options(subvulpes-server PRIVATE /W4 /WX /utf-8)
 set_source_files_properties(${SV_GAME_SOURCES} PROPERTIES COMPILE_OPTIONS "/arch:IA32;/Z7")
-set_source_files_properties(src/game/ai_car.c src/lifted/lifted_024d.c
+set_source_files_properties(src/game/ai_car.c
     PROPERTIES COMPILE_OPTIONS "/arch:IA32;/W0;/WX-;/we4013;/Z7")
-set_source_files_properties(src/lifted/x87_intrinsics.c src/lifted/lifted_table.c
-    PROPERTIES COMPILE_OPTIONS "/W0;/WX-")
+
+set(SV_STORAGE_HEADERS)
+foreach(header sr_types.h sr_runtime.h sr_storage.h sr_storage_types.h sr_limits.h)
+    list(APPEND SV_STORAGE_HEADERS "${CMAKE_SOURCE_DIR}/src/include/${header}")
+endforeach()
+set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c src/platform/x87_math.c
+    APPEND PROPERTY OBJECT_DEPENDS "${SV_STORAGE_HEADERS}")
 target_link_options(subvulpes-server PRIVATE /LARGEADDRESSAWARE /MAP /DEBUG)
 set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 

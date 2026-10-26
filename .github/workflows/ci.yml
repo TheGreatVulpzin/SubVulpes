@@ -21,6 +21,8 @@ jobs:
         run: |
           python -I tools/re/gen_types.py
           git diff --exit-code -- src/include
+      - name: Check storage generation
+        run: python -I tools/re/gen_storage.py --check
   windows:
     runs-on: windows-latest
     steps:
@@ -31,3 +33,5 @@ jobs:
       - name: Build server and launcher
         shell: cmd
         run: tools\build_hook.bat
+      - name: Check native server dependencies
+        run: python -I tools/ci/check_native.py
