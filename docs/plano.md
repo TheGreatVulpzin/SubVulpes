@@ -14,14 +14,17 @@ Record observed results and limits in `docs/s0.md`. S0 does not prove full gamep
 
 ## S1: Direct calls
 
-**Code complete.** The server calls C functions directly. The address dispatch table is removed.
-Build and startup/stop checks pass. Live gameplay equivalence remains outside the available local proof.
+**Complete for the structural migration.** The server calls C functions directly. The address dispatch table is removed.
+Source review, build and startup/stop checks pass. The user accepts deferring the live client playtest.
+That follow-up does not block S1 closure or establish full gameplay equivalence.
 
 ## S2: Global access
 
-**Code complete.** The server owns 138 separate typed objects, with no reconstructed image region.
+**Complete for the structural migration.** The server owns 138 separate typed objects, with no reconstructed image region.
 Initial values, capacities, aliases and deterministic entity checks match the upstream migration tests.
-The type and storage generators run without a game executable. S3 work has not started.
+The independent source review finds no actionable introduced defect. The native checks pass again at closure.
+The type and storage generators run without a game executable. The deferred client playtest remains a follow-up.
+S3 work has not started.
 
 ## S3: Rules and administration
 

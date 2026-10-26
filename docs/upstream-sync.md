@@ -91,12 +91,37 @@ Before the documentation commit, the history audit covers nine commits and 324 u
 The audit checks known forbidden paths, binary signatures and credential patterns. It does not prove every possible secret format is absent.
 The whitespace check passes. No private test output is staged.
 
+## S1 and S2 closure review
+
+The closure review covers `b0086b9..d78dfb6` on 2026-10-26.
+The primary review checks the import, portable generators, target dependencies and compatibility boundaries.
+A separate agent reviews the runtime diff independently and makes no file changes.
+Neither review identifies an actionable introduced defect. No runtime correction is needed.
+
+The independent review checks direct-call targets and signatures, storage capacities and offsets, and pointer aliases.
+It also checks accesses that previously crossed image regions, startup, x87 math, timers and packet capture.
+The packet reader ignores the capture header base, so a zero base does not change packet parsing.
+The review uses the source diff and local verification evidence. It is not a multiplayer load or full gameplay proof.
+
+Closure rechecks pass:
+
+- `python -I tools/re/gen_storage.py --check`: 138 objects and 499,799,832 declared bytes.
+- `python -I tools/ci/check_native.py`: 67 sources, without image storage or address dispatch.
+- Native storage executable: 138 initial objects, 276 state digests, nine boundary cases and 65,536 synthetic client records.
+
+The native test output again matches the upstream verified output exactly.
+Earlier build, package, runtime and manual launcher results still apply because the reviewed runtime code does not change.
+S1 and S2 are closed for the structural migration with the user's acceptance of the available proof.
+The user defers the live client playtest. That check remains a documented follow-up and does not block milestone closure.
+No S3 work starts as part of this review.
+
 ## Evidence boundaries and rollback
 
 The upstream migration report records a passing full gate on 13 recordings and 2,087 matching calls, plus synthetic suites.
 Those differential tools are not imported or rerun in this repository.
 The local storage test checks the newly built SubVulpes game objects rather than only reusing upstream executables.
-Upstream still reports pre-existing raw differential failures and the need for additional model review.
+The upstream report lists pre-existing raw differential failures and requests additional model review.
+The closure review below covers the imported runtime changes. It does not review the excluded upstream verification tools.
 See its `docs/server-c-migration.md` at source commit `6e56d22` for those limits.
 
 No client joins during the local synchronization checks.

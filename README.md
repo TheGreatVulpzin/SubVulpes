@@ -9,7 +9,8 @@ This repository started with a source import because `git filter-repo` was not i
 It now includes the direct-call and native-storage changes from upstream commits `ed4aef5` and `6e56d22`.
 It does not contain the upstream verification tools or proprietary binaries.
 
-Status: **S1 and S2 code migration imported**. The Windows x86 server uses direct C calls and owned typed storage.
+Status: **S1 and S2 complete for the structural migration**. The Windows x86 server uses direct C calls and owned typed storage.
+Source review and native checks pass. A live client playtest remains a documented follow-up.
 See [synchronization checks and limits](docs/upstream-sync.md). Earlier checks remain in [S0 results](docs/s0.md).
 Later milestones are in [the plan](docs/plano.md).
 
@@ -31,10 +32,10 @@ Check and extract the data with `tools/release/expand_data_zip.ps1`.
 That release contains only `data/`. The public default config comes from the source tag in `tools/release/default-config.ini`.
 
 ```powershell
-.\tools\release\make_package.ps1 -Version v0.0.0-s0 -DataDir build\data-checked\data
+.\tools\release\make_package.ps1 -Version v0.0.0-s2 -DataDir build\data-checked\data
 ```
 
-Extract `build/package/SubVulpes-server-v0.0.0-s0.zip` into a test folder.
+Extract `build/package/SubVulpes-server-v0.0.0-s2.zip` into a test folder.
 Open `subvulpes_launcher.exe`, set your server settings, then click **Start** and **Stop**.
 The window title is **SubVulpes Server**. The default UDP port is 27584.
 Set an admin password before public use. Keep `config.txt`, accounts, dumps and logs private.
