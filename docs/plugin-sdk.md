@@ -2,7 +2,9 @@
 
 The current SDK targets Windows x86 native DLLs.
 It supports status, console logs, commands and tick/stop events. It has no game mutation API.
-Game APIs, entity references, broader module services, Lua and WASM remain future work.
+Most mapped read, mutation and hook APIs remain unimplemented.
+The independent handle component does not expose game entity references yet.
+The user ordered framework tests, then the full mapped API, then production plugins. Lua and WASM hosts remain future work.
 See [platform scope](plugins.md), [system coverage](plugin-api-map.md) and [S3 evidence](s3.md).
 
 ## Build and ABI
@@ -20,6 +22,7 @@ The host owns the descriptor buffer and initializes its `size`.
 The entry must return `SV_OK` and fill `size`, `abi`, `id`, `version`, `flags` and `enable`.
 The descriptor must match the manifest. The `disable` callback is optional.
 The ID buffer holds 48 bytes. The version buffer holds 24 bytes, including terminators.
+IDs and library names allow at most 47 characters. Versions allow at most 23 characters.
 Public records contain no internal game pointers.
 
 `plugins/status/status.c` is the buildable example. The normal `tools\build_hook.bat` build compiles it.
@@ -41,6 +44,7 @@ dependencies=
 
 Dependencies are comma-separated module IDs, without spaces. The limit is eight per module.
 IDs use lowercase letters, digits, dots, underscores and hyphens. They start with a letter or digit and cannot contain `..`.
+Trailing dots and Windows DOS device basenames, including names with extensions, are invalid.
 The host accepts plain x86 DLLs of at most 64 MiB.
 Link private helpers statically. The loader searches System32 for imported DLLs, with no support for arbitrary adjacent helper DLLs.
 
@@ -53,7 +57,7 @@ sv.status=enabled
 
 `required` prevents startup if activation fails and prevents disabling.
 `enabled` selects a default-enabled module. `disabled` leaves an optional module inactive.
-The optional status module is enabled in the first proof profile. No required production catalog exists yet.
+The first status module is default-enabled and non-required. No required production catalog exists yet.
 Private overrides use `[plugins]` in `user/plugins/state.ini`.
 The host lock is `user/plugins/host.lock`.
 
@@ -104,3 +108,35 @@ The approval command writes the private file. Changed bytes require new approval
 A hash proves identity, not security. Native DLLs have full process access and can block, corrupt memory or crash.
 The user-requested `--allow-unapproved-native` flag defaults off. It prints a warning and skips approval only, including during checks.
 It preserves ABI and dependency checks. Metadata inspection does not prove safe execution or client compatibility.
+
+
+## Module ZIP installation and launcher management
+
+A module ZIP contains exactly two root files: `plugin.ini` and the DLL named by its `library` field.
+The INI limit is 64 KiB. The DLL limit is 64 MiB, and the ZIP limit is 70 MiB.
+The installer rejects unsafe paths, duplicate entries, incompatible metadata and invalid x86 DLL headers without loading code.
+It checks installed dependencies before public changes.
+
+Use `tools/plugins/install_plugin.ps1` from the source tree, or `install_plugin.ps1` from the server package:
+
+```powershell
+.\install_plugin.ps1 -ServerDir C:\Servers\SubVulpes -Package C:\Packages\module.zip -Inspect
+.\install_plugin.ps1 -ServerDir C:\Servers\SubVulpes -Package C:\Packages\module.zip -ExpectedPackageHash SHA256
+```
+
+`-Inspect` reports the module ID, version, DLL hash and package hash without executing the DLL or changing the installation.
+Replace `SHA256` with the reported lowercase package hash. `-ExpectedPackageHash` rejects changed package bytes after inspection.
+It does not establish publisher trust or approve the DLL.
+
+Stop the server before installation. The shared host lock prevents installation while the host runs.
+New modules start disabled. Updates retain profile classes, other module entries, approvals and all private settings and data.
+Updates save the previous manifest and DLL in `backup/plugins/<unique>.zip`.
+Use that ZIP as `-Package` to restore the previous module. Approve exact DLL content separately when needed.
+A compatible module update needs no core rebuild.
+
+The launcher's Plugins page offers Refresh, Enable, Disable, Approve native DLL and Install / update plugin zip.
+Live controls send local commands. Offline controls save next-start state.
+The installation action inspects the ZIP, shows its identity, requests confirmation, stops the server and installs the same package bytes.
+The native bypass checkbox applies to the next Start and defaults off.
+These controls exist in the implementation. Their presence does not establish a completed visual or manual flow test.
+See [recorded evidence and limits](s3.md).

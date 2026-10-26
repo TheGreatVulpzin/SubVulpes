@@ -33,7 +33,7 @@ Activation classes belong to the selected server profile:
 - Default enabled: initially active, but the administrator can disable the module when dependencies allow it.
 - Optional: active only after the administrator selects it.
 
-The first native proof uses an optional status module. This does not establish the final required service catalog.
+The first native proof enables the status module but does not require it. This does not establish the final required service catalog.
 A remote listener stays off until its endpoint and authentication are configured.
 Reserved items A10, D11 and D12 still lack definitions. They are not inferred requirements or completed work.
 
@@ -120,7 +120,7 @@ Deliver the platform in this order:
    Demonstrate two NPC behaviors, a custom mission, an effect with an existing weapon representation and an external snapshot consumer.
    These examples exercise the contract. They are not its final ceiling.
 
-The current proof includes 41 native checks plus codec, handle and path checks.
+The current proof includes 52 native checks plus codec, handle, launcher and installation checks.
 See [S3 evidence](s3.md) for recorded results and limits. This proof does not close S3 or the full API scope.
 
 Check invalid references, exhausted resources, wrong execution phases, conflicting commands, failed activation and dependency failures.

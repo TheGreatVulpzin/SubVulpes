@@ -28,14 +28,14 @@ S3 runtime implementation is in progress. See [S3 evidence](s3.md).
 
 ## S3: Core boundaries and official native plugins
 
-**In progress. S3 remains open.** The first native foundation and optional status module exist.
+**In progress. S3 remains open.** The first native foundation and default-enabled status module exist.
 See [S3 evidence](s3.md), [plugin design](plugins.md) and [system coverage](plugin-api-map.md).
 The coverage catalog defines intended reach. The current status proof does not establish that reach.
 
 The server keeps game simulation, protocol handling and unconditional memory and representation checks in the core.
 New administration tools and configurable server policies belong in official plugins shipped with the server.
 Some official plugins are required and always active. Others are enabled by default or optional.
-These activation classes are distinct. The first proof profile uses an optional status module.
+These activation classes are distinct. The first proof profile enables the status module but does not require it.
 The production module catalog remains undefined. Define required modules before implementing those services.
 
 The goal is to update an administration or policy plugin independently when the installed core API remains compatible.
@@ -61,7 +61,7 @@ Classify A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time` before t
 Separate core invariants from plugin policy. Check compatible base fixes for OpenSubRosa24. See [placement notes](ideas.md).
 Define A10, D11 and D12 first. Their inherited identifiers still have no description.
 
-The current proof includes 41 native checks plus codec, handle and path checks. See [S3 evidence](s3.md) for results and limits.
+The current proof includes 52 native checks plus codec, handle, launcher and installation checks. See [S3 evidence](s3.md) for results and limits.
 These checks do not close the full API coverage requirement or S3.
 
 Package and version production plugins separately. Check API and module dependencies before installation or activation.
