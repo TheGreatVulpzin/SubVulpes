@@ -36,3 +36,15 @@ add_custom_command(OUTPUT "${SV_LAUNCHER}"
     DEPENDS tools/launcher/Launcher.cs tools/launcher/build.bat tools/release/default-config.ini
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" VERBATIM)
 add_custom_target(subvulpes-launcher ALL DEPENDS "${SV_LAUNCHER}")
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c
+        src/platform/x87_math.c src/platform/plat_imports.c ${SV_GAME_SOURCES})
+    target_include_directories(sv-codec-test PRIVATE src/include src/platform src/common src/net src/game)
+    target_compile_definitions(sv-codec-test PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
+    target_compile_options(sv-codec-test PRIVATE /W4 /WX /utf-8)
+    target_link_options(sv-codec-test PRIVATE /LARGEADDRESSAWARE)
+    set_target_properties(sv-codec-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME codec-bounds COMMAND sv-codec-test)
+endif()

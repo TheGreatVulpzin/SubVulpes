@@ -23,6 +23,7 @@
 #define NUM_NET_HUMANS 128
 #define NUM_NET_OBJECTS 128
 #define NUM_NET_CITYOBJECTS 128
+#define MAX_NET_ITEMS 255 /* the item count has 8 bits */
 #define BEST_HUMANS 8
 
 static void filler(void)
@@ -383,15 +384,15 @@ static void pick_objects(Connection *c, const vec3 *ref)
     }
 }
 
-/* The items to send. The list has 256 places but the count can pass 255: the extra entries
- * go into the next fields of the record, and the count of city objects is set after them. */
+/* Keep the first 255 eligible items in the existing order. Later IDs can wait indefinitely
+ * while 255 earlier IDs remain eligible. The 8-bit count must match the written list. */
 static void pick_items(const Connection *c, const vec3 *ref)
 {
     ObjectPacket *op = &sr_objectpacket;
     int *list = op->items;
     int i;
     op->num_items = 0;
-    for (i = 0; i < SR_MAX_ITEM; i++) {
+    for (i = 0; i < SR_MAX_ITEM && op->num_items < MAX_NET_ITEMS; i++) {
         const Item *it = &sr_items[i];
         if (!it->active || it->parent_item != -1 || (it->parent_human != -1 && it->parent_slot >= 2))
             continue;
@@ -442,9 +443,13 @@ static void write_humans(const ObjectPacket *op)
             continue;
         pbitwrite((const uint32_t *)&hm->vehicle_id, 8);
         pbitwrite((const uint32_t *)&hm->vehicle_seat, 4);
-        hp = (uint32_t)(hm->health + 10);
-        if ((int)hp < 0)
+        /* Clamp only the wire value. Check bounds before addition to avoid overflow. */
+        if (hm->health < -10)
             hp = 0;
+        else if (hm->health > 117)
+            hp = 127;
+        else
+            hp = (uint32_t)(hm->health + 10);
         pbitwrite(&hp, 7);
         pbitwrite((const uint32_t *)&hm->bleeding, 1);
         for (b = 0; b < 15; b++) {

@@ -154,6 +154,19 @@ The packet writers define the fields of each type. Types 8 and 11 to 16 write wh
 
 The sorting is `csradixsort` on the keys of the `Radix` record. `packobjectpacket2` is an older version (power 1.75, one list for humans and objects, a limit of 31 events). No code calls it.
 
+## Representation limits
+
+Both object packet writers select at most 255 eligible items because the count occupies eight bits.
+They preserve the existing ascending selection order. Later item identifiers can receive no updates while more than 255 items remain eligible.
+This limit prevents a wrapped count from changing the interpretation of later packet fields.
+
+The human health field stores health plus ten in seven bits.
+The writer limits this encoded value to 0 through 127, without integer overflow.
+Server health remains unchanged. Values below -10 or above 117 therefore use the nearest wire value.
+
+`tests/codec_bounds.c` checks both writers with integer extremes, large item lists, cash data and fields after the lists.
+These codec checks do not establish full client gameplay equivalence.
+
 ## Voice
 
 `calculateplayervoice` chooses the 8 voice slots of a connection when the option `voicechat` is on.
@@ -272,5 +285,5 @@ The invalid input mode uses sanitized packets or state checks. S1 cases cover bo
 - A NaN distance keeps a speaker that already has a slot (`256 < NaN` is false) but never adds a new speaker.
 
 - `recvpacket` compares the first byte of the socket id as a signed char. An id byte of 0x80 or more never matches.
-- `pbitread` does not count the leftover bits of the last byte. It can read up to 7 bits past the end of a packet.
+- `pbitread` checks partial bits against the packet length. A failed read stops later reads until the next packet.
 - `packorientation` tests each side with a compare that is false for a NaN. The form of each test decides which branch a NaN takes.
