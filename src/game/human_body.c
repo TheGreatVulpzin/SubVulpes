@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "items.h"
+#include "plugin_entities.h"
 #include "sr_os.h"
 #include "sr_runtime.h"
 #include "vectors.h"
@@ -44,6 +45,7 @@ void deletehuman(uint32_t human)
         sr_bonds[hu->muscles[k].bond].time_to_live = 0;
     }
     hu->active = 0;
+    sv_entity_deleted(SV_ENTITY_HUMAN, human);
     if (sr_server != 0) {
         ev = &sr_events[sr_numofevents];
         ev->type = EVENT_HUMAN;
@@ -241,6 +243,7 @@ int createhuman(float *posp, float *rot, int player)
     hu = &humans[h];
     memset(hu, 0, sizeof *hu);
     hu->active = 1;
+    sv_entity_created(SV_ENTITY_HUMAN, (uint32_t)h);
     hu->player_id = player;
     hu->account = -1;
     hu->despawn_timer = 0xe10;

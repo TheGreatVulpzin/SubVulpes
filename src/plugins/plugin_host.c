@@ -282,6 +282,12 @@ int sv_plugins_start(void)
     memset(commands, 0, sizeof commands);
     failed = stopping = 0;
     started = 1;
+    if (!sv_game_start()) {
+        failed = 1;
+        module_count = 0;
+        sv_log("Cannot allocate game references. Normal startup refused.");
+        return 0;
+    }
     profile_lock = sv_plugin_lock();
     if (profile_lock == INVALID_HANDLE_VALUE) {
         failed = 1;
@@ -353,6 +359,7 @@ void sv_plugins_stop(void)
         deactivate(i - 1, SV_MODULE_DISABLED, "Server stopped.");
     for (i = module_count; i > 0; --i)
         sv_plugin_unload(&modules[i - 1]);
+    sv_game_stop();
     if (profile_lock != INVALID_HANDLE_VALUE)
         CloseHandle(profile_lock);
     profile_lock = INVALID_HANDLE_VALUE;

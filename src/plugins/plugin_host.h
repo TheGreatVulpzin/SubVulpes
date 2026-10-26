@@ -26,6 +26,8 @@ void sv_control_poll(void);
 void sv_control_stop(void);
 
 void sv_game_status(SvStatus *status);
+int sv_game_start(void);
+void sv_game_stop(void);
 int sv_game_actor_admin(uint64_t actor);
 void sv_log(const char *fmt, ...);
 

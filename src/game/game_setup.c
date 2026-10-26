@@ -1,5 +1,6 @@
 /* Asset identifiers and game reset. */
 #include "logic.h"
+#include "plugin_entities.h"
 #include "level.h"
 
 #include <string.h>
@@ -91,6 +92,7 @@ static void test_players(void)
             pos.z = 143.5f;
         }
         p->active = 1;
+        sv_entity_created(SV_ENTITY_PLAYER, (uint32_t)i);
         if (i > 0)
             p->is_bot = 1;
         p->team = 0;
@@ -194,8 +196,10 @@ void resetgame(void)
     sr_numofbonds = 0;
     for (i = 0; i < 256; ++i) {
         Player *p = &sr_players[i];
-        if (p->is_bot)
+        if (p->is_bot) {
             p->active = 0;
+            sv_entity_deleted(SV_ENTITY_PLAYER, (uint32_t)i);
+        }
         p->num_purchases = 0;
         p->unused_74 = 0;
         p->num_actions = 0;
@@ -215,6 +219,9 @@ void resetgame(void)
         sr_speex.voice_ring[i].voice_off = 1;
         p->menu = sr_game.gametype == 3 ? 2 : 0;
     }
+    sv_entities_clear(SV_ENTITY_HUMAN);
+    sv_entities_clear(SV_ENTITY_OBJECT);
+    sv_entities_clear(SV_ENTITY_ITEM);
     for (i = 0; i < 512; ++i)
         sr_humans[i].active = 0;
     for (i = 0; i < 1024; ++i)
@@ -260,6 +267,7 @@ void resetgame(void)
         pos.y = 26.0f;
         pos.z = 138.0f;
         sr_players[0].active = 1;
+        sv_entity_created(SV_ENTITY_PLAYER, 0);
         sr_players[0].team = 0;
         resetorientation(rot);
         rotateorientation(rot, &rot[1], 3.1415927410125732f);

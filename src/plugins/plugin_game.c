@@ -1,7 +1,18 @@
 #include "plugin_host.h"
+#include "plugin_entities.h"
 #include "sr_runtime.h"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
+int sv_game_start(void)
+{
+    return sv_entities_start();
+}
+
+void sv_game_stop(void)
+{
+    sv_entities_stop();
+}
 
 void sv_game_status(SvStatus *status)
 {

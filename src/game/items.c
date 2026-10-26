@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "events.h"
+#include "plugin_entities.h"
 #include "sr_runtime.h"
 
 #define MAX_ITEMS 0x400
@@ -175,6 +176,7 @@ uint32_t createitem(int type, const vec3 *pos, const vec3 *vel, const vec3 rot[3
     it = &sr_items[i];
     memset(it, 0, sizeof *it);
     it->active = 1;
+    sv_entity_created(SV_ENTITY_ITEM, i);
     it->type = type;
     it->time_to_live = NO_LIMIT;
     it->parent_human = -1;
@@ -302,6 +304,7 @@ void itemtimetolive(void)
         if (it->type == ITEM_KEY && (uint32_t)it->vehicle_id < MAX_ITEMS)
             sr_objects[it->vehicle_id].time_to_live = 0; /* the vehicle goes with its key */
         it->active = 0;
+        sv_entity_deleted(SV_ENTITY_ITEM, i);
         createevent_updateitem(i);
     }
 }

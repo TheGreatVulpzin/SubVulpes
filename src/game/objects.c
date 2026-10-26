@@ -15,6 +15,7 @@
 #include "collide.h"
 #include "events.h"
 #include "objects.h"
+#include "plugin_entities.h"
 #include "profiler.h"
 #include "sr_math.h"
 #include "sr_os.h"
@@ -83,6 +84,7 @@ void objecttimetolive(void)
         sr_humans[h].vehicle_id = -1;
     }
     o->active = 0;
+    sv_entity_deleted(SV_ENTITY_OBJECT, (uint32_t)i);
     createevent_updateobject(i, 3, 0, &o->pos, NULL);
   }
 }

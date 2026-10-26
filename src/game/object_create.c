@@ -14,6 +14,7 @@
 #include "object_types.h"
 #include "objects.h"
 #include "particles.h"
+#include "plugin_entities.h"
 #include "sr_runtime.h"
 
 /* A solid body for wheel k of a type 1 car. The partner is the other wheel of the axle. */
@@ -114,6 +115,7 @@ int createobject(int type, const vec3 *pos, const vec3 *vel, const vec3 rot[3], 
   o = &sr_objects[object];
   memset(o, 0, sizeof *o);
   o->active = 1;
+  sv_entity_created(SV_ENTITY_OBJECT, (uint32_t)object);
   o->type = type;
   o->health = 100;
   o->time_to_live = 0xffff;

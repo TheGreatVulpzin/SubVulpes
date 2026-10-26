@@ -6,6 +6,7 @@
 
 #include "random.h"
 #include "sr_runtime.h"
+#include "plugin_entities.h"
 #include "sr_server.h"
 
 void *sr_import(const char *dll, const char *name);
@@ -38,6 +39,7 @@ void __cdecl sr_loadaccountsserver(void)
 
     account_key = genrand_int32();
     numofaccounts = 0;
+    sv_entities_clear(SV_ENTITY_ACCOUNT);
     account_file = fopen_("user/server.srk", "rb");
     if (!account_file)
         return;
@@ -80,6 +82,8 @@ void __cdecl sr_loadaccountsserver(void)
         if (count != 0)
             memcpy(accounts, pending, count * sizeof *pending);
         numofaccounts = count;
+        for (i = 0; i < count; ++i)
+            sv_entity_created(SV_ENTITY_ACCOUNT, (uint32_t)i);
         account_key = key;
     }
 close:

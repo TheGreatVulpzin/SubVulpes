@@ -1,5 +1,6 @@
 /* Round timers, world time and team membership. */
 #include "logic.h"
+#include "plugin_entities.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -54,6 +55,7 @@ static void expire_bot(Player *p)
         h->player_id = -1;
     }
     p->active = 0;
+    sv_entity_deleted(SV_ENTITY_PLAYER, (uint32_t)(p - sr_players));
 }
 
 static void world_test_items(void)
@@ -85,8 +87,10 @@ void logicsimulation_world(void)
     for (i = 0; i < 256; ++i) {
         Player *p = &sr_players[i];
         if (p->active && p->is_bot) {
-            if (p->human_id == -1)
+            if (p->human_id == -1) {
                 p->active = 0;
+                sv_entity_deleted(SV_ENTITY_PLAYER, (uint32_t)i);
+            }
             if (p->despawn_time != 0 && p->despawn_time < g_game_world.clock)
                 expire_bot(p);
         }

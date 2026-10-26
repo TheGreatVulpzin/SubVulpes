@@ -34,6 +34,7 @@
 #include "sr_runtime.h"
 #include "sr_server.h"
 #include "plugin_host.h"
+#include "plugin_entities.h"
 
 #ifndef SR_STANDALONE
 #include "loop_calls.h"
@@ -92,6 +93,8 @@ static void tick(void)
 
     sv_control_poll();
     sv_plugins_tick();
+    if (sv_plugins_failed())
+        return;
 
     if (sr_game.state == 2) {
         for (i = 0; i < 256; i++) {
@@ -180,6 +183,7 @@ void __cdecl sr_dedicatedserverloop(void)
     setupgame();
     for (i = 0; i < 4; i++)
         sr_market.stocks[i].price = 100.0f;
+    sv_entities_clear(SV_ENTITY_PLAYER);
     for (i = 0; i < 256; i++)
         sr_players[i].active = 0;
     sr_game.gametype = sr_option.gametype;

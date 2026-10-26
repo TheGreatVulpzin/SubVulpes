@@ -1,5 +1,6 @@
 /* Player state, input and saved equipment. */
 #include "player.h"
+#include "plugin_entities.h"
 
 #include <string.h>
 
@@ -22,6 +23,7 @@ int createplayer(void)
     p = &sr_players[i];
     memset(p, 0, sizeof(*p));
     p->active = 1;
+    sv_entity_created(SV_ENTITY_PLAYER, (uint32_t)i);
     p->team = 7;
     p->money = 50000;
     p->account = -1;
@@ -65,6 +67,7 @@ void deleteplayer(int player)
         sr_humans[p->human_id].player_id = -1;
     }
     p->active = 0;
+    sv_entity_deleted(SV_ENTITY_PLAYER, (uint32_t)player);
     createevent_updateplayer(player);
 }
 

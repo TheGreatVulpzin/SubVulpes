@@ -1,5 +1,6 @@
 /* Account names and account files. */
 #include "player.h"
+#include "plugin_entities.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -69,6 +70,7 @@ int createaccount(int player)
     a->look_b = os_rand() & 7;
     a->look_c = os_rand() & 3;
     ++sr_numofaccounts;
+    sv_entity_created(SV_ENTITY_ACCOUNT, (uint32_t)i);
     return i;
 }
 

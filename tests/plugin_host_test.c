@@ -6,6 +6,9 @@
 #include <string.h>
 #include "plugin_host.h"
 
+int sv_game_start(void) { return 1; }
+void sv_game_stop(void) {}
+
 void sv_log(const char *format, ...)
 {
     va_list args;
