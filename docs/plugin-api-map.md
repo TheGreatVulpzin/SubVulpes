@@ -49,9 +49,12 @@ Access to positions does not require OverRosa. A new map display inside the game
 2. **Derived values need real operations.** Objects rebuild their frame from particles in `src/game/objects.c:174`.
    An object teleport cannot be a single write to `Object.pos`.
    Inventory changes also need matching parent links and events.
-3. **Current codecs set real limits.** `src/net/netpack.c:445` writes health plus ten into seven bits without an upper clamp.
-   The same file writes the item count into eight bits at line 489.
-   These are API design constraints and existing S3 placement items, not fixes made by this review.
+3. **Core codecs enforce wire limits (C3/C4).** Commit `bba5b84` implements these guards in `src/net/netpack.c`.
+   Both object packet writers select the first 255 eligible items and preserve the existing order.
+   Later item identifiers can receive no updates while 255 earlier identifiers remain eligible.
+   Human health plus ten uses a wire value from 0 through 127. Bounds checks precede addition and leave server health unchanged.
+   The real [codec tests](../tests/codec_bounds.c) passed for both writers, including integer extremes, count boundaries, selection order and trailing payload.
+   See [network behavior and limits](game/network.md#representation-limits) and [S3 evidence](s3.md).
 4. **Some internal paths lack capacity checks.** `src/game/item_physics.c:171` appends a contact bond without a local capacity check.
    `scenario_getnextmission` in `src/game/logic.h` returns slot 16 when all 16 slots are active.
    API validation must cover resulting engine work as well as the immediate call.
@@ -93,12 +96,19 @@ Do not use that rule to exclude a feasible mod feature permanently.
 
 ## Effect on the delivery plan
 
-Use this catalog to define the first API contract. Record each implemented operation and its checks separately.
-Use `/status` as a loader proof only.
-Then prove game mutation with two NPC behaviors, a custom mission and a weapon effect that reuses an existing representation.
-Use an online map snapshot as the read and async-service example.
+Follow the [milestone order](plano.md):
+
+1. Complete the existing framework, status proof and framework tests. The status DLL and test fixtures remain framework proof.
+2. Complete the common API across every mapped system, with focused tests.
+   Cover reads, mutations, decisions that plugins can replace or cancel, and resources owned by plugins.
+   Record implemented coverage, unsupported operations and compatibility limits before production plugin work starts.
+3. Only after this API proof, build production gameplay and administration plugins.
+   Then demonstrate two NPC behaviors, a custom mission and a weapon effect that reuses an existing representation.
+   Use an online map snapshot as the read and async-service example.
+
 Each example needs its own acceptance conditions and client checks where applicable.
 These examples exercise the API. They do not define its final ceiling or prove coverage of every system.
+The C3/C4 guards do not close the remaining safety gaps, the mapped API or S3.
 
 The common contract remains the base for native, Lua and WASM plugins.
 Live activation is conditional on module support. Installation, native replacement and world changes can require a restart.

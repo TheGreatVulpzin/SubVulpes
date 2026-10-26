@@ -1,6 +1,7 @@
 # SubVulpes ideas
 
 These ideas are proposals. See [the milestone plan](plano.md) for the implementation order.
+Complete the existing framework proof first, then the whole mapped API with tests, then production gameplay and administration plugins.
 
 ## Server
 
@@ -16,32 +17,37 @@ These ideas are proposals. See [the milestone plan](plano.md) for the implementa
 
 ## Security work
 
-The base includes the completed input checks.
-The following items remain open because they change accepted values or add server policy.
+The base includes earlier input checks and the implemented C3/C4 codec guards.
+Other items below remain open because they change accepted values or add server policy.
+These guards do not establish that all inputs are safe or that S3 is complete.
 These identifiers refer to the inherited security notes, not the SubVulpes milestones.
 They are not a list of features to hardcode in the core. Classify the invariant and policy before implementation.
 Check compatible base fixes for OpenSubRosa24 separately. New configurable administration belongs in official plugins.
 
-| Item | Work reserved for SVS |
+| Item | Status and work |
 | --- | --- |
 | A7 | Clamp float inputs. Define the accepted range for each field. |
 | A8 | Limit the rate of query replies. |
 | A9 | Define a window for action replay. |
 | A10 | Deferred. The security plan lists this identifier without a description. Define its scope before implementation. |
 | B5 | Count admin login attempts by IP address and require a strong default password. |
-| C3 | Handle object item lists above the 255 entries that the wire count can represent. |
-| C4 | Handle human health above 117 without a wrap in the 7-bit field. |
+| C3 | Implemented core wire guard. Both object packet writers select the first 255 eligible items in the existing order. Later identifiers can receive no updates while 255 earlier identifiers remain eligible. |
+| C4 | Implemented core wire guard. Encode health plus ten from 0 through 127, with bounds checks before addition. Server health remains unchanged, including values below -10 or above 117. |
 | D11, D12 | Deferred. The security plan lists these identifiers without descriptions. Define their scope before implementation. |
 | Persistent `ban_time` | Save and load ban time. The account file does not store this field. |
 | Server name | Limit the server name to 31 characters and a null byte. The query reply sends 32 bytes. |
 
+Commit `bba5b84` implements C3/C4 in `src/net/netpack.c`.
+The real [codec tests](../tests/codec_bounds.c) passed for both writers, including integer extremes, item selection and trailing payload.
+See [network limits](game/network.md#representation-limits) and [S3 evidence](s3.md).
+Unchecked contact-bond capacity and mission slot 16 remain open in the [API safety catalog](plugin-api-map.md#source-checks-that-change-the-api-design).
 
 ### Placement decisions for S3
 
 - A7: core validates data representation and required invariants. Gameplay-specific accepted ranges need a separately defined policy.
 - A8 and A9: configurable query/replay policies can use required official plugins. Core transport and protocol safety remain unconditional.
 - B5: the administration permission/authentication plugin owns login policy. Remote interfaces declare that service as a dependency.
-- C3 and C4: core codecs enforce representable output. Plugins cannot bypass protocol bounds; gameplay limits remain a separate decision.
+- C3 and C4: implemented core codecs enforce representable output. Plugins cannot bypass protocol bounds. Gameplay limits remain a separate decision.
 - Persistent `ban_time`: an official moderation plugin owns saving, expiration policy and data format through supported lifecycle/storage interfaces.
 
 Core emits diagnostic and service events. Official plugins implement commands, RCON and selected structured log outputs.
