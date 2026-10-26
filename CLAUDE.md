@@ -3,6 +3,9 @@
 SubVulpes is a modified server, based on OpenSubRosa24 at `svs-base` (`eb68519b0982583e188ceb619ff49f14f332e6d9`).
 Read `docs/plano.md` before changes. S0 establishes the runnable Windows x86 base.
 Core rule changes belong here. OverRosa is the future modified client.
+Keep simulation, protocol handling and unconditional memory/representation checks in the core.
+Plan new administration and configurable policies as official plugins, with required modules where needed.
+Official plugins use the public API and separate versions/packages so compatible updates do not require a core rebuild.
 
 ## Scope and build
 

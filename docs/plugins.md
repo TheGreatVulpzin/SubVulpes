@@ -1,6 +1,7 @@
 # Plugin system of the SubVulpes server (plan)
 
-Status: S4 design proposal. No plugin API or host exists in S0. See `plano.md`.
+Status: design proposal. S3 adds the native foundation and official plugins. S4 adds Lua, WASM and the external SDK.
+No plugin API or host is implemented yet. See `plano.md`.
 
 Goal: a deep and integrated plugin system. A plugin can change almost any part of the server, not only react to a few events.
 
@@ -22,6 +23,47 @@ Goal: a deep and integrated plugin system. A plugin can change almost any part o
 - The server exposes players, humans, objects, items, buildings and economy as tables. The field names come from `analysis/structs/names.csv`.
 - Plugins do not change what the client calculates alone (local physics, collision with unknown object types). A change of state is safe. A change of physics can desync the client.
 
+## Core and official plugins
+
+The core owns simulation, game storage, protocol parsing and unconditional memory and representation checks.
+It also owns the native loader, the versioned API and the checks on operations requested through that API.
+Core startup diagnostics must work before plugins load.
+
+Administration commands, permission services, ban policy and persistence, RCON, log sinks and configurable policies belong in official plugins.
+The core emits events and offers validated operations. Plugins implement the service or policy behind those interfaces.
+Basic diagnostic output remains available even when no optional log sink loads.
+Port inherited administration behavior in tested steps rather than replacing it all at once.
+
+Official means shipped and maintained with SubVulpes. It does not mean compiled into the server executable.
+Use separate module files and version metadata so a compatible plugin can be updated independently.
+Official and third-party plugins use the same public API, without private memory patches or an internal-layout dependency.
+
+Activation classes:
+
+- Required: always active for the selected server profile. Missing, incompatible or disabled required modules prevent normal startup.
+- Default enabled: active on a fresh configuration, but the administrator can disable the module if no required module depends on it.
+- Optional: enabled when the administrator selects the feature and its dependencies are available.
+
+The exact module catalog and required set remain design decisions. Required does not mean that every network endpoint is enabled by default.
+Administration interfaces must not accept commands without their required authorization service.
+
+## Independent module updates
+
+A plugin package declares its version, public API requirements and module dependencies.
+The manager checks those requirements before installation and activation.
+A compatible plugin update replaces that module without rebuilding the core or unrelated plugins.
+A plugin that needs new core capabilities must declare the newer API requirement.
+
+The initial update path can stop the server, install the checked module, restart and run a focused check.
+Preserve private configuration and persistent plugin data. Keep the prior module available for rollback.
+Live unload or replacement of native code during a running match is not an initial requirement.
+The current executable-only launcher updater does not yet implement plugin installation or updates.
+
+Shimmie2 is an architecture reference: its extensions react to events and administration has a separate extension directory.
+See its [extension documentation](https://github.com/shish/shimmie2/wiki/Extension-Development)
+and [admin extension](https://github.com/shish/shimmie2/tree/main/ext/admin).
+The activation and update contract above is the SubVulpes design, not a claim about an identical Shimmie2 implementation.
+
 ## Three kinds of plugin
 
 | Kind | Who writes it | Speed | Safety |
@@ -34,7 +76,8 @@ Ease of writing, from easy to hard:
 
 1. Lua. One text file. The author installs nothing.
 2. WASM. The author chooses the language and gives one `.wasm` file. The same file runs on Windows and Linux. The author needs a compiler and the SDK.
-3. Native. The server is x86 32 bit and MSVC. A native plugin must be a 32 bit DLL, built with a compatible compiler, and it must match the struct layout of `sr_types.h`. Each new platform needs another DLL.
+3. Native. The server is x86 32 bit and MSVC. A native plugin needs a compatible 32-bit DLL and public API ABI.
+   Internal `sr_types.h` layouts are not the public plugin contract. Each new platform needs its own native build.
 
 Native plugins are for the core and for trusted authors. WASM is the main way to write fast plugins for third parties. Without an SDK (a template folder, the types of the API and one build command), WASM is not easier than native. Plan the SDK with the WASM host.
 
@@ -47,9 +90,9 @@ Design:
 
 Order of work:
 
-1. C API, events and native plugins.
-2. Lua host. It tests the API with real plugins.
-3. WASM host and SDK. This comes right after Lua. It gives fast plugins to authors who cannot build a 32 bit native DLL.
+1. S3: minimal C API, events, loader and official native plugins with separate package/update support.
+2. S4: Lua host on the tested API.
+3. S4: WASM host and SDK after Lua, with the same versioned API contract.
 
 Cost: each new function of the API is work in three places. Keep the API small and stable. Plugins need an order (priority) and a way to cancel an event (for example `on_chat` returns "block").
 

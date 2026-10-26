@@ -24,19 +24,48 @@ That follow-up does not block S1 closure or establish full gameplay equivalence.
 Initial values, capacities, aliases and deterministic entity checks match the upstream migration tests.
 The independent source review finds no actionable introduced defect. The native checks pass again at closure.
 The type and storage generators run without a game executable. The deferred client playtest remains a follow-up.
-S3 work has not started.
+S3 runtime implementation has not started.
 
-## S3: Rules and administration
+## S3: Core boundaries and official native plugins
 
-Add behavior changes A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time`.
-Define A10, D11 and D12 before implementation. The inherited notes do not define their scope.
-Add admin commands, RCON and structured logs. Define authentication and rate limits for public administration.
+The server keeps game simulation, protocol handling and unconditional memory and representation checks in the core.
+New administration tools and configurable server policies belong in official plugins shipped with the server.
+Some official plugins are required and always active. Others are enabled by default or optional.
+These activation classes are distinct. Define the required module list before implementation.
 
-## S4: Plugin API
+The goal is to update an administration or policy plugin independently when the installed core API remains compatible.
+Official plugins remain separate versioned modules rather than features compiled into the server executable.
+An update that needs a new API capability can also require a core update.
 
-Add a native C API first, then Lua, then WASM with an SDK.
-Define events, handles, API versions and compatibility rules before hosts depend on them.
-See [plugin design](plugins.md). Core rule changes can exist independently of plugins.
+Implement in this order:
+
+1. Classify A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time` by core invariant or plugin policy.
+   Check which compatible base fixes also belong in OpenSubRosa24. See [placement notes](ideas.md).
+   Define A10, D11 and D12 before implementation. Their inherited identifiers still have no description.
+2. Add the minimum native C API and loader needed by an official plugin.
+   Define events, handles, command registration, API versions, dependency checks and required-plugin startup behavior.
+   Public ABI types must not depend on internal game record layouts.
+3. Build administration commands, permission services, ban policy/persistence, RCON and log output as official plugins.
+   Core code supplies validated operations and lifecycle events. Plugins supply the policy and user-facing features.
+   Define authentication and request limits before exposing remote administration.
+4. Package and version official plugins separately. Check API and module dependencies before installation or activation.
+   Prove that a compatible plugin update needs no core rebuild and preserves private settings and plugin data.
+   A clean server restart is acceptable for installation. Live module replacement is not required for S3.
+5. Test required and optional activation, missing dependencies, API mismatches, plugin updates and runtime compatibility.
+   Required plugins use the same API and lifecycle as other plugins. Missing required modules must prevent normal startup.
+   Keep build, launcher Start/Stop, focused tests and observed gameplay limits in the milestone evidence.
+
+Loading a required RCON plugin does not enable a public listener by itself. Module activation and endpoint configuration are separate decisions.
+Define the exact command list, permissions, ban expiration rules and log outputs before implementing each official plugin.
+This section is a plan. No plugin API, loader or official plugin is implemented by the documentation change.
+
+## S4: Lua, WASM and external SDK
+
+Extend the native plugin foundation from S3 with Lua, then WASM and an SDK.
+Keep one public C API as the contract for official and third-party modules.
+Document compatibility, examples and author tools against that tested contract.
+Optional modes, integrations and other custom features use the same extension system.
+See [plugin design](plugins.md).
 
 ## Later
 
