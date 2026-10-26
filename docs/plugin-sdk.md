@@ -1,9 +1,11 @@
 # Native plugin SDK v1
 
 The current SDK targets Windows x86 native DLLs.
-It supports status, console logs, commands and tick/stop events. It has no game mutation API.
-Most mapped read, mutation and hook APIs remain unimplemented.
-The independent handle component does not expose game entity references yet.
+It supports status, console logs, commands, tick/stop events and capability lookup. It has no game mutation API.
+The first [game read contract](plugin-game-api.md) adds copied snapshots and opaque entity references.
+Its normal build, focused fixture, six-group CTest run and two isolated real server cycles passed.
+The linked evidence records exact binaries and limits. The runtime setup is not a new release package.
+Most mapped read, mutation and hook APIs remain unimplemented. The full API and S3 remain open.
 The user ordered framework tests, then the full mapped API, then production plugins. Lua and WASM hosts remain future work.
 See [platform scope](plugins.md), [system coverage](plugin-api-map.md) and [S3 evidence](s3.md).
 
@@ -24,6 +26,12 @@ The descriptor must match the manifest. The `disable` callback is optional.
 The ID buffer holds 48 bytes. The version buffer holds 24 bytes, including terminators.
 IDs and library names allow at most 47 characters. Versions allow at most 23 characters.
 Public records contain no internal game pointers.
+The optional `SvHost.get_api` field follows the original 24-byte x86 prefix, identified by `SV_HOST_V1_SIZE`.
+Check `host->size` before accessing that field. Earlier hosts can omit it.
+The [game read API](plugin-game-api.md) documents capability lookup, readiness, copied records, reference lifetime and raw-field meanings.
+Entity pages scan at most 256 physical slots and return at most the requested capacity, which cannot exceed 256.
+Empty pages can precede active entities. Continue to the documented pool capacity rather than stopping at an empty page.
+Historical item links and linked-object indices remain outside this contract until generation-safe associations exist.
 
 `plugins/status/status.c` is the buildable example. The normal `tools\build_hook.bat` build compiles it.
 It registers `status`. Its output goes to the server console.
@@ -70,6 +78,7 @@ Worker-thread calls return `SV_STATE`.
 - `status` copies tick, player count, bot count and uptime into `SvStatus`. Set its `size` first.
 - `command` registers a unique name and callback with public, admin or local permission. The host reserves `plugins`.
 - `subscribe` replaces the module subscription for `SV_EVENT_TICK` and `SV_EVENT_STOP`. A zero mask removes it.
+- `get_api` obtains a versioned capability table within the current callback context. Game reads also need world readiness.
 
 The limits are 32 modules and 128 commands across the host.
 Command callbacks receive the owner, actor and arguments. Actor zero is the local operator.
