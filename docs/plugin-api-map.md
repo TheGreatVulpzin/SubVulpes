@@ -12,7 +12,9 @@ The original client remains usable wherever its protocol and behavior support th
 Use OverRosa when a feature requires client support that the original client lacks.
 An absent API operation is work to plan, rather than a permanent restriction on mods.
 
-The inventory below describes candidate capabilities. These are not implemented public calls.
+The inventory below describes target capabilities. It does not claim complete implementation.
+The implemented [read capability](plugin-game-api.md) covers copied entity, inventory, bone and world snapshots.
+Most mutations, decisions and owned game resources remain unimplemented.
 Internal C functions establish implementation seams. They are not a safe or stable external contract by themselves.
 
 ## Coverage by system
@@ -34,11 +36,11 @@ Internal C functions establish implementation seams. They are not a safe or stab
 | [Buildings and city objects](game/buildings.md) | Floorplans, placement, special rooms, safe zones, elevators, shops and newspaper text | `buildings.h`, floorplan and city-object implementations | Validate dimensions, names, counts and room links. Some builders reuse global scratch state. Match client data for geometry and existing object types. |
 | [Level construction](game/level.md) | Seed, terrain, track, roads, intersections, tiles, building lists and generation decisions | `level.c`, `city.c`, `mesh.c`, `level.h`, `city.h` | Start with load or reset boundaries when needed. A server-only terrain change can disagree with the client. Do not promise arbitrary map streaming from the current protocol. |
 | [Network and communication](game/network.md) | Join and leave events, chat, commands, voice routing, messages, known sounds, replication priorities and server queries | `server.c`, `commands.c`, `events.c`, `netpack.c`, `server.h`, `events.h` | Keep packet parsing and unconditional bounds checks in the core. Separate policy hooks from representation checks. Client extensions require explicit capability negotiation. |
-| [System services](game/system.md) | Settings, lifecycle, timers, metrics, tasks, logs and persistence services | `main_loop.c`, `options.c`, common services and platform code | The current loop supplies callback seams. Plugin storage, bounded async work and a manager still need implementation. Client graphics settings do not affect the dedicated server. |
+| [System services](game/system.md) | Settings, lifecycle, timers, metrics, tasks, logs and persistence services | `main_loop.c`, `options.c`, common services and platform code | The current loop supplies callback seams. The native manager exists. Plugin storage and bounded async work still need implementation. Client graphics settings do not affect the dedicated server. |
 | [Math](game/math.md) | Vector, rotation, geometry and random helpers | `vectors.c`, `random.c`, `intersect.c` | Preserve engine numeric behavior. Define random-state ownership so plugin randomness does not silently change the engine sequence. Returned values must not expose shared scratch pointers. |
 
 An online map uses authorized entity snapshots and an external service.
-The engine already contains positions. A public snapshot API and bounded network service do not exist yet.
+The read API supplies entity positions. A bounded external network service remains future work.
 Access to positions does not require OverRosa. A new map display inside the game requires separate client support.
 
 ## Source checks that change the API design
