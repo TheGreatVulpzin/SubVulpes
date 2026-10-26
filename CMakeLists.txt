@@ -9,12 +9,12 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 file(GLOB SV_GAME_SOURCES CONFIGURE_DEPENDS src/common/*.c src/net/*.c src/game/*.c src/server/*.c)
-list(APPEND SV_GAME_SOURCES src/platform/os_calls.c)
+list(APPEND SV_GAME_SOURCES src/platform/os_calls.c src/plugins/plugin_files.c)
 add_executable(subvulpes-server
     src/standalone/main.c src/platform/x87_math.c
     src/platform/plat_imports.c ${SV_GAME_SOURCES})
 target_include_directories(subvulpes-server PRIVATE
-    src/include src/platform src/common src/net src/game)
+    src/include src/platform src/common src/net src/game src/plugins)
 target_compile_definitions(subvulpes-server PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
 target_compile_options(subvulpes-server PRIVATE /W4 /WX /utf-8)
 set_source_files_properties(${SV_GAME_SOURCES} PROPERTIES COMPILE_OPTIONS "/arch:IA32;/Z7")
