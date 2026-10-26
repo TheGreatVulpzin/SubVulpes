@@ -108,3 +108,8 @@ if(BUILD_TESTING)
     set_target_properties(sv-handle-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME entity-handles COMMAND sv-handle-test)
 endif()
+
+if(BUILD_TESTING)
+    add_test(NAME plugin-package-install COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_SOURCE_DIR}/tests/plugin_install_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
+endif()
