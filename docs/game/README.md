@@ -20,6 +20,9 @@ This folder describes how each rewritten game system works. Each page lists the 
 | [objects.md](objects.md) | `src/game/objects.c`, `vehicles.c`, `wheels.c`, `object_types.c`, `vehicle_types.c`, `object_create.c`, `ai_car.c` | Objects and vehicles: the frame, the engine, the wheels, the helicopter, the train and the contacts. |
 | [collision.md](collision.md) | `src/game/collide.c`, `collide_area.c`, `area.c`, `rigid.c` | Collision tests against the level, objects, humans and items. |
 | [logic.md](logic.md) | `src/game/account_db.c`, `player.c`, `economy.c`, `logic.c`, `logic_sim.c`, `player_ai.c`, `scenario.c`, `missions.c`, `game_setup.c` | Players, accounts, shops, stocks, missions, round and world flow, bot controls and game reset. |
+| [area.md](area.md) | `src/game/area.c`, block and interior builders | Block grids, interiors, block files, allocation and terrain shapes. |
+| [buildings.md](buildings.md) | Building and city-object implementations | Floorplans, building files, placement, city objects and elevators. |
+| [level.md](level.md) | `src/game/level.c`, `city.c`, `mesh.c` | Terrain, track, city roads, editor tiles and level construction. |
 
 Related pages:
 

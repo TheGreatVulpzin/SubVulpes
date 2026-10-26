@@ -2,7 +2,7 @@
 
 An account keeps the money and the looks of a player between games. The server saves all accounts in `user/server.srk`. A player joins with two ids. The server finds the account by these ids. The account fields appear below.
 
-Only the load function is in clean C: `src/server/accounts.c`. The save, create and lookup functions still run as lifted C.
+The loader is in `src/server/accounts.c`. Account creation, lookup and save functions are C implementations in `src/game/account_db.c`.
 
 ## Records
 
@@ -43,7 +43,8 @@ Version rules:
 - Version 2 rolls the looks again when all three are 0.
 - Version 3 uses the looks from the file.
 
-The load code calls the C library of the game for `fopen`, `fclose` and `rand`. It uses the `fread` pointer that the game sets. The state of `rand()` is the state of the game CRT.
+The loader keeps the original import names for compatibility. The local platform adapter maps these names to the statically linked runtime.
+Startup sets the file-read pointer. The loader does not require an original game process or `MSVCR100.dll`.
 
 ## Use of accounts in other systems
 
@@ -56,7 +57,7 @@ The load code calls the C library of the game for `fopen`, `fclose` and `rand`. 
 | --- | --- | --- | --- |
 | `sr_loadaccountsserver` (`loadaccountsserver`) | 0xe2e0 | accounts.c | Read the accounts from `user/server.srk`. |
 
-Functions of the system that are not rewritten yet:
+Additional C functions in `src/game/account_db.c`:
 
 | Function | RVA | Purpose |
 | --- | --- | --- |

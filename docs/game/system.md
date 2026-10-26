@@ -38,7 +38,7 @@ Odd behavior:
 
 `loadsaveoptions` (0x4e7a0) sets the defaults and then reads `config.txt` from the settings folder. A non-zero argument only changes to the settings folder and back.
 
-The defaults are the player name "Agent" and a number up to 511, the server name "Sub Rosa Server", a random server password, port 27584, 16 players, game type 3 and round time 7. The two random values use `srand` with the clock and `rand` of the game library.
+The defaults are the player name "Agent" and a number up to 511, the server name "Sub Rosa Server", a random server password, port 27584, 16 players, game type 3 and round time 7. The two random values use `srand` with the clock and the local runtime random functions.
 
 Each key is a line `name=value`. The keys go in this order. Each key search starts at the top of the text.
 
@@ -103,12 +103,13 @@ Odd behavior:
 `sr_getpaths` is the main function. It does these steps:
 
 1. Resets the debug log, reads the frequency of the counter and numbers the timers.
-2. Sets the pointers that the game uses to read and write files.
+2. Sets the file-service pointers through the local platform adapter. The original import names do not require an original executable.
 3. Stores the start folder and the settings folder.
 4. Loads the settings.
 5. Starts WinSock and calls `sr_dedicatedserverloop`.
 
-`sr_dedicatedserverloop` sets the server up and then runs ticks without end.
+`sr_dedicatedserverloop` sets the server up and runs ticks until the stop event is set.
+The loop checks `sv_stop_requested()` before its next wait. The standalone entry point then closes its capture and log files.
 
 Setup:
 

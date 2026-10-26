@@ -127,4 +127,4 @@ The type functions of the table above (`contact_*`, `bond_bodyrotbody`, `bond_bo
 - `loop_balance` adds three turns to bone 0 of an upright human: to the vertical, to the stance and to the body strength. This holds the person up on the ground.
 - A small integer in a float field is a denormal on the x87. It makes the code slow.
 - `contact_wheel` writes the friction into `Wheel.slip`. The wheel code reads it in the next pass.
-- The wheel and engine steps still run as lifted C (`objectwheelsimulation2`, `objectenginesimulation2`).
+- The wheel and engine steps use C implementations in `src/game/wheels.c` and `src/game/vehicles.c`.
