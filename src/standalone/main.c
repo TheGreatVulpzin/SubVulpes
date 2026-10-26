@@ -17,6 +17,7 @@
 #include "sr_runtime.h"
 #include "sr_math.h"
 #include "platform.h"
+#include "plugin_host.h"
 
 
 void __cdecl sr_getpaths(void);
@@ -301,10 +302,28 @@ static DWORD WINAPI test_crash(void *arg)
     return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     unsigned cw;
+    int cli, argument;
     const char *stop_name = getenv("SV_STOP_EVENT");
+    for (argument = 1; argument < argc; ++argument) {
+        if (!strcmp(argv[argument], "--allow-unapproved-native")) {
+            sv_plugins_native_bypass(1);
+            memmove(argv + argument, argv + argument + 1, (size_t)(argc - argument) * sizeof *argv);
+            --argc;
+            --argument;
+        }
+    }
+    if (argc > 1) {
+        cli = sv_plugins_cli(argc, argv);
+        if (cli >= 0)
+            return cli;
+        fprintf(stderr, "Use --plugins-check, --plugins-list, --plugin-enable ID, --plugin-disable ID,\n"
+                        "--plugin-hash ID, or --plugin-approve ID SHA256.\n"
+                        "--allow-unapproved-native skips content approval only.\n");
+        return 2;
+    }
     if (stop_name) {
         g_stop_event = OpenEventA(SYNCHRONIZE, FALSE, stop_name);
         if (!g_stop_event) {
@@ -317,11 +336,22 @@ int main(void)
     /* Keep 53-bit x87 precision for game calculations. */
     _controlfp_s(&cw, _PC_53, _MCW_PC);
     x87_init();
+    if (!sv_plugins_start()) {
+        sv_plugins_stop();
+        if (g_log)
+            fclose(g_log);
+        if (g_stop_event)
+            CloseHandle(g_stop_event);
+        return 2;
+    }
+    sv_control_start();
     open_packets();
     start_sampler();
     if (getenv("SV_TEST_CRASH"))
         CreateThread(NULL, 0, test_crash, (void *)(uintptr_t)atoi(getenv("SV_TEST_CRASH")), 0, NULL);
     sr_getpaths();
+    sv_control_stop();
+    sv_plugins_stop();
     InterlockedExchange(&g_sampler_stop, 1);
     if (g_sampler) {
         WaitForSingleObject(g_sampler, INFINITE);
@@ -338,5 +368,5 @@ int main(void)
         fclose(g_log);
     if (g_stop_event)
         CloseHandle(g_stop_event);
-    return 0;
+    return sv_plugins_failed() ? 2 : 0;
 }

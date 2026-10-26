@@ -1,6 +1,6 @@
 # Plugin platform
 
-Status: approved design. Implementation evidence must state which operations and hosts exist.
+Status: approved design. S3 remains open. Implementation evidence must state which operations and hosts exist.
 See [the milestones](plano.md) and [system coverage](plugin-api-map.md).
 The coverage catalog describes the intended reach. It does not claim a complete public API.
 
@@ -91,6 +91,8 @@ A compatible module update does not require a core rebuild.
 
 ## Lua and WASM
 
+Lua and WASM hosts follow the common API coverage proof and remain S4 work.
+Both hosts use the tested common contract. Their planned role does not imply that either host exists.
 Prioritize Lua and WASM for third-party code that needs containment.
 Each plugin has separate runtime state, memory limits, execution limits and authorized host services.
 Lua needs protected calls, an allocator budget and an instruction budget.
@@ -105,11 +107,21 @@ The SDK must include a buildable example, capability requirements, errors and a 
 
 ## Delivery and acceptance
 
-First establish the native contract, loader, status proof and manager states.
-Then add dependency checks, content approval, command cleanup and compatible module replacement after restart.
-Expand the API by system with focused checks before exposing broader mutation.
-Demonstrate two NPC behaviors, a custom mission, an effect using an existing weapon representation and an external snapshot consumer.
-These examples exercise the contract. They are not its final ceiling.
+Deliver the platform in this order:
+
+1. Complete the existing native framework, status proof and framework tests.
+   Cover loader and manager states, dependencies, content approval, command cleanup and compatible module replacement after restart.
+   The status DLL and test fixtures are framework proof. They do not start production gameplay or administration plugin work.
+2. Complete the common API across every mapped system, with focused tests for each capability.
+   Include reads, mutations, decisions that plugins can replace or cancel, and resources owned by plugins.
+   Prove handle lifetimes, packed relocation, execution phases, bounds, failures and resource limits.
+   Record implemented coverage, unsupported operations and original-client limits before production plugin work starts.
+3. Only after this API proof, build production gameplay and administration plugins.
+   Demonstrate two NPC behaviors, a custom mission, an effect with an existing weapon representation and an external snapshot consumer.
+   These examples exercise the contract. They are not its final ceiling.
+
+The current proof includes 41 native checks plus codec, handle and path checks.
+See [S3 evidence](s3.md) for recorded results and limits. This proof does not close S3 or the full API scope.
 
 Check invalid references, exhausted resources, wrong execution phases, conflicting commands, failed activation and dependency failures.
 Check controlled shutdown, launcher Start/Stop and absence of residual processes.

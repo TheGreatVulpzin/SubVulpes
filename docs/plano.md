@@ -24,44 +24,64 @@ That follow-up does not block S1 closure or establish full gameplay equivalence.
 Initial values, capacities, aliases and deterministic entity checks match the upstream migration tests.
 The independent source review finds no actionable introduced defect. The native checks pass again at closure.
 The type and storage generators run without a game executable. The deferred client playtest remains a follow-up.
-S3 runtime implementation has not started.
+S3 runtime implementation is in progress. See [S3 evidence](s3.md).
 
 ## S3: Core boundaries and official native plugins
+
+**In progress. S3 remains open.** The first native foundation and optional status module exist.
+See [S3 evidence](s3.md), [plugin design](plugins.md) and [system coverage](plugin-api-map.md).
+The coverage catalog defines intended reach. The current status proof does not establish that reach.
 
 The server keeps game simulation, protocol handling and unconditional memory and representation checks in the core.
 New administration tools and configurable server policies belong in official plugins shipped with the server.
 Some official plugins are required and always active. Others are enabled by default or optional.
-These activation classes are distinct. Define the required module list before implementation.
+These activation classes are distinct. The first proof profile uses an optional status module.
+The production module catalog remains undefined. Define required modules before implementing those services.
 
 The goal is to update an administration or policy plugin independently when the installed core API remains compatible.
 Official plugins remain separate versioned modules rather than features compiled into the server executable.
 An update that needs a new API capability can also require a core update.
 
-Implement in this order:
+Continue implementation in this order:
 
-1. Classify A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time` by core invariant or plugin policy.
-   Check which compatible base fixes also belong in OpenSubRosa24. See [placement notes](ideas.md).
-   Define A10, D11 and D12 before implementation. Their inherited identifiers still have no description.
-2. Add the minimum native C API and loader needed by an official plugin.
-   Define events, handles, command registration, API versions, dependency checks and required-plugin startup behavior.
-   Public ABI types must not depend on internal game record layouts.
-3. Build administration commands, permission services, ban policy/persistence, RCON and log output as official plugins.
-   Core code supplies validated operations and lifecycle events. Plugins supply the policy and user-facing features.
-   Define authentication and request limits before exposing remote administration.
-4. Package and version official plugins separately. Check API and module dependencies before installation or activation.
-   Prove that a compatible plugin update needs no core rebuild and preserves private settings and plugin data.
-   A clean server restart is acceptable for installation. Live module replacement is not required for S3.
-5. Test required and optional activation, missing dependencies, API mismatches, plugin updates and runtime compatibility.
-   Required plugins use the same API and lifecycle as other plugins. Missing required modules must prevent normal startup.
-   Keep build, launcher Start/Stop, focused tests and observed gameplay limits in the milestone evidence.
+1. Complete the existing native framework, status proof and framework tests.
+   Prove loader and manager states, versions, dependencies, content approval, command ownership, events and required-module failures.
+   The status DLL and test fixtures prove the framework. They are not new production plugin work.
+2. Complete the common API across every system in the [coverage catalog](plugin-api-map.md), with focused tests.
+   Cover reads, mutations, decisions that plugins can replace or cancel, and resources owned by plugins.
+   Add stable handles, relocation tracking, execution phases, lifecycle events, bounds and resource limits where each system needs them.
+   Keep public ABI types independent of internal game record layouts.
+   Record each mapped capability, its tested behavior and any unsupported operation or client limit before production plugin work starts.
+3. Only after the API coverage proof, build production gameplay and administration plugins.
+   Include administration commands, permissions, ban policy and persistence, RCON and optional log output.
+   Then demonstrate two NPC behaviors, a custom mission, an effect with an existing weapon representation and an external snapshot consumer.
+   Core operations supply validated game access and lifecycle events. Plugins supply policy and features.
+
+Classify A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time` before their corresponding implementation.
+Separate core invariants from plugin policy. Check compatible base fixes for OpenSubRosa24. See [placement notes](ideas.md).
+Define A10, D11 and D12 first. Their inherited identifiers still have no description.
+
+The current proof includes 41 native checks plus codec, handle and path checks. See [S3 evidence](s3.md) for results and limits.
+These checks do not close the full API coverage requirement or S3.
+
+Package and version production plugins separately. Check API and module dependencies before installation or activation.
+Prove that a compatible plugin update needs no core rebuild and preserves private settings and plugin data.
+A clean server restart is acceptable for installation. Live module replacement is not required for S3.
+Check the normal build, controlled shutdown, launcher Start/Stop and runtime compatibility. Record focused tests and observed gameplay limits in the milestone evidence.
+Required plugins use the common API and lifecycle. Missing required modules must prevent normal startup.
 
 Loading a required RCON plugin does not enable a public listener by itself. Module activation and endpoint configuration are separate decisions.
+Define authentication and request limits before exposing remote administration.
 Define the exact command list, permissions, ban expiration rules and log outputs before implementing each official plugin.
-This section is a plan. No plugin API, loader or official plugin is implemented by the documentation change.
+The native foundation does not close the game API or official service work.
+The complete mapped API remains future work. Production plugins and the gameplay examples follow its coverage proof.
+Keep these examples within the original client limits stated in the system coverage catalog.
+Lua, WASM and the external SDK remain later work in S4.
 
 ## S4: Lua, WASM and external SDK
 
-Extend the native plugin foundation from S3 with Lua, then WASM and an SDK.
+After the common API proof in S3, add Lua, then WASM hosts and an SDK.
+Both hosts use the tested common API. Their implementation and acceptance remain S4 work.
 Keep one public C API as the contract for official and third-party modules.
 Document compatibility, examples and author tools against that tested contract.
 Optional modes, integrations and other custom features use the same extension system.

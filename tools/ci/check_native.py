@@ -33,7 +33,7 @@ def main():
             if forbidden.search(entry['path']):
                 raise SystemExit('Transition include path in server target.')
     files = [ROOT / path for path in sources if path.endswith('.c')]
-    for folder in ('common', 'game', 'net', 'server'):
+    for folder in ('common', 'game', 'net', 'server', 'plugins'):
         files.extend((ROOT / 'src' / folder).glob('*.h'))
     files.extend(ROOT / 'src/include' / name for name in
                  ('sr_runtime.h', 'sr_storage.h', 'sr_storage_types.h', 'sr_limits.h', 'sr_types.h', 'sr_math.h'))

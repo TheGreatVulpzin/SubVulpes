@@ -33,6 +33,7 @@
 #include "sr_os.h"
 #include "sr_runtime.h"
 #include "sr_server.h"
+#include "plugin_host.h"
 
 #ifndef SR_STANDALONE
 #include "loop_calls.h"
@@ -88,6 +89,9 @@ static int simulating(int state)
 static void tick(void)
 {
     int i, state;
+
+    sv_control_poll();
+    sv_plugins_tick();
 
     if (sr_game.state == 2) {
         for (i = 0; i < 256; i++) {
@@ -192,7 +196,7 @@ void __cdecl sr_dedicatedserverloop(void)
     sv_log("Server started on port %u.", (unsigned)(uint16_t)sr_bsdsocket.port);
     for (;;) {
 #ifdef SR_STANDALONE
-        if (sv_stop_requested())
+        if (sv_stop_requested() || sv_plugins_failed())
             return;
 #endif
         os_sleep(1);
