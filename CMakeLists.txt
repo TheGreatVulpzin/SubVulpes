@@ -30,6 +30,24 @@ set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c src/platform/x87_ma
 target_link_options(subvulpes-server PRIVATE /LARGEADDRESSAWARE /MAP /DEBUG)
 set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 
+add_library(sv-status MODULE plugins/status/status.c)
+target_include_directories(sv-status PRIVATE src/plugins)
+target_compile_definitions(sv-status PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_options(sv-status PRIVATE /W4 /WX /utf-8)
+target_link_options(sv-status PRIVATE /EXPORT:sv_plugin_entry)
+set_target_properties(sv-status PROPERTIES OUTPUT_NAME status PREFIX ""
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.status"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.status")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.status")
+configure_file(plugins/status/plugin.ini "${CMAKE_BINARY_DIR}/plugins/sv.status/plugin.ini" COPYONLY)
+configure_file(plugins/plugins.ini "${CMAKE_BINARY_DIR}/plugins/plugins.ini" COPYONLY)
+add_custom_target(sv-official-approvals ALL
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_SOURCE_DIR}/tools/plugins/write_approval.ps1"
+        -Binary "$<TARGET_FILE:sv-status>" -Id sv.status
+        -Output "${CMAKE_BINARY_DIR}/plugins/native-approvals.ini"
+    DEPENDS sv-status VERBATIM)
+
 set(SV_LAUNCHER "${CMAKE_SOURCE_DIR}/build/launcher/subvulpes_launcher.exe")
 add_custom_command(OUTPUT "${SV_LAUNCHER}"
     COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat"
