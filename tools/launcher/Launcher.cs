@@ -293,8 +293,41 @@ namespace SubVulpes
         const int FreezeSeconds = 150;
         const int HotkeyId = 1;
         static readonly string[] UpdateFiles = {
-            "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt"
+            "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt",
+            "plugins/plugins.ini", "plugins/native-approvals.ini", "plugins/sv.status/plugin.ini", "plugins/sv.status/status.dll",
+            "install_plugin.ps1"
         };
+
+        internal static string UpdateKey(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path.IndexOfAny(new[] { '\\', ':', '\r', '\n', '\0' }) >= 0) return null;
+            string[] parts = path.Split('/');
+            if (parts.Any(p => p == "." || p == ".." || p.Length == 0)) return null;
+            foreach (string allowed in UpdateFiles) {
+                int count = allowed.Split('/').Length;
+                if (parts.Length != count && parts.Length != count + 1) continue;
+                if (path.Equals(allowed, StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith("/" + allowed, StringComparison.OrdinalIgnoreCase)) return allowed;
+            }
+            return null;
+        }
+
+        static void AssertUpdatePath(string path)
+        {
+            FileSystemInfo item = File.Exists(path) ? (FileSystemInfo)new FileInfo(path) : new DirectoryInfo(path);
+            while (item != null) {
+                if (item.Exists && (item.Attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Update paths cannot contain links.");
+                var directory = item as DirectoryInfo;
+                item = directory != null ? directory.Parent : ((FileInfo)item).Directory;
+            }
+        }
+
+        internal static void CreateUpdateDirectory(string path)
+        {
+            AssertUpdatePath(path);
+            Directory.CreateDirectory(path);
+        }
 
         static readonly Preset[] Presets = {
             new Preset("Normal Playtest",
@@ -343,6 +376,12 @@ namespace SubVulpes
 
         // Console
         TextBox console;
+
+        // Plugins
+        ListView pluginList;
+        CheckBox nativeBypass;
+        TextBox pluginCommand;
+        bool pluginBusy;
 
         // Captures page
         CheckBox profileBox, timersBox, packetsBox, freezeBox;
@@ -396,6 +435,7 @@ namespace SubVulpes
             layout.Controls.Add(message, 0, 1);
             AddPage("Server", ServerPage());
             AddPage("Server settings", SettingsPage());
+            AddPage("Plugins", PluginsPage());
             AddPage("Launcher settings", LauncherSettingsPage());
             AddPage("Debug", DeveloperPage());
             Controls.Add(layout);
@@ -457,8 +497,9 @@ namespace SubVulpes
 
         void OpenServerFolder(string path)
         {
-            if (server != null) return;
+            if (server != null || updating || pluginBusy) return;
             SetFolder(path);
+            pluginList.Items.Clear();
             folderBox.Text = folder;
             settings.Set("server_folder", folder);
             settings.Save();
@@ -604,10 +645,11 @@ namespace SubVulpes
         void SetState(string text)
         {
             serverState = text;
-            startStop.Enabled = server == null && !updating;
+            startStop.Enabled = server == null && !updating && !pluginBusy;
             stopButton.Enabled = server != null && !stopping;
-            browseButton.Enabled = server == null && !updating;
-            presetBox.Enabled = server == null;
+            browseButton.Enabled = server == null && !updating && !pluginBusy;
+            presetBox.Enabled = server == null && !updating && !pluginBusy;
+            nativeBypass.Enabled = server == null && !updating && !pluginBusy;
             RefreshStatus();
         }
 
@@ -814,11 +856,268 @@ namespace SubVulpes
             settings.Save();
         }
 
+        Control PluginsPage()
+        {
+            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 4, Dock = DockStyle.Fill, Padding = new Padding(8) };
+            page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+            var refresh = new Button { Text = "Refresh", AutoSize = true };
+            refresh.Click += async delegate { await RefreshPlugins(); };
+            var enable = new Button { Text = "Enable", AutoSize = true };
+            enable.Click += async delegate { await ChangePlugin(true); };
+            var disable = new Button { Text = "Disable", AutoSize = true };
+            disable.Click += async delegate { await ChangePlugin(false); };
+            var approve = new Button { Text = "Approve native DLL", AutoSize = true };
+            approve.Click += async delegate { await ApprovePlugin(); };
+            var install = new Button { Text = "Install / update plugin zip", AutoSize = true };
+            install.Click += async delegate { await InstallPlugin(); };
+            buttons.Controls.AddRange(new Control[] { refresh, enable, disable, approve, install });
+            page.Controls.Add(buttons, 0, 0);
+            pluginList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false };
+            pluginList.Columns.Add("Plugin", 160);
+            pluginList.Columns.Add("Version", 85);
+            pluginList.Columns.Add("State", 90);
+            pluginList.Columns.Add("Required", 70);
+            pluginList.Columns.Add("Details", 490);
+            page.Controls.Add(pluginList, 0, 1);
+            nativeBypass = new CheckBox {
+                Text = "Allow unapproved native DLLs on the next Start (full process access and crash risk)",
+                AutoSize = true, Margin = new Padding(3, 10, 3, 10)
+            };
+            nativeBypass.CheckedChanged += delegate {
+                if (nativeBypass.Checked && MessageBox.Show(this,
+                    "This skips native content approval. A DLL can read private process data, corrupt memory, hang or crash the server.\r\n\r\n" +
+                    "API, path and dependency checks still apply. Allow unapproved native DLLs for this launcher session?",
+                    "Native DLL approval bypass", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    nativeBypass.Checked = false;
+            };
+            page.Controls.Add(nativeBypass, 0, 2);
+            var commandRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+            commandRow.Controls.Add(new Label { Text = "Local server command", AutoSize = true, Margin = new Padding(3, 8, 3, 3) });
+            pluginCommand = new TextBox { Width = 400, MaxLength = 300 };
+            var send = new Button { Text = "Send", AutoSize = true };
+            send.Click += delegate { SendPluginCommand(pluginCommand.Text); };
+            pluginCommand.KeyDown += (sender, e) => {
+                if (e.KeyCode == Keys.Enter) { SendPluginCommand(pluginCommand.Text); e.SuppressKeyPress = true; }
+            };
+            commandRow.Controls.AddRange(new Control[] { pluginCommand, send });
+            page.Controls.Add(commandRow, 0, 3);
+            return page;
+        }
+
+        string SelectedPlugin()
+        {
+            if (pluginList.SelectedItems.Count != 1) {
+                message.Text = "Select a plugin first.";
+                return null;
+            }
+            string id = pluginList.SelectedItems[0].Text;
+            return Regex.IsMatch(id, @"\A[a-z0-9][a-z0-9_.-]{0,46}\z") && !id.Contains("..") ? id : null;
+        }
+
+        void ReadPluginLine(string line)
+        {
+            if (!line.StartsWith("PLUGIN\t", StringComparison.Ordinal)) return;
+            string[] fields = line.Split('\t');
+            if (fields.Length != 7 || !Regex.IsMatch(fields[1], @"\A[a-z0-9][a-z0-9_.-]{0,46}\z")) return;
+            ListViewItem item = pluginList.Items.ContainsKey(fields[1]) ? pluginList.Items[fields[1]] : null;
+            if (item == null) {
+                item = new ListViewItem(fields[1]) { Name = fields[1] };
+                for (int i = 0; i < 4; i++) item.SubItems.Add("");
+                pluginList.Items.Add(item);
+            }
+            item.SubItems[1].Text = fields[2];
+            item.SubItems[2].Text = fields[3];
+            item.SubItems[3].Text = fields[4] == "1" ? "Yes" : "No";
+            item.SubItems[4].Text = fields[6];
+            item.Tag = fields[5];
+        }
+
+        static string RunPluginTool(string serverFolder, string arguments)
+        {
+            string executable = Path.Combine(serverFolder, "subvulpes_server.exe");
+            var info = new FileInfo(executable);
+            if (!info.Exists || info.Length > 64 * 1024 * 1024) throw new IOException("Invalid server executable.");
+            string content = Encoding.ASCII.GetString(File.ReadAllBytes(executable));
+            if (!content.Contains("SubVulpes-plugin-cli-v1"))
+                throw new IOException("This server does not support plugin metadata requests. Update the server and launcher together.");
+            var start = new ProcessStartInfo(executable, arguments) {
+                WorkingDirectory = serverFolder, UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            using (var process = Process.Start(start)) {
+                Task<string> output = process.StandardOutput.ReadToEndAsync();
+                Task<string> error = process.StandardError.ReadToEndAsync();
+                if (!process.WaitForExit(10000)) {
+                    process.Kill();
+                    process.WaitForExit();
+                    throw new IOException("Plugin metadata request timed out.");
+                }
+                Task.WaitAll(output, error);
+                string text = output.Result + error.Result;
+                if (process.ExitCode != 0) throw new IOException(text.Trim());
+                return text;
+            }
+        }
+
+        async Task RefreshPlugins()
+        {
+            if (pluginBusy || updating) return;
+            if (server != null) {
+                pluginList.Items.Clear();
+                SendPluginCommand("plugins list");
+                return;
+            }
+            pluginBusy = true;
+            SetState(serverState);
+            string selectedFolder = folder;
+            try {
+                string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugins-list"));
+                if (selectedFolder != folder || server != null) return;
+                pluginList.Items.Clear();
+                foreach (string line in output.Replace("\r", "").Split('\n')) ReadPluginLine(line);
+                message.Text = "Plugin metadata read. No native DLL was executed.";
+            } catch (Exception ex) {
+                message.Text = "Cannot list plugins: " + ex.Message;
+            } finally { pluginBusy = false; SetState(serverState); }
+        }
+
+        void SendPluginCommand(string command)
+        {
+            if (updating) return;
+            if (server == null || stopping) { message.Text = "Start the server before sending a local command."; return; }
+            if (command.Length == 0 || command.Length > 300 || command.IndexOfAny(new[] { '\r', '\n' }) >= 0) return;
+            try {
+                server.StandardInput.WriteLine(command);
+                server.StandardInput.Flush();
+                message.Text = "Command sent. Results appear in the server console.";
+            } catch (Exception ex) { message.Text = "Cannot send the command: " + ex.Message; }
+        }
+
+        async Task ChangePlugin(bool enabled)
+        {
+            if (pluginBusy || updating) return;
+            string id = SelectedPlugin();
+            if (id == null) return;
+            if (server != null) {
+                SendPluginCommand("plugins " + (enabled ? "enable " : "disable ") + id);
+                return;
+            }
+            pluginBusy = true;
+            SetState(serverState);
+            string selectedFolder = folder;
+            try {
+                string output = await Task.Run(() => RunPluginTool(selectedFolder,
+                    (enabled ? "--plugin-enable " : "--plugin-disable ") + id));
+                message.Text = output.Trim();
+            } catch (Exception ex) { message.Text = "Cannot change plugin state: " + ex.Message; }
+            finally { pluginBusy = false; SetState(serverState); }
+            await RefreshPlugins();
+        }
+
+        async Task ApprovePlugin()
+        {
+            if (pluginBusy || updating) return;
+            string id = SelectedPlugin();
+            if (id == null) return;
+            if (server != null) { message.Text = "Stop the server before approving a native DLL."; return; }
+            pluginBusy = true;
+            SetState(serverState);
+            string selectedFolder = folder;
+            try {
+                string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-hash " + id));
+                Match hash = Regex.Match(output, @"(?m)^SHA256\t[^\r\n\t]+\t([0-9a-f]{64})\r?$");
+                if (!hash.Success) throw new IOException("The server did not return a valid SHA-256.");
+                if (server != null || folder != selectedFolder) return;
+                if (MessageBox.Show(this,
+                    "This DLL gets full process access. It can read private data, corrupt memory, hang or crash the server.\r\n\r\n" +
+                    "Plugin: " + id + "\r\nSHA-256: " + hash.Groups[1].Value + "\r\n\r\nApprove this exact content?",
+                    "Approve native DLL", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+                string digest = hash.Groups[1].Value;
+                message.Text = (await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-approve " + id + " " + digest))).Trim();
+            } catch (Exception ex) { message.Text = "Cannot approve native DLL: " + ex.Message; }
+            finally { pluginBusy = false; SetState(serverState); }
+            await RefreshPlugins();
+        }
+
+        internal static string QuoteProcessArgument(string value)
+        {
+            var result = new StringBuilder("\"");
+            int slashes = 0;
+            foreach (char character in value) {
+                if (character == '\\') { slashes++; continue; }
+                if (character == '"') result.Append('\\', slashes * 2 + 1);
+                else result.Append('\\', slashes);
+                result.Append(character);
+                slashes = 0;
+            }
+            return result.Append('\\', slashes * 2).Append('"').ToString();
+        }
+
+        static string RunPluginInstaller(string serverFolder, string script, string zip, bool inspect, string packageHash = null)
+        {
+            string arguments = "-NoProfile -ExecutionPolicy Bypass -File " + QuoteProcessArgument(script) +
+                " -ServerDir " + QuoteProcessArgument(serverFolder) + " -Package " + QuoteProcessArgument(zip) +
+                (inspect ? " -Inspect" : "") + (packageHash == null ? "" : " -ExpectedPackageHash " + packageHash);
+            var start = new ProcessStartInfo("powershell.exe", arguments) {
+                WorkingDirectory = serverFolder, UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            using (var process = Process.Start(start)) {
+                Task<string> output = process.StandardOutput.ReadToEndAsync();
+                Task<string> error = process.StandardError.ReadToEndAsync();
+                // An automatic kill during file replacement would bypass installer rollback.
+                process.WaitForExit();
+                Task.WaitAll(output, error);
+                string text = output.Result + error.Result;
+                if (process.ExitCode != 0) throw new IOException(text.Trim());
+                return text;
+            }
+        }
+
+        async Task InstallPlugin()
+        {
+            if (pluginBusy || updating) return;
+            string zip;
+            using (var dialog = new OpenFileDialog { Filter = "Plugin package (*.zip)|*.zip" }) {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                zip = dialog.FileName;
+            }
+            string selectedFolder = folder;
+            string script = Path.Combine(selectedFolder, "install_plugin.ps1");
+            if (!File.Exists(script)) { message.Text = "The server package has no plugin installer."; return; }
+            pluginBusy = true;
+            SetState(serverState);
+            try {
+                string inspection = await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, true));
+                Match metadata = Regex.Match(inspection, @"(?m)^MODULE\t([^\t\r\n]+)\t([^\t\r\n]+)\t([0-9a-f]{64})\t([0-9a-f]{64})\r?$");
+                if (!metadata.Success) throw new IOException("The installer did not return valid package metadata.");
+                string question = "Install " + metadata.Groups[1].Value + " " + metadata.Groups[2].Value +
+                    "?\r\nSHA-256: " + metadata.Groups[3].Value +
+                    "\r\n\r\nThe server stops first. Native approval is a separate step. New modules start disabled.";
+                if (MessageBox.Show(this, question, "Install plugin package", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+                if (!await StopServer()) return;
+                message.Text = "Installing plugin package...";
+                string packageHash = metadata.Groups[4].Value;
+                string result = await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, false, packageHash));
+                message.Text = result.Trim();
+            } catch (Exception ex) { message.Text = "Plugin installation failed: " + ex.Message; }
+            finally {
+                pluginBusy = false;
+                SetState(serverState);
+            }
+            await RefreshPlugins();
+        }
+
         // ------------------------------------------------------------ the server
 
         void StartServer()
         {
-            if (server != null) return;
+            if (server != null || updating || pluginBusy) return;
             developerRun = debugModeBox.Checked;
             activeCaptures = developerRun ? captures.Copy() : new Captures { CrashDump = "none" };
             string exe = Path.Combine(folder, "subvulpes_server.exe");
@@ -841,7 +1140,8 @@ namespace SubVulpes
                 stopEvent = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.ManualReset, eventName);
                 var start = new ProcessStartInfo(exe) {
                     WorkingDirectory = folder, UseShellExecute = false, CreateNoWindow = true,
-                    RedirectStandardOutput = true, RedirectStandardError = true
+                    RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
+                    Arguments = nativeBypass.Checked ? "--allow-unapproved-native" : ""
                 };
                 var env = start.EnvironmentVariables;
                 foreach (string key in new[] { "SV_SAMPLE", "SV_TIMERS", "SV_PACKETS", "SV_DUMP", "SV_DUMP_TYPE", "SV_TEST_CRASH", "SV_RECORD_DIR", "SV_SNAPSHOT_AFTER" })
@@ -875,6 +1175,7 @@ namespace SubVulpes
                 graph.Points.Clear();
                 graph.Invalidate();
                 console.Clear();
+                pluginList.Items.Clear();
                 ResetCards();
                 logOffset = 0;
                 pendingLog = "";
@@ -949,6 +1250,7 @@ namespace SubVulpes
 
         void AddLine(string line)
         {
+            ReadPluginLine(line);
             // A long test makes many lines. Keep the last part only: the log file has all.
             if (console.TextLength > 200000)
                 console.Text = console.Text.Substring(100000);
@@ -1257,7 +1559,7 @@ namespace SubVulpes
 
         async Task CheckForUpdates()
         {
-            if (updating) return;
+            if (updating || pluginBusy) return;
             updating = true;
             checkUpdate.Enabled = false;
             SetState(serverState);
@@ -1301,13 +1603,13 @@ namespace SubVulpes
                     await InstallUpdate(dialog.FileName);
         }
 
-        // Only the files of UpdateFiles come from the zip, from any folder inside it. The old
+        // Only fixed public files from a flat zip or one package root can enter an update. The old
         // files go to backup\<time>. config.txt, data and user never change. The running
         // launcher cannot be overwritten, but Windows lets it be renamed: it becomes
         // subvulpes_launcher.old, and the next start deletes it.
         public async Task InstallUpdate(string zip, string releaseName = null)
         {
-            if (updating) return;
+            if (updating || pluginBusy) return;
             var found = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase);
             ZipArchive archive;
             try {
@@ -1317,13 +1619,21 @@ namespace SubVulpes
                 return;
             }
             using (archive) {
+                string archiveRoot = null;
                 foreach (var entry in archive.Entries) {
-                    if (!UpdateFiles.Contains(entry.Name, StringComparer.OrdinalIgnoreCase)) continue;
-                    if (found.ContainsKey(entry.Name)) {
+                    string key = UpdateKey(entry.FullName);
+                    if (key == null) continue;
+                    string root = entry.FullName.Substring(0, entry.FullName.Length - key.Length);
+                    if (archiveRoot != null && !root.Equals(archiveRoot, StringComparison.OrdinalIgnoreCase)) {
+                        message.Text = "The zip mixes multiple update roots.";
+                        return;
+                    }
+                    archiveRoot = root;
+                    if (found.ContainsKey(key) || entry.Length > 64 * 1024 * 1024) {
                         message.Text = "The zip contains duplicate update files.";
                         return;
                     }
-                    found[entry.Name] = entry;
+                    found[key] = entry;
                 }
                 if (found.Count == 0) {
                     MessageBox.Show(this, "The zip has no update file (" + string.Join(", ", UpdateFiles) + ").", Text);
@@ -1337,17 +1647,23 @@ namespace SubVulpes
                 if (MessageBox.Show(this, question, Text, MessageBoxButtons.YesNo) != DialogResult.Yes)
                     return;
                 updating = true;
-                if (!await StopServer()) { updating = false; return; }
-
-                string backup = Path.Combine(folder, "backup", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-                Directory.CreateDirectory(backup);
+                SetState(serverState);
+                string backup = null;
                 bool newLauncher = false;
                 try {
+                    if (!await StopServer()) return;
+                    backup = Path.Combine(folder, "backup", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+                    CreateUpdateDirectory(backup);
                     foreach (var f in found) {
                         string target = f.Key.Equals("subvulpes_launcher.exe", StringComparison.OrdinalIgnoreCase)
                             ? Application.ExecutablePath : Path.Combine(folder, f.Key);
-                        if (File.Exists(target))
-                            File.Copy(target, Path.Combine(backup, f.Key), true);
+                        if (f.Key == "plugins/plugins.ini" && File.Exists(target)) continue;
+                        AssertUpdatePath(target);
+                        string backupFile = Path.Combine(backup, f.Key);
+                        AssertUpdatePath(backupFile);
+                        Directory.CreateDirectory(Path.GetDirectoryName(target));
+                        Directory.CreateDirectory(Path.GetDirectoryName(backupFile));
+                        if (File.Exists(target)) File.Copy(target, backupFile, true);
                         if (f.Key.Equals("subvulpes_launcher.exe", StringComparison.OrdinalIgnoreCase)) {
                             string old = Path.Combine(launcherFolder, "subvulpes_launcher.old");
                             if (File.Exists(old))
@@ -1357,21 +1673,24 @@ namespace SubVulpes
                         }
                         f.Value.ExtractToFile(target, true);
                     }
+                    Text = "SubVulpes Server" + Version();
+                    message.Text = "Update installed" + version + ". Old files: backup\\" + Path.GetFileName(backup);
                 } catch (Exception ex) {
-                    updating = false;
-                    MessageBox.Show(this, "The update stopped: " + ex.Message + "\r\n\r\nThe old files are in " + backup + ".", Text);
+                    MessageBox.Show(this, "The update stopped: " + ex.Message +
+                        (backup == null ? "" : "\r\n\r\nBackup path: " + backup + "."), Text);
                     return;
+                } finally {
+                    updating = false;
+                    SetState(serverState);
                 }
                 if (newLauncher) {
                     MessageBox.Show(this, "Update installed" + version + ". The launcher starts again now.", Text);
-                    updating = false;
-                    Process.Start(Application.ExecutablePath);
-                    Close();
+                    try {
+                        Process.Start(Application.ExecutablePath);
+                        Close();
+                    } catch (Exception ex) { message.Text = "Cannot restart the launcher: " + ex.Message; }
                     return;
                 }
-                Text = "SubVulpes Server" + Version();
-                updating = false;
-                message.Text = "Update installed" + version + ". Old files: backup\\" + Path.GetFileName(backup);
             }
         }
 
@@ -1547,7 +1866,7 @@ namespace SubVulpes
 
         async void OnClosing(object sender, FormClosingEventArgs e)
         {
-            if (updating) { e.Cancel = true; return; }
+            if (updating || pluginBusy) { e.Cancel = true; return; }
             if (closeAfterStop) return;
             if (dirty) {
                 var answer = MessageBox.Show(this, "Save the changed settings?", Text, MessageBoxButtons.YesNoCancel);

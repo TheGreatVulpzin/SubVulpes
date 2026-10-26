@@ -107,9 +107,13 @@ if(BUILD_TESTING)
     target_compile_options(sv-handle-test PRIVATE /W4 /WX /utf-8)
     set_target_properties(sv-handle-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME entity-handles COMMAND sv-handle-test)
-endif()
-
-if(BUILD_TESTING)
+    set(SV_LAUNCHER_TEST "${CMAKE_SOURCE_DIR}/build/launcher/launcher-update-tests.exe")
+    add_custom_command(OUTPUT "${SV_LAUNCHER_TEST}"
+        COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat" test
+        DEPENDS tools/launcher/Launcher.cs tools/launcher/build.bat tests/launcher_update_test.cs
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" VERBATIM)
+    add_custom_target(sv-launcher-tests ALL DEPENDS "${SV_LAUNCHER_TEST}")
+    add_test(NAME launcher-update-paths COMMAND "${SV_LAUNCHER_TEST}")
     add_test(NAME plugin-package-install COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_SOURCE_DIR}/tests/plugin_install_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
 endif()

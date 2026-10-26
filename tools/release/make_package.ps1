@@ -38,11 +38,19 @@ $sources = [ordered]@{
     'LEIA-ME.txt' = 'tools\release\LEIA-ME.txt'
     'config.txt' = 'tools\release\default-config.ini'
     'readme.txt' = 'tools\release\newspaper.txt'
+    'plugins/plugins.ini' = 'plugins\plugins.ini'
+    'plugins/native-approvals.ini' = 'build\server\plugins\native-approvals.ini'
+    'plugins/sv.status/plugin.ini' = 'plugins\status\plugin.ini'
+    'plugins/sv.status/status.dll' = 'build\server\plugins\sv.status\status.dll'
+    'install_plugin.ps1' = 'tools\plugins\install_plugin.ps1'
 }
 $allowed = @($sources.Keys) + @('version.txt')
 $allowed += @($dataFiles | ForEach-Object { "data/$($_.Relative)" })
-$directories = @('data', 'data/block', 'data/building', 'data/texture', 'data/weapon')
+$directories = @('data', 'data/block', 'data/building', 'data/texture', 'data/weapon', 'plugins', 'plugins/sv.status')
 $defaultConfig = [IO.File]::ReadAllBytes((Join-Path $repo $sources['config.txt']))
+$statusHash = (Get-FileHash -LiteralPath (Join-Path $repo $sources['plugins/sv.status/status.dll']) -Algorithm SHA256).Hash.ToLowerInvariant()
+$approvalText = [IO.File]::ReadAllText((Join-Path $repo $sources['plugins/native-approvals.ini'])).Replace("`r", '').Trim()
+if ($approvalText -cne "[native]`nsv.status=$statusHash") { throw 'The official native approval does not match the built status plugin.' }
 
 # Copy build outputs, package defaults and checked data files.
 foreach ($source in $sources.Values) {
@@ -85,7 +93,9 @@ function Assert-Package {
 # Refuse contamination from an earlier run instead of silently hiding it.
 Assert-Package
 foreach ($entry in $sources.GetEnumerator()) {
-    Copy-Item -LiteralPath (Join-Path $repo $entry.Value) -Destination (Join-Path $package $entry.Key) -Force
+    $target = Join-Path $package $entry.Key
+    New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repo $entry.Value) -Destination $target -Force
 }
 foreach ($file in $dataFiles) {
     $target = Join-Path $package "data/$($file.Relative)"
@@ -102,11 +112,11 @@ if (@(Get-ChildItem -LiteralPath $package -Force -Recurse -File).Count -ne $allo
 # Reject game binaries even if someone renames them as a package executable.
 $gameHashes = @(Get-Content -LiteralPath (Join-Path $repo 'tools\ci\game_binary_hashes.txt') |
     ForEach-Object { if ($_ -match '^([0-9a-fA-F]{64})\s') { $Matches[1] } })
-foreach ($file in Get-ChildItem -LiteralPath $package -File) {
+foreach ($file in Get-ChildItem -LiteralPath $package -File -Recurse) {
     if ((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -in $gameHashes) {
         throw "A game file cannot enter the package: $($file.Name)"
     }
-    if ($file.Extension -eq '.exe') {
+    if ($file.Extension -in @('.exe', '.dll')) {
         $bytes = [IO.File]::ReadAllBytes($file.FullName)
         if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
             throw "Invalid executable: $($file.Name)"
@@ -116,6 +126,10 @@ foreach ($file in Get-ChildItem -LiteralPath $package -File) {
             [BitConverter]::ToUInt32($bytes, $offset) -ne 0x4550 -or
             [BitConverter]::ToUInt16($bytes, $offset + 4) -ne 0x14c) {
             throw "Expected an x86 PE executable: $($file.Name)"
+        }
+        if ($file.Extension -eq '.dll' -and
+            ([BitConverter]::ToUInt16($bytes, $offset + 22) -band 0x2000) -eq 0) {
+            throw "Expected a DLL: $($file.Name)"
         }
     }
 }
