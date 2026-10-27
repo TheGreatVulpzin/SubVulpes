@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "plugin_host.h"
+#include "plugin_config.h"
 
 typedef struct {
     char id[SV_PLUGIN_ID_SIZE];
@@ -29,6 +30,7 @@ typedef struct {
     uint32_t slow_count;
     uint64_t slow_start_ms;
     const char *doom;
+    SvSettingSet config;
     uint32_t visiting;
     uint64_t calls;
     uint64_t elapsed_us;
@@ -39,9 +41,12 @@ int sv_plugin_profile(SvModule *modules, uint32_t *count);
 SvResult sv_plugin_load(SvModule *module);
 void sv_plugin_unload(SvModule *module);
 int sv_plugin_inspect(const char *id, SvModule *module);
+int sv_plugin_declared(const char *id, SvModule *module);
 int sv_plugin_approved(const SvModule *module);
 int sv_plugin_approve(const char *id, const char *hash);
 int sv_plugin_save_state(const char *id, int enabled);
 HANDLE sv_plugin_lock(void);
+/* The private settings file of a plugin: user/plugins/ID.settings.ini. With create, the folders are made. */
+int sv_plugin_private_file(const char *id, char path[MAX_PATH], int create);
 
 #endif

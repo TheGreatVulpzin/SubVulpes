@@ -29,6 +29,10 @@ function Manifest([string]$Id='sv.status', [string]$Version='0.1.0', [string]$Ap
                   [string]$Dependencies='', [string]$Library='status.dll') {
     return [Text.Encoding]::ASCII.GetBytes("[plugin]`nid=$Id`nversion=$Version`nlibrary=$Library`napi=$Api`nlive=1`ndependencies=$Dependencies`n")
 }
+# A manifest with a body of our own: the text after the [plugin] fields, for the unsafe_events key and the settings.
+function ManifestBody([string]$Id, [string]$Body) {
+    return [Text.Encoding]::ASCII.GetBytes("[plugin]`nid=$Id`nversion=0.1.0`nlibrary=status.dll`napi=1`nlive=1`ndependencies=`n$Body")
+}
 function Entry([string]$Name, [byte[]]$Bytes) { return [pscustomobject]@{ Name=$Name; Bytes=$Bytes } }
 function Package([string]$Name, [object[]]$Entries) {
     $path = Join-Path $caseRoot ($Name + '.zip')
@@ -119,9 +123,26 @@ $bad = @(
     (Package 'manifest-size' @((Entry 'plugin.ini' (New-Object byte[] 65537)), (Entry 'status.dll' $currentBytes))),
     (Package 'dll-size' @((Entry 'plugin.ini' (Manifest)), (Entry 'status.dll' (New-Object byte[] 67108865))))
 )
+# The manifest of a plugin may declare settings and ask for unsafe events. The installer checks the shape of the sections and
+# the fields, and copies the manifest as it is. The host checks each value when it starts.
+$setting = "[setting.price]`ntype=int`ndefault=1`nmin=0`nmax=5`nlabel=Price`nlive=1`nadmin=1`n"
+$settingsOk = Package 'settings-ok' @((Entry 'plugin.ini' (ManifestBody 'test.settings' ("unsafe_events=1`n" + $setting + "[setting.mode]`ntype=choice`nchoices=a,b`ndefault=a`nlabel=Mode`n"))), (Entry 'status.dll' $currentBytes))
+Install $server $settingsOk
+Assert-Test ([IO.File]::ReadAllText((Join-Path $server 'plugins/test.settings/plugin.ini')).Contains('[setting.mode]')) 'The installer changed the manifest.'
+$badSettings = @(
+    (Package 'unsafe-value' @((Entry 'plugin.ini' (ManifestBody 'test.bad1' "unsafe_events=2`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'setting-field' @((Entry 'plugin.ini' (ManifestBody 'test.bad2' ($setting + "color=red`n"))), (Entry 'status.dll' $currentBytes))),
+    (Package 'setting-duplicate-field' @((Entry 'plugin.ini' (ManifestBody 'test.bad3' ($setting + "type=int`n"))), (Entry 'status.dll' $currentBytes))),
+    (Package 'setting-duplicate-section' @((Entry 'plugin.ini' (ManifestBody 'test.bad4' ($setting + $setting))), (Entry 'status.dll' $currentBytes))),
+    (Package 'setting-uppercase' @((Entry 'plugin.ini' (ManifestBody 'test.bad5' "[setting.Price]`ntype=flag`ndefault=1`nlabel=A`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'setting-other-section' @((Entry 'plugin.ini' (ManifestBody 'test.bad6' "[other]`nkey=1`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'setting-before-plugin' @((Entry 'plugin.ini' ([Text.Encoding]::ASCII.GetBytes("[setting.price]`ntype=flag`n[plugin]`nid=test.bad7`nversion=0.1.0`nlibrary=status.dll`napi=1`nlive=1`n"))), (Entry 'status.dll' $currentBytes))),
+    (Package 'setting-count' @((Entry 'plugin.ini' (ManifestBody 'test.bad8' ((0..32 | ForEach-Object { "[setting.k$_]`ntype=flag`ndefault=1`nlabel=K`n" }) -join ''))), (Entry 'status.dll' $currentBytes)))
+)
 $stableProfile = Hash $profile
 $stableDll = Hash $installedDll
 foreach ($zip in $bad) { Install $server $zip $false }
+foreach ($zip in $badSettings) { Install $server $zip $false }
 Assert-Test ((Hash $profile) -eq $stableProfile -and (Hash $installedDll) -eq $stableDll) 'A rejected package changed public files.'
 $lockPath = Join-Path $server 'user/plugins/host.lock'
 $lock = [IO.File]::Open($lockPath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::Read)

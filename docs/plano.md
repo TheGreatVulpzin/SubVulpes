@@ -84,7 +84,7 @@ Step 2 (common API) is in progress.
   Decision of 2026-10-27: the user allows kind 3, a decision inside the simulation, with the danger documented. The owner of the plugin takes the responsibility. The host keeps the write API closed inside it.
 - Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
 - Private messages: the server writes an empty slot for each other connection (`0581091`).
-- Planned and not started: plugin configuration set by the administrator in the launcher or by command (N23).
+- Plugin configuration set by the administrator (N23): built. The plugin declares settings in its manifest, the host checks every value, the administrator sets them in the launcher form or with `plugins config`, and the plugin reads them with the `SV_API_CONFIG` table. See [plugin settings](plugin-config.md).
 - Planned and not started: library plugins (idea of the user, 2026-10-27). Today a plugin can declare dependencies, and the host then starts it only when they are active. A dependency does not give functions to the dependent.
   A library plugin offers its own table of functions with a name and a version. The dependents ask for it with `get_api`, as for the game tables. This needs four things:
   1. a call for a plugin to register its table,

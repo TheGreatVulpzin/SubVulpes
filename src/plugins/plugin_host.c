@@ -1,7 +1,9 @@
 /* Call native modules only on the server thread and between lifecycle transitions. */
 #include "plugin_internal.h"
 #include <float.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -40,6 +42,69 @@ int sv_plugins_write_context(SvOwner owner)
     return sv_plugins_context(owner) && !in_simulation;
 }
 
+/* The settings of the plugin that makes the call. The value that the plugin sees is the effective one. */
+static const SvSetting *own_setting(SvOwner owner, const char *key, SvResult *result)
+{
+    const SvSetting *setting;
+    if (!sv_plugins_context(owner)) {
+        *result = SV_STATE;
+        return NULL;
+    }
+    if (!key) {
+        *result = SV_INVALID;
+        return NULL;
+    }
+    setting = sv_config_find(&modules[owner - 1].config, key);
+    *result = setting ? SV_OK : SV_NOT_FOUND;
+    return setting;
+}
+
+static SvResult SV_CALL config_get_int(SvOwner owner, const char *key, int32_t *value)
+{
+    SvResult result;
+    const SvSetting *setting = own_setting(owner, key, &result);
+    uint32_t i;
+    if (!setting)
+        return result;
+    if (!value || (setting->type != SV_SETTING_FLAG && setting->type != SV_SETTING_INT && setting->type != SV_SETTING_CHOICE))
+        return SV_INVALID;
+    if (setting->type == SV_SETTING_CHOICE) {
+        for (i = 0; i < setting->choice_count; ++i)
+            if (!strcmp(setting->choices[i], setting->effective))
+                *value = (int32_t)i;
+    } else {
+        *value = (int32_t)strtol(setting->effective, NULL, 10);
+    }
+    return SV_OK;
+}
+
+static SvResult SV_CALL config_get_float(SvOwner owner, const char *key, float *value)
+{
+    SvResult result;
+    const SvSetting *setting = own_setting(owner, key, &result);
+    if (!setting)
+        return result;
+    if (!value || setting->type != SV_SETTING_FLOAT)
+        return SV_INVALID;
+    *value = (float)strtod(setting->effective, NULL);
+    return SV_OK;
+}
+
+static SvResult SV_CALL config_get_text(SvOwner owner, const char *key, char *buffer, uint32_t capacity)
+{
+    SvResult result;
+    const SvSetting *setting = own_setting(owner, key, &result);
+    if (!setting)
+        return result;
+    if (!buffer || capacity < SV_CONFIG_TEXT_MAX + 1 ||
+        (setting->type != SV_SETTING_TEXT && setting->type != SV_SETTING_SECRET && setting->type != SV_SETTING_CHOICE))
+        return SV_INVALID;
+    strcpy(buffer, setting->effective);
+    return SV_OK;
+}
+
+static const SvConfig config_api = { sizeof(SvConfig), SV_CONFIG_VERSION, config_get_int, config_get_float, config_get_text };
+
 static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_t version, const void **api)
 {
     if (!sv_plugins_context(owner))
@@ -47,6 +112,12 @@ static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_
     if (!api)
         return SV_INVALID;
     *api = NULL;
+    if (capability == SV_API_CONFIG) {
+        if (version != SV_CONFIG_VERSION)
+            return SV_INCOMPATIBLE;
+        *api = &config_api;
+        return SV_OK;
+    }
     return sv_game_api(capability, version, api);
 }
 
@@ -105,7 +176,7 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
     if ((events & SV_EVENT_DAMAGE) && !module->unsafe)
         return SV_DENIED;
     if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
-                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE) ||
+                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE | SV_EVENT_CONFIG) ||
         (events && !callback))
         return SV_INVALID;
     module->events = events;
@@ -341,28 +412,33 @@ int sv_plugins_start(void)
     return !failed;
 }
 
+/* Gives one event to one plugin, if it is active and asked for the kind. */
+static void deliver_to(uint32_t i, const SvEvent *event)
+{
+    SvModule *module = &modules[i];
+    SvResult result;
+    LARGE_INTEGER before, after, frequency;
+    unsigned control;
+    if (module->state != SV_MODULE_ACTIVE || !(module->events & event->kind))
+        return;
+    QueryPerformanceCounter(&before);
+    control = enter(i);
+    result = module->event_callback(i + 1, event);
+    leave(control);
+    QueryPerformanceCounter(&after);
+    QueryPerformanceFrequency(&frequency);
+    ++module->calls;
+    module->elapsed_us += (uint64_t)((after.QuadPart - before.QuadPart) * 1000000.0 / frequency.QuadPart);
+    if (result != SV_OK)
+        deactivate(i, SV_MODULE_FAILED, "Event callback reported failure.");
+}
+
 /* Gives one event to every active plugin that asked for its kind. */
 static void deliver(const SvEvent *event)
 {
     uint32_t i;
-    for (i = 0; i < module_count; ++i) {
-        SvModule *module = &modules[i];
-        SvResult result;
-        LARGE_INTEGER before, after, frequency;
-        unsigned control;
-        if (module->state != SV_MODULE_ACTIVE || !(module->events & event->kind))
-            continue;
-        QueryPerformanceCounter(&before);
-        control = enter(i);
-        result = module->event_callback(i + 1, event);
-        leave(control);
-        QueryPerformanceCounter(&after);
-        QueryPerformanceFrequency(&frequency);
-        ++module->calls;
-        module->elapsed_us += (uint64_t)((after.QuadPart - before.QuadPart) * 1000000.0 / frequency.QuadPart);
-        if (result != SV_OK)
-            deactivate(i, SV_MODULE_FAILED, "Event callback reported failure.");
-    }
+    for (i = 0; i < module_count; ++i)
+        deliver_to(i, event);
 }
 
 static void dispatch(uint32_t kind)
@@ -532,6 +608,127 @@ void sv_plugins_stop(void)
     started = 0;
 }
 
+/* A reply to the caller of a command: the local operator reads the log, and a player gets a message of at most 63 bytes. A
+ * longer text for a player is cut, so the texts for a player are short. */
+static void reply(uint64_t actor, const char *format, ...)
+{
+    char text[300];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(text, sizeof text, format, args);
+    va_end(args);
+    if (actor) {
+        text[SV_CONFIG_TEXT_MAX] = 0;
+        sv_game_tell(actor, text);
+    } else {
+        sv_log("%s", text);
+    }
+}
+
+/* Saves one setting of a plugin and, for a live setting of an active plugin that asked for it, gives the change event.
+ * text is NULL for the default. The text of a secret never goes to a log or an event. */
+static SvResult config_set(int index, const char *key, const char *text, int by_admin, int *applied)
+{
+    SvModule *module = &modules[index];
+    SvConfigEvent event;
+    char old_text[SV_CONFIG_TEXT_MAX + 1], new_text[SV_CONFIG_TEXT_MAX + 1];
+    int live = 0;
+    SvResult result = sv_config_store(&module->config, module->id, key, text, by_admin, &live, old_text, new_text);
+    *applied = 0;
+    if (result != SV_OK || !live)
+        return result;
+    *applied = 1;
+    memset(&event, 0, sizeof event);
+    event.base.size = sizeof event;
+    event.base.kind = SV_EVENT_CONFIG;
+    strcpy(event.key, key);
+    strcpy(event.old_value, old_text);
+    strcpy(event.new_value, new_text);
+    if (!stopping && !current && !in_simulation && GetCurrentThreadId() == server_thread) {
+        SvStatus status = { sizeof status };
+        sv_game_status(&status);
+        event.base.tick = status.tick;
+        deliver_to((uint32_t)index, &event.base);
+    }
+    return result;
+}
+
+/* "plugins config", "plugins config ID", "plugins config ID KEY" (the default) and "plugins config ID KEY VALUE". A player
+ * must be an administrator and sees only the settings that allow it. */
+static void config_command(uint64_t actor, char *arguments)
+{
+    static const char *results[] = { "OK", "invalid value", "wrong state", "resource limit", "conflict", "denied by the plugin",
+        "unknown key", "incompatible", "could not save the file" };
+    char *id, *key = NULL, *value = NULL;
+    uint32_t i, shown = 0;
+    int index, applied;
+    SvResult result;
+    int by_admin = actor != 0;
+    if (by_admin && !sv_game_actor_admin(actor)) {
+        reply(actor, "Plugin command permission denied: plugins");
+        return;
+    }
+    while (*arguments == ' ')
+        ++arguments;
+    id = arguments;
+    if (*id) {
+        key = strchr(id, ' ');
+        if (key) {
+            *key++ = 0;
+            while (*key == ' ')
+                ++key;
+            value = strchr(key, ' ');
+            if (value) {
+                *value++ = 0;
+                while (*value == ' ')
+                    ++value;
+            }
+            if (!*key)
+                key = NULL;
+            if (value && !*value)
+                value = NULL;
+        }
+    }
+    if (!*id) {
+        for (i = 0; i < module_count; ++i)
+            if (modules[i].config.count)
+                reply(actor, "%s: %u settings", modules[i].id, modules[i].config.count);
+        return;
+    }
+    index = find_module(id);
+    if (index < 0) {
+        reply(actor, "Plugin not found: %s", id);
+        return;
+    }
+    if (!key) {
+        for (i = 0; i < modules[index].config.count; ++i) {
+            const SvSetting *setting = &modules[index].config.item[i];
+            char line[600];
+            if (by_admin && !setting->admin)
+                continue;
+            if (by_admin)
+                reply(actor, "%s = %s", setting->key, setting->type == SV_SETTING_SECRET ? (setting->stored[0] ? "*" : "") : setting->stored);
+            else {
+                sv_config_line(id, setting, line, sizeof line);
+                sv_log("%s", line);
+            }
+            ++shown;
+        }
+        if (!shown)
+            reply(actor, "No settings: %s", id);
+        return;
+    }
+    result = config_set(index, key, value, by_admin, &applied);
+    if (result == SV_OK && by_admin)
+        reply(actor, "Saved %s.%s (%s)", id, key, applied ? "now" : "next start");
+    else if (result == SV_OK)
+        reply(actor, "Setting saved: %s.%s (%s)", id, key, applied ? "applies now" : "applies at the next server start");
+    else if (by_admin)
+        reply(actor, "Refused %s.%s: %s", id, key, result >= SV_OK && result <= SV_IO ? results[result] : "failure");
+    else
+        reply(actor, "Setting refused: %s.%s: %s", id, key, result >= SV_OK && result <= SV_IO ? results[result] : "failure");
+}
+
 int sv_plugins_command(uint64_t actor, const char *text)
 {
     char name[SV_PLUGIN_ID_SIZE], arguments[256];
@@ -552,6 +749,10 @@ int sv_plugins_command(uint64_t actor, const char *text)
     if (!strcmp(name, "plugins")) {
         char *id = strchr(arguments, ' ');
         SvResult result = SV_INVALID;
+        if (!strncmp(arguments, "config", 6) && (!arguments[6] || arguments[6] == ' ')) {
+            config_command(actor, arguments + 6);
+            return 1;
+        }
         if (actor) {
             sv_log("Plugin management requires the local operator.");
             return 1;
@@ -658,6 +859,46 @@ int sv_plugins_cli(int argc, char **argv)
         }
         CloseHandle(lock);
         sv_log("Plugin state saved. It applies at the next server start.");
+        return 0;
+    }
+    /* The launcher: list the settings of a plugin, set one, or put one back to the default. The server must be stopped. */
+    if (argc >= 3 && argc <= 5 && !strcmp(argv[1], "--plugin-config")) {
+        SvModule inspected;
+        HANDLE lock = INVALID_HANDLE_VALUE;
+        uint32_t i;
+        int applied;
+        SvResult result;
+        /* The listing only reads the manifest and the saved file, so it works beside a running server. A change needs the
+         * lock, which means that the server is stopped. */
+        if (argc != 3) {
+            lock = sv_plugin_lock();
+            if (lock == INVALID_HANDLE_VALUE) {
+                sv_log("Stop the server before changing settings with an offline command.");
+                return 2;
+            }
+        }
+        if (!sv_plugin_declared(argv[2], &inspected) || !inspected.metadata_valid) {
+            if (lock != INVALID_HANDLE_VALUE)
+                CloseHandle(lock);
+            sv_log("Plugin is not installed or its manifest is invalid.");
+            return 2;
+        }
+        if (argc == 3) {
+            sv_log("SubVulpes-plugin-config-v1");
+            for (i = 0; i < inspected.config.count; ++i) {
+                char line[600];
+                sv_config_line(argv[2], &inspected.config.item[i], line, sizeof line);
+                sv_log("%s", line);
+            }
+            return 0;
+        }
+        result = sv_config_store(&inspected.config, argv[2], argv[3], argc == 5 ? argv[4] : NULL, 0, &applied, (char[SV_CONFIG_TEXT_MAX + 1]){ 0 }, (char[SV_CONFIG_TEXT_MAX + 1]){ 0 });
+        CloseHandle(lock);
+        if (result != SV_OK) {
+            sv_log("Setting refused (%d).", result);
+            return 2;
+        }
+        sv_log("Setting saved. It applies at the next server start.");
         return 0;
     }
     if (argc == 2 && !strcmp(argv[1], "--plugins-check")) {

@@ -875,7 +875,9 @@ namespace SubVulpes
             approve.Click += async delegate { await ApprovePlugin(); };
             var install = new Button { Text = "Install / update plugin zip", AutoSize = true };
             install.Click += async delegate { await InstallPlugin(); };
-            buttons.Controls.AddRange(new Control[] { refresh, enable, disable, approve, install });
+            var pluginSettingsButton = new Button { Text = "Settings...", AutoSize = true };
+            pluginSettingsButton.Click += async delegate { await EditPluginSettings(); };
+            buttons.Controls.AddRange(new Control[] { refresh, enable, disable, approve, install, pluginSettingsButton });
             page.Controls.Add(buttons, 0, 0);
             pluginList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false };
             pluginList.Columns.Add("Plugin", 160);
@@ -1017,6 +1019,163 @@ namespace SubVulpes
             } catch (Exception ex) { message.Text = "Cannot change plugin state: " + ex.Message; }
             finally { pluginBusy = false; SetState(serverState); }
             await RefreshPlugins();
+        }
+
+        // One setting of a plugin, as the server lists it. The server checks every value again, so this form only helps.
+        sealed class PluginSetting
+        {
+            public string Key, Type, Value, Default, Min, Max, Label, Help;
+            public bool Live, Admin, Pending, Reset;
+            public Control Editor;
+        }
+
+        // The listing of the server: SETTING, id, key, type, value, default, min, max (or choices), live, admin, pending, label, help.
+        static List<PluginSetting> ParsePluginSettings(string id, string output)
+        {
+            var result = new List<PluginSetting>();
+            foreach (string line in output.Replace("\r", "").Split('\n')) {
+                if (!line.StartsWith("SETTING\t", StringComparison.Ordinal)) continue;
+                string[] f = line.Split('\t');
+                if (f.Length != 13 || f[1] != id || !Regex.IsMatch(f[2], @"\A[a-z][a-z0-9_]{0,31}\z")) continue;
+                if (Array.IndexOf(new[] { "flag", "int", "float", "text", "choice", "secret" }, f[3]) < 0) continue;
+                result.Add(new PluginSetting {
+                    Key = f[2], Type = f[3], Value = f[4], Default = f[5], Min = f[6], Max = f[7],
+                    Live = f[8] == "1", Admin = f[9] == "1", Pending = f[10] == "1", Label = f[11], Help = f[12]
+                });
+            }
+            return result;
+        }
+
+        static Control SettingEditor(PluginSetting s)
+        {
+            int number;
+            decimal low, high;
+            switch (s.Type) {
+            case "flag":
+                return new CheckBox { Checked = s.Value == "1", AutoSize = true };
+            case "int":
+                if (int.TryParse(s.Min, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out number)) low = number; else low = int.MinValue;
+                if (int.TryParse(s.Max, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out number)) high = number; else high = int.MaxValue;
+                decimal start;
+                if (!decimal.TryParse(s.Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out start)) start = low;
+                return new NumericUpDown { Minimum = low, Maximum = high, Value = Math.Min(high, Math.Max(low, start)), Width = 140 };
+            case "choice":
+                var box = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+                foreach (string name in s.Max.Split(',')) box.Items.Add(name);
+                box.SelectedItem = s.Value;
+                return box;
+            case "secret":
+                // A secret shows no value. The field stays empty until the administrator types a new one.
+                return new TextBox { UseSystemPasswordChar = true, Width = 240, MaxLength = 63 };
+            default:
+                int most;
+                if (!int.TryParse(s.Max, out most) || most < 1 || most > 63) most = 63;
+                return new TextBox { Text = s.Value, Width = 240, MaxLength = most };
+            }
+        }
+
+        static string SettingEditorValue(PluginSetting s)
+        {
+            if (s.Type == "flag") return ((CheckBox)s.Editor).Checked ? "1" : "0";
+            if (s.Type == "int") return ((NumericUpDown)s.Editor).Value.ToString(CultureInfo.InvariantCulture);
+            if (s.Type == "choice") return ((ComboBox)s.Editor).SelectedItem as string ?? s.Value;
+            return ((TextBox)s.Editor).Text.Trim();
+        }
+
+        // The form of the settings of the selected plugin. It reads the listing of the server tool (no DLL runs). It saves each
+        // changed value with the file command when the server is stopped, and with a local command when the server runs.
+        async Task EditPluginSettings()
+        {
+            if (pluginBusy || updating) return;
+            string id = SelectedPlugin();
+            if (id == null) return;
+            pluginBusy = true;
+            SetState(serverState);
+            string selectedFolder = folder;
+            List<PluginSetting> rows;
+            try {
+                string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-config " + id));
+                rows = ParsePluginSettings(id, output);
+            } catch (Exception ex) {
+                message.Text = "Cannot read the settings: " + ex.Message;
+                return;
+            } finally { pluginBusy = false; SetState(serverState); }
+            if (rows.Count == 0) { message.Text = "This plugin has no settings."; return; }
+            var changes = new List<PluginSetting>();
+            using (var dialog = new Form {
+                Text = "Settings: " + id, StartPosition = FormStartPosition.CenterParent, Width = 760, Height = 520,
+                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false
+            })
+            using (var tips = new ToolTip()) {
+                var table = new TableLayoutPanel { ColumnCount = 3, AutoScroll = true, Dock = DockStyle.Fill, Padding = new Padding(8) };
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                foreach (PluginSetting s in rows) {
+                    var caption = s.Label + (s.Live ? "" : " (needs a restart)") + (s.Pending ? " *" : "");
+                    var label = new Label { Text = caption, AutoSize = false, Width = 240, Height = 24, TextAlign = ContentAlignment.MiddleLeft };
+                    s.Editor = SettingEditor(s);
+                    var reset = new Button { Text = "Default", AutoSize = true };
+                    PluginSetting current = s;
+                    reset.Click += delegate {
+                        current.Reset = true;
+                        if (current.Type == "flag") ((CheckBox)current.Editor).Checked = current.Default == "1";
+                        else if (current.Type == "secret") ((TextBox)current.Editor).Text = "";
+                        else if (current.Type == "choice") ((ComboBox)current.Editor).SelectedItem = current.Default;
+                        else if (current.Type == "int") {
+                            decimal d;
+                            if (decimal.TryParse(current.Default, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out d))
+                                ((NumericUpDown)current.Editor).Value = Math.Min(((NumericUpDown)current.Editor).Maximum, Math.Max(((NumericUpDown)current.Editor).Minimum, d));
+                        } else ((TextBox)current.Editor).Text = current.Default;
+                    };
+                    if (s.Help.Length > 0) { tips.SetToolTip(label, s.Help); tips.SetToolTip(s.Editor, s.Help); }
+                    table.Controls.Add(label);
+                    table.Controls.Add(s.Editor);
+                    table.Controls.Add(reset);
+                }
+                var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 44, Padding = new Padding(8) };
+                var save = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
+                var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+                var note = new Label { Text = "A setting marked * is saved and waits for a restart.", AutoSize = true, Margin = new Padding(12, 8, 3, 3) };
+                footer.Controls.AddRange(new Control[] { save, cancel, note });
+                dialog.Controls.Add(table);
+                dialog.Controls.Add(footer);
+                dialog.AcceptButton = save;
+                dialog.CancelButton = cancel;
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                foreach (PluginSetting s in rows) {
+                    string now = SettingEditorValue(s);
+                    bool secret = s.Type == "secret";
+                    // A secret changes only when the administrator typed something, or asked for the default.
+                    if (s.Reset || (secret ? now.Length > 0 : now != s.Value)) {
+                        s.Value = now;
+                        changes.Add(s);
+                    }
+                }
+            }
+            if (changes.Count == 0) { message.Text = "No setting changed."; return; }
+            int saved = 0;
+            var failures = new List<string>();
+            foreach (PluginSetting s in changes) {
+                // No value means the default. Text cannot be empty, so an empty text asks for the default too.
+                bool useDefault = s.Reset || s.Value.Length == 0;
+                if (!Regex.IsMatch(s.Value, @"\A[\x20-\x7e]*\z") || s.Value.IndexOf('"') >= 0 || s.Value.IndexOf(';') >= 0) {
+                    failures.Add(s.Key);
+                    continue;
+                }
+                if (server != null) {
+                    SendPluginCommand("plugins config " + id + " " + s.Key + (useDefault ? "" : " " + s.Value));
+                    saved++;
+                    continue;
+                }
+                try {
+                    string arguments = "--plugin-config " + id + " " + s.Key + (useDefault ? "" : " " + QuoteProcessArgument(s.Value));
+                    await Task.Run(() => RunPluginTool(selectedFolder, arguments));
+                    saved++;
+                } catch (Exception ex) { failures.Add(s.Key + ": " + ex.Message); }
+            }
+            message.Text = saved + " setting(s) sent." + (server != null ? " Results appear in the server console." : " They apply at the next server start.") +
+                (failures.Count > 0 ? " Refused: " + string.Join(", ", failures.ToArray()) : "");
         }
 
         async Task ApprovePlugin()

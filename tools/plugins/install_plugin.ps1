@@ -51,12 +51,28 @@ function Read-Manifest([byte[]]$Bytes) {
     }
     $values = @{}
     $section = $false
+    # The sections [setting.KEY] declare the settings that the administrator sets (docs/plugin-config.md). The host checks the
+    # values of each field when it reads the manifest. The installer checks the shape: the names, the fields and the count.
+    $settingSections = @{}
+    $current = $null
+    $settingKeys = @('type', 'default', 'min', 'max', 'maxlen', 'choices', 'label', 'help', 'live', 'admin')
     foreach ($raw in ([Text.Encoding]::ASCII.GetString($Bytes) -split '\r?\n')) {
         $line = $raw.Trim()
         if (-not $line -or $line.StartsWith(';') -or $line.StartsWith('#')) { continue }
         if ($line -ceq '[plugin]' -and -not $section) { $section = $true; continue }
-        if (-not $section -or $line -cnotmatch '^([a-z]+)=(.*)$') { throw 'Invalid manifest syntax.' }
+        if ($section -and $line -cmatch '^\[setting\.([a-z][a-z0-9_]{0,31})\]$') {
+            if ($settingSections.ContainsKey($Matches[1]) -or $settingSections.Count -ge 32) { throw 'Invalid or duplicate setting section.' }
+            $current = @{}
+            $settingSections[$Matches[1]] = $current
+            continue
+        }
+        if (-not $section -or $line -cnotmatch '^([a-z_]+)=(.*)$') { throw 'Invalid manifest syntax.' }
         $key, $value = $Matches[1], $Matches[2]
+        if ($null -ne $current) {
+            if ($key -notin $settingKeys -or $current.ContainsKey($key)) { throw 'Invalid or duplicate setting field.' }
+            $current[$key] = $value
+            continue
+        }
         if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies', 'unsafe_events') -or $values.ContainsKey($key)) {
             throw 'Invalid or duplicate manifest field.'
         }

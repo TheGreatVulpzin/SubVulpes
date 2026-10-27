@@ -6,10 +6,12 @@
 #include <string.h>
 #include "sv_plugin.h"
 #include "sv_game_events.h"
+#include "sv_config.h"
 
 static const SvHost *api;
 static const char *mode;
 static SvOwner identity;
+static const SvConfig *config;
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 {
@@ -64,10 +66,80 @@ static DWORD WINAPI worker(void *unused)
     return api->status(identity, &status) == SV_STATE ? 0 : 1;
 }
 
+/* The settings of the plugin, in the modes that start with config. Each mode reads the keys that its manifest declares. */
+static SvResult SV_CALL cfg_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    int32_t price = 0, enabled = 0, mode_index = 0, extra = 0, retyped = 0;
+    float rate = 0.0f;
+    char name[64] = "", token[64] = "", text[300];
+    (void)actor;
+    (void)arguments;
+    if (config->get_int(owner, "price", &price) != SV_OK)
+        return SV_FAILED;
+    if (!strcmp(mode, "config-update")) {
+        /* The manifest lost name, token, mode and enabled, and changed the type of rate to an integer. It gained extra. */
+        if (config->get_int(owner, "rate", &retyped) != SV_OK || config->get_int(owner, "extra", &extra) != SV_OK ||
+            config->get_text(owner, "name", name, sizeof name) != SV_NOT_FOUND)
+            return SV_FAILED;
+        _snprintf(text, sizeof text, "cfg price=%d rate=%d extra=%d", price, retyped, extra);
+    } else {
+        if (config->get_float(owner, "rate", &rate) != SV_OK || config->get_int(owner, "enabled", &enabled) != SV_OK ||
+            config->get_text(owner, "name", name, sizeof name) != SV_OK || config->get_int(owner, "mode", &mode_index) != SV_OK ||
+            config->get_text(owner, "token", token, sizeof token) != SV_OK)
+            return SV_FAILED;
+        _snprintf(text, sizeof text, "cfg price=%d rate=%.2f enabled=%d name=%s mode=%d token_len=%u", price, rate, enabled, name,
+            mode_index, (unsigned)strlen(token));
+    }
+    text[sizeof text - 1] = 0;
+    return api->log(owner, text);
+}
+
+/* The first mode checks every result code of the getters and the defaults. */
+static SvResult config_checks(const SvHost *host, SvOwner owner)
+{
+    const void *table = NULL;
+    int32_t number = 0;
+    float real = 0.0f;
+    char text[64], small[10];
+    if (host->get_api(owner, SV_API_CONFIG, SV_CONFIG_VERSION + 1, &table) != SV_INCOMPATIBLE || table != NULL ||
+        host->get_api(owner, SV_API_CONFIG, SV_CONFIG_VERSION, &table) != SV_OK)
+        return SV_FAILED;
+    config = (const SvConfig *)table;
+    if (!config || config->size != sizeof *config || config->version != SV_CONFIG_VERSION)
+        return SV_FAILED;
+    if (config->get_int(owner + 1, "price", &number) != SV_STATE || config->get_int(owner, "nosuch", &number) != SV_NOT_FOUND ||
+        config->get_int(owner, NULL, &number) != SV_INVALID || config->get_int(owner, "price", NULL) != SV_INVALID ||
+        config->get_int(owner, "rate", &number) != SV_INVALID || config->get_int(owner, "name", &number) != SV_INVALID ||
+        config->get_float(owner, "price", &real) != SV_INVALID || config->get_float(owner, "rate", NULL) != SV_INVALID ||
+        config->get_text(owner, "price", text, sizeof text) != SV_INVALID ||
+        config->get_text(owner, "name", small, sizeof small) != SV_INVALID || config->get_text(owner, "name", NULL, sizeof text) != SV_INVALID ||
+        config->get_text(owner, "nosuch", text, sizeof text) != SV_NOT_FOUND)
+        return SV_FAILED;
+    if (config->get_int(owner, "price", &number) != SV_OK || number != 125 || config->get_float(owner, "rate", &real) != SV_OK ||
+        real != 1.5f || config->get_int(owner, "enabled", &number) != SV_OK || number != 1 ||
+        config->get_text(owner, "name", text, sizeof text) != SV_OK || strcmp(text, "Name") ||
+        config->get_int(owner, "mode", &number) != SV_OK || number != 1 ||
+        config->get_text(owner, "mode", text, sizeof text) != SV_OK || strcmp(text, "normal") ||
+        config->get_text(owner, "token", text, sizeof text) != SV_OK || text[0])
+        return SV_FAILED;
+    return SV_OK;
+}
+
 static SvResult SV_CALL event(SvOwner owner, const SvEvent *notification)
 {
     unsigned unused;
     (void)owner;
+    if (notification->kind == SV_EVENT_CONFIG) {
+        /* A live setting changed. The log shows the key and the two values, which are empty for a secret. */
+        const SvConfigEvent *change = (const SvConfigEvent *)notification;
+        char text[200];
+        if (notification->size != sizeof *change || change->key[SV_CONFIG_KEY_MAX] || change->old_value[SV_CONFIG_TEXT_MAX] ||
+            change->new_value[SV_CONFIG_TEXT_MAX])
+            return SV_FAILED;
+        _snprintf(text, sizeof text, "CONFIG %s [%s] [%s]", change->key, change->old_value, change->new_value);
+        text[sizeof text - 1] = 0;
+        return api->log(owner, text);
+    }
     if (notification->kind == SV_EVENT_DAMAGE) {
         /* A decision inside the simulation. A slow answer for 99, a failure in the mode unsafe-fail, and the guard on 88: a
          * call that changes the host must give SV_STATE there. */
@@ -126,8 +198,15 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
         api->command(owner, "no_callback", SV_COMMAND_PUBLIC, NULL) != SV_INVALID ||
         api->subscribe(owner, SV_EVENT_TICK, NULL) != SV_INVALID)
         return SV_FAILED;
-    if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP, event) != SV_OK)
+    if (!strncmp(mode, "config", 6)) {
+        if ((!strcmp(mode, "config") && config_checks(api, owner) != SV_OK) ||
+            api->get_api(owner, SV_API_CONFIG, SV_CONFIG_VERSION, (const void **)&config) != SV_OK ||
+            api->command(owner, "cfg", SV_COMMAND_LOCAL, cfg_command) != SV_OK ||
+            api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_CONFIG, event) != SV_OK)
+            return SV_FAILED;
+    } else if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP, event) != SV_OK) {
         return SV_FAILED;
+    }
     /* Decisions inside the simulation need unsafe_events=1 in the manifest. Only the unsafe modes have it. */
     if (!strncmp(mode, "unsafe", 6)) {
         if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_DAMAGE, event) != SV_OK)

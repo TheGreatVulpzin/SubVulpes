@@ -51,6 +51,7 @@ dependencies=
 ```
 
 Dependencies are comma-separated module IDs, without spaces. The limit is eight per module.
+The manifest may also declare settings in sections `[setting.KEY]`. The administrator sets them in the launcher or with a command. See [plugin settings](plugin-config.md).
 The optional key `unsafe_events` is `0` (the default) or `1`. A plugin needs `1` to subscribe to `SV_EVENT_DAMAGE`, a decision inside the simulation. Without it the `subscribe` call returns `SV_DENIED`. Read the danger in [plugin events](plugin-events.md#danger-of-kind-3) first. The plugin list and the approval command print a notice for such a plugin.
 IDs use lowercase letters, digits, dots, underscores and hyphens. They start with a letter or digit and cannot contain `..`.
 Trailing dots and Windows DOS device basenames, including names with extensions, are invalid.
@@ -78,7 +79,7 @@ Worker-thread calls return `SV_STATE`.
 - `log` accepts one line of at most 512 bytes, without CR or LF.
 - `status` copies tick, player count, bot count and uptime into `SvStatus`. Set its `size` first.
 - `command` registers a unique name and callback with public, admin or local permission. The host reserves `plugins`.
-- `subscribe` replaces the module subscription. The mask may hold `SV_EVENT_TICK`, `SV_EVENT_STOP` and the game events `SV_EVENT_LOST`, `SV_EVENT_SPAWN`, `SV_EVENT_DEATH` and `SV_EVENT_LEAVE`, `SV_EVENT_CHAT`, `SV_EVENT_JOIN`, `SV_EVENT_PHONE_DIGIT` and `SV_EVENT_PHONE_CALL`. A zero mask removes it. For a chat or join event the callback may answer `SV_DENIED` to drop the text or the player. For every other event `SV_DENIED` is a failure. `SV_EVENT_DAMAGE` is the exception that needs `unsafe_events=1`. Its callback can only read, and it answers `SV_OK`, `SV_DENIED` or a new amount in the field `new_amount` of `SvDamageEvent`. A game event record starts with the `SvEvent` of this ABI and has a larger `size`. See `sv_game_events.h` and [plugin events](plugin-events.md).
+- `subscribe` replaces the module subscription. The mask may hold `SV_EVENT_TICK`, `SV_EVENT_STOP` and the game events `SV_EVENT_LOST`, `SV_EVENT_SPAWN`, `SV_EVENT_DEATH` and `SV_EVENT_LEAVE`, `SV_EVENT_CHAT`, `SV_EVENT_JOIN`, `SV_EVENT_PHONE_DIGIT` and `SV_EVENT_PHONE_CALL` and `SV_EVENT_CONFIG` (the change of a live setting of the plugin). A zero mask removes it. For a chat or join event the callback may answer `SV_DENIED` to drop the text or the player. For every other event `SV_DENIED` is a failure. `SV_EVENT_DAMAGE` is the exception that needs `unsafe_events=1`. Its callback can only read, and it answers `SV_OK`, `SV_DENIED` or a new amount in the field `new_amount` of `SvDamageEvent`. A game event record starts with the `SvEvent` of this ABI and has a larger `size`. See `sv_game_events.h` and [plugin events](plugin-events.md).
 - `get_api` obtains a versioned capability table within the current callback context. Game reads also need world readiness.
 
 The limits are 32 modules and 128 commands across the host.

@@ -1,7 +1,9 @@
 #include "plugin_host.h"
 #include "plugin_entities.h"
 #include "plugin_game_internal.h"
+#include "events.h"
 #include "sr_runtime.h"
+#include <string.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -76,6 +78,14 @@ void sv_game_status(SvStatus *status)
 
 /* An actor is the reference of the player who typed the command. Administration is the flag that
  * /admin sets, so a plugin command with the admin level follows the inherited password login. */
+/* A reply to a player: a message of the admin kind, as the replies of the chat commands. */
+void sv_game_tell(uint64_t actor, const char *text)
+{
+    int32_t index = sv_entity_resolve(SV_ENTITY_PLAYER, actor);
+    if (index >= 0 && text && strlen(text) <= 63)
+        createevent_message_to(4, text, index);
+}
+
 int sv_game_actor_admin(uint64_t actor)
 {
     int32_t index = sv_entity_resolve(SV_ENTITY_PLAYER, actor);

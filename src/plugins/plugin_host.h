@@ -54,5 +54,7 @@ void sv_events_clear(void);
 SvResult sv_plugins_decide(const SvEvent *event);
 int sv_game_actor_admin(uint64_t actor);
 void sv_log(const char *fmt, ...);
+/* Sends a short text (at most 63 bytes) to one player, as a reply to a command. Actor 0 is the local operator and has none. */
+void sv_game_tell(uint64_t actor, const char *text);
 
 #endif

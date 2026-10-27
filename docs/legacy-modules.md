@@ -130,7 +130,7 @@ The design rules:
 - Each plugin has its own keys, a limit for each value and a limit for the total. The host saves at a safe point and in one step, so a crash leaves the old file whole.
 - Persistent bans, permission groups and ranks depend on the account scope.
 | N19 | Write the body part masses. Low priority. The effect is not known. |
-| N23 | Plugin configuration set by the administrator, in the launcher or with a command. See the notes below. |
+| N23 | Plugin configuration set by the administrator, in the launcher or with a command. Done: see [plugin settings](plugin-config.md). The notes below are the design. |
 | N24 | Damage decision. Before a bullet, a fist, a blade or a vehicle applies damage to a human, an object or a wheel, a plugin can allow it, scale it or cancel it. The event says the source, the target and the amount. |
 | N25 | Closed. The read table already gives the buttons, the velocity of each bone and `reload_ticks`. The punch module of the tool keeps a counter in a free field of the human record. A plugin keeps such a counter in its own storage (N18), and not in the game record. |
 | N26 | World flow. The world read already shows the mode, the round, the state and the timers. Add writes for the timers and the state, and a request to reset the round. No operation names a gametype. |

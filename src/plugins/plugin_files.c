@@ -116,6 +116,10 @@ static int metadata(const char *id, SvModule *module)
             part = next + 1;
         }
     }
+    /* The settings: the sections [setting.KEY] of the manifest, and the saved values. module->path is still the manifest. */
+    if (!sv_config_declare(&module->config, module->path))
+        return 0;
+    sv_config_load(&module->config, id);
     snprintf(manifest, sizeof manifest, "%s/%s", folder, library);
     if (!plain_path(manifest, 0) || !absolute(manifest, module->path))
         return 0;
@@ -315,6 +319,13 @@ void sv_plugin_unload(SvModule *module)
     module->lock = INVALID_HANDLE_VALUE;
 }
 
+/* The manifest only: the declaration and the saved values, with no read of the DLL. A running server holds the DLL, so this
+ * is the call for a listing that must work beside it. */
+int sv_plugin_declared(const char *id, SvModule *module)
+{
+    return metadata(id, module);
+}
+
 int sv_plugin_inspect(const char *id, SvModule *module)
 {
     if (!metadata(id, module) || !open_binary(module))
@@ -354,6 +365,25 @@ int sv_plugin_save_state(const char *id, int enabled)
     if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES && !plain_path(path, 0))
         return 0;
     return WritePrivateProfileStringA("plugins", id, enabled ? "enabled" : "disabled", path) != 0;
+}
+
+int sv_plugin_private_file(const char *id, char path[MAX_PATH], int create)
+{
+    char relative[MAX_PATH];
+    if (!sv_plugin_id(id))
+        return 0;
+    if (create && !CreateDirectoryA("user", NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return 0;
+    if (!plain_path("user", 1))
+        return 0;
+    if (create && !CreateDirectoryA("user/plugins", NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return 0;
+    if (!plain_path("user/plugins", 1))
+        return 0;
+    snprintf(relative, sizeof relative, "user/plugins/%s.settings.ini", id);
+    if (!absolute(relative, path))
+        return 0;
+    return GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES || plain_path(path, 0);
 }
 
 HANDLE sv_plugin_lock(void)

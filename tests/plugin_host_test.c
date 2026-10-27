@@ -33,6 +33,12 @@ void sv_game_status(SvStatus *status)
     status->tick = 42;
 }
 
+/* A reply to a player goes to the output, so a test can read it. */
+void sv_game_tell(uint64_t actor, const char *text)
+{
+    printf("TELL %llu %s\n", (unsigned long long)actor, text);
+}
+
 /* Actor 7 is an administrator. Actor 8 is a player without administration rights. */
 int sv_game_actor_admin(uint64_t actor)
 {
@@ -120,6 +126,41 @@ int main(int argc, char **argv)
         CHECK(!sv_plugins_command(0, "lim0") && !sv_plugins_command(0, "fixture"));
         CHECK(sv_plugins_enable("test.fixture") == SV_OK);
         CHECK(sv_plugins_command(0, "lim126") && sv_plugins_command(0, "fixture"));
+    } else if (!strcmp(argv[1], "config")) {
+        /* The settings. The test script reads the output. Actor 7 is an administrator and actor 8 is not. */
+        CHECK(ok && sv_plugins_command(0, "cfg"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture price 300"));
+        CHECK(sv_plugins_command(0, "cfg"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture rate 2"));
+        CHECK(sv_plugins_command(0, "cfg"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture price 2000000"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture price -1"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture price 12x"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture price 5 6"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture nosuch 1"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture enabled 2"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture mode extreme"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture rate 3.5"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture rate 1e1"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture name bad;name"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture name this-name-is-longer-than-twenty-chars"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture mode hard"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture token s3cret"));
+        CHECK(sv_plugins_command(0, "cfg"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture price"));
+        CHECK(sv_plugins_command(0, "cfg"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture price 300"));
+        CHECK(sv_plugins_command(0, "plugins config"));
+        CHECK(sv_plugins_command(0, "plugins config missing"));
+        CHECK(sv_plugins_command(0, "plugins config test.fixture"));
+        CHECK(sv_plugins_command(7, "plugins config test.fixture price 77"));
+        CHECK(sv_plugins_command(7, "plugins config test.fixture rate 1"));
+        CHECK(sv_plugins_command(7, "plugins config test.fixture"));
+        CHECK(sv_plugins_command(8, "plugins config test.fixture price 1"));
+        CHECK(sv_plugins_command(8, "plugins config test.fixture"));
+        CHECK(sv_plugins_command(8, "plugins disable test.fixture"));
+    } else if (!strcmp(argv[1], "config-read")) {
+        CHECK(ok && sv_plugins_command(0, "cfg"));
     } else if (!strcmp(argv[1], "unsafe-budget")) {
         unsigned i;
         /* The guard on 88 runs inside the plugin. A fast answer does not count. Ten slow answers are allowed, and the
