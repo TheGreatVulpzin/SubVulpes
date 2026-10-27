@@ -181,6 +181,8 @@ These codec checks do not establish full client gameplay equivalence.
 
 `server_playermessage` runs for each chat text. The word filter lowers the text, finds the filtered word and replaces the text with "i'm an idiot" (the real text goes to `orig_text`, only the player sees it). A text that starts with `/` is a command. A muted player (`chat_block` above 0) gets no chat.
 
+A command first goes to the plugin commands. If a plugin owns the name, the plugin gets the text and the rest of this section does not run. The plugin command has a permission level: public, admin or local. A player runs a public command. An admin runs an admin command, where admin means the `is_admin` flag. A player never runs a local command, and the chat answer is only a log line. A player with no plugin reference never reaches the plugins, because actor zero is the local operator. The names `plugins` and `admin` are not available to plugins. With no plugin command, this section works as before.
+
 `/admin PASSWORD` makes the player an admin. After 5 tries it stops. An admin can use:
 
 | Command | Effect |

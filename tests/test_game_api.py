@@ -27,6 +27,13 @@ with tempfile.TemporaryDirectory(prefix="game-api-", dir=build / "tests") as fol
                          capture_output=True, text=True, timeout=30)
     print(run.stdout, end="")
     print(run.stderr, end="", file=sys.stderr)
-    required = ("PUBLIC_READ_API_PASS", "STOP_READ_DENIED", "PUBLIC_WRITE_API_PASS", "STOP_WRITE_DENIED")
-    if run.returncode or any(text not in run.stdout for text in required):
+    required = ("PUBLIC_READ_API_PASS", "STOP_READ_DENIED", "PUBLIC_WRITE_API_PASS", "STOP_WRITE_DENIED",
+                "COMMAND echo hi there", "COMMAND secret two")
+    # A player runs the PUBLIC command. The ADMIN command waits for the flag. The LOCAL command never runs.
+    # A player with no reference must not become the local operator (actor zero).
+    absent = ("COMMAND secret one", "COMMAND localonly", "COMMAND echo nope", "Plugin command result: echo")
+    denied = run.stdout.count("Plugin command permission denied: secret") == 1 and \
+        run.stdout.count("Plugin command permission denied: localonly") == 2
+    if run.returncode or not denied or any(text not in run.stdout for text in required) or \
+            any(text in run.stdout for text in absent):
         raise SystemExit(run.returncode or 1)

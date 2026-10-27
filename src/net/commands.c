@@ -14,6 +14,8 @@
 #include "events.h"
 #include "items.h"
 #include "objects.h"
+#include "plugin_entities.h"
+#include "plugin_host.h"
 #include "scenario.h"
 #include "server.h"
 #include "sr_server.h"
@@ -245,6 +247,7 @@ static void admin_commands(int player, const char *text, int n)
 int server_playermessage(int player, char *text)
 {
     Player *p;
+    SvEntity actor;
     int len, n, total;
     if (player == -1)
         return 0;
@@ -268,6 +271,11 @@ int server_playermessage(int player, char *text)
     }
     if (text[0] != '/')
         return 0;
+    /* A plugin command comes first. An actor of zero is the local operator, so a player with no
+     * reference never reaches the plugins. */
+    actor = sv_entity_at(SV_ENTITY_PLAYER, player);
+    if (actor != 0 && sv_plugins_command(actor, text))
+        return 1;
     admin_login(player, text);
     if (p->is_admin != 0)
         admin_commands(player, text, n);

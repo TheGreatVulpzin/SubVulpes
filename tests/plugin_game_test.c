@@ -155,6 +155,37 @@ static void write_api_tick(void)
     sr_numofconnections = 0;
 }
 
+/* Plugin commands in the chat. Only the PUBLIC command runs for a player. The ADMIN command runs
+ * after the /admin flag is set. The LOCAL command never runs for a player. */
+static void chat_commands(void)
+{
+    char text[64];
+    sr_players[0].is_admin = 0;
+    strcpy(text, "hello");
+    CHECK(server_playermessage(0, text) == 0);
+    strcpy(text, "/echo hi there");
+    CHECK(server_playermessage(0, text) == 1);
+    strcpy(text, "/secret one");
+    CHECK(server_playermessage(0, text) == 1);
+    strcpy(text, "/localonly one");
+    CHECK(server_playermessage(0, text) == 1);
+    strcpy(text, "/nothing");
+    CHECK(server_playermessage(0, text) == 1);
+    /* Player 5 has no reference. Its actor would be zero, the local operator, so the chat must not route it. */
+    CHECK(sv_entity_at(SV_ENTITY_PLAYER, 5) == 0);
+    strcpy(text, "/echo nope");
+    CHECK(server_playermessage(5, text) == 1);
+    CHECK(sv_game_actor_admin(sv_entity_at(SV_ENTITY_PLAYER, 0)) == 0);
+    sr_players[0].is_admin = 1;
+    CHECK(sv_game_actor_admin(sv_entity_at(SV_ENTITY_PLAYER, 0)) == 1);
+    CHECK(sv_game_actor_admin(0) == 0);
+    strcpy(text, "/secret two");
+    CHECK(server_playermessage(0, text) == 1);
+    strcpy(text, "/localonly two");
+    CHECK(server_playermessage(0, text) == 1);
+    sr_players[0].is_admin = 0;
+}
+
 int main(void)
 {
     SvEntity old;
@@ -198,6 +229,7 @@ int main(void)
     sr_items[0].num_children = 0;
     sr_data_object[0].num_wheels = 0;
     write_api_tick();
+    chat_commands();
     sv_game_reset();
     sv_entities_clear(SV_ENTITY_HUMAN);
     sv_entities_clear(SV_ENTITY_ITEM);

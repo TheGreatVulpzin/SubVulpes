@@ -57,9 +57,10 @@ void sv_game_status(SvStatus *status)
             sr_players[i].is_bot ? ++status->bots : ++status->players;
 }
 
+/* An actor is the reference of the player who typed the command. Administration is the flag that
+ * /admin sets, so a plugin command with the admin level follows the inherited password login. */
 int sv_game_actor_admin(uint64_t actor)
 {
-    /* Remote command authorization needs a separate permission contract. */
-    (void)actor;
-    return 0;
+    int32_t index = sv_entity_resolve(SV_ENTITY_PLAYER, actor);
+    return index >= 0 && sr_players[index].is_admin != 0;
 }

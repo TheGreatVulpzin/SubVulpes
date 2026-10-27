@@ -192,7 +192,7 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 
 | Method | Effect | Result codes besides `SV_STATE` |
 | --- | --- | --- |
-| `message(kind, text)` | Sends a message event to every client. Kind `0` is a server message and kind `4` is a chat line. The text has 1 to 63 printable ASCII bytes. | `SV_INVALID` for another kind, a null or empty text, a long text or a control byte |
+| `message(kind, text)` | Sends a message event to every client. Kind `0` is a server message for every client. Kind `4` reaches only admins, like the replies of the chat commands. The text has 1 to 63 printable ASCII bytes. | `SV_INVALID` for another kind, a null or empty text, a long text or a control byte |
 | `kick(player)` | Adds the address of the connection to the kick list and sets its idle counter to the drop value, as `/kick` does. | `SV_NOT_FOUND` for a wrong kind or a player with no connection, `SV_LIMIT` when the kick list is full |
 | `add_money(account, amount)` | Adds the amount to the account and to each active player of it, as `/give` does. | `SV_NOT_FOUND`, `SV_INVALID` when any sum leaves the 32-bit range (no balance changes) |
 | `set_godmode(player, enabled)` | Sets the flag to 0 or 1. | `SV_NOT_FOUND`, `SV_INVALID` for another value |
@@ -207,3 +207,20 @@ The packet writer clamps the sent health to the range -10 to 117 and leaves the 
 
 Not covered: a full kick list (41,368 addresses), more than one connection for a player, a message when the event ring is full, and a client check of a teleport or a health value.
 The original client was not run. A teleport reaches the client only through the normal human state updates.
+
+## Chat commands
+
+A plugin registers a command with `host->command(owner, name, permission, callback)`. A chat text that starts with `/` goes to the plugin commands before the inherited ones.
+The callback gets an actor, a nonzero reference of the player who typed the text, and the text after the name.
+Actor zero is the local operator on the server console. The chat never sends it.
+
+| Permission | Who can run it from the chat |
+| --- | --- |
+| `SV_COMMAND_PUBLIC` | Every player |
+| `SV_COMMAND_ADMIN` | A player with the `is_admin` flag, which `/admin PASSWORD` sets |
+| `SV_COMMAND_LOCAL` | Nobody. Only the server console runs it |
+
+The host refuses a denied command and logs `Plugin command permission denied`. The host reserves the names `plugins` and `admin`.
+The tests run the chat function against a real player record. They check the three levels, an unknown command, and a player with no reference.
+Removing the routing, the admin flag check, the zero-actor guard or the `admin` reservation made `game-api` fail each time.
+A plugin cannot yet answer one player: `message` goes to every client. The [legacy module list](legacy-modules.md) names this as N1.

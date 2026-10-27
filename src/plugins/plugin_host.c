@@ -71,7 +71,9 @@ static SvResult SV_CALL host_command(SvOwner owner, const char *name, uint32_t p
     uint32_t i, slot = SV_PLUGIN_COMMAND_MAX;
     if (!owner_module(owner) || stopping)
         return SV_STATE;
-    if (!sv_plugin_id(name) || !callback || permission > SV_COMMAND_LOCAL || !strcmp(name, "plugins"))
+    /* "plugins" is the management command. "admin" is the password login of the chat. */
+    if (!sv_plugin_id(name) || !callback || permission > SV_COMMAND_LOCAL || !strcmp(name, "plugins") ||
+        !strcmp(name, "admin"))
         return SV_INVALID;
     for (i = 0; i < SV_PLUGIN_COMMAND_MAX; ++i) {
         if (commands[i].owner && !strcmp(commands[i].name, name))

@@ -29,6 +29,31 @@ static DWORD WINAPI wrong_thread(void *argument)
         host->get_api(plugin_owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_STATE ? 0 : 1;
 }
 
+/* A chat command logs its name and text. The actor is never zero, since zero is the local operator. */
+static SvResult report(SvOwner owner, const char *name, uint64_t actor, const char *arguments)
+{
+    char text[128];
+    if (!actor)
+        return SV_DENIED;
+    snprintf(text, sizeof text, "COMMAND %s %s", name, arguments);
+    return host->log(owner, text);
+}
+
+static SvResult SV_CALL echo_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    return report(owner, "echo", actor, arguments);
+}
+
+static SvResult SV_CALL secret_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    return report(owner, "secret", actor, arguments);
+}
+
+static SvResult SV_CALL localonly_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    return report(owner, "localonly", actor, arguments);
+}
+
 static DWORD WINAPI write_wrong_thread(void *argument)
 {
     (void)argument;
@@ -264,6 +289,10 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     change = (const SvGameWrite *)table;
     CHECK(change && change->size == sizeof *change && change->version == SV_GAME_WRITE_VERSION);
     CHECK(change->message(owner, SV_MESSAGE_SERVER, "before ready") == SV_STATE);
+    CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
+    CHECK(host->command(owner, "echo", SV_COMMAND_PUBLIC, echo_command) == SV_OK);
+    CHECK(host->command(owner, "secret", SV_COMMAND_ADMIN, secret_command) == SV_OK);
+    CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);

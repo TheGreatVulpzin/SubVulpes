@@ -6,7 +6,7 @@
 #define SV_API_GAME_WRITE 2u
 #define SV_GAME_WRITE_VERSION 1u
 
-/* Message kinds the original client shows: 0 is a server message, 4 is a chat line. */
+/* Message kinds: 0 is a server message for every client. Kind 4 reaches only admins, as the replies of the chat commands do. */
 enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_CHAT = 4 };
 /* The health range of the game: -100 is dead and 100 is full health. */
 enum { SV_HEALTH_MIN = -100, SV_HEALTH_MAX = 100 };
