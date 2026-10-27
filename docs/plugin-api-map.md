@@ -145,7 +145,13 @@ How the game works today:
 | --- | --- | --- |
 | N20 | **AI control.** Read the threats of a bot. Set its destination, waypoints and target. Override its input (movement and buttons) for some ticks, with a way to give control back. | A bot that hunts chosen players. Two different NPC behaviors. |
 | N21 | **Economy.** Read the companies (shares, price, stake). Change a price or a share count under the split rules. Add or remove stocks of a player. | Rewards and penalties in stocks. A market event. |
-| N22 | **Missions.** Read the slots of a team (kind, expiry, reward). Start or cancel a mission with an existing kind. Events for start, completion and expiry, with a decision to replace the reward. | Change the rules of the existing missions. A mission of your own. |
+| N22 | **Missions.** Read the slots of a team (kind, expiry, reward). Start or cancel a mission with an existing kind. Events for start, completion and expiry, with a decision to replace the reward. A decision before the game picks a scenario (see below). | Change the rules of the existing missions. A mission of your own. |
+
+There is no data pool of missions to add to. `createscenario_world` (`missions.c`) is code. It runs when a team has fewer than one mission
+(or fewer than two at some clock values). It picks by random numbers between three builders: a three-way exchange, a transaction and an acquisition (guards or a chase).
+So "add a mission to the pool" means a decision event at that point. The plugin may leave the choice to the game, change the odds, forbid a builder,
+or start its own scenario instead. A scenario of the plugin fills mission slots with an existing kind for the display, and the plugin decides when it ends.
+Each team has 16 slots. `scenario_getnextmission` returns 16 when all are in use, so the API must check that case itself.
 
 The original client shows a mission only through the existing kinds, the phone menu and the news. A new kind of display needs OverRosa.
 A plugin can reuse the display of a kind and change the rules behind it.
