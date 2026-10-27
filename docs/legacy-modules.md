@@ -103,7 +103,16 @@ This reading is from the code and not tested. The newer version of the tool can 
 | N15 | Shop catalog entries and phone purchase events. |
 | N16 | Events: chat text (observe), human death (observe and early processing), spawn (decide position), vehicle damage (observe), purchase (decide). |
 | N17 | Engine parameters of one object type. |
-| N18 | Plugin state that the host clears on disable and bounds in size. |
+| N18 | Plugin storage with a size bound, in three scopes: session (one player, cleared when the player leaves or the plugin stops), account (kept on disk, tied to an account) and server (kept on disk). See the notes below. |
+
+Plugin storage (N18) does not exist yet. A native plugin can write its own files, but the host does not bound or clean them.
+The design rules:
+
+- Do not add fields to the account record. Its file format is fixed (0x4c bytes for each record), and old account files must keep working. The player record is gone when the player leaves.
+- Keep the data in a private plugin folder that the installer already keeps during updates. The data stays after a disable and goes only when the administrator asks.
+- The key of the account scope is an opaque reference. The host maps it to the real account id. The plugin never sees the id, as in the read API.
+- Each plugin has its own keys, a limit for each value and a limit for the total. The host saves at a safe point and in one step, so a crash leaves the old file whole.
+- Persistent bans, permission groups and ranks depend on the account scope.
 | N19 | Write the body part masses. Low priority. The effect is not known. |
 
 ## Order
