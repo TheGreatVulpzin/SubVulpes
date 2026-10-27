@@ -75,7 +75,7 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 | N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors are not done. |
 | N5 | Write the human fields for the drunk level and the death mark. Find the fields first. |
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. Done: `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. |
-| N7 | Make and remove vehicles and other objects. |
+| N7 | Make and remove vehicles and other objects. Done: `object_create` and `object_remove`. Train pieces are refused. |
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. |
 | N9 | Eject a human from a vehicle. |
 | N10 | Aim and line queries against the level, objects and humans. They copy the result out of the shared scratch record. |

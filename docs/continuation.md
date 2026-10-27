@@ -173,6 +173,10 @@ Findings and fixes:
 Items (`b486fc1`): `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. Removal proofs are in `build/logs/mutation10.log`.
 The test checks both sides of every item link after the game removes an item. No test makes a loop of parent items.
 
+Objects (`83f34e0`): `object_create` and `object_remove`. Removal proofs are in `build/logs/mutation11.log`.
+The test needs `x87_init()` first, because the orientation helpers use the x87 math of the game.
+The real server starts it at launch.
+
 Not tested:
 
 - The original client. No write method, no private message and no filtered event ran against it. A teleport has no check for a wall at the target.
