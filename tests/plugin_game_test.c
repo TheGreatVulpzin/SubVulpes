@@ -268,6 +268,41 @@ static void effects_check(uint32_t events, vec3 bone_before)
     CHECK(test_world_value == 5);
 }
 
+/* The event queue: the core posts a spawn, two deaths and a leave. One death names a human that is gone by the delivery.
+ * A post of a kind that the core does not post, or of two kinds at once, does nothing. */
+static void post_events(void)
+{
+    SvEntity player_ref = sv_entity_at(SV_ENTITY_PLAYER, 0), human_ref = sv_entity_at(SV_ENTITY_HUMAN, 0), stale;
+    float pos[3] = { 500.0f, 30.0f, 500.0f }, rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    int temp;
+    CHECK(sv_plugins_wants(SV_EVENT_SPAWN) && sv_plugins_wants(SV_EVENT_DEATH) && sv_plugins_wants(SV_EVENT_LEAVE));
+    CHECK(sv_plugins_wants(SV_EVENT_TICK) && !sv_plugins_wants(SV_EVENT_STOP) && !sv_plugins_wants(0x40u));
+    sv_events_post(SV_EVENT_TICK, 1, player_ref, human_ref, 0);
+    sv_events_post(SV_EVENT_STOP, 1, player_ref, human_ref, 0);
+    sv_events_post(0x40u, 1, player_ref, human_ref, 0);
+    sv_events_post(0, 1, player_ref, human_ref, 0);
+    sv_events_post(SV_EVENT_SPAWN | SV_EVENT_DEATH, 1, player_ref, human_ref, 0);
+    CHECK(sv_events_pending() == 0);
+    sv_events_post(SV_EVENT_SPAWN, 11, player_ref, human_ref, 0);
+    sv_events_post(SV_EVENT_DEATH, 12, player_ref, human_ref, 0);
+    sv_events_post(SV_EVENT_LEAVE, 13, player_ref, 0, 0);
+    temp = createhuman(pos, rot, -1);
+    CHECK(temp >= 0);
+    stale = sv_entity_at(SV_ENTITY_HUMAN, temp);
+    sv_events_post(SV_EVENT_DEATH, 14, player_ref, stale, 0);
+    deletehuman((uint32_t)temp);
+    CHECK(sv_events_pending() == 4);
+}
+
+/* More records than the queue holds: the queue keeps 1024 and counts the rest. A lost record leads the next delivery. */
+static void post_flood(void)
+{
+    int i;
+    for (i = 0; i < 1100; ++i)
+        sv_events_post(SV_EVENT_SPAWN, 20, 0, 0, 0);
+    CHECK(sv_events_pending() == 1024 + 1);
+}
+
 /* The fixture calls the write API in this tick. The game state shows what the calls did. */
 static void write_api_tick(void)
 {
@@ -300,6 +335,7 @@ static void write_api_tick(void)
     CHECK(train_piece > 0);
     sr_data_soundlist.num_sounds = 47;
     bone_before = hu->bones[3].vel;
+    post_events();
     make_target();
     seat_riders();
     events = sr_numofevents;
@@ -503,12 +539,16 @@ int main(void)
     sv_entities_clear(SV_ENTITY_ACCOUNT);
     sv_entity_deleted(SV_ENTITY_PLAYER, 0);
     sv_entity_created(SV_ENTITY_PLAYER, 0);
+    post_flood();
     CHECK(sv_game_read.world(1, &(SvWorldState){ sizeof(SvWorldState) }) == SV_STATE);
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);
+    /* After the stop no plugin wants a record, and the queue is empty. */
+    sv_events_post(SV_EVENT_DEATH, 1, 0, 0, 0);
+    CHECK(sv_events_pending() == 0 && !sv_plugins_wants(SV_EVENT_DEATH));
     CHECK(sv_game_start());
     sv_entity_created(SV_ENTITY_PLAYER, 0);
     CHECK(sv_entity_at(SV_ENTITY_PLAYER, 0) != old);

@@ -77,7 +77,7 @@ Worker-thread calls return `SV_STATE`.
 - `log` accepts one line of at most 512 bytes, without CR or LF.
 - `status` copies tick, player count, bot count and uptime into `SvStatus`. Set its `size` first.
 - `command` registers a unique name and callback with public, admin or local permission. The host reserves `plugins`.
-- `subscribe` replaces the module subscription for `SV_EVENT_TICK` and `SV_EVENT_STOP`. A zero mask removes it.
+- `subscribe` replaces the module subscription. The mask may hold `SV_EVENT_TICK`, `SV_EVENT_STOP` and the game events `SV_EVENT_LOST`, `SV_EVENT_SPAWN`, `SV_EVENT_DEATH` and `SV_EVENT_LEAVE`. A zero mask removes it. A game event record starts with the `SvEvent` of this ABI and has a larger `size`. See `sv_game_events.h` and [plugin events](plugin-events.md).
 - `get_api` obtains a versioned capability table within the current callback context. Game reads also need world readiness.
 
 The limits are 32 modules and 128 commands across the host.

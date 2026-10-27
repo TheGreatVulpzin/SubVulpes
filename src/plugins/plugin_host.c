@@ -95,7 +95,8 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
     SvModule *module = owner_module(owner);
     if (!module || stopping)
         return SV_STATE;
-    if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP) || (events && !callback))
+    if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE) ||
+        (events && !callback))
         return SV_INVALID;
     module->events = events;
     module->event_callback = callback;
@@ -298,6 +299,7 @@ int sv_plugins_start(void)
     memset(modules, 0, sizeof modules);
     memset(commands, 0, sizeof commands);
     failed = stopping = 0;
+    sv_events_clear();
     started = 1;
     if (!sv_game_start()) {
         failed = 1;
@@ -327,23 +329,20 @@ int sv_plugins_start(void)
     return !failed;
 }
 
-static void dispatch(uint32_t kind)
+/* Gives one event to every active plugin that asked for its kind. */
+static void deliver(const SvEvent *event)
 {
     uint32_t i;
-    SvStatus status = { sizeof status };
-    SvEvent event = { sizeof event, kind, 0 };
-    sv_game_status(&status);
-    event.tick = status.tick;
     for (i = 0; i < module_count; ++i) {
         SvModule *module = &modules[i];
         SvResult result;
         LARGE_INTEGER before, after, frequency;
         unsigned control;
-        if (module->state != SV_MODULE_ACTIVE || !(module->events & kind))
+        if (module->state != SV_MODULE_ACTIVE || !(module->events & event->kind))
             continue;
         QueryPerformanceCounter(&before);
         control = enter(i);
-        result = module->event_callback(i + 1, &event);
+        result = module->event_callback(i + 1, event);
         leave(control);
         QueryPerformanceCounter(&after);
         QueryPerformanceFrequency(&frequency);
@@ -354,10 +353,41 @@ static void dispatch(uint32_t kind)
     }
 }
 
+static void dispatch(uint32_t kind)
+{
+    SvStatus status = { sizeof status };
+    SvEvent event = { sizeof event, kind, 0 };
+    sv_game_status(&status);
+    event.tick = status.tick;
+    deliver(&event);
+}
+
+/* The records that the core posted since the last tick. A record that a callback causes is for the next tick. */
+static void deliver_queue(void)
+{
+    SvGameEvent record;
+    uint32_t count = sv_events_pending();
+    while (count-- && sv_events_next(&record))
+        deliver(&record.base);
+}
+
+int sv_plugins_wants(uint32_t kind)
+{
+    uint32_t i;
+    if (!started || stopping || GetCurrentThreadId() != server_thread)
+        return 0;
+    for (i = 0; i < module_count; ++i)
+        if (modules[i].state == SV_MODULE_ACTIVE && (modules[i].events & kind))
+            return 1;
+    return 0;
+}
+
 void sv_plugins_tick(void)
 {
-    if (started && !stopping && !current && !failed)
+    if (started && !stopping && !current && !failed) {
+        deliver_queue();
         dispatch(SV_EVENT_TICK);
+    }
 }
 
 int sv_plugins_failed(void)
@@ -371,6 +401,7 @@ void sv_plugins_stop(void)
     if (!started)
         return;
     stopping = 1;
+    sv_events_clear();
     dispatch(SV_EVENT_STOP);
     for (i = module_count; i > 0; --i)
         deactivate(i - 1, SV_MODULE_DISABLED, "Server stopped.");

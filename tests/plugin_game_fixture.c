@@ -5,6 +5,7 @@
 #include "sv_game_read.h"
 #include "sv_game_write.h"
 #include "sv_game_props.h"
+#include "sv_game_events.h"
 
 static const SvHost *host;
 static const SvGameRead *game;
@@ -17,6 +18,9 @@ static SvEntity player, human, item, object, account;
 static uint32_t stage;
 static uint64_t reset_sequence;
 static int runtime_probe;
+/* What the fixture saw of the game events. */
+static uint32_t seen_spawn, seen_death, seen_leave, seen_lost, seen_other, spawn_before_lost, seen_n, seen_ticks[8];
+static int ref_ok[8];
 
 #define CHECK(test) do { if (!(test)) { \
     char text[160]; \
@@ -667,9 +671,43 @@ static SvResult runtime_reads(SvOwner owner)
     return host->log(owner, "PUBLIC_READ_RUNTIME_PASS");
 }
 
+/* A game event record: count it, and note the tick and whether its human reference is still valid. */
+static SvResult game_event(SvOwner owner, const SvEvent *event)
+{
+    const SvGameEvent *record = (const SvGameEvent *)event;
+    SvHumanState h = { sizeof h };
+    if (event->size != sizeof *record || record->reserved)
+        return SV_FAILED;
+    switch (event->kind) {
+    case SV_EVENT_SPAWN: ++seen_spawn; break;
+    case SV_EVENT_DEATH: ++seen_death; break;
+    case SV_EVENT_LEAVE: ++seen_leave; break;
+    case SV_EVENT_LOST:
+        seen_lost += record->lost;
+        spawn_before_lost = seen_spawn;
+        break;
+    default: ++seen_other;
+    }
+    if (seen_n < 8 && event->kind != SV_EVENT_LOST) {
+        seen_ticks[seen_n] = event->tick;
+        ref_ok[seen_n] = record->human ? game->human(owner, record->human, &h) == SV_OK : -1;
+        ++seen_n;
+    }
+    return SV_OK;
+}
+
+/* The test program posted a spawn, two deaths and a leave. The second death has a human that is gone. */
+static int event_checks(void)
+{
+    return seen_spawn == 1 && seen_death == 2 && seen_leave == 1 && seen_lost == 0 && seen_other == 0 && seen_n == 4 &&
+        seen_ticks[0] == 11 && seen_ticks[1] == 12 && seen_ticks[2] == 13 && seen_ticks[3] == 14 &&
+        ref_ok[0] == 1 && ref_ok[1] == 1 && ref_ok[2] == -1 && ref_ok[3] == 0;
+}
+
 static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
 {
-    (void)event;
+    if (event->kind != SV_EVENT_TICK)
+        return game_event(owner, event);
     ++stage;
     if (runtime_probe)
         return stage == 1 ? runtime_reads(owner) : SV_OK;
@@ -688,6 +726,7 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
     } else if (stage == 3) {
         SvObjectState o = { sizeof o };
         CHECK(game->object(owner, object, &o) == SV_OK && o.driver == 0);
+        CHECK(event_checks());
         return write_checks(owner);
     } else if (stage == 4) {
         SvPlayerState p = { sizeof p };
@@ -698,6 +737,7 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
         SvWorldState world = { sizeof world };
         SvEntity page[1] = {0};
         uint32_t count = 777, next = 888;
+        CHECK(seen_spawn == 1025 && seen_lost == 76 && spawn_before_lost == 1 && seen_other == 0);
         CHECK(game->player(owner, player, &p) == SV_NOT_FOUND);
         CHECK(game->human(owner, human, &h) == SV_NOT_FOUND);
         CHECK(game->item(owner, item, &it) == SV_NOT_FOUND);
@@ -744,7 +784,8 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
-    return host->subscribe(owner, SV_EVENT_TICK, tick);
+    CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x40u, tick) == SV_INVALID);
+    return host->subscribe(owner, SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE, tick);
 }
 
 static void SV_CALL disable(SvOwner owner)

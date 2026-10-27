@@ -93,7 +93,7 @@ if(BUILD_TESTING)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_executable(sv-plugin-test tests/plugin_host_test.c src/plugins/plugin_host.c
-        src/plugins/plugin_files.c src/plugins/plugin_control.c)
+        src/plugins/plugin_files.c src/plugins/plugin_control.c src/plugins/plugin_events.c)
     target_include_directories(sv-plugin-test PRIVATE src/plugins)
     target_compile_definitions(sv-plugin-test PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(sv-plugin-test PRIVATE /W4 /WX /utf-8)

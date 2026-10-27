@@ -2,6 +2,7 @@
 #define SV_PLUGIN_HOST_H
 
 #include "sv_plugin.h"
+#include "sv_game_events.h"
 
 #define SV_PLUGIN_MAX 32
 #define SV_PLUGIN_COMMAND_MAX 128
@@ -32,6 +33,13 @@ void sv_game_ready(void);
 void sv_game_reset(void);
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
+/* 1 when an active plugin asked for this kind of event and the call is on the server thread. */
+int sv_plugins_wants(uint32_t kind);
+/* The event queue (plugin_events.c). The core posts, and the host takes the records out at a safe point. */
+void sv_events_post(uint32_t kind, uint32_t tick, SvEntity player, SvEntity human, SvEntity actor);
+uint32_t sv_events_pending(void);
+int sv_events_next(SvGameEvent *out);
+void sv_events_clear(void);
 int sv_game_actor_admin(uint64_t actor);
 void sv_log(const char *fmt, ...);
 

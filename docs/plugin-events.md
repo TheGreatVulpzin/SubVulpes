@@ -1,6 +1,6 @@
 # Plugin events (N16)
 
-Status: design of 2026-10-27. Nothing here is built yet. It serves the need N16 and the damage decision N24 in the [legacy module catalog](legacy-modules.md).
+Status: design of 2026-10-27. Step 1 of the order of work is built: the record, the queue and the delivery of kind 1 events. The core does not post any event yet (step 2). It serves the need N16 and the damage decision N24 in the [legacy module catalog](legacy-modules.md).
 The plugin API today has two events, `SV_EVENT_TICK` and `SV_EVENT_STOP`. Both run between two ticks, so a plugin never meets the simulation.
 
 ## Three kinds of event
@@ -60,7 +60,10 @@ Use kind 3 only when the safe route cannot say the rule. Keep the answer short: 
 
 ## Order of work
 
-1. The event mechanism: the record, the queue, the delivery order and the lost count, with tests of the full queue and of an older plugin.
+1. Done. The event mechanism: `SvGameEvent` (`sv_game_events.h`), the queue (`plugin_events.c`) and the delivery before the tick event. The core calls `sv_events_post(kind, tick, player, human, actor)`.
+   The post does nothing when no active plugin asked for the kind, when the kind is not one that the core posts, or when the call is not on the server thread. The queue holds 1,024 records.
+   Tests: the order, a human that is gone at delivery, a flood of 1,100 posts (1,024 kept, a lost record with 76 that comes first), a bad mask, and no record after the stop.
+   Removing the queue limit, the kind filter, the ring index and the mask check made `game-api` fail each time (`build/logs/mutation16.log`).
 2. The first notices: spawn, death and leave. Find the hook points in the core.
 3. The decision at a safe point for chat and join.
 4. The safe route for damage: the three rows and the small change in the damage code. The result equals today while the scale is 1.
