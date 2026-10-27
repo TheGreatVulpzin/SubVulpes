@@ -14,7 +14,6 @@ Add new items here when you find them.
 
 ## Open items
 
-- `NUM_SLOTS` has two meanings. It is 8 in `human_body.c` and 7 in `human_items.c`. Give each a clear name.
 
 ## Backport candidates
 
@@ -29,3 +28,6 @@ A backport there must pass its own verification tools, which this repository doe
 - Duplicate pool limits. `NUM_HUMANS`, `MAX_HUMANS` and `MAX_ITEMS` are gone from seven files in `src/game/` and `src/net/`.
   They now use `SR_MAX_HUMAN` and `SR_MAX_ITEM` from `sr_limits.h`. The values were equal (512 and 1024).
   The build and all seven CTest groups pass. No test fails on a changed pool size, so a wrong value would not show there.
+- Slot counts. `NUM_SLOTS` is now `INVENTORY_SLOTS` (8, the whole `Human.inventory` array) in `human_body.c`
+  and `BODY_SLOTS` (7, two hands and five pockets) in `human_items.c`. Both values are unchanged.
+  Slot 7 is cleared and released but never filled or simulated. No caller links an item into it.

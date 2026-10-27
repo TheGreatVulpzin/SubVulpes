@@ -23,9 +23,9 @@
 #include "sr_server.h"
 #include "vectors.h"
 
-#define NUM_SLOTS 7 /* the slots that hold items on the body: two hands and five pockets */
 #define NUM_POCKETS 5
 #define FIRST_POCKET 2
+#define BODY_SLOTS (FIRST_POCKET + NUM_POCKETS) /* two hands and five pockets */
 #define RELOAD_TICKS 60
 
 /* The buttons. */
@@ -296,7 +296,7 @@ void human_itemsimulation(int human)
         full_hand(hu, human, hand, &keys);
     if (key_edge(&keys, BTN_SWAP))
         swap_hands(hu, human);
-    for (slot = 0; slot < NUM_SLOTS; slot++) {
+    for (slot = 0; slot < BODY_SLOTS; slot++) {
         const InventorySlot *s = &hu->inventory[slot];
 
         for (j = 0; j < s->count; j++) {

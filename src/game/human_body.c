@@ -15,7 +15,7 @@
 /* Game globals. */
 #define g_body sr_data_body /* the bone tree: the parent and the offset of each bone */
 
-#define NUM_SLOTS 8
+#define INVENTORY_SLOTS 8 /* the length of Human.inventory, used or not */
 #define NUM_BONES 15
 #define EVENT_HUMAN 0x11 /* attach_type 1: a new human, 0: the end of a human */
 
@@ -33,7 +33,7 @@ void deletehuman(uint32_t human)
     p = hu->player_id;
     if (p != -1 && (uint32_t)sr_players[p].human_id == human)
         sr_players[p].human_id = -1;
-    for (s = 0; s < NUM_SLOTS; s++)
+    for (s = 0; s < INVENTORY_SLOTS; s++)
         while (0 < hu->inventory[s].count)
             item_removehumanlink(hu->inventory[s].items[hu->inventory[s].count - 1], human, s);
     for (k = 0; k < hu->num_joints; k++) {
@@ -263,7 +263,7 @@ int createhuman(float *posp, float *rot, int player)
     hu->protect_timer = (((uint32_t)os_rand() & 3) + 3) * 0xe10;
     hu->vehicle_id = -1;
     hu->input_buttons_prev = 0x3c0;
-    for (s = 0; s < NUM_SLOTS; s++)
+    for (s = 0; s < INVENTORY_SLOTS; s++)
         hu->inventory[s].count = 0;
     for (k = 0; k < NUM_BONES; k++) {
         const Body *bd = &body[k];
