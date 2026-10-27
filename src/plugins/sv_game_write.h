@@ -12,7 +12,7 @@ enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_ADMIN = 4 };
 enum { SV_HEALTH_MIN = -100, SV_HEALTH_MAX = 100 };
 /* The look selectors and the highest value of each, as the game makes them. */
 enum { SV_LOOK_COUNT = 5, SV_TEAM_MAX = 7, SV_ITEM_TYPE_COUNT = 27, SV_ITEM_SLOT_COUNT = 7,
-    SV_OBJECT_TYPE_COUNT = 12, SV_OBJECT_COLOR_MAX = 5 };
+    SV_OBJECT_TYPE_COUNT = 12, SV_OBJECT_COLOR_MAX = 5, SV_STUN_MAX = 3600 };
 /* A teleport accepts finite coordinates inside this limit. */
 #define SV_POSITION_LIMIT 32768.0f
 
@@ -58,6 +58,11 @@ typedef struct {
     /* Ends the life of an object. The game removes it in its next object lifetime pass, and the humans inside get out.
      * SV_DENIED for a train piece. */
     SvResult (SV_CALL *object_remove)(SvOwner owner, SvEntity object);
+    /* Sets the bleeding flag of a human to 0 or 1. A bleeding body loses health over time. */
+    SvResult (SV_CALL *set_bleeding)(SvOwner owner, SvEntity human, int32_t enabled);
+    /* Sets the stun timer of a human, from 0 to SV_STUN_MAX ticks. The torso is weak while it runs, so the body staggers.
+     * The game counts it down by 1 each tick. */
+    SvResult (SV_CALL *set_stun)(SvOwner owner, SvEntity human, int32_t ticks);
 } SvGameWrite;
 #pragma pack(pop)
 

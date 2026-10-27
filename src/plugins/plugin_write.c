@@ -358,9 +358,33 @@ static SvResult SV_CALL write_object_remove(SvOwner owner, SvEntity object)
     return SV_OK;
 }
 
+static SvResult SV_CALL write_bleeding(SvOwner owner, SvEntity human, int32_t enabled)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
+    if (result != SV_OK)
+        return result;
+    if (enabled != 0 && enabled != 1)
+        return SV_INVALID;
+    sr_humans[index].bleeding = enabled;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_stun(SvOwner owner, SvEntity human, int32_t ticks)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
+    if (result != SV_OK)
+        return result;
+    if (ticks < 0 || ticks > SV_STUN_MAX)
+        return SV_INVALID;
+    sr_humans[index].stun_timer = ticks;
+    return SV_OK;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
     write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
-    write_object_create, write_object_remove
+    write_object_create, write_object_remove, write_bleeding, write_stun
 };

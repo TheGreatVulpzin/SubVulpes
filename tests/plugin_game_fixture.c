@@ -304,6 +304,15 @@ static SvResult write_checks(SvOwner owner)
     CHECK(change->teleport(owner, human, bad) == SV_INVALID);
     CHECK(change->teleport(owner, player, target) == SV_NOT_FOUND);
     CHECK(change->teleport(owner, human, target) == SV_OK);
+    CHECK(change->set_bleeding(owner, human, 2) == SV_INVALID && change->set_bleeding(owner, player, 1) == SV_NOT_FOUND);
+    CHECK(change->set_bleeding(owner, human, 1) == SV_OK && game->human(owner, human, &h) == SV_OK && h.bleeding == 1);
+    CHECK(change->set_bleeding(owner, human, 0) == SV_OK && game->human(owner, human, &h) == SV_OK && h.bleeding == 0);
+    CHECK(change->set_bleeding(owner, human, 1) == SV_OK);
+    CHECK(change->set_stun(owner, human, -1) == SV_INVALID && change->set_stun(owner, human, SV_STUN_MAX + 1) == SV_INVALID);
+    CHECK(change->set_stun(owner, player, 5) == SV_NOT_FOUND);
+    CHECK(change->set_stun(owner, human, SV_STUN_MAX) == SV_OK && game->human(owner, human, &h) == SV_OK &&
+          h.stun_ticks == SV_STUN_MAX);
+    CHECK(change->set_stun(owner, human, 120) == SV_OK);
     CHECK(game->human(owner, human, &h) == SV_OK);
     CHECK(h.position.x == 100.0f && h.position.y == 50.0f && h.position.z == 200.0f && h.health == 80);
     CHECK(change_player_fields(owner));
