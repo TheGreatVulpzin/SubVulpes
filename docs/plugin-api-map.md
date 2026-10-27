@@ -143,7 +143,7 @@ How the game works today:
 
 | Id | Operation or event | What it allows |
 | --- | --- | --- |
-| N20 | **AI control.** Read the threats of a bot. Set its destination, waypoints and target. Override its input (movement and buttons) for some ticks, with a way to give control back. | A bot that hunts chosen players. Two different NPC behaviors. |
+| N20 | **AI control.** Read the threats of a bot. Set its destination, waypoints and target. Override its input (movement and buttons) for some ticks, with a way to give control back. Version 0.8.0 of the legacy tool adds: set the perception point (body part 1 or 2), switch the aim mode, and set the chance of a shot (no random hesitation). The crazy NPC pair also needs a bot driver on a street route, a seated shooter that aims at players, and a switch to foot combat. | A bot that hunts chosen players. Two different NPC behaviors. |
 | N21 | **Economy.** Read the companies (shares, price, stake). Change a price or a share count under the split rules. Add or remove stocks of a player. | Rewards and penalties in stocks. A market event. |
 | N22 | **Missions.** Read the slots of a team (kind, expiry, reward). Start or cancel a mission with an existing kind. Events for start, completion and expiry, with a decision to replace the reward. A decision before the game picks a scenario (see below). | Change the rules of the existing missions. A mission of your own. |
 
