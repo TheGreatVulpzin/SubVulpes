@@ -11,6 +11,7 @@
 #include "logic.h"
 #include "objects.h"
 #include "player.h"
+#include "events.h"
 #include "server.h"
 #include "sr_server.h"
 #include "plugin_game_internal.h"
@@ -130,8 +131,14 @@ static void write_api_tick(void)
     sr_connections[0].player_id = 0;
     sr_connections[0].ip = 0x01020304u;
     sr_connections[0].idle_ticks = 0;
-    sr_numofconnections = 1;
+    sr_connections[1].player_id = 1;
+    sr_connections[1].is_admin = 0;
+    sr_numofconnections = 2;
     sr_numofkicked = 0;
+    /* A bot with a reference. The fixture needs it to check that a bot cannot be an admin. */
+    sr_players[1].active = 1;
+    sr_players[1].is_bot = 1;
+    sv_entity_created(SV_ENTITY_PLAYER, 1);
     offset[0] = hu->bones[14].pos.x - hu->bones[0].pos.x;
     offset[1] = hu->bones[14].pos.y - hu->bones[0].pos.y;
     offset[2] = hu->bones[14].pos.z - hu->bones[0].pos.z;
@@ -140,7 +147,18 @@ static void write_api_tick(void)
     sv_plugins_tick();
     sr_server = 0;
     CHECK(!sv_plugins_failed());
-    CHECK(sr_numofevents == events + 2);
+    CHECK(sr_numofevents == events + 6);
+    CHECK(sr_events[events + 2].type == 7 && sr_events[events + 3].type == 7 && sr_events[events + 4].type == 17);
+    CHECK(sr_events[events + 5].type == 2 && !strcmp(sr_events[events + 5].message, "private"));
+    /* The private message is for player 0 only. Connection 1 belongs to the bot. */
+    CHECK(!event_hidden_from((int)events, 0) && !event_hidden_from((int)events, 1));
+    CHECK(!event_hidden_from((int)events + 5, 0) && event_hidden_from((int)events + 5, 1));
+    sr_events[events + 5].tick++;
+    CHECK(!event_hidden_from((int)events + 5, 1));
+    sr_events[events + 5].tick--;
+    CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
+    CHECK(sr_players[0].team == 3 && sr_humans[0].team == 3);
+    CHECK(sr_players[0].look_b == 5 && sr_humans[0].look_b == 5 && sr_humans[0].look_e == 1);
     CHECK(sr_events[events].type == 2 && sr_events[events].attach_type == SV_MESSAGE_SERVER &&
           sr_events[events].attach_id == -1 && strlen(sr_events[events].message) == 63);
     CHECK(sr_events[events + 1].attach_type == SV_MESSAGE_CHAT && !strcmp(sr_events[events + 1].message, "chat line"));
@@ -153,6 +171,10 @@ static void write_api_tick(void)
           near_value(hu->bones[14].pos.z - hu->bones[0].pos.z, offset[2]));
     CHECK(sr_numofkicked == 1 && sr_kickedip[0] == 0x01020304u && sr_connections[0].idle_ticks == 0x4b0);
     sr_numofconnections = 0;
+    sr_players[0].is_admin = 0;
+    sv_entity_deleted(SV_ENTITY_PLAYER, 1);
+    sr_players[1].active = 0;
+    sr_players[1].is_bot = 0;
 }
 
 /* Plugin commands in the chat. Only the PUBLIC command runs for a player. The ADMIN command runs

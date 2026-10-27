@@ -12,6 +12,10 @@ void createevent_updateiteminfo(uint32_t item);
 void createevent_updateplayer(int player);
 void createevent_updateplayer_finance(int player);
 void createevent_updatehuman(int human, int player);
+/* A message that only the connection of one player gets. The other clients see a filler. */
+void createevent_message_to(int kind, const char *text, int player);
+/* 1 when event number index goes to one player only and connection conn is not that player. */
+int event_hidden_from(int index, int conn);
 void createevent_updatestocks(void);
 void createevent_updatecarmarket(int row);
 void eventsimulation(void);

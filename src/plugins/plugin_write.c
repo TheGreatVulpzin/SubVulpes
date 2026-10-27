@@ -27,12 +27,10 @@ static int finite(float value)
     return value == value && value - value == 0.0f;
 }
 
-static SvResult SV_CALL write_message(SvOwner owner, uint32_t kind, const char *text)
+/* Copies a valid text of 1 to 63 printable ASCII bytes. */
+static SvResult copy_text(uint32_t kind, const char *text, char buffer[MESSAGE_MAX + 1])
 {
-    char buffer[MESSAGE_MAX + 1];
     size_t i, length;
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
-        return SV_STATE;
     if ((kind != SV_MESSAGE_SERVER && kind != SV_MESSAGE_CHAT) || !text)
         return SV_INVALID;
     length = strnlen(text, MESSAGE_MAX + 1);
@@ -43,7 +41,33 @@ static SvResult SV_CALL write_message(SvOwner owner, uint32_t kind, const char *
             return SV_INVALID;
     memcpy(buffer, text, length);
     buffer[length] = 0;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_message(SvOwner owner, uint32_t kind, const char *text)
+{
+    char buffer[MESSAGE_MAX + 1];
+    SvResult result;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    result = copy_text(kind, text, buffer);
+    if (result != SV_OK)
+        return result;
     sr_createevent_message((int)kind, buffer, -1, 0);
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_message_to(SvOwner owner, uint32_t kind, SvEntity player, const char *text)
+{
+    char buffer[MESSAGE_MAX + 1];
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
+    if (result != SV_OK)
+        return result;
+    result = copy_text(kind, text, buffer);
+    if (result != SV_OK)
+        return result;
+    createevent_message_to((int)kind, buffer, index);
     return SV_OK;
 }
 
@@ -145,7 +169,70 @@ static SvResult SV_CALL write_teleport(SvOwner owner, SvEntity human, SvVector p
     return SV_OK;
 }
 
+static SvResult SV_CALL write_admin(SvOwner owner, SvEntity player, int32_t enabled)
+{
+    int32_t index;
+    int i;
+    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
+    if (result != SV_OK)
+        return result;
+    if ((enabled != 0 && enabled != 1) || sr_players[index].is_bot)
+        return SV_INVALID;
+    sr_players[index].is_admin = enabled;
+    for (i = 0; i < sr_numofconnections; ++i)
+        if (sr_connections[i].player_id == index)
+            sr_connections[i].is_admin = enabled;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_team(SvOwner owner, SvEntity player, int32_t team)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
+    if (result != SV_OK)
+        return result;
+    if (team < 0 || team > SV_TEAM_MAX)
+        return SV_INVALID;
+    sr_players[index].team = team;
+    if (sr_players[index].human_id >= 0)
+        sr_humans[sr_players[index].human_id].team = team;
+    createevent_updateplayer(index);
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_looks(SvOwner owner, SvEntity player, const int32_t *looks)
+{
+    static const int32_t highest[SV_LOOK_COUNT] = { 2, 7, 3, 1, 1 };
+    int32_t index;
+    int i, human;
+    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
+    if (result != SV_OK)
+        return result;
+    if (!looks)
+        return SV_INVALID;
+    for (i = 0; i < SV_LOOK_COUNT; ++i)
+        if (looks[i] < 0 || looks[i] > highest[i])
+            return SV_INVALID;
+    sr_players[index].look_a = looks[0];
+    sr_players[index].look_b = looks[1];
+    sr_players[index].look_c = looks[2];
+    sr_players[index].look_d = looks[3];
+    sr_players[index].look_e = looks[4];
+    human = sr_players[index].human_id;
+    if (human >= 0) {
+        sr_humans[human].look_a = looks[0];
+        sr_humans[human].look_b = looks[1];
+        sr_humans[human].look_c = looks[2];
+        sr_humans[human].look_d = looks[3];
+        sr_humans[human].look_e = looks[4];
+    }
+    createevent_updateplayer(index);
+    if (human >= 0)
+        createevent_updatehuman(human, index);
+    return SV_OK;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
-    write_godmode, write_health, write_teleport
+    write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to
 };

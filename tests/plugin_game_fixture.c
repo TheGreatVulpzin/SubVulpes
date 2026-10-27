@@ -136,6 +136,50 @@ static SvResult initial_reads(SvOwner owner)
     return SV_OK;
 }
 
+/* The admin flag, the team, the looks and the private message. Returns 1 when all checks pass. */
+static int change_player_fields(SvOwner owner)
+{
+    static const int32_t highest[SV_LOOK_COUNT] = { 2, 7, 3, 1, 1 };
+    const int32_t looks[SV_LOOK_COUNT] = { 2, 5, 3, 1, 1 };
+    int32_t bad[SV_LOOK_COUNT];
+    SvPlayerState ps = { sizeof ps };
+    SvHumanState hs = { sizeof hs };
+    SvEntity page[2] = { 0, 0 };
+    uint32_t count = 0, next = 0, i;
+    if (game->entities(owner, SV_ENTITY_PLAYER, 0, page, 2, &count, &next) != SV_OK || count != 2 || page[0] != player)
+        return 0;
+    if (change->set_admin(owner, player, 2) != SV_INVALID || change->set_admin(owner, page[1], 1) != SV_INVALID ||
+        change->set_admin(owner, human, 1) != SV_NOT_FOUND || change->set_admin(owner, player, 1) != SV_OK ||
+        game->player(owner, player, &ps) != SV_OK || ps.is_admin != 1)
+        return 0;
+    if (change->set_team(owner, player, SV_TEAM_MAX + 1) != SV_INVALID || change->set_team(owner, player, -1) != SV_INVALID ||
+        change->set_team(owner, human, 2) != SV_NOT_FOUND || change->set_team(owner, player, 3) != SV_OK ||
+        game->player(owner, player, &ps) != SV_OK || ps.team != 3 || game->human(owner, human, &hs) != SV_OK ||
+        hs.team != 3)
+        return 0;
+    if (change->set_looks(owner, player, NULL) != SV_INVALID || change->set_looks(owner, human, looks) != SV_NOT_FOUND)
+        return 0;
+    for (i = 0; i < SV_LOOK_COUNT; ++i) {
+        memcpy(bad, looks, sizeof bad);
+        bad[i] = highest[i] + 1;
+        if (change->set_looks(owner, player, bad) != SV_INVALID)
+            return 0;
+        bad[i] = -1;
+        if (change->set_looks(owner, player, bad) != SV_INVALID)
+            return 0;
+    }
+    if (change->set_looks(owner, player, looks) != SV_OK || game->player(owner, player, &ps) != SV_OK ||
+        game->human(owner, human, &hs) != SV_OK)
+        return 0;
+    for (i = 0; i < SV_LOOK_COUNT; ++i)
+        if (ps.looks[i] != looks[i] || hs.looks[i] != looks[i])
+            return 0;
+    return change->message_to(owner, 1, player, "kind") == SV_INVALID &&
+        change->message_to(owner, SV_MESSAGE_SERVER, human, "target") == SV_NOT_FOUND &&
+        change->message_to(owner, SV_MESSAGE_SERVER, player, "") == SV_INVALID &&
+        change->message_to(owner, SV_MESSAGE_SERVER, player, "private") == SV_OK;
+}
+
 /* Bad input must change nothing. The test program checks the game state after the tick. */
 static SvResult write_checks(SvOwner owner)
 {
@@ -175,6 +219,7 @@ static SvResult write_checks(SvOwner owner)
     CHECK(change->teleport(owner, human, target) == SV_OK);
     CHECK(game->human(owner, human, &h) == SV_OK);
     CHECK(h.position.x == 100.0f && h.position.y == 50.0f && h.position.z == 200.0f && h.health == 80);
+    CHECK(change_player_fields(owner));
     CHECK(change->kick(owner, human) == SV_NOT_FOUND);
     CHECK(change->kick(owner, player) == SV_OK);
     thread = CreateThread(NULL, 0, write_wrong_thread, NULL, 0, NULL);

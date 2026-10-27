@@ -11,9 +11,15 @@
 #include <string.h>
 
 #include "area.h"
+#include "server.h"
 #include "sr_runtime.h"
+#include "sr_server.h"
 
 #define sr_market sr_data_market
+
+/* The player that a private message is for, by ring slot. Zero means no target. The tick and the
+ * kind must match the event, so a later event in the same slot never inherits an old target. */
+static struct { int tick; int kind; int player_plus_one; } message_target[0x10000];
 /* The first event that eventsimulation did not handle yet (it lives in BlockTemp). */
 #define lastevent (*((uint32_t *)&sr_data_blocktemp.unused_7602c))
 
@@ -273,4 +279,25 @@ void eventsimulation(void)
         }
         lastevent = (lastevent + 1) & 0xffff;
     }
+}
+
+/* Event 2 for one player: a text that only the connection of that player gets. */
+void createevent_message_to(int kind, const char *text, int player)
+{
+    uint32_t index = sr_numofevents;
+    sr_createevent_message(kind, text, -1, 0);
+    if (sr_numofevents == index)
+        return;
+    message_target[index].tick = sr_events[index].tick;
+    message_target[index].kind = kind;
+    message_target[index].player_plus_one = player + 1;
+}
+
+int event_hidden_from(int index, int conn)
+{
+    const Event *ev = &sr_events[index];
+    if (ev->type != 2 || message_target[index].player_plus_one == 0 || message_target[index].tick != ev->tick ||
+        message_target[index].kind != ev->attach_type)
+        return 0;
+    return sr_connections[conn].player_id != message_target[index].player_plus_one - 1;
 }

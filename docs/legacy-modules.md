@@ -69,10 +69,10 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 
 | Id | Operation or event |
 | --- | --- |
-| N1 | Send a message to one player. The current `message` goes to everyone. |
-| N2 | Set the admin flag of a player and of its connection, as the password login does. |
-| N3 | Set the team of a player and send the update. |
-| N4 | Write the look fields and colors of a player or human and send the update. |
+| N1 | Send a message to one player. Done: `message_to`. The server filters the event for each connection, so the original client gets a normal message. |
+| N2 | Set the admin flag of a player and of its connection, as the password login does. Done: `set_admin`. |
+| N3 | Set the team of a player and send the update. Done: `set_team`. |
+| N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors are not done. |
 | N5 | Write the human fields for the drunk level and the death mark. Find the fields first. |
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. |
 | N7 | Make and remove vehicles and other objects. |

@@ -115,3 +115,14 @@ The C3/C4 guards do not close the remaining safety gaps, the mapped API or S3.
 The common contract remains the base for native, Lua and WASM plugins.
 Live activation is conditional on module support. Installation, native replacement and world changes can require a restart.
 The initial review ran no gameplay test. Later implementation must record its own build and runtime evidence.
+
+## Sending to some clients only
+
+The server writes the event list and the object packet again for each connection. It can write different bytes for each one.
+The original client reads the usual formats, so these uses need no client change: a private message, a sound for one player, team chat,
+text and names that differ by observer, and fewer updates for far or spectating clients.
+A private message exists (`message_to`). The core keeps the packet writer and the memory checks. A plugin gives only the rule: who gets what.
+
+Hiding an entity from some players can leave the client with a world that differs from the server. It can also work as a defense against wallhacks.
+Do not call it done until the original client runs it.
+A new packet type, menu, HUD element or model still needs OverRosa.

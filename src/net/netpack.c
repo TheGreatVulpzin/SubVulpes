@@ -10,6 +10,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "events.h"
 #include "packet.h"
 #include "server.h"
 #include "sr_math.h"
@@ -218,6 +219,10 @@ void packevent(int index, int conn)
         return;
     }
     if (type == 2 && ev->attach_type == 4 && c->is_admin == 0) {
+        filler();
+        return;
+    }
+    if (event_hidden_from(index, conn)) {
         filler();
         return;
     }

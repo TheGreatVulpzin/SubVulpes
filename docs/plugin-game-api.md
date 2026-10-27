@@ -197,12 +197,17 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `add_money(account, amount)` | Adds the amount to the account and to each active player of it, as `/give` does. | `SV_NOT_FOUND`, `SV_INVALID` when any sum leaves the 32-bit range (no balance changes) |
 | `set_godmode(player, enabled)` | Sets the flag to 0 or 1. | `SV_NOT_FOUND`, `SV_INVALID` for another value |
 | `set_health(human, health)` | Sets the health from -100 to 100. -100 is the dead value of the game. | `SV_NOT_FOUND`, `SV_INVALID` out of range |
+| `set_admin(player, enabled)` | Sets the admin flag of the player and of each of its connections, as the password login does. It lasts until the player leaves. | `SV_NOT_FOUND`, `SV_INVALID` for a value other than 0 or 1 and for a bot |
+| `set_team(player, team)` | Sets the team 0 to 7 of the player and of its human, and sends the player update. | `SV_NOT_FOUND`, `SV_INVALID` out of range |
+| `set_looks(player, looks)` | Sets the five look selectors (highest values 2, 7, 3, 1 and 1, as the game makes them) of the player and of its human, and sends the player and human updates. | `SV_NOT_FOUND`, `SV_INVALID` for a null pointer or one value out of range (nothing changes) |
+| `message_to(kind, player, text)` | Like `message`, but only the connection of that player gets the text. The other clients get an empty slot in the event list. | As `message`, and `SV_NOT_FOUND` for a wrong kind of reference |
 | `teleport(human, position)` | Moves the 15 bones by the same offset so bone 0 reaches the position. It copies the new place to the previous place of each bone. The velocity does not change. | `SV_NOT_FOUND`, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle |
 
 The tests call every method from a real plugin callback against records that real constructors made.
 They check each error code and a wrong-thread call. The test program then reads the game records.
 It checks the two message events, the balances, the flag, the health, the bone offsets, the kick list and the idle counter.
 Removing one check at a time (message bytes, money range, flag range, health range, finite position, position limit, vehicle) made `game-api` fail each time.
+For the checks that guard rights or privacy, the same removal made `game-api` fail too: the private-message filter, the stale-target test, the bot check and the connection admin flag of `set_admin`.
 The packet writer clamps the sent health to the range -10 to 117 and leaves the server value as written. So a client sees the same value for -100 and -10, and for 100 and 117. See [network limits](game/network.md#representation-limits).
 
 Not covered: a full kick list (41,368 addresses), more than one connection for a player, a message when the event ring is full, and a client check of a teleport or a health value.

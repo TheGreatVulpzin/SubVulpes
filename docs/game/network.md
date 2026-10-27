@@ -137,6 +137,7 @@ The client gets the events from `event_ack` to `sr_numofevents`, at most 31. `pa
 
 - An old message (more than 600 ticks) or sound becomes a placeholder (type 0x12, 6 bits).
 - A message of kind 4 goes only to an admin.
+- A private message (made through the plugin API) is a normal message event with a target player in a side table of the server. `packevent` writes an empty slot for each connection that does not belong to that player. The client gets the usual bytes. The table entry is valid only while the tick and the kind match the event.
 - A user (not an admin) gets a message of a human or an item only when it is near. The value is `256 / d`, where `d` is the distance to the listener. Range mode 0 multiplies it by 0.25, mode 2 by 2, and an item by 0.25 more. Below 4 the event is a placeholder.
 - The player of a human gets its own chat text, the one before the word filter.
 
