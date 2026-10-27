@@ -11,7 +11,7 @@ enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_ADMIN = 4 };
 /* The health range of the game: -100 is dead and 100 is full health. */
 enum { SV_HEALTH_MIN = -100, SV_HEALTH_MAX = 100 };
 /* The look selectors and the highest value of each, as the game makes them. */
-enum { SV_LOOK_COUNT = 5, SV_TEAM_MAX = 7 };
+enum { SV_LOOK_COUNT = 5, SV_TEAM_MAX = 7, SV_ITEM_TYPE_COUNT = 27, SV_ITEM_SLOT_COUNT = 7 };
 /* A teleport accepts finite coordinates inside this limit. */
 #define SV_POSITION_LIMIT 32768.0f
 
@@ -36,6 +36,19 @@ typedef struct {
     SvResult (SV_CALL *set_looks)(SvOwner owner, SvEntity player, const int32_t looks[SV_LOOK_COUNT]);
     /* Like message, but only the connection of this player gets the text. Other clients see an empty slot. */
     SvResult (SV_CALL *message_to)(SvOwner owner, uint32_t kind, SvEntity player, const char *text);
+    /* Makes an item of a type from 0 to 26, except 26 (newspapers belong to the news system), at rest at the position.
+     * The item reference goes to *item only on success. SV_LIMIT means that all item slots are in use. */
+    SvResult (SV_CALL *item_create)(SvOwner owner, uint32_t type, SvVector position, SvEntity *item);
+    /* Ends the life of an item. The game removes it in its next item lifetime pass. It leaves its human and its parent
+     * item, and its children leave it. A key takes its vehicle with it. */
+    SvResult (SV_CALL *item_remove)(SvOwner owner, SvEntity item);
+    /* Puts an item in a slot of a human (0 and 1 hands, 2 to 6 pockets). SV_CONFLICT when the slot rules refuse it. */
+    SvResult (SV_CALL *item_equip)(SvOwner owner, SvEntity item, SvEntity human, uint32_t slot);
+    /* Puts a child item in a parent item, such as a magazine in a gun. The child must have no parent item.
+     * SV_CONFLICT when the types do not fit or the parent is full. */
+    SvResult (SV_CALL *item_attach)(SvOwner owner, SvEntity parent, SvEntity child);
+    /* Takes an item out of its human or its parent item. SV_STATE when it has neither. */
+    SvResult (SV_CALL *item_detach)(SvOwner owner, SvEntity item);
 } SvGameWrite;
 #pragma pack(pop)
 

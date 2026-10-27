@@ -180,6 +180,59 @@ static int change_player_fields(SvOwner owner)
         change->message_to(owner, SV_MESSAGE_SERVER, player, "private") == SV_OK;
 }
 
+/* Reads one item, or returns 0. */
+static int read_item(SvOwner owner, SvEntity entity, SvItemState *state)
+{
+    state->size = sizeof *state;
+    return game->item(owner, entity, state) == SV_OK;
+}
+
+/* Make, equip, attach, detach and remove items. Returns 1 when all checks pass. */
+static int change_items(SvOwner owner)
+{
+    const SvVector at = { 12.0f, 20.0f, 30.0f };
+    SvVector bad = at;
+    SvItemState state;
+    SvEntity gun = 0, gun2 = 0, mag = 0, bandage = 0, none = 0;
+    uint32_t nan_bits = 0x7fc00000u;
+    memcpy(&bad.x, &nan_bits, sizeof bad.x);
+    if (change->item_create(owner, SV_ITEM_TYPE_COUNT, at, &none) != SV_INVALID ||
+        change->item_create(owner, 26, at, &none) != SV_INVALID || change->item_create(owner, 0, at, NULL) != SV_INVALID ||
+        change->item_create(owner, 0, bad, &none) != SV_INVALID || none != 0)
+        return 0;
+    if (change->item_create(owner, 0, at, &gun) != SV_OK || change->item_create(owner, 0, at, &gun2) != SV_OK ||
+        change->item_create(owner, 1, at, &mag) != SV_OK || change->item_create(owner, 12, at, &bandage) != SV_OK ||
+        !gun || !gun2 || !mag || !bandage)
+        return 0;
+    if (!read_item(owner, bandage, &state) || state.type != 12 || state.position.x != 12.0f || state.parent_human != 0)
+        return 0;
+    if (change->item_equip(owner, bandage, human, SV_ITEM_SLOT_COUNT) != SV_INVALID ||
+        change->item_equip(owner, bandage, player, 3) != SV_NOT_FOUND ||
+        change->item_equip(owner, player, human, 3) != SV_NOT_FOUND || change->item_equip(owner, bandage, human, 3) != SV_OK)
+        return 0;
+    if (!read_item(owner, bandage, &state) || state.parent_human != human || state.parent_slot != 3)
+        return 0;
+    /* Slot 2 takes only guns, so the bandage stays in slot 3. */
+    if (change->item_equip(owner, bandage, human, 2) != SV_CONFLICT || !read_item(owner, bandage, &state) ||
+        state.parent_slot != 3 || change->item_equip(owner, gun, human, 0) != SV_OK)
+        return 0;
+    if (change->item_attach(owner, gun, gun) != SV_INVALID || change->item_attach(owner, human, mag) != SV_NOT_FOUND ||
+        change->item_attach(owner, gun, mag) != SV_OK)
+        return 0;
+    if (!read_item(owner, gun, &state) || state.child_count != 1 || state.children[0] != mag ||
+        !read_item(owner, mag, &state) || state.parent_item != gun)
+        return 0;
+    /* The magazine already sits in a gun. A second gun must refuse it, or it would have two parents. */
+    if (change->item_attach(owner, gun2, mag) != SV_CONFLICT || change->item_attach(owner, gun, mag) != SV_CONFLICT)
+        return 0;
+    if (!read_item(owner, gun2, &state) || state.child_count != 0)
+        return 0;
+    if (change->item_detach(owner, mag) != SV_OK || !read_item(owner, gun, &state) || state.child_count != 0 ||
+        change->item_detach(owner, mag) != SV_STATE)
+        return 0;
+    return change->item_remove(owner, bandage) == SV_OK && change->item_remove(owner, player) == SV_NOT_FOUND;
+}
+
 /* Bad input must change nothing. The test program checks the game state after the tick. */
 static SvResult write_checks(SvOwner owner)
 {
@@ -220,6 +273,7 @@ static SvResult write_checks(SvOwner owner)
     CHECK(game->human(owner, human, &h) == SV_OK);
     CHECK(h.position.x == 100.0f && h.position.y == 50.0f && h.position.z == 200.0f && h.health == 80);
     CHECK(change_player_fields(owner));
+    CHECK(change_items(owner));
     CHECK(change->kick(owner, human) == SV_NOT_FOUND);
     CHECK(change->kick(owner, player) == SV_OK);
     thread = CreateThread(NULL, 0, write_wrong_thread, NULL, 0, NULL);

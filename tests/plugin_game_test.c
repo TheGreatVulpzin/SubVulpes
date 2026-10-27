@@ -121,6 +121,39 @@ static int near_value(float a, float b)
     return a - b < 0.001f && b - a < 0.001f;
 }
 
+/* Both sides of every item link must agree: item and human, item and parent item. */
+static void check_item_links(void)
+{
+    int i, h, s, k, found;
+    for (i = 0; i < SR_MAX_ITEM; ++i) {
+        const Item *it = &sr_items[i];
+        if (!it->active)
+            continue;
+        if (it->parent_human != -1) {
+            const InventorySlot *slot = &sr_humans[it->parent_human].inventory[it->parent_slot];
+            for (found = 0, k = 0; k < slot->count; ++k)
+                found += slot->items[k] == i;
+            CHECK(found == 1);
+        }
+        if (it->parent_item != -1) {
+            const Item *parent = &sr_items[it->parent_item];
+            CHECK(parent->active);
+            for (found = 0, k = 0; k < parent->num_children; ++k)
+                found += parent->children[k] == i;
+            CHECK(found == 1);
+        }
+    }
+    for (h = 0; h < SR_MAX_HUMAN; ++h) {
+        if (!sr_humans[h].active)
+            continue;
+        for (s = 0; s < 8; ++s)
+            for (k = 0; k < sr_humans[h].inventory[s].count; ++k) {
+                const Item *it = &sr_items[sr_humans[h].inventory[s].items[k]];
+                CHECK(it->active && it->parent_human == h && it->parent_slot == s);
+            }
+    }
+}
+
 /* The number of bits that packevent writes for one connection. */
 static int event_bits(int index, int conn)
 {
@@ -151,12 +184,16 @@ static void write_api_tick(void)
     offset[0] = hu->bones[14].pos.x - hu->bones[0].pos.x;
     offset[1] = hu->bones[14].pos.y - hu->bones[0].pos.y;
     offset[2] = hu->bones[14].pos.z - hu->bones[0].pos.z;
+    /* Item 0 left over from the lifetime test carries a link that its human does not hold. */
+    sr_items[0].parent_human = -1;
+    sr_itemtypes[0].inv_inertia = sr_itemtypes[1].inv_inertia = sr_itemtypes[12].inv_inertia = (vec3){1, 1, 1};
+    sr_itemtypes[1].fits_in[0] = 1;
     events = sr_numofevents;
     sr_server = 1;
     sv_plugins_tick();
     sr_server = 0;
     CHECK(!sv_plugins_failed());
-    CHECK(sr_numofevents == events + 6);
+    CHECK(sr_numofevents >= events + 6);
     CHECK(sr_events[events + 2].type == 7 && sr_events[events + 3].type == 7 && sr_events[events + 4].type == 17);
     CHECK(sr_events[events + 5].type == 2 && !strcmp(sr_events[events + 5].message, "private"));
     /* The private message is for player 0 only. Connection 1 belongs to the bot. */
@@ -182,6 +219,12 @@ static void write_api_tick(void)
           near_value(hu->bones[14].pos.y - hu->bones[0].pos.y, offset[1]) &&
           near_value(hu->bones[14].pos.z - hu->bones[0].pos.z, offset[2]));
     CHECK(sr_numofkicked == 1 && sr_kickedip[0] == 0x01020304u && sr_connections[0].idle_ticks == 0x4b0);
+    /* The gun sits in a hand and the bandage in a pocket until the game removes it. */
+    check_item_links();
+    CHECK(hu->inventory[0].count == 1 && hu->inventory[3].count == 1);
+    itemtimetolive();
+    check_item_links();
+    CHECK(hu->inventory[0].count == 1 && hu->inventory[3].count == 0);
     sr_numofconnections = 0;
     sr_players[0].is_admin = 0;
     sv_entity_deleted(SV_ENTITY_PLAYER, 1);

@@ -7,6 +7,7 @@
 #include "sv_game_write.h"
 #include "plugin_game_internal.h"
 #include "events.h"
+#include "items.h"
 #include "server.h"
 #include "sr_runtime.h"
 #include "sr_server.h"
@@ -232,7 +233,97 @@ static SvResult SV_CALL write_looks(SvOwner owner, SvEntity player, const int32_
     return SV_OK;
 }
 
+static int position_ok(SvVector position)
+{
+    return finite(position.x) && finite(position.y) && finite(position.z) &&
+        position.x <= SV_POSITION_LIMIT && position.x >= -SV_POSITION_LIMIT &&
+        position.y <= SV_POSITION_LIMIT && position.y >= -SV_POSITION_LIMIT &&
+        position.z <= SV_POSITION_LIMIT && position.z >= -SV_POSITION_LIMIT;
+}
+
+static SvResult SV_CALL write_item_create(SvOwner owner, uint32_t type, SvVector position, SvEntity *item)
+{
+    static const vec3 rotation[3] = { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} };
+    vec3 at;
+    uint32_t index;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (type >= SV_ITEM_TYPE_COUNT || type == ITEM_NEWSPAPER || !item || !position_ok(position))
+        return SV_INVALID;
+    at.x = position.x;
+    at.y = position.y;
+    at.z = position.z;
+    index = createitem((int)type, &at, NULL, rotation);
+    if (index >= SR_MAX_ITEM)
+        return SV_LIMIT;
+    *item = sv_entity_at(SV_ENTITY_ITEM, (int32_t)index);
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_item_remove(SvOwner owner, SvEntity item)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_ITEM, item, &index);
+    if (result != SV_OK)
+        return result;
+    sr_items[index].time_to_live = 0;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_item_equip(SvOwner owner, SvEntity item, SvEntity human, uint32_t slot)
+{
+    int32_t item_index, human_index;
+    SvResult result = resolve(owner, SV_ENTITY_ITEM, item, &item_index);
+    if (result != SV_OK)
+        return result;
+    result = resolve(owner, SV_ENTITY_HUMAN, human, &human_index);
+    if (result != SV_OK)
+        return result;
+    if (slot >= SV_ITEM_SLOT_COUNT)
+        return SV_INVALID;
+    return linkitem((uint32_t)item_index, UINT32_MAX, human_index, (int)slot) ? SV_OK : SV_CONFLICT;
+}
+
+/* 1 when "ancestor" is the item or one of the parents of the item. */
+static int in_chain(int32_t item, int32_t ancestor)
+{
+    int depth;
+    for (depth = 0; item != -1; ++depth) {
+        if (item == ancestor || depth >= SR_MAX_ITEM)
+            return 1;
+        item = sr_items[item].parent_item;
+    }
+    return 0;
+}
+
+static SvResult SV_CALL write_item_attach(SvOwner owner, SvEntity parent, SvEntity child)
+{
+    int32_t parent_index, child_index;
+    SvResult result = resolve(owner, SV_ENTITY_ITEM, parent, &parent_index);
+    if (result != SV_OK)
+        return result;
+    result = resolve(owner, SV_ENTITY_ITEM, child, &child_index);
+    if (result != SV_OK)
+        return result;
+    if (parent_index == child_index)
+        return SV_INVALID;
+    /* linkitem does not remove the child from an old parent item, so refuse that case. */
+    if (sr_items[child_index].parent_item != -1 || in_chain(parent_index, child_index))
+        return SV_CONFLICT;
+    return linkitem((uint32_t)parent_index, (uint32_t)child_index, -1, 0) ? SV_OK : SV_CONFLICT;
+}
+
+static SvResult SV_CALL write_item_detach(SvOwner owner, SvEntity item)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_ITEM, item, &index);
+    if (result != SV_OK)
+        return result;
+    return linkitem((uint32_t)index, UINT32_MAX, -1, 0) ? SV_OK : SV_STATE;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
-    write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to
+    write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to,
+    write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach
 };
