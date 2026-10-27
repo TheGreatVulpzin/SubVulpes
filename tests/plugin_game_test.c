@@ -13,6 +13,7 @@
 #include "player.h"
 #include "events.h"
 #include "server.h"
+#include "sr_math.h"
 #include "sr_server.h"
 #include "plugin_game_internal.h"
 
@@ -168,6 +169,7 @@ static void write_api_tick(void)
 {
     Human *hu = &sr_humans[0];
     float offset[3];
+    int train_piece, made_object, k2;
     uint32_t events;
     int k;
     sr_connections[0].player_id = 0;
@@ -188,6 +190,9 @@ static void write_api_tick(void)
     sr_items[0].parent_human = -1;
     sr_itemtypes[0].inv_inertia = sr_itemtypes[1].inv_inertia = sr_itemtypes[12].inv_inertia = (vec3){1, 1, 1};
     sr_itemtypes[1].fits_in[0] = 1;
+    /* A train piece. Only the track system makes these, so the write API must refuse to remove it. */
+    train_piece = createobject(12, &position, NULL, rotation, 0);
+    CHECK(train_piece > 0);
     events = sr_numofevents;
     sr_server = 1;
     sv_plugins_tick();
@@ -223,6 +228,14 @@ static void write_api_tick(void)
     check_item_links();
     CHECK(hu->inventory[0].count == 1 && hu->inventory[3].count == 1);
     itemtimetolive();
+    /* The fixture made one object and asked the game to remove it. The train piece stays. */
+    made_object = -1;
+    for (k2 = 0; k2 < 1024; ++k2)
+        if (sr_objects[k2].active && sr_objects[k2].type == 0 && sr_objects[k2].color == 3)
+            made_object = k2;
+    CHECK(made_object > 0 && sr_objects[made_object].time_to_live == 0);
+    objecttimetolive();
+    CHECK(!sr_objects[made_object].active && sr_objects[train_piece].active);
     check_item_links();
     CHECK(hu->inventory[0].count == 1 && hu->inventory[3].count == 0);
     sr_numofconnections = 0;
@@ -267,6 +280,7 @@ int main(void)
 {
     SvEntity old;
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    x87_init();
     CHECK(sv_entity_capacity(0) == 0);
     CHECK(sv_entity_capacity(UINT32_MAX) == 0);
     CHECK(sv_entity_at(0, 0) == 0);

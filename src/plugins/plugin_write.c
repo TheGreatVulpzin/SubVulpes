@@ -8,9 +8,11 @@
 #include "plugin_game_internal.h"
 #include "events.h"
 #include "items.h"
+#include "objects.h"
 #include "server.h"
 #include "sr_runtime.h"
 #include "sr_server.h"
+#include "vectors.h"
 #include <string.h>
 
 enum { MESSAGE_MAX = 63, KICK_IDLE_TICKS = 0x4b0 };
@@ -322,8 +324,43 @@ static SvResult SV_CALL write_item_detach(SvOwner owner, SvEntity item)
     return linkitem((uint32_t)index, UINT32_MAX, -1, 0) ? SV_OK : SV_STATE;
 }
 
+static SvResult SV_CALL write_object_create(SvOwner owner, uint32_t type, SvVector position, float yaw, int32_t color,
+    SvEntity *object)
+{
+    vec3 at, rotation[3];
+    int index;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (type >= SV_OBJECT_TYPE_COUNT || color < 0 || color > SV_OBJECT_COLOR_MAX || !object || !position_ok(position) ||
+        !finite(yaw))
+        return SV_INVALID;
+    at.x = position.x;
+    at.y = position.y;
+    at.z = position.z;
+    resetorientation(rotation);
+    rotateorientation(rotation, &rotation[1], yaw);
+    index = createobject((int)type, &at, NULL, rotation, color);
+    if (index < 0)
+        return SV_LIMIT;
+    *object = sv_entity_at(SV_ENTITY_OBJECT, index);
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_object_remove(SvOwner owner, SvEntity object)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_OBJECT, object, &index);
+    if (result != SV_OK)
+        return result;
+    if (sr_objects[index].type >= SV_OBJECT_TYPE_COUNT)
+        return SV_DENIED;
+    sr_objects[index].time_to_live = 0;
+    return SV_OK;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
     write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to,
-    write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach
+    write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
+    write_object_create, write_object_remove
 };

@@ -233,6 +233,40 @@ static int change_items(SvOwner owner)
     return change->item_remove(owner, bandage) == SV_OK && change->item_remove(owner, player) == SV_NOT_FOUND;
 }
 
+/* Make and remove objects. The train piece (type 12) comes from the test program. Returns 1 when all checks pass. */
+static int change_objects(SvOwner owner)
+{
+    const SvVector at = { 40.0f, 21.0f, 60.0f };
+    SvVector bad = at;
+    SvObjectState state = { sizeof state };
+    SvEntity made = 0, none = 0, train = 0, page[8];
+    uint32_t nan_bits = 0x7fc00000u, count = 0, next = 0, i;
+    float yaw_nan;
+    memcpy(&bad.x, &nan_bits, sizeof bad.x);
+    memcpy(&yaw_nan, &nan_bits, sizeof yaw_nan);
+    if (change->object_create(owner, 12, at, 0.0f, 0, &none) != SV_INVALID ||
+        change->object_create(owner, 13, at, 0.0f, 0, &none) != SV_INVALID ||
+        change->object_create(owner, SV_OBJECT_TYPE_COUNT + 100, at, 0.0f, 0, &none) != SV_INVALID ||
+        change->object_create(owner, 0, at, 0.0f, SV_OBJECT_COLOR_MAX + 1, &none) != SV_INVALID ||
+        change->object_create(owner, 0, at, 0.0f, -1, &none) != SV_INVALID ||
+        change->object_create(owner, 0, at, 0.0f, 0, NULL) != SV_INVALID ||
+        change->object_create(owner, 0, bad, 0.0f, 0, &none) != SV_INVALID ||
+        change->object_create(owner, 0, at, yaw_nan, 0, &none) != SV_INVALID || none != 0)
+        return 0;
+    if (change->object_create(owner, 0, at, 1.5f, 3, &made) != SV_OK || !made || game->object(owner, made, &state) != SV_OK ||
+        state.type != 0 || state.color != 3 || state.health != 100 || state.position.x != 40.0f ||
+        state.position.y != 21.0f || state.position.z != 60.0f)
+        return 0;
+    if (game->entities(owner, SV_ENTITY_OBJECT, 0, page, 8, &count, &next) != SV_OK)
+        return 0;
+    for (i = 0; i < count; ++i)
+        if (game->object(owner, page[i], &state) == SV_OK && state.type == 12)
+            train = page[i];
+    if (!train || change->object_remove(owner, train) != SV_DENIED || change->object_remove(owner, player) != SV_NOT_FOUND)
+        return 0;
+    return change->object_remove(owner, made) == SV_OK;
+}
+
 /* Bad input must change nothing. The test program checks the game state after the tick. */
 static SvResult write_checks(SvOwner owner)
 {
@@ -274,6 +308,7 @@ static SvResult write_checks(SvOwner owner)
     CHECK(h.position.x == 100.0f && h.position.y == 50.0f && h.position.z == 200.0f && h.health == 80);
     CHECK(change_player_fields(owner));
     CHECK(change_items(owner));
+    CHECK(change_objects(owner));
     CHECK(change->kick(owner, human) == SV_NOT_FOUND);
     CHECK(change->kick(owner, player) == SV_OK);
     thread = CreateThread(NULL, 0, write_wrong_thread, NULL, 0, NULL);

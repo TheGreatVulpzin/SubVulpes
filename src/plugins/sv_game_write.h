@@ -11,7 +11,8 @@ enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_ADMIN = 4 };
 /* The health range of the game: -100 is dead and 100 is full health. */
 enum { SV_HEALTH_MIN = -100, SV_HEALTH_MAX = 100 };
 /* The look selectors and the highest value of each, as the game makes them. */
-enum { SV_LOOK_COUNT = 5, SV_TEAM_MAX = 7, SV_ITEM_TYPE_COUNT = 27, SV_ITEM_SLOT_COUNT = 7 };
+enum { SV_LOOK_COUNT = 5, SV_TEAM_MAX = 7, SV_ITEM_TYPE_COUNT = 27, SV_ITEM_SLOT_COUNT = 7,
+    SV_OBJECT_TYPE_COUNT = 12, SV_OBJECT_COLOR_MAX = 5 };
 /* A teleport accepts finite coordinates inside this limit. */
 #define SV_POSITION_LIMIT 32768.0f
 
@@ -49,6 +50,14 @@ typedef struct {
     SvResult (SV_CALL *item_attach)(SvOwner owner, SvEntity parent, SvEntity child);
     /* Takes an item out of its human or its parent item. SV_STATE when it has neither. */
     SvResult (SV_CALL *item_detach)(SvOwner owner, SvEntity item);
+    /* Makes an object of a type from 0 to 11 (cars, trucks, the helicopter) at the position, turned by the yaw angle
+     * in radians. The color is 0 to 5. Types 12 and 13 are the train pieces, which only the track system makes.
+     * The reference goes to *object only on success. SV_LIMIT means that all 1,024 object slots are in use. */
+    SvResult (SV_CALL *object_create)(SvOwner owner, uint32_t type, SvVector position, float yaw, int32_t color,
+        SvEntity *object);
+    /* Ends the life of an object. The game removes it in its next object lifetime pass, and the humans inside get out.
+     * SV_DENIED for a train piece. */
+    SvResult (SV_CALL *object_remove)(SvOwner owner, SvEntity object);
 } SvGameWrite;
 #pragma pack(pop)
 
