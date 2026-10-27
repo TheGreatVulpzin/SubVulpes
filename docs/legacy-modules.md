@@ -108,7 +108,7 @@ Its `/kill` writes health -5 and `bleeding` 1. So the "drunk level" is `stun_tim
 | N12 | Add a push or speed to a body part. |
 | N13 | Write the spawn protection timer. |
 | N14 | Settings that the core owns: player limit, starting money and bot count. |
-| N15 | Shop catalog entries and phone purchase events. |
+| N15 | Phones, in a general way. The core knows no shop and no price. A cell phone item keeps its dialed digits in `phone_number` and its state in `call_state`, and the game calls another phone at 4 digits (code read, not run). A plugin gets an event for each digit (phone item, number so far, the human that holds it) and one when the game is about to call. It can claim the number, so the game does not call, or let the game go on. A write puts a phone back to idle. The plugin gives the number its meaning with the methods that exist: a sale (`add_money`, `item_create`, `item_equip`), a command or a quiz. A short code such as 24 needs a rule for its end, for example a wait of some ticks. The plugin owns that rule. A second, separate part: read and replace the rows of the menu shops of a building (type and price), for the dealership truck. |
 | N16 | Events: chat text (observe), human death (observe and early processing), spawn (decide position), vehicle damage (observe), purchase (decide). |
 | N17 | Engine parameters of one object type. |
 | N18 | Plugin storage with a size bound, in three scopes: session (one player, cleared when the player leaves or the plugin stops), account (kept on disk, tied to an account) and server (kept on disk). See the notes below. |
