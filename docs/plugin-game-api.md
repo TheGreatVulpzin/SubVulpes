@@ -89,7 +89,8 @@ Separate pages do not form an atomic world snapshot.
 | `account` | Name, money, `playtime_raw` and three look selectors |
 | `bone` | One human bone's motion, rotation, mass and radius |
 | `inventory` | One human slot's count and item references |
-| `world` | Tick/reset sequence, mode/round/state, timers, raw clock, server name, limits, spawn position/sizes and type counts |
+| `world` | Tick/reset sequence, mode/round/state, timers, raw clock, server name, limits, spawn position/sizes, type counts and the number of news lines |
+| `headline(index, text, capacity)` | Copies one news line. The index is below `headline_count` of the world snapshot. The buffer needs `SV_HEADLINE_BUFFER` (125) bytes. `SV_NOT_FOUND` for a line that does not exist, `SV_INVALID` for a null or small buffer |
 
 Bone indices are `0..14`: 15 bones. Inventory slot indices are `0..7`: eight slots.
 Each inventory slot and item child list holds at most eight references.
@@ -225,7 +226,18 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `npc_remove(player)` | Gives the bot an end time in the past. The bot expiry of the game removes the human and the player in the next world logic pass. | `SV_NOT_FOUND`, `SV_DENIED` for a player who is not a bot |
 | `vehicle_exit(human, stop)` | Takes the human out of its vehicle the way the exit button does: the view angles become free, the vehicle gets the idle drive state and a bone that the exit would put in a wall moves to the near side of it. With `stop` 1 the speed of each bone becomes 0, so the body does not fly at the speed of the vehicle. | `SV_NOT_FOUND`, `SV_INVALID` for a `stop` other than 0 or 1, `SV_STATE` for a human who sits in no vehicle |
 | `sound(index, position, volume, pitch)` | Plays a sound of the game at the position for the clients. The index must be below the size of the sound list (47 in this server, so 0 to 46). The volume is 0 to 2 and the pitch 0.1 to 4. These two limits are a choice of this API. The game uses volumes 0.5 to 1 and pitches 0.5 to 1. | `SV_INVALID` for an index, a volume, a pitch or a position out of range, or a value that is not finite |
+| `headline(index, text)` | Replaces news line `index`, or adds a line when the index equals `headline_count`, and sends it to the clients. The text has 0 to 124 printable ASCII characters. The game splits it at character 63 into the two parts of the line. See [News lines](#news-lines). | `SV_INVALID` for a null text, a text that is too long or has a control or non-ASCII byte, or an index that leaves a gap. `SV_LIMIT` when 1,024 lines exist |
 | `teleport(human, position)` | Moves the 15 bones by the same offset so bone 0 reaches the position. It copies the new place to the previous place of each bone. The velocity does not change. | `SV_NOT_FOUND`, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle |
+
+### News lines
+
+The newspaper of the game has up to 1,024 lines of 256 bytes. The server loads them from `readme.txt` at each round, adds "Top 10 list" and the ten richest accounts, and sends each line to the clients as two events of kind 3. The first event holds the characters 0 to 62 and the second holds the rest, from character 63. A line can hold 124 characters, which is the length that the loader reads.
+The events of kind 3 are the only text events that a client gets whole when it joins late. The game turns other old text events into placeholders after 600 ticks. The event list restarts at each round, so a client that joins later replays the lines, including the ones that a plugin changed.
+A change lasts for the current round. The next round loads `readme.txt` again, so a plugin that wants a line in every round writes it again at each round start.
+A line that the plugin replaces sends two new events with the same index. The original client most likely overwrites the old text with them, but this was not run. A new line at the end depends on the client count of lines, which was not checked either. Both go on the list of things to test with the original client.
+The server reads the lines only to send them. A change affects only what the clients show.
+The test starts with three lines. It checks each error code, a refused call that changes nothing, a replaced line, a line of 100 characters that splits into 63 and 37, an empty line, the fill of all 1,024 lines and the refusal of the next one. It also reads the events and the storage, and it checks that a client that is 1,000 ticks late gets a headline whole and a message as a placeholder.
+Removing one check at a time made `game-api` fail each time (`build/logs/mutation22.log`): the gap in the index, the limit of 1,024 lines, the text length, the line count on read, the buffer capacity on read, the null buffer and the null text, the printable-text check, and the context checks of both methods.
 
 The tests call every method from a real plugin callback against records that real constructors made.
 They check each error code and a wrong-thread call. The test program then reads the game records.

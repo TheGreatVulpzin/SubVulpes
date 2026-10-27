@@ -306,10 +306,8 @@ void resetgame(void)
     economy_gunmarket();
     createevent_updatestocks();
     j = g_numofheadlines;
-    for (i = 0; i < j; ++i) {
-        sr_createevent_message(3, g_headlines[i], i, 0);
-        sr_createevent_message(3, g_headlines[i] + 0x3f, i, 1);
-    }
+    for (i = 0; i < j; ++i)
+        newspaper_send_line(i);
     for (i = 0; i < 256; ++i)
         if (sr_players[i].active) {
             createevent_updateplayer(i);

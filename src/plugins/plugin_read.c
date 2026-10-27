@@ -4,6 +4,7 @@
 #include "plugin_game_internal.h"
 #include "sr_runtime.h"
 #include "collide.h"
+#include "buildings.h"
 #include <math.h>
 #include <string.h>
 
@@ -240,6 +241,7 @@ static SvResult SV_CALL read_world(SvOwner owner, SvWorldState *state)
     value.spawn_sizes.y = sr_data_game_world.spawn_size_y;
     value.spawn_sizes.z = sr_data_game_world.spawn_size_z;
     value.item_type_count = 27; value.object_type_count = 14;
+    value.headline_count = (uint32_t)sr_data_newspaper.num_lines;
     memcpy(state, &value, sizeof value);
     return SV_OK;
 }
@@ -355,8 +357,21 @@ static SvResult SV_CALL read_aim(SvOwner owner, SvEntity human, float distance, 
     return SV_OK;
 }
 
+static SvResult SV_CALL read_headline(SvOwner owner, uint32_t index, char *text, uint32_t capacity)
+{
+    char line[NEWS_TEXT_MAX + 1];
+    if (context(owner) != SV_OK)
+        return SV_STATE;
+    if (!text || capacity < SV_HEADLINE_BUFFER)
+        return SV_INVALID;
+    if (index >= SV_HEADLINE_COUNT_MAX || !newspaper_get_line((int)index, line))
+        return SV_NOT_FOUND;
+    memcpy(text, line, sizeof line);
+    return SV_OK;
+}
+
 const SvGameRead sv_game_read = {
     sizeof(SvGameRead), SV_GAME_READ_VERSION, read_entities,
     read_player, read_human, read_item, read_object, read_account,
-    read_bone, read_inventory, read_world, read_line, read_aim
+    read_bone, read_inventory, read_world, read_line, read_aim, read_headline
 };

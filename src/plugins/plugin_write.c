@@ -7,6 +7,7 @@
 #include "sv_game_write.h"
 #include "plugin_game_internal.h"
 #include "events.h"
+#include "buildings.h"
 #include "items.h"
 #include "objects.h"
 #include "player.h"
@@ -388,10 +389,31 @@ static SvResult SV_CALL write_sound(SvOwner owner, uint32_t index, SvVector posi
     return SV_OK;
 }
 
+static SvResult SV_CALL write_headline(SvOwner owner, uint32_t index, const char *text)
+{
+    size_t i, length;
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!text || index > SV_HEADLINE_COUNT_MAX)
+        return SV_INVALID;
+    length = strnlen(text, SV_HEADLINE_TEXT_MAX + 1);
+    for (i = 0; i < length; ++i)
+        if ((unsigned char)text[i] < 0x20 || (unsigned char)text[i] > 0x7e)
+            return SV_INVALID;
+    switch (newspaper_set_line((int)index, text)) {
+    case NEWS_OK:
+        return SV_OK;
+    case NEWS_FULL:
+        return SV_LIMIT;
+    default:
+        return SV_INVALID;
+    }
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
     write_teleport, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
     write_object_create, write_object_remove, write_npc_create, write_npc_remove,
-    write_vehicle_exit, write_sound
+    write_vehicle_exit, write_sound, write_headline
 };

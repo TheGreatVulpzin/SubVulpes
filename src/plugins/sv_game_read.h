@@ -6,7 +6,6 @@
 #define SV_API_GAME_READ 1u
 #define SV_GAME_READ_VERSION 1u
 #define SV_ENTITY_PAGE_MAX 256u
-
 #pragma pack(push, 8)
 typedef struct {
     uint32_t size;
@@ -85,6 +84,7 @@ typedef struct {
     char server_name[72];
     SvVector spawn, spawn_sizes;
     uint32_t item_type_count, object_type_count;
+    uint32_t headline_count;
 } SvWorldState;
 
 /* What a line query can hit. A query takes the nearest hit of the kinds in its flags. */
@@ -120,6 +120,9 @@ typedef struct {
     /* The same query along the aim of a human: from the middle of its head, in the direction that its head faces, for
      * "distance" units (more than 0, at most SV_LINE_LENGTH_MAX). The human itself is never a hit. */
     SvResult (SV_CALL *aim)(SvOwner owner, SvEntity human, float distance, uint32_t flags, SvLineHit *hit);
+    /* Copies news line "index" (below SvWorldState.headline_count) to the buffer. The buffer must hold SV_HEADLINE_BUFFER
+     * bytes. SV_NOT_FOUND when the line does not exist. */
+    SvResult (SV_CALL *headline)(SvOwner owner, uint32_t index, char *text, uint32_t capacity);
 } SvGameRead;
 #pragma pack(pop)
 

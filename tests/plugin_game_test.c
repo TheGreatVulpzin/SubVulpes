@@ -270,6 +270,47 @@ static void effects_check(uint32_t events, vec3 bone_before)
     CHECK(test_world_value == 5);
 }
 
+/* The news lines that the fixture wrote: the storage, the events and what a client that joins late gets. The fixture started
+ * with the lines "first", "second" and "third". */
+static void headline_check(uint32_t events)
+{
+    uint32_t i, kind3 = 0, pair_a = 0, pair_b = 0, pair_c = 0, ticks = (uint32_t)sr_game.ticks;
+    const char *line = sr_data_newspaper.lines[3];
+    CHECK(sr_data_newspaper.num_lines == 1024);
+    CHECK(!strcmp(sr_data_newspaper.lines[0], "first") && !strcmp(sr_data_newspaper.lines[1], "second replaced"));
+    CHECK(!strcmp(sr_data_newspaper.lines[2], "third") && !sr_data_newspaper.lines[4][0]);
+    CHECK(strlen(line) == 100 && line[0] == 'a' && line[62] == 'a' && line[63] == 'b' && line[99] == 'b');
+    CHECK(!strcmp(sr_data_newspaper.lines[1023], "last"));
+    for (i = events; i != sr_numofevents; i = (i + 1) & 0xffff) {
+        const Event *ev = &sr_events[i];
+        if (ev->type != 2 || ev->attach_type != 3)
+            continue;
+        ++kind3;
+        if (ev->attach_id == 1) {
+            CHECK(ev->range_mode == (int)pair_a && !strcmp(ev->message, pair_a ? "" : "second replaced"));
+            ++pair_a;
+        } else if (ev->attach_id == 3) {
+            CHECK(ev->range_mode == (int)pair_b);
+            CHECK(pair_b ? (strlen(ev->message) == 37 && ev->message[0] == 'b') : (strlen(ev->message) == 63 && ev->message[62] == 'a'));
+            ++pair_b;
+        } else if (ev->attach_id == 4) {
+            CHECK(ev->range_mode == (int)pair_c && !ev->message[0] && ev->param == 0);
+            ++pair_c;
+        }
+    }
+    /* Lines 1, 3 and 4 have two events each, and lines 5 to 1023 have two each, and line 1023 is written twice. */
+    CHECK(pair_a == 2 && pair_b == 2 && pair_c == 2 && kind3 == 2046);
+    /* A message is a filler for a client that is more than 600 ticks late. A headline stays whole, so a late client gets it. */
+    sr_game.ticks += 1000;
+    CHECK(event_bits((int)events, 0) == 6);
+    for (i = events; i != sr_numofevents; i = (i + 1) & 0xffff)
+        if (sr_events[i].type == 2 && sr_events[i].attach_type == 3) {
+            CHECK(event_bits((int)i, 0) > 6);
+            break;
+        }
+    sr_game.ticks = (int)ticks;
+}
+
 /* The places in the core that post events, run with real constructors: a spawn for a human with a player (and none for a
  * human with no player), a death once with the last shooter as the killer, a death with no known killer, and a leave. */
 static void core_events(void)
@@ -506,6 +547,7 @@ static void write_api_tick(void)
     CHECK(event_bits((int)events + 5, 0) > 6 + 28 + 6 && event_bits((int)events, 0) == event_bits((int)events, 1));
     riders_check();
     effects_check(events, bone_before);
+    headline_check(events);
     damage_check();
     decision_check();
     CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
@@ -723,6 +765,10 @@ int main(void)
     sr_data_object[0].num_seats = 1;
     sr_data_server.max_players = 128;
     sr_data_game_world.clock = 123456;
+    sr_data_newspaper.num_lines = 3;
+    strcpy(sr_data_newspaper.lines[0], "first");
+    strcpy(sr_data_newspaper.lines[1], "second");
+    strcpy(sr_data_newspaper.lines[2], "third");
     CHECK(!sv_game_is_ready());
     sv_game_ready();
     sv_plugins_tick();

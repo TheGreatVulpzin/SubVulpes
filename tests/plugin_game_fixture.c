@@ -155,6 +155,7 @@ static SvResult initial_reads(SvOwner owner)
     SvBoneState bone = { sizeof bone };
     SvInventoryState inventory = { sizeof inventory };
     SvWorldState world = { sizeof world };
+    char news[SV_HEADLINE_BUFFER];
     struct { SvPlayerState state; uint32_t tail[4]; } larger;
     SvEntity page[2] = {0, 0};
     uint32_t count = 777, next = 888;
@@ -185,6 +186,14 @@ static SvResult initial_reads(SvOwner owner)
     CHECK(game->inventory(owner, human, 8, &inventory) == SV_INVALID);
     CHECK(game->world(owner, &world) == SV_OK && world.world_clock_raw == 123456);
     CHECK(world.max_players == 128 && world.item_type_count == 27 && world.object_type_count == 14);
+    /* The test program put three news lines in the game: "first", "second" and "third". */
+    CHECK(world.headline_count == 3);
+    CHECK(game->headline(owner, 0, news, SV_HEADLINE_BUFFER) == SV_OK && !strcmp(news, "first"));
+    CHECK(game->headline(owner, 2, news, SV_HEADLINE_BUFFER) == SV_OK && !strcmp(news, "third"));
+    CHECK(game->headline(owner, 3, news, SV_HEADLINE_BUFFER) == SV_NOT_FOUND && game->headline(owner, 1024, news, SV_HEADLINE_BUFFER) == SV_NOT_FOUND);
+    CHECK(game->headline(owner, UINT32_MAX, news, SV_HEADLINE_BUFFER) == SV_NOT_FOUND);
+    CHECK(game->headline(owner, 0, news, SV_HEADLINE_BUFFER - 1) == SV_INVALID && game->headline(owner, 0, NULL, SV_HEADLINE_BUFFER) == SV_INVALID);
+    CHECK(game->headline(owner + 1, 0, news, SV_HEADLINE_BUFFER) == SV_STATE);
     reset_sequence = world.reset_sequence;
     CHECK(game->entities(owner, SV_ENTITY_PLAYER, 0, page, 2, &count, &next) == SV_OK);
     CHECK(count == 1 && page[0] == player && next == 256);
@@ -442,6 +451,47 @@ static int effect_checks(SvOwner owner)
     return 0;
 }
 
+/* News lines. The test program starts with three lines and reads the events and the storage after the tick.
+ * Returns 0 when all checks pass, or the line of the check that failed. */
+static int headline_checks(SvOwner owner)
+{
+    char news[SV_HEADLINE_BUFFER], long_text[SV_HEADLINE_BUFFER + 1], text[SV_HEADLINE_BUFFER];
+    SvWorldState world = { sizeof world };
+    uint32_t n;
+    memset(long_text, 'x', SV_HEADLINE_TEXT_MAX + 1);
+    long_text[SV_HEADLINE_TEXT_MAX + 1] = 0;
+    STEP(change->headline(owner + 1, 0, "late") == SV_STATE);
+    STEP(change->headline(owner, 0, NULL) == SV_INVALID);
+    STEP(change->headline(owner, 0, "bad\ttext") == SV_INVALID && change->headline(owner, 0, "caf\xc3\xa9") == SV_INVALID);
+    STEP(change->headline(owner, 0, long_text) == SV_INVALID);
+    /* A gap is refused, and so is an index beyond the limit. */
+    STEP(change->headline(owner, 4, "gap") == SV_INVALID && change->headline(owner, 1025, "far") == SV_INVALID);
+    STEP(change->headline(owner, UINT32_MAX, "far") == SV_INVALID);
+    /* A refusal changes nothing. */
+    STEP(game->world(owner, &world) == SV_OK && world.headline_count == 3);
+    STEP(game->headline(owner, 0, news, sizeof news) == SV_OK && !strcmp(news, "first"));
+    /* Replace a line, add one with 100 characters, and add an empty one. */
+    STEP(change->headline(owner, 1, "second replaced") == SV_OK);
+    memset(text, 'a', 100);
+    memset(text + 63, 'b', 37);
+    text[100] = 0;
+    STEP(change->headline(owner, 3, text) == SV_OK);
+    STEP(change->headline(owner, 4, "") == SV_OK);
+    STEP(game->world(owner, &world) == SV_OK && world.headline_count == 5);
+    STEP(game->headline(owner, 1, news, sizeof news) == SV_OK && !strcmp(news, "second replaced"));
+    STEP(game->headline(owner, 3, news, sizeof news) == SV_OK && !strcmp(news, text));
+    STEP(game->headline(owner, 4, news, sizeof news) == SV_OK && !news[0]);
+    /* Fill the list. The game keeps 1,024 lines. */
+    for (n = 5; n < SV_HEADLINE_COUNT_MAX; ++n)
+        STEP(change->headline(owner, n, "fill") == SV_OK);
+    STEP(game->world(owner, &world) == SV_OK && world.headline_count == SV_HEADLINE_COUNT_MAX);
+    STEP(change->headline(owner, SV_HEADLINE_COUNT_MAX, "full") == SV_LIMIT);
+    STEP(change->headline(owner, SV_HEADLINE_COUNT_MAX - 1, "last") == SV_OK);
+    STEP(game->headline(owner, SV_HEADLINE_COUNT_MAX - 1, news, sizeof news) == SV_OK && !strcmp(news, "last"));
+    STEP(game->headline(owner, SV_HEADLINE_COUNT_MAX, news, sizeof news) == SV_NOT_FOUND);
+    return 0;
+}
+
 /* The property table itself: names, descriptions, operations and the checks that do not belong to one row.
  * Returns 0 when all checks pass, or the line of the check that failed. */
 static int props_checks(SvOwner owner)
@@ -658,6 +708,8 @@ static SvResult write_checks(SvOwner owner)
             bad_line = line_checks(owner);
         if (!bad_line)
             bad_line = effect_checks(owner);
+        if (!bad_line)
+            bad_line = headline_checks(owner);
         if (!bad_line)
             bad_line = props_checks(owner);
         if (!bad_line)

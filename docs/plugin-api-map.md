@@ -14,7 +14,7 @@ An absent API operation is work to plan, rather than a permanent restriction on 
 
 The inventory below describes target capabilities. It does not claim complete implementation.
 The implemented [read capability](plugin-game-api.md) covers copied entity, inventory, bone and world snapshots.
-The [write capability](plugin-game-api.md#write-capability-version-1) has seventeen methods: messages, kick, money, teleport, looks, five item operations, two object operations, two bot operations, the vehicle exit and the sound. The [property table](plugin-game-api.md#property-table-capability-10) holds the numbers that a plugin reads and changes: god mode, admin, team, health, bleeding, stun, spawn protection and the velocity of a bone and of an object.
+The [write capability](plugin-game-api.md#write-capability-version-1) has eighteen methods: messages, kick, money, teleport, looks, five item operations, two object operations, two bot operations, the vehicle exit, the sound and the news line. The [property table](plugin-game-api.md#property-table-capability-10) holds the numbers that a plugin reads and changes: god mode, admin, team, health, bleeding, stun, spawn protection and the velocity of a bone and of an object.
 Most other mutations, decisions that plugins can replace and owned game resources remain unimplemented.
 Internal C functions establish implementation seams. They are not a safe or stable external contract by themselves.
 
@@ -158,8 +158,8 @@ So the server cannot change the words that the client shows for a mission. The c
 The server does send text in these places, and a plugin can change them:
 
 - Server messages (kind 0, done in `message`) and admin messages (kind 4).
-- Headlines (kind 3): two lines of up to 63 bytes for each headline index. The API has no method for them yet.
-- Newspapers: the text comes from `readme.txt`, at most 1,013 lines, read at the load. The API has no method for it.
+- Headlines (kind 3): two parts of up to 63 bytes for each news line. Done: `headline` writes a line of up to 124 characters and `headline` in the read table reads it.
+- Newspapers: the text comes from `readme.txt`, at most 1,013 lines, read at each round. A plugin that changes a line writes it again at each round start. The newspaper item has no API of its own.
 - Player names, at most 31 bytes.
 
 A mission of a plugin can announce itself with a message or a headline, while the slots use an existing kind for the display.

@@ -86,7 +86,7 @@ A plugin that needs a thing that the API does not give waits for a new general o
 | N1 | Send a message to one player. Done: `message_to`. The server filters the event for each connection, so the original client gets a normal message. |
 | N2 | Set the admin flag of a player and of its connection, as the password login does. Done: the property `player.admin`. |
 | N3 | Set the team of a player and send the update. Done: the property `player.team`. |
-| N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors are not done. |
+| N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors have no support: `colors[4]` of a player and of a human never leave the server, and no server code reads them after the creation. A write would change nothing that a client or the game shows. The close of S3 lists this as "no support". |
 | N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. Done: the properties `human.bleeding` and `human.stun`. |
 
 About the "drunk" look. This server has no drunk field. A body staggers in two cases, and both come from the code:

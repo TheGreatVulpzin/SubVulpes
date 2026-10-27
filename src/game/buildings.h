@@ -13,6 +13,12 @@ void cityobject_addbox(int type, float x, float y, float z, float sx, float sy, 
 void setupcityobjecttypes(void);
 void setupbuildingtypes(void);
 void newspaper_load(void);
+/* The news lines are 256 bytes each, and a text may use at most 124 of them (the length that the file loader reads). */
+enum { NEWS_MAX_LINES = 1024, NEWS_TEXT_MAX = 124 };
+enum { NEWS_OK = 0, NEWS_BAD_LINE, NEWS_FULL, NEWS_BAD_TEXT };
+void newspaper_send_line(int line);
+int newspaper_set_line(int line, const char *text);
+int newspaper_get_line(int line, char out[NEWS_TEXT_MAX + 1]);
 void building_load(const char *name, int header_only);
 void building_save(const char *name);
 void building_setupbuild(void);

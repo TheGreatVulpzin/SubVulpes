@@ -17,7 +17,7 @@ Seven capabilities have a reserved id, a stub header, a stub table and a stub te
 | `engine` | 8 | N17 engine parameters | Second editor |
 | `shop` | 9 | N15 shop and phone | Second editor |
 
-The ids 1 (read), 2 (write) and 10 (property table) stay with the first editor, with N4 colors, N16, N19, N23 and the headline method.
+The ids 1 (read), 2 (write) and 10 (property table) stay with the first editor, with N16, N19, N23 and the headline method (N4 colors have no support, and the headline method is done).
 
 ## The property table
 

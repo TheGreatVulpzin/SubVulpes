@@ -68,6 +68,11 @@ typedef struct {
     /* Plays a sound of the game at the position for the clients. The index must be below the size of the sound list of the
      * game (47). The volume is from 0 to SV_SOUND_VOLUME_MAX and the pitch from SV_SOUND_PITCH_MIN to SV_SOUND_PITCH_MAX. */
     SvResult (SV_CALL *sound)(SvOwner owner, uint32_t index, SvVector position, float volume, float pitch);
+    /* Replaces news line "index", or adds a line when the index equals SvWorldState.headline_count, and sends it to the
+     * clients. The text has 0 to SV_HEADLINE_TEXT_MAX printable ASCII characters. The game splits it at character 63 into
+     * the two lines that the newspaper shows. SV_INVALID for a gap in the index or a bad text, SV_LIMIT when 1,024 lines
+     * exist. The next round loads the news again, so a plugin that wants its line every round writes it again. */
+    SvResult (SV_CALL *headline)(SvOwner owner, uint32_t index, const char *text);
 } SvGameWrite;
 #pragma pack(pop)
 
