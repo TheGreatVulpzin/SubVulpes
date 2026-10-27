@@ -15,6 +15,7 @@
 #include "economy.h"
 #include "events.h"
 #include "items.h"
+#include "plugin_game_events.h"
 #include "profiler.h"
 #include "rigid.h"
 #include "sr_math.h"
@@ -162,6 +163,9 @@ static void human_despawn(Human *hu)
   int t;
 
   if (hu->health < -4) {
+    /* The timer is 3600 until the first tick of the death, so a human with a player dies once here. */
+    if (hu->despawn_timer == 0xe10 && hu->player_id != -1)
+      sv_game_event_death((int)(hu - sr_humans));
     if (hu->despawn_timer < 0xa8c)
       human_releaseplayer(hu);
     t = hu->despawn_timer - 1;

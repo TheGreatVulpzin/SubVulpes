@@ -1,6 +1,6 @@
 # Plugin events (N16)
 
-Status: design of 2026-10-27. Step 1 of the order of work is built: the record, the queue and the delivery of kind 1 events. The core does not post any event yet (step 2). It serves the need N16 and the damage decision N24 in the [legacy module catalog](legacy-modules.md).
+Status: design of 2026-10-27. Steps 1 and 2 of the order of work are built: the record, the queue, the delivery of kind 1 events, and the three events that the core posts. It serves the need N16 and the damage decision N24 in the [legacy module catalog](legacy-modules.md).
 The plugin API today has two events, `SV_EVENT_TICK` and `SV_EVENT_STOP`. Both run between two ticks, so a plugin never meets the simulation.
 
 ## Three kinds of event
@@ -64,7 +64,12 @@ Use kind 3 only when the safe route cannot say the rule. Keep the answer short: 
    The post does nothing when no active plugin asked for the kind, when the kind is not one that the core posts, or when the call is not on the server thread. The queue holds 1,024 records.
    Tests: the order, a human that is gone at delivery, a flood of 1,100 posts (1,024 kept, a lost record with 76 that comes first), a bad mask, and no record after the stop.
    Removing the queue limit, the kind filter, the ring index and the mask check made `game-api` fail each time (`build/logs/mutation16.log`).
-2. The first notices: spawn, death and leave. Find the hook points in the core.
+2. Done. The first notices: spawn, death and leave (`plugin_game_events.c`).
+   - Spawn is posted at the end of `createhuman` for a human that has a player. It also posts for a bot that a plugin makes with `npc_create`, and for the bodies that the game makes when the world starts.
+   - Death is posted in the despawn step of `humansimulation`, once, on the first tick of the death, for a human that still has a player. The despawn timer is 3600 until that tick. A human with no player gives no death event. A plugin that revives a body with `human.health` and the body dies again gives a new event.
+   - The killer is the human of the player that owns the last bullet that hit the victim, when that player is still active and has a human. Other causes of death (a crash, bleeding, a fall) give no killer. The game has no field for the killer, so the core keeps a table of the last bullet owner for each human, and the spawn of a body clears its entry.
+   - Leave is posted when a player slot is released (`deleteplayer`): a connection that ended, a bot that went, or a rollback of a failed `npc_create`. The player reference no longer resolves at delivery. A plugin matches it with the reference that it saved at the spawn.
+   - The tests make real players and humans, run `humansimulation`, and read the queue. They also call each hook with indexes out of range. The bounds on the index of the last-bullet table are not proven by removal, because an out-of-range write has no visible effect in the test world.
 3. The decision at a safe point for chat and join.
 4. The safe route for damage: the three rows and the small change in the damage code. The result equals today while the scale is 1.
 5. Kind 3: the restricted context, the time budget, the approval text and the tests of each limit.

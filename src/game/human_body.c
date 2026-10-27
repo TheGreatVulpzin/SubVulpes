@@ -8,6 +8,7 @@
 
 #include "items.h"
 #include "plugin_entities.h"
+#include "plugin_game_events.h"
 #include "sr_os.h"
 #include "sr_runtime.h"
 #include "vectors.h"
@@ -343,5 +344,6 @@ int createhuman(float *posp, float *rot, int player)
         ev->attach_id = hu->player_id;
         *event_count = (*event_count + 1) & 0xffff;
     }
+    sv_game_event_spawn(player, h);
     return h;
 }

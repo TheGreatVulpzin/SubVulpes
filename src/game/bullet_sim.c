@@ -12,6 +12,7 @@
 #include "collide.h"
 #include "economy.h"
 #include "events.h"
+#include "plugin_game_events.h"
 #include "objects.h"
 #include "sr_os.h"
 #include "area.h"
@@ -84,6 +85,8 @@ static void bullet_human_hit(Bullet *b, Hit *hit)
             sr_players[b->owner].team == sr_players[hu->player_id].team)
             playerteamkilltax(b->owner, dmg);
     }
+    if (dmg > 0)
+        sv_game_event_hit(hit->human, b->owner);
     hu->health -= dmg;
     if (dmg > 0 && (os_rand() & 0x1f) < dmg)
         hu->bleeding = 1;

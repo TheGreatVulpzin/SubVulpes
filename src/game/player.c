@@ -1,6 +1,7 @@
 /* Player state, input and saved equipment. */
 #include "player.h"
 #include "plugin_entities.h"
+#include "plugin_game_events.h"
 
 #include <string.h>
 
@@ -66,6 +67,7 @@ void deleteplayer(int player)
         sr_humans[p->human_id].account = p->account;
         sr_humans[p->human_id].player_id = -1;
     }
+    sv_game_event_leave(player);
     p->active = 0;
     sv_entity_deleted(SV_ENTITY_PLAYER, (uint32_t)player);
     createevent_updateplayer(player);

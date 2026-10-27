@@ -80,7 +80,7 @@ Step 2 (common API) is in progress.
 - Writes, version 1: seventeen methods. They are `message`, `message_to`, `kick`, `add_money`, `teleport`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `npc_create`, `npc_remove`, `vehicle_exit` and `sound`.
 - Property table (capability 10): `find`, `info`, `get`, `set` and `add` over named numbers with a range. It holds god mode, admin, team, health, bleeding, stun, spawn protection and the velocity of a bone and of an object.
   Decision of 2026-10-27: a new number of the game adds a row, not a method. A plugin area adds a group of rows with `sv_props_add_group`.
-- Events (N16): the design is in [plugin events](plugin-events.md). Three kinds: notices in a queue, decisions at a safe point, and decisions inside the simulation.
+- Events (N16): the design is in [plugin events](plugin-events.md). Three kinds: notices in a queue, decisions at a safe point, and decisions inside the simulation. Built: the queue and the notices spawn, death and leave.
   Decision of 2026-10-27: the user allows kind 3, a decision inside the simulation, with the danger documented. The owner of the plugin takes the responsibility. The host keeps the write API closed inside it.
 - Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
 - Private messages: the server writes an empty slot for each other connection (`0581091`).

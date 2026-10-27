@@ -17,6 +17,7 @@
 #include "sr_server.h"
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
+#include "plugin_game_events.h"
 
 _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
 _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
@@ -268,6 +269,70 @@ static void effects_check(uint32_t events, vec3 bone_before)
     CHECK(test_world_value == 5);
 }
 
+/* The places in the core that post events, run with real constructors: a spawn for a human with a player (and none for a
+ * human with no player), a death once with the last shooter as the killer, a death with no known killer, and a leave. */
+static void core_events(void)
+{
+    float pos[3] = { 700.0f, 40.0f, 700.0f }, rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    SvGameEvent e;
+    SvEntity shooter_player, victim_player, shooter_ref, victim_ref;
+    int shooter_p, shooter_h, victim_p, victim_h, loose;
+    sv_events_clear();
+    shooter_p = createplayer();
+    shooter_h = createhuman(pos, rot, shooter_p);
+    victim_p = createplayer();
+    victim_h = createhuman(pos, rot, victim_p);
+    CHECK(shooter_p >= 0 && shooter_h >= 0 && victim_p >= 0 && victim_h >= 0);
+    sr_players[shooter_p].human_id = shooter_h;
+    sr_players[victim_p].human_id = victim_h;
+    shooter_player = sv_entity_at(SV_ENTITY_PLAYER, shooter_p);
+    victim_player = sv_entity_at(SV_ENTITY_PLAYER, victim_p);
+    shooter_ref = sv_entity_at(SV_ENTITY_HUMAN, shooter_h);
+    victim_ref = sv_entity_at(SV_ENTITY_HUMAN, victim_h);
+    CHECK(sv_events_next(&e) && e.base.kind == SV_EVENT_SPAWN && e.base.size == sizeof e && e.player == shooter_player &&
+          e.human == shooter_ref && e.actor == 0);
+    CHECK(sv_events_next(&e) && e.base.kind == SV_EVENT_SPAWN && e.player == victim_player && e.human == victim_ref);
+    loose = createhuman(pos, rot, -1);
+    CHECK(loose >= 0 && !sv_events_next(&e));
+    /* A death with the last shooter as the killer. The event comes once, and not again on the next tick. */
+    sv_game_event_hit(victim_h, shooter_p);
+    sr_humans[victim_h].health = -50;
+    humansimulation();
+    CHECK(sv_events_next(&e) && e.base.kind == SV_EVENT_DEATH && e.player == victim_player && e.human == victim_ref &&
+          e.actor == shooter_ref);
+    CHECK(!sv_events_next(&e));
+    humansimulation();
+    CHECK(!sv_events_next(&e));
+    /* A death that no bullet caused has no killer. A human with no player gives no death event. */
+    sr_humans[shooter_h].health = -50;
+    sr_humans[loose].health = -50;
+    humansimulation();
+    CHECK(sv_events_next(&e) && e.base.kind == SV_EVENT_DEATH && e.human == shooter_ref && e.actor == 0);
+    CHECK(!sv_events_next(&e));
+    /* A leave: the reference of the player is stale at the delivery. */
+    deleteplayer(shooter_p);
+    CHECK(sv_events_next(&e) && e.base.kind == SV_EVENT_LEAVE && e.player == shooter_player && e.human == 0);
+    CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, shooter_player) == -1);
+    deleteplayer(victim_p);
+    CHECK(sv_events_next(&e) && e.base.kind == SV_EVENT_LEAVE && e.player == victim_player);
+    CHECK(!sv_events_next(&e));
+    /* Indexes out of range do nothing and post nothing. */
+    sv_game_event_spawn(-1, -1);
+    sv_game_event_spawn(0, SR_MAX_HUMAN);
+    sv_game_event_spawn(SR_MAX_PLAYER, 0);
+    sv_game_event_death(-1);
+    sv_game_event_death(SR_MAX_HUMAN);
+    sv_game_event_leave(-1);
+    sv_game_event_leave(SR_MAX_PLAYER);
+    sv_game_event_hit(-1, 0);
+    sv_game_event_hit(SR_MAX_HUMAN, 0);
+    CHECK(!sv_events_next(&e));
+    deletehuman((uint32_t)shooter_h);
+    deletehuman((uint32_t)victim_h);
+    deletehuman((uint32_t)loose);
+    sv_events_clear();
+}
+
 /* The event queue: the core posts a spawn, two deaths and a leave. One death names a human that is gone by the delivery.
  * A post of a kind that the core does not post, or of two kinds at once, does nothing. */
 static void post_events(void)
@@ -298,6 +363,8 @@ static void post_events(void)
 static void post_flood(void)
 {
     int i;
+    /* The earlier calls of the test made real events too (a bot spawned and left). Start with an empty queue. */
+    sv_events_clear();
     for (i = 0; i < 1100; ++i)
         sv_events_post(SV_EVENT_SPAWN, 20, 0, 0, 0);
     CHECK(sv_events_pending() == 1024 + 1);
@@ -498,6 +565,7 @@ int main(void)
     item_lifetime();
     object_lifetime();
     account_lifetime();
+    core_events();
     props_groups();
     sr_players[0].money = 4242;
     memset(sr_players[0].name, 'P', sizeof sr_players[0].name);
