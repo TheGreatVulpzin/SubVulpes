@@ -77,8 +77,9 @@ the stop event, metrics and subscriptions. `ctest --test-dir build/server` passe
 Step 2 (common API) is in progress.
 
 - Reads: entity pages and eight snapshot methods (`92854b1`).
-- Writes, version 1: twenty-one methods (`3590ba9`, `0581091`, `b486fc1`, `83f34e0`, `c80db6b`, `9c31d54`). They are `message`, `message_to`, `kick`, `add_money`, `set_godmode`,
-  `set_health`, `teleport`, `set_admin`, `set_team`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `set_bleeding`, `set_stun`, `npc_create` and `npc_remove`.
+- Writes, version 1: seventeen methods. They are `message`, `message_to`, `kick`, `add_money`, `teleport`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `npc_create`, `npc_remove`, `vehicle_exit` and `sound`.
+- Property table (capability 10): `find`, `info`, `get`, `set` and `add` over named numbers with a range. It holds god mode, admin, team, health, bleeding, stun, spawn protection and the velocity of a bone and of an object.
+  Decision of 2026-10-27: a new number of the game adds a row, not a method. A plugin area adds a group of rows with `sv_props_add_group`.
 - Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
 - Private messages: the server writes an empty slot for each other connection (`0581091`).
 - Planned and not started: plugin configuration set by the administrator in the launcher or by command (N23).

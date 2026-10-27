@@ -16,6 +16,7 @@
 #include "sr_math.h"
 #include "sr_server.h"
 #include "plugin_game_internal.h"
+#include "plugin_props.h"
 
 _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
 _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
@@ -180,6 +181,7 @@ static void npc_check(void)
 }
 
 static int target_car, rider_car, rider_a, rider_b;
+static int test_world_value;
 
 /* A car with two faces for the line queries: face 0 in the plane x = 500 and face 1 in the plane z = 150. */
 static void make_target(void)
@@ -203,7 +205,10 @@ static void make_target(void)
         ob->faces[i].verts[1] = 3 * i + 1;
         ob->faces[i].verts[2] = 3 * i + 2;
     }
+    ob->num_particles = 2;
     ob->particles[0] = 0;
+    ob->particles[1] = 1;
+    sr_particles[0].vel = sr_particles[1].vel = (vec3){ 0, 0, 0 };
     ob->box_min = (vec3){ -1, -1, -1 };
     ob->box_max = (vec3){ 501, 81, 201 };
 }
@@ -243,12 +248,33 @@ static void riders_check(void)
     CHECK(sr_humans[rider_a].exit_timer == 0 && sr_humans[rider_b].exit_timer == 0);
 }
 
+/* The sound event, the push on a bone and on the particles of a car, and the spawn protection counter. */
+static void effects_check(uint32_t events, vec3 bone_before)
+{
+    uint32_t i, sounds = 0;
+    const Human *hu = &sr_humans[0];
+    for (i = events; i < sr_numofevents; ++i)
+        if (sr_events[i].type == 9) {
+            ++sounds;
+            CHECK(sr_events[i].param == 21 && sr_events[i].sound_a == 1.0f && sr_events[i].sound_b == 0.15f);
+            CHECK(sr_events[i].pos.x == 100.0f && sr_events[i].pos.y == 50.0f && sr_events[i].pos.z == 200.0f);
+        }
+    CHECK(sounds == 1);
+    CHECK(near_value(hu->bones[3].vel.x, bone_before.x + 1.0f) && near_value(hu->bones[3].vel.y, bone_before.y + 2.0f) &&
+          near_value(hu->bones[3].vel.z, bone_before.z + 3.0f));
+    CHECK(sr_particles[0].vel.x == 1.0f && sr_particles[0].vel.y == 2.0f && sr_particles[0].vel.z == 3.0f);
+    CHECK(sr_particles[1].vel.x == 1.0f && sr_particles[1].vel.y == 2.0f && sr_particles[1].vel.z == 3.0f);
+    CHECK(hu->protect_timer == 500);
+    CHECK(test_world_value == 5);
+}
+
 /* The fixture calls the write API in this tick. The game state shows what the calls did. */
 static void write_api_tick(void)
 {
     Human *hu = &sr_humans[0];
     float offset[3];
     int train_piece, made_object, k2;
+    vec3 bone_before;
     uint32_t events;
     int k;
     sr_connections[0].player_id = 0;
@@ -272,6 +298,8 @@ static void write_api_tick(void)
     /* A train piece. Only the track system makes these, so the write API must refuse to remove it. */
     train_piece = createobject(12, &position, NULL, rotation, 0);
     CHECK(train_piece > 0);
+    sr_data_soundlist.num_sounds = 47;
+    bone_before = hu->bones[3].vel;
     make_target();
     seat_riders();
     events = sr_numofevents;
@@ -292,6 +320,7 @@ static void write_api_tick(void)
     CHECK(event_bits((int)events + 5, 1) == 6);
     CHECK(event_bits((int)events + 5, 0) > 6 + 28 + 6 && event_bits((int)events, 0) == event_bits((int)events, 1));
     riders_check();
+    effects_check(events, bone_before);
     CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
     CHECK(sr_players[0].team == 3 && sr_humans[0].team == 3);
     CHECK(sr_players[0].look_b == 5 && sr_humans[0].look_b == 5 && sr_humans[0].look_e == 1);
@@ -375,6 +404,36 @@ static void npc_limit(void)
     sr_numofbonds = bonds;
 }
 
+static void *test_world_field(int32_t index, uint32_t slot)
+{
+    (void)index;
+    (void)slot;
+    return &test_world_value;
+}
+
+static const Prop test_world[] = {
+    { "test.world", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 10, test_world_field, NULL, NULL, NULL },
+};
+
+/* A plugin area adds its own rows. The table must refuse bad rows and repeated names, and the same group twice is no error. */
+static void props_groups(void)
+{
+    static const Prop repeated[] = { { "human.health", 1, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL } };
+    static const Prop no_field[] = { { "test.nofield", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, NULL, NULL, NULL, NULL } };
+    static const Prop no_ops[] = { { "test.noops", SV_ENTITY_WORLD, SV_PROP_INT, 1, 0, 0, 1, test_world_field, NULL, NULL, NULL } };
+    static const Prop vector_set[] = { { "test.vecset", SV_ENTITY_WORLD, SV_PROP_VECTOR, 1, SV_PROP_SET, 0, 1, test_world_field, NULL, NULL, NULL } };
+    static const Prop vector_add[] = { { "test.vecadd", SV_ENTITY_WORLD, SV_PROP_VECTOR, 1, SV_PROP_ADD, 0, 1, test_world_field, NULL, NULL, NULL } };
+    static const Prop long_name[] = { { "0123456789012345678901234567890123456789", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL } };
+    static const Prop twice[] = { { "test.twice", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL },
+                                  { "test.twice", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL } };
+    CHECK(sv_props_add_group(NULL, 1) == SV_INVALID && sv_props_add_group(test_world, 0) == SV_INVALID);
+    CHECK(sv_props_add_group(repeated, 1) == SV_INVALID && sv_props_add_group(no_field, 1) == SV_INVALID);
+    CHECK(sv_props_add_group(no_ops, 1) == SV_INVALID && sv_props_add_group(vector_set, 1) == SV_INVALID);
+    CHECK(sv_props_add_group(vector_add, 1) == SV_INVALID && sv_props_add_group(long_name, 1) == SV_INVALID);
+    CHECK(sv_props_add_group(twice, 2) == SV_INVALID);
+    CHECK(sv_props_add_group(test_world, 1) == SV_OK && sv_props_add_group(test_world, 1) == SV_OK);
+}
+
 /* A line query uses the shared hit record of the game. The record must keep its old content after the query. */
 static void line_mark(void)
 {
@@ -403,6 +462,7 @@ int main(void)
     item_lifetime();
     object_lifetime();
     account_lifetime();
+    props_groups();
     sr_players[0].money = 4242;
     memset(sr_players[0].name, 'P', sizeof sr_players[0].name);
     sr_players[0].account = 0;

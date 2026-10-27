@@ -4,10 +4,14 @@
 #include <string.h>
 #include "sv_game_read.h"
 #include "sv_game_write.h"
+#include "sv_game_props.h"
 
 static const SvHost *host;
 static const SvGameRead *game;
 static const SvGameWrite *change;
+static const SvGameProps *props;
+static uint32_t pid_godmode, pid_admin, pid_team, pid_health, pid_bleeding, pid_stun, pid_protect, pid_bone_velocity,
+    pid_object_velocity;
 static SvOwner plugin_owner;
 static SvEntity player, human, item, object, account;
 static uint32_t stage;
@@ -82,11 +86,45 @@ static SvResult SV_CALL linemark_command(SvOwner owner, uint64_t actor, const ch
     return host->log(owner, "LINE_MARK_PASS");
 }
 
+/* The ids of the properties. The first call that can find them runs in a tick, when the world is ready. */
+static int find_props(SvOwner owner)
+{
+    return props->find(owner, "player.godmode", &pid_godmode) == SV_OK && props->find(owner, "player.admin", &pid_admin) == SV_OK &&
+        props->find(owner, "player.team", &pid_team) == SV_OK && props->find(owner, "human.health", &pid_health) == SV_OK &&
+        props->find(owner, "human.bleeding", &pid_bleeding) == SV_OK && props->find(owner, "human.stun", &pid_stun) == SV_OK &&
+        props->find(owner, "human.protect", &pid_protect) == SV_OK &&
+        props->find(owner, "human.bone_velocity", &pid_bone_velocity) == SV_OK &&
+        props->find(owner, "object.velocity", &pid_object_velocity) == SV_OK;
+}
+
+static SvResult put(SvOwner owner, uint32_t id, SvEntity entity, int32_t value)
+{
+    SvValue v = { 0 };
+    v.i = value;
+    return props->set(owner, id, entity, 0, v);
+}
+
+static SvResult push_to(SvOwner owner, uint32_t id, SvEntity entity, uint32_t slot, SvVector change_by)
+{
+    SvValue v;
+    v.v = change_by;
+    return props->add(owner, id, entity, slot, v);
+}
+
+static int get_int(SvOwner owner, uint32_t id, SvEntity entity, int32_t *value)
+{
+    SvValue v;
+    if (props->get(owner, id, entity, 0, &v) != SV_OK)
+        return 0;
+    *value = v.i;
+    return 1;
+}
+
 static DWORD WINAPI write_wrong_thread(void *argument)
 {
     (void)argument;
     return change->message(plugin_owner, SV_MESSAGE_SERVER, "wrong thread") == SV_STATE &&
-        change->set_health(plugin_owner, human, 50) == SV_STATE ? 0 : 1;
+        put(plugin_owner, pid_health, human, 50) == SV_STATE ? 0 : 1;
 }
 
 static SvEntity first(SvOwner owner, uint32_t kind)
@@ -176,12 +214,12 @@ static int change_player_fields(SvOwner owner)
     uint32_t count = 0, next = 0, i;
     if (game->entities(owner, SV_ENTITY_PLAYER, 0, page, 2, &count, &next) != SV_OK || count != 2 || page[0] != player)
         return 0;
-    if (change->set_admin(owner, player, 2) != SV_INVALID || change->set_admin(owner, page[1], 1) != SV_INVALID ||
-        change->set_admin(owner, human, 1) != SV_NOT_FOUND || change->set_admin(owner, player, 1) != SV_OK ||
+    if (put(owner, pid_admin, player, 2) != SV_INVALID || put(owner, pid_admin, page[1], 1) != SV_INVALID ||
+        put(owner, pid_admin, human, 1) != SV_NOT_FOUND || put(owner, pid_admin, player, 1) != SV_OK ||
         game->player(owner, player, &ps) != SV_OK || ps.is_admin != 1)
         return 0;
-    if (change->set_team(owner, player, SV_TEAM_MAX + 1) != SV_INVALID || change->set_team(owner, player, -1) != SV_INVALID ||
-        change->set_team(owner, human, 2) != SV_NOT_FOUND || change->set_team(owner, player, 3) != SV_OK ||
+    if (put(owner, pid_team, player, 8) != SV_INVALID || put(owner, pid_team, player, -1) != SV_INVALID ||
+        put(owner, pid_team, human, 2) != SV_NOT_FOUND || put(owner, pid_team, player, 3) != SV_OK ||
         game->player(owner, player, &ps) != SV_OK || ps.team != 3 || game->human(owner, human, &hs) != SV_OK ||
         hs.team != 3)
         return 0;
@@ -352,6 +390,108 @@ static int vehicle_checks(SvOwner owner)
     return 0;
 }
 
+/* Sound, pushes and spawn protection. The test program reads the events and the records after the tick.
+ * Returns 0 when all checks pass, or the line of the check that failed. */
+static int effect_checks(SvOwner owner)
+{
+    const SvVector at = { 100.0f, 50.0f, 200.0f }, push = { 1.0f, 2.0f, 3.0f }, strong = { 60.0f, 30.0f, 0.0f };
+    SvVector bad = at;
+    SvEntity page[16], car = 0, train = 0;
+    SvObjectState os = { sizeof os };
+    uint32_t nan_bits = 0x7fc00000u, count = 0, next = 0, i;
+    float nan_value;
+    memcpy(&nan_value, &nan_bits, sizeof nan_value);
+    bad.x = nan_value;
+    STEP(change->sound(owner + 1, 21, at, 1.0f, 0.15f) == SV_STATE);
+    STEP(change->sound(owner, 47, at, 1.0f, 0.15f) == SV_INVALID && change->sound(owner, UINT32_MAX, at, 1.0f, 0.15f) == SV_INVALID);
+    STEP(change->sound(owner, 21, bad, 1.0f, 0.15f) == SV_INVALID);
+    STEP(change->sound(owner, 21, at, nan_value, 0.15f) == SV_INVALID && change->sound(owner, 21, at, 1.0f, nan_value) == SV_INVALID);
+    STEP(change->sound(owner, 21, at, -0.5f, 0.15f) == SV_INVALID && change->sound(owner, 21, at, SV_SOUND_VOLUME_MAX + 0.5f, 0.15f) == SV_INVALID);
+    STEP(change->sound(owner, 21, at, 1.0f, 0.05f) == SV_INVALID && change->sound(owner, 21, at, 1.0f, SV_SOUND_PITCH_MAX + 1.0f) == SV_INVALID);
+    STEP(change->sound(owner, 21, at, 1.0f, 0.15f) == SV_OK);
+    STEP(push_to(owner + 1, pid_bone_velocity, human, 3, push) == SV_STATE && push_to(owner, pid_bone_velocity, player, 3, push) == SV_NOT_FOUND);
+    STEP(push_to(owner, pid_bone_velocity, human, 15, push) == SV_INVALID && push_to(owner, pid_bone_velocity, human, 3, strong) == SV_INVALID);
+    STEP(push_to(owner, pid_bone_velocity, human, 3, bad) == SV_INVALID);
+    STEP(push_to(owner, pid_bone_velocity, human, 3, push) == SV_OK);
+    STEP(game->entities(owner, SV_ENTITY_OBJECT, 0, page, 16, &count, &next) == SV_OK);
+    for (i = 0; i < count; ++i)
+        if (game->object(owner, page[i], &os) == SV_OK) {
+            if (os.type == 12)
+                train = page[i];
+            else if (os.color == 4)
+                car = page[i];
+        }
+    STEP(car && train);
+    STEP(push_to(owner, pid_object_velocity, train, 0, push) == SV_DENIED && push_to(owner, pid_object_velocity, human, 0, push) == SV_NOT_FOUND);
+    STEP(push_to(owner, pid_object_velocity, car, 0, strong) == SV_INVALID && push_to(owner, pid_object_velocity, car, 0, bad) == SV_INVALID);
+    STEP(push_to(owner, pid_object_velocity, car, 0, push) == SV_OK);
+    STEP(put(owner, pid_protect, human, -1) == SV_INVALID && put(owner, pid_protect, human, 21601) == SV_INVALID);
+    STEP(put(owner, pid_protect, player, 5) == SV_NOT_FOUND);
+    STEP(put(owner, pid_protect, human, 500) == SV_OK);
+    return 0;
+}
+
+/* The property table itself: names, descriptions, operations and the checks that do not belong to one row.
+ * Returns 0 when all checks pass, or the line of the check that failed. */
+static int props_checks(SvOwner owner)
+{
+    SvPropInfo info = { sizeof info }, small = { 4 };
+    SvValue v = { 0 }, vel;
+    uint32_t id = 0, count = 0;
+    STEP(props->find(owner + 1, "human.health", &id) == SV_STATE);
+    STEP(props->find(owner, NULL, &id) == SV_INVALID && props->find(owner, "human.health", NULL) == SV_INVALID);
+    STEP(props->find(owner, "", &id) == SV_INVALID && props->find(owner, "no.such", &id) == SV_NOT_FOUND);
+    STEP(props->find(owner, "0123456789012345678901234567890123456789", &id) == SV_INVALID);
+    STEP(props->find(owner, "human.health", &id) == SV_OK && id == pid_health);
+    STEP(props->info(owner, 0, &info) == SV_NOT_FOUND && props->info(owner, 9999, &info) == SV_NOT_FOUND);
+    STEP(props->info(owner, id, NULL) == SV_INVALID && props->info(owner, id, &small) == SV_INVALID);
+    STEP(props->info(owner + 1, id, &info) == SV_STATE);
+    STEP(props->info(owner, id, &info) == SV_OK && info.id == id && info.entity_kind == SV_ENTITY_HUMAN &&
+         info.type == SV_PROP_INT && info.count == 1 && info.min == -100.0 && info.max == 100.0 &&
+         !strcmp(info.name, "human.health") && info.ops == (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD));
+    for (id = 1; props->info(owner, id, &info) == SV_OK; ++id) {
+        STEP(info.id == id);
+        ++count;
+    }
+    STEP(count == 10);
+    /* Read. */
+    STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
+    STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);
+    STEP(props->get(owner, pid_health, human, 0, NULL) == SV_INVALID && props->get(owner, 0, human, 0, &v) == SV_NOT_FOUND);
+    STEP(props->get(owner + 1, pid_health, human, 0, &v) == SV_STATE);
+    STEP(props->get(owner, pid_bone_velocity, human, 14, &vel) == SV_OK && props->get(owner, pid_bone_velocity, human, 15, &vel) == SV_INVALID);
+    STEP(props->get(owner, pid_object_velocity, object, 0, &vel) == SV_OK);
+    /* An operation that the row does not offer. */
+    v.i = 1;
+    STEP(props->set(owner, pid_bone_velocity, human, 0, v) == SV_DENIED && props->set(owner, pid_object_velocity, object, 0, v) == SV_DENIED);
+    STEP(props->add(owner, pid_godmode, player, 0, v) == SV_DENIED && props->add(owner, pid_bleeding, human, 0, v) == SV_DENIED);
+    /* Add to a number: the sum must stay in the range, and an error changes nothing. */
+    v.i = 5;
+    STEP(props->add(owner, pid_health, human, 0, v) == SV_OK && props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 85);
+    v.i = 100;
+    STEP(props->add(owner, pid_health, human, 0, v) == SV_INVALID && props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 85);
+    v.i = INT32_MAX;
+    STEP(props->add(owner, pid_health, human, 0, v) == SV_INVALID);
+    v.i = INT32_MIN;
+    STEP(props->add(owner, pid_health, human, 0, v) == SV_INVALID);
+    v.i = -5;
+    STEP(props->add(owner, pid_health, human, 0, v) == SV_OK && props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
+    /* A row that a plugin area added: a world property, with no entity. */
+    STEP(props->find(owner, "test.world", &id) == SV_OK && props->info(owner, id, &info) == SV_OK && info.entity_kind == 0 &&
+         info.max == 10.0);
+    STEP(props->get(owner, id, 0, 0, &v) == SV_OK && v.i == 0 && props->get(owner, id, player, 0, &v) == SV_INVALID);
+    v.i = 11;
+    STEP(props->set(owner, id, 0, 0, v) == SV_INVALID);
+    v.i = 3;
+    STEP(props->add(owner, id, 0, 0, v) == SV_OK && props->add(owner, id, 0, 0, v) == SV_OK);
+    STEP(props->get(owner, id, 0, 0, &v) == SV_OK && v.i == 6);
+    v.i = 5;
+    STEP(props->add(owner, id, 0, 0, v) == SV_INVALID && props->get(owner, id, 0, 0, &v) == SV_OK && v.i == 6);
+    v.i = 5;
+    STEP(props->set(owner, id, 0, 0, v) == SV_OK);
+    return 0;
+}
+
 /* The test program puts a car with two faces in the world. Face 0 is the plane x = 500 and face 1 is the plane z = 150.
  * The head of the human faces -z from (100, 51, 200). The level is the flat ground at height 0. */
 static int line_checks(SvOwner owner)
@@ -429,13 +569,13 @@ static SvResult write_checks(SvOwner owner)
     CHECK(change->add_money(owner, account, INT32_MAX) == SV_INVALID);
     CHECK(change->add_money(owner, human, 5) == SV_NOT_FOUND);
     CHECK(change->add_money(owner, account, 500) == SV_OK);
-    CHECK(change->set_godmode(owner, player, 2) == SV_INVALID);
-    CHECK(change->set_godmode(owner, human, 1) == SV_NOT_FOUND);
-    CHECK(change->set_godmode(owner, player, 1) == SV_OK);
-    CHECK(change->set_health(owner, human, SV_HEALTH_MAX + 1) == SV_INVALID);
-    CHECK(change->set_health(owner, human, SV_HEALTH_MIN - 1) == SV_INVALID);
-    CHECK(change->set_health(owner, player, 5) == SV_NOT_FOUND);
-    CHECK(change->set_health(owner, human, 80) == SV_OK);
+    CHECK(put(owner, pid_godmode, player, 2) == SV_INVALID);
+    CHECK(put(owner, pid_godmode, human, 1) == SV_NOT_FOUND);
+    CHECK(put(owner, pid_godmode, player, 1) == SV_OK);
+    CHECK(put(owner, pid_health, human, 101) == SV_INVALID);
+    CHECK(put(owner, pid_health, human, -101) == SV_INVALID);
+    CHECK(put(owner, pid_health, player, 5) == SV_NOT_FOUND);
+    CHECK(put(owner, pid_health, human, 80) == SV_OK);
     memcpy(&bad.x, &nan_bits, sizeof bad.x);
     CHECK(change->teleport(owner, human, bad) == SV_INVALID);
     bad = target;
@@ -446,15 +586,15 @@ static SvResult write_checks(SvOwner owner)
     CHECK(change->teleport(owner, human, bad) == SV_INVALID);
     CHECK(change->teleport(owner, player, target) == SV_NOT_FOUND);
     CHECK(change->teleport(owner, human, target) == SV_OK);
-    CHECK(change->set_bleeding(owner, human, 2) == SV_INVALID && change->set_bleeding(owner, player, 1) == SV_NOT_FOUND);
-    CHECK(change->set_bleeding(owner, human, 1) == SV_OK && game->human(owner, human, &h) == SV_OK && h.bleeding == 1);
-    CHECK(change->set_bleeding(owner, human, 0) == SV_OK && game->human(owner, human, &h) == SV_OK && h.bleeding == 0);
-    CHECK(change->set_bleeding(owner, human, 1) == SV_OK);
-    CHECK(change->set_stun(owner, human, -1) == SV_INVALID && change->set_stun(owner, human, SV_STUN_MAX + 1) == SV_INVALID);
-    CHECK(change->set_stun(owner, player, 5) == SV_NOT_FOUND);
-    CHECK(change->set_stun(owner, human, SV_STUN_MAX) == SV_OK && game->human(owner, human, &h) == SV_OK &&
-          h.stun_ticks == SV_STUN_MAX);
-    CHECK(change->set_stun(owner, human, 120) == SV_OK);
+    CHECK(put(owner, pid_bleeding, human, 2) == SV_INVALID && put(owner, pid_bleeding, player, 1) == SV_NOT_FOUND);
+    CHECK(put(owner, pid_bleeding, human, 1) == SV_OK && game->human(owner, human, &h) == SV_OK && h.bleeding == 1);
+    CHECK(put(owner, pid_bleeding, human, 0) == SV_OK && game->human(owner, human, &h) == SV_OK && h.bleeding == 0);
+    CHECK(put(owner, pid_bleeding, human, 1) == SV_OK);
+    CHECK(put(owner, pid_stun, human, -1) == SV_INVALID && put(owner, pid_stun, human, 3601) == SV_INVALID);
+    CHECK(put(owner, pid_stun, player, 5) == SV_NOT_FOUND);
+    CHECK(put(owner, pid_stun, human, 3600) == SV_OK && game->human(owner, human, &h) == SV_OK &&
+          h.stun_ticks == 3600);
+    CHECK(put(owner, pid_stun, human, 120) == SV_OK);
     CHECK(game->human(owner, human, &h) == SV_OK);
     CHECK(h.position.x == 100.0f && h.position.y == 50.0f && h.position.z == 200.0f && h.health == 80);
     CHECK(change_player_fields(owner));
@@ -466,6 +606,10 @@ static SvResult write_checks(SvOwner owner)
             bad_line = vehicle_checks(owner);
         if (!bad_line)
             bad_line = line_checks(owner);
+        if (!bad_line)
+            bad_line = effect_checks(owner);
+        if (!bad_line)
+            bad_line = props_checks(owner);
         if (bad_line) {
             char text[80];
             snprintf(text, sizeof text, "Write check failed at line %d.", bad_line);
@@ -530,7 +674,7 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
     if (runtime_probe)
         return stage == 1 ? runtime_reads(owner) : SV_OK;
     if (stage == 1)
-        return initial_reads(owner);
+        return find_props(owner) ? initial_reads(owner) : SV_FAILED;
     if (stage == 2) {
         SvInventoryState inventory = { sizeof inventory };
         SvItemState it = { sizeof it };
@@ -586,6 +730,10 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
     change = (const SvGameWrite *)table;
     CHECK(change && change->size == sizeof *change && change->version == SV_GAME_WRITE_VERSION);
+    CHECK(host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION + 1, &table) == SV_INCOMPATIBLE && table == NULL);
+    CHECK(host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &table) == SV_OK);
+    props = (const SvGameProps *)table;
+    CHECK(props && props->size == sizeof *props && props->version == SV_GAME_PROPS_VERSION);
     CHECK(change->message(owner, SV_MESSAGE_SERVER, "before ready") == SV_STATE);
     CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
     CHECK(host->command(owner, "echo", SV_COMMAND_PUBLIC, echo_command) == SV_OK);

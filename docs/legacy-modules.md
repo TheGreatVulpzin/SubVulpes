@@ -23,9 +23,9 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 
 | Command | Behavior to keep | Needs |
 | --- | --- | --- |
-| `/imortal` | Toggle. Hold the health at 100 each tick without the god mode flag, so hits and pushes still show. Ends on body change, disconnect, reset or plugin stop. | Now (tick, `set_health`), N18 |
-| `/heal` | Set health 100, `bleeding` 0 and `stun_timer` 0. The tool calls the stun timer "drunk level" and the bleeding flag "death mark". The source of 0.8.0 confirms these three writes and no others. | Now (`set_health`, `set_bleeding`, `set_stun`) |
-| `/kill` | Kill the own body: health -5 and `bleeding` 1. | Now (`set_health`, `set_bleeding`) |
+| `/imortal` | Toggle. Hold the health at 100 each tick without the god mode flag, so hits and pushes still show. Ends on body change, disconnect, reset or plugin stop. | Now (tick, the property `human.health`), N18 |
+| `/heal` | Set health 100, `bleeding` 0 and `stun_timer` 0. The tool calls the stun timer "drunk level" and the bleeding flag "death mark". The source of 0.8.0 confirms these three writes and no others. | Now (the properties `human.health`, `human.bleeding`, `human.stun`) |
+| `/kill` | Kill the own body: health -5 and `bleeding` 1. | Now (the properties `human.health` and `human.bleeding`) |
 | `/item N` | Make item type 0 to 26 and put it in a free hand. A knife (24) starts in attack state. Fail without cost when there is no free hand or item. | N6 |
 | `/vehicle N` | Make vehicle type 0 to 13 four units in front of the head, color 0. Do not seat the player. | N7 |
 | `/arm N` | Uniform 1 to 6, clothes variant 4, two bandages in slot 6. The inherited `/arm` stays until then. | N4, N6 |
@@ -50,7 +50,7 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 | Module | Behavior to keep | Needs |
 | --- | --- | --- |
 | Black market | Two phones that sell a knife (type 24) and a bandage (type 12) for set prices and waits. A buy needs a living player near the phone. Take the money only after the item exists. | N6, N15, N16 |
-| Knife attack | Damage 25, range 1.5, wait 20 ticks, in the active hand, with a push on the hit body. | N10, N12, `set_health` now |
+| Knife attack | Damage 25, range 1.5, wait 20 ticks, in the active hand, with a push on the hit body. | N10, N12, the property `human.health` now |
 | Chat in console | Log the name and text, with the id as an option. Limit the text to 63 bytes and strip control bytes. | N16 |
 | Maximum players | Set the active player limit from 1 to 32. Do not kick anyone. | N14 |
 | NPC count | Set the number of bots that the start makes. Do not add or remove now. | N14 |
@@ -84,10 +84,10 @@ A plugin that needs a thing that the API does not give waits for a new general o
 | Id | Operation or event |
 | --- | --- |
 | N1 | Send a message to one player. Done: `message_to`. The server filters the event for each connection, so the original client gets a normal message. |
-| N2 | Set the admin flag of a player and of its connection, as the password login does. Done: `set_admin`. |
-| N3 | Set the team of a player and send the update. Done: `set_team`. |
+| N2 | Set the admin flag of a player and of its connection, as the password login does. Done: the property `player.admin`. |
+| N3 | Set the team of a player and send the update. Done: the property `player.team`. |
 | N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors are not done. |
-| N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. Done: `set_bleeding` and `set_stun`. |
+| N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. Done: the properties `human.bleeding` and `human.stun`. |
 
 About the "drunk" look. This server has no drunk field. A body staggers in two cases, and both come from the code:
 
@@ -112,9 +112,9 @@ Its `/kill` writes health -5 and `bleeding` 1. So the "drunk level" is `stun_tim
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. Done for bots: `npc_create` and `npc_remove`. Not done: delete the body of a real player. Kill it with `set_health` instead. |
 | N9 | Eject a human from a vehicle. Done: `vehicle_exit`, with the option to stop the bones. The exit code of the game is now one shared function, `human_leavevehicle`. |
 | N10 | Aim and line queries against the level, objects and humans. They copy the result out of the shared scratch record. Done: `line` and `aim` in the read table. Not done: a query of a surface material or a block, and a sphere query. |
-| N11 | Play a known sound at a position, with a volume and a pitch. The index is from 0 to the size of the sound list. |
-| N12 | Add a velocity change (an impulse) to one bone of a human or to an object, with a bound on its size. |
-| N13 | Write the spawn protection timer. |
+| N11 | Play a known sound at a position, with a volume and a pitch. The index is from 0 to the size of the sound list. Done: `sound`. This server has 47 sounds (0 to 46). The legacy tool accepts 47 too, and this server refuses it. |
+| N12 | Add a velocity change (an impulse) to one bone of a human or to an object, with a bound on its size. Done: the properties `human.bone_velocity` and `object.velocity` with `add`. |
+| N13 | Write the spawn protection timer. Done: the property `human.protect`. |
 | N14 | Named settings of the core in one table. Each has a type and a range, a read, a write with a range check and a change event. The first entries are the player limit, the money of a new account and the bot count. Another setting adds a row, not a new method. |
 | N15 | Phones, in a general way. The core knows no shop and no price. A cell phone item keeps its dialed digits in `phone_number` and its state in `call_state`, and the game calls another phone at 4 digits (code read, not run). A plugin gets an event for each digit (phone item, number so far, the human that holds it) and one when the game is about to call. It can claim the number, so the game does not call, or let the game go on. A write puts a phone back to idle. The plugin gives the number its meaning with the methods that exist: a sale (`add_money`, `item_create`, `item_equip`), a command or a quiz. A short code such as 24 needs a rule for its end, for example a wait of some ticks. The plugin owns that rule. A second, separate part: read and replace the rows of the menu shops of a building (type and price), for the dealership truck. |
 | N16 | One event mechanism. Each event has a phase (observe or decide), a typed payload and a limit on what a decision can change. The first events: chat text (observe), human death (observe, and early processing), spawn (decide the position), damage (N24), menu purchase (decide), connect (decide) and phone (N15). Another event adds a row, not a new mechanism. |

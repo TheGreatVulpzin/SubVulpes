@@ -42,6 +42,7 @@ static const Capability capabilities[] = {
     { SV_API_STORAGE, SV_GAME_STORAGE_VERSION, &sv_game_storage },
     { SV_API_ENGINE, SV_GAME_ENGINE_VERSION, &sv_game_engine },
     { SV_API_SHOP, SV_GAME_SHOP_VERSION, &sv_game_shop },
+    { SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &sv_game_props },
 };
 
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api)

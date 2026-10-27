@@ -3,6 +3,7 @@
 
 #include "sv_game_read.h"
 #include "sv_game_write.h"
+#include "sv_game_props.h"
 #include "sv_game_ai.h"
 #include "sv_game_economy.h"
 #include "sv_game_mission.h"
@@ -15,6 +16,7 @@ int sv_game_is_ready(void);
 uint64_t sv_game_reset_sequence(void);
 extern const SvGameRead sv_game_read;
 extern const SvGameWrite sv_game_write;
+extern const SvGameProps sv_game_props;
 extern const SvGameAi sv_game_ai;
 extern const SvGameEconomy sv_game_economy;
 extern const SvGameMission sv_game_mission;

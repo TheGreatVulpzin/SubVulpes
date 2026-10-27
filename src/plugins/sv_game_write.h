@@ -8,11 +8,13 @@
 
 /* Message kinds: 0 is a server message for every client. Kind 4 reaches only admins, as the replies of the chat commands do. */
 enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_ADMIN = 4 };
-/* The health range of the game: -100 is dead and 100 is full health. */
-enum { SV_HEALTH_MIN = -100, SV_HEALTH_MAX = 100 };
-/* The look selectors and the highest value of each, as the game makes them. */
-enum { SV_LOOK_COUNT = 5, SV_TEAM_MAX = 7, SV_ITEM_TYPE_COUNT = 27, SV_ITEM_SLOT_COUNT = 7,
-    SV_OBJECT_TYPE_COUNT = 12, SV_OBJECT_COLOR_MAX = 5, SV_STUN_MAX = 3600 };
+/* Sizes of the things that a plugin can make, as the game has them. */
+enum { SV_LOOK_COUNT = 5, SV_ITEM_TYPE_COUNT = 27, SV_ITEM_SLOT_COUNT = 7, SV_OBJECT_TYPE_COUNT = 12,
+    SV_OBJECT_COLOR_MAX = 5 };
+/* The limits of a sound are a choice of this API. The game plays volumes from 0.5 to 1 and pitches from 0.5 to 1. */
+#define SV_SOUND_VOLUME_MAX 2.0f
+#define SV_SOUND_PITCH_MIN 0.1f
+#define SV_SOUND_PITCH_MAX 4.0f
 /* A teleport accepts finite coordinates inside this limit. */
 #define SV_POSITION_LIMIT 32768.0f
 
@@ -25,14 +27,8 @@ typedef struct {
     SvResult (SV_CALL *kick)(SvOwner owner, SvEntity player);
     /* Adds money to an account and to each active player of it. The sum must fit in 32 bits. */
     SvResult (SV_CALL *add_money)(SvOwner owner, SvEntity account, int32_t amount);
-    SvResult (SV_CALL *set_godmode)(SvOwner owner, SvEntity player, int32_t enabled);
-    SvResult (SV_CALL *set_health)(SvOwner owner, SvEntity human, int32_t health);
     /* Moves every bone of a human on foot by the same offset. The velocity does not change. */
     SvResult (SV_CALL *teleport)(SvOwner owner, SvEntity human, SvVector position);
-    /* Sets the admin flag of a player and of its connections, as the password login does. Bots cannot be admins. */
-    SvResult (SV_CALL *set_admin)(SvOwner owner, SvEntity player, int32_t enabled);
-    /* Sets the team of a player and of its human, from 0 to 7, and sends the player update. */
-    SvResult (SV_CALL *set_team)(SvOwner owner, SvEntity player, int32_t team);
     /* Sets the five look selectors of a player and of its human, and sends the updates. */
     SvResult (SV_CALL *set_looks)(SvOwner owner, SvEntity player, const int32_t looks[SV_LOOK_COUNT]);
     /* Like message, but only the connection of this player gets the text. Other clients see an empty slot. */
@@ -58,11 +54,6 @@ typedef struct {
     /* Ends the life of an object. The game removes it in its next object lifetime pass, and the humans inside get out.
      * SV_DENIED for a train piece. */
     SvResult (SV_CALL *object_remove)(SvOwner owner, SvEntity object);
-    /* Sets the bleeding flag of a human to 0 or 1. A bleeding body loses health over time. */
-    SvResult (SV_CALL *set_bleeding)(SvOwner owner, SvEntity human, int32_t enabled);
-    /* Sets the stun timer of a human, from 0 to SV_STUN_MAX ticks. The torso is weak while it runs, so the body staggers.
-     * The game counts it down by 1 each tick. */
-    SvResult (SV_CALL *set_stun)(SvOwner owner, SvEntity human, int32_t ticks);
     /* Makes a bot player on foot, named NPC, in team 6 like the bots of the game, with a human at the position turned by the
      * yaw angle. It has no route and no end time. Both references go out only on success. SV_LIMIT means that no player
      * slot, human slot or bond is free, and then nothing is left behind. */
@@ -74,6 +65,9 @@ typedef struct {
      * near side of it. With stop 1 the speed of every bone becomes 0, so the body does not fly out at the speed of the
      * vehicle. SV_STATE when the human sits in no vehicle. stop must be 0 or 1. */
     SvResult (SV_CALL *vehicle_exit)(SvOwner owner, SvEntity human, int32_t stop);
+    /* Plays a sound of the game at the position for the clients. The index must be below the size of the sound list of the
+     * game (47). The volume is from 0 to SV_SOUND_VOLUME_MAX and the pitch from SV_SOUND_PITCH_MIN to SV_SOUND_PITCH_MAX. */
+    SvResult (SV_CALL *sound)(SvOwner owner, uint32_t index, SvVector position, float volume, float pitch);
 } SvGameWrite;
 #pragma pack(pop)
 

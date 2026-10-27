@@ -120,30 +120,6 @@ static SvResult SV_CALL write_add_money(SvOwner owner, SvEntity account, int32_t
     return SV_OK;
 }
 
-static SvResult SV_CALL write_godmode(SvOwner owner, SvEntity player, int32_t enabled)
-{
-    int32_t index;
-    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
-    if (result != SV_OK)
-        return result;
-    if (enabled != 0 && enabled != 1)
-        return SV_INVALID;
-    sr_players[index].godmode = enabled;
-    return SV_OK;
-}
-
-static SvResult SV_CALL write_health(SvOwner owner, SvEntity human, int32_t health)
-{
-    int32_t index;
-    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
-    if (result != SV_OK)
-        return result;
-    if (health < SV_HEALTH_MIN || health > SV_HEALTH_MAX)
-        return SV_INVALID;
-    sr_humans[index].health = health;
-    return SV_OK;
-}
-
 static SvResult SV_CALL write_teleport(SvOwner owner, SvEntity human, SvVector position)
 {
     int32_t index;
@@ -171,37 +147,6 @@ static SvResult SV_CALL write_teleport(SvOwner owner, SvEntity human, SvVector p
         hu->bones[k].pos_prev = hu->bones[k].pos;
     }
     hu->pos = hu->bones[0].pos;
-    return SV_OK;
-}
-
-static SvResult SV_CALL write_admin(SvOwner owner, SvEntity player, int32_t enabled)
-{
-    int32_t index;
-    int i;
-    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
-    if (result != SV_OK)
-        return result;
-    if ((enabled != 0 && enabled != 1) || sr_players[index].is_bot)
-        return SV_INVALID;
-    sr_players[index].is_admin = enabled;
-    for (i = 0; i < sr_numofconnections; ++i)
-        if (sr_connections[i].player_id == index)
-            sr_connections[i].is_admin = enabled;
-    return SV_OK;
-}
-
-static SvResult SV_CALL write_team(SvOwner owner, SvEntity player, int32_t team)
-{
-    int32_t index;
-    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
-    if (result != SV_OK)
-        return result;
-    if (team < 0 || team > SV_TEAM_MAX)
-        return SV_INVALID;
-    sr_players[index].team = team;
-    if (sr_players[index].human_id >= 0)
-        sr_humans[sr_players[index].human_id].team = team;
-    createevent_updateplayer(index);
     return SV_OK;
 }
 
@@ -360,30 +305,6 @@ static SvResult SV_CALL write_object_remove(SvOwner owner, SvEntity object)
     return SV_OK;
 }
 
-static SvResult SV_CALL write_bleeding(SvOwner owner, SvEntity human, int32_t enabled)
-{
-    int32_t index;
-    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
-    if (result != SV_OK)
-        return result;
-    if (enabled != 0 && enabled != 1)
-        return SV_INVALID;
-    sr_humans[index].bleeding = enabled;
-    return SV_OK;
-}
-
-static SvResult SV_CALL write_stun(SvOwner owner, SvEntity human, int32_t ticks)
-{
-    int32_t index;
-    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
-    if (result != SV_OK)
-        return result;
-    if (ticks < 0 || ticks > SV_STUN_MAX)
-        return SV_INVALID;
-    sr_humans[index].stun_timer = ticks;
-    return SV_OK;
-}
-
 static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float yaw, SvEntity *player, SvEntity *human)
 {
     vec3 at, rotation[3];
@@ -452,10 +373,25 @@ static SvResult SV_CALL write_vehicle_exit(SvOwner owner, SvEntity human, int32_
     return SV_OK;
 }
 
+static SvResult SV_CALL write_sound(SvOwner owner, uint32_t index, SvVector position, float volume, float pitch)
+{
+    vec3 at;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (index >= (uint32_t)sr_data_soundlist.num_sounds || !position_ok(position) || !finite(volume) || !finite(pitch) ||
+        volume < 0.0f || volume > SV_SOUND_VOLUME_MAX || pitch < SV_SOUND_PITCH_MIN || pitch > SV_SOUND_PITCH_MAX)
+        return SV_INVALID;
+    at.x = position.x;
+    at.y = position.y;
+    at.z = position.z;
+    createevent_sound((int)index, &at, volume, pitch);
+    return SV_OK;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
-    write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to,
+    write_teleport, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
-    write_object_create, write_object_remove, write_bleeding, write_stun, write_npc_create, write_npc_remove,
-    write_vehicle_exit
+    write_object_create, write_object_remove, write_npc_create, write_npc_remove,
+    write_vehicle_exit, write_sound
 };

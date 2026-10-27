@@ -17,7 +17,14 @@ Seven capabilities have a reserved id, a stub header, a stub table and a stub te
 | `engine` | 8 | N17 engine parameters | Second editor |
 | `shop` | 9 | N15 shop and phone | Second editor |
 
-The ids 1 (read) and 2 (write) stay with the first editor, with N4 colors, N9 to N13, N16, N19, N23 and the headline method.
+The ids 1 (read), 2 (write) and 10 (property table) stay with the first editor, with N4 colors, N16, N19, N23 and the headline method.
+
+## The property table
+
+The areas `settings` (N14) and `engine` (N17) must not make one method for each setting. They add rows to the property table.
+Write the rows in your own file (`plugin_settings.c` or `plugin_engine.c`) as a static array of `Prop` (see `src/plugins/plugin_props.h`), and add them with `sv_props_add_group` from an install function of your area.
+A setting of the world uses the kind `SV_ENTITY_WORLD` (0). A value for each object type uses the slot for the type. Do not edit `plugin_props.c` or `sv_game_props.h`.
+The first editor calls your install function from the start of the game at the merge. Give the rows a name that starts with your area, for example `settings.max_players` or `engine.truck_power`.
 
 ## Files of an area
 
