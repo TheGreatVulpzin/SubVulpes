@@ -3,6 +3,8 @@
 #include "sv_game_read.h"
 #include "plugin_game_internal.h"
 #include "sr_runtime.h"
+#include "collide.h"
+#include <math.h>
 #include <string.h>
 
 static SvVector vector(vec3 value)
@@ -242,8 +244,119 @@ static SvResult SV_CALL read_world(SvOwner owner, SvWorldState *state)
     return SV_OK;
 }
 
+static int finite(float value)
+{
+    return value == value && value - value == 0.0f;
+}
+
+static int point_ok(SvVector p)
+{
+    return finite(p.x) && finite(p.y) && finite(p.z) && p.x <= SV_POSITION_LIMIT && p.x >= -SV_POSITION_LIMIT &&
+        p.y <= SV_POSITION_LIMIT && p.y >= -SV_POSITION_LIMIT && p.z <= SV_POSITION_LIMIT && p.z >= -SV_POSITION_LIMIT;
+}
+
+/* Keeps the hit of the last game test when it is nearer than the best one. */
+static void keep_hit(SvLineHit *best, uint32_t kind, uint32_t entity_kind, int32_t index, int32_t bone)
+{
+    if (!(sr_data_intersect.fraction < best->fraction))
+        return;
+    best->kind = kind;
+    best->entity = kind == SV_HIT_LEVEL ? 0 : sv_entity_at(entity_kind, index);
+    best->bone = bone;
+    best->position.x = sr_data_intersect.pos[0];
+    best->position.y = sr_data_intersect.pos[1];
+    best->position.z = sr_data_intersect.pos[2];
+    best->normal.x = sr_data_intersect.normal[0];
+    best->normal.y = sr_data_intersect.normal[1];
+    best->normal.z = sr_data_intersect.normal[2];
+    best->fraction = sr_data_intersect.fraction;
+}
+
+/* The game tests write their answer in one shared record, so the query saves it and puts it back. */
+static void line_run(vec3 from, vec3 to, uint32_t flags, int32_t ignore, SvLineHit *out)
+{
+    const Intersect saved = sr_data_intersect;
+    SvLineHit best = { sizeof best, SV_HIT_NONE, 0, -1, { 0, 0, 0 }, { 0, 0, 0 }, 1.0f, 0.0f };
+    vec3 d = { to.x - from.x, to.y - from.y, to.z - from.z };
+    int i;
+    if (flags & SV_LINE_LEVEL) {
+        if (lineintersectlevel(&from.x, &to.x, 1))
+            keep_hit(&best, SV_HIT_LEVEL, 0, 0, -1);
+    }
+    if (flags & SV_LINE_OBJECTS)
+        for (i = 0; i < SR_MAX_OBJECT; ++i)
+            if (sr_objects[i].active && lineintersectobject(i, &from.x, &to.x, 1))
+                keep_hit(&best, SV_HIT_OBJECT, SV_ENTITY_OBJECT, i, -1);
+    if (flags & SV_LINE_HUMANS)
+        for (i = 0; i < SR_MAX_HUMAN; ++i)
+            if (sr_humans[i].active && i != ignore && lineintersecthuman(i, &from.x, &to.x, 0.0f))
+                keep_hit(&best, SV_HIT_HUMAN, SV_ENTITY_HUMAN, i, sr_data_intersect.tri_particles[0]);
+    sr_data_intersect = saved;
+    if (best.kind == SV_HIT_NONE) {
+        best.fraction = 1.0f;
+    } else {
+        best.distance = best.fraction * (float)sqrt((double)(d.x * d.x + d.y * d.y + d.z * d.z));
+    }
+    *out = best;
+}
+
+static SvResult line_check(SvOwner owner, uint32_t flags, const SvLineHit *hit)
+{
+    if (context(owner) != SV_OK)
+        return SV_STATE;
+    if (!hit || hit->size < sizeof *hit || !flags || (flags & ~(uint32_t)SV_LINE_ALL))
+        return SV_INVALID;
+    return SV_OK;
+}
+
+static SvResult SV_CALL read_line(SvOwner owner, SvVector from, SvVector to, uint32_t flags, SvEntity ignore,
+    SvLineHit *hit)
+{
+    int32_t skip = -1;
+    vec3 a, b;
+    float length2;
+    SvResult result = line_check(owner, flags, hit);
+    if (result != SV_OK)
+        return result;
+    if (!point_ok(from) || !point_ok(to))
+        return SV_INVALID;
+    length2 = (to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y) + (to.z - from.z) * (to.z - from.z);
+    if (!(length2 > 0.0f) || length2 > SV_LINE_LENGTH_MAX * SV_LINE_LENGTH_MAX)
+        return SV_INVALID;
+    if (ignore && (skip = sv_entity_resolve(SV_ENTITY_HUMAN, ignore)) < 0)
+        return SV_NOT_FOUND;
+    a.x = from.x; a.y = from.y; a.z = from.z;
+    b.x = to.x; b.y = to.y; b.z = to.z;
+    line_run(a, b, flags, skip, hit);
+    return SV_OK;
+}
+
+static SvResult SV_CALL read_aim(SvOwner owner, SvEntity human, float distance, uint32_t flags, SvLineHit *hit)
+{
+    int32_t index;
+    const Bone *head;
+    vec3 a, b;
+    SvResult result = line_check(owner, flags, hit);
+    if (result != SV_OK)
+        return result;
+    index = sv_entity_resolve(SV_ENTITY_HUMAN, human);
+    if (index < 0)
+        return SV_NOT_FOUND;
+    if (!(distance > 0.0f) || distance > SV_LINE_LENGTH_MAX)
+        return SV_INVALID;
+    head = &sr_humans[index].bones[2];
+    a = head->pos;
+    b.x = a.x - head->rot[2].x * distance;
+    b.y = a.y - head->rot[2].y * distance;
+    b.z = a.z - head->rot[2].z * distance;
+    if (!finite(b.x) || !finite(b.y) || !finite(b.z) || !finite(a.x) || !finite(a.y) || !finite(a.z))
+        return SV_INVALID;
+    line_run(a, b, flags, index, hit);
+    return SV_OK;
+}
+
 const SvGameRead sv_game_read = {
     sizeof(SvGameRead), SV_GAME_READ_VERSION, read_entities,
     read_player, read_human, read_item, read_object, read_account,
-    read_bone, read_inventory, read_world
+    read_bone, read_inventory, read_world, read_line, read_aim
 };

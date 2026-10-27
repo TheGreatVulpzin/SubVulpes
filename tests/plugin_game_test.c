@@ -179,6 +179,70 @@ static void npc_check(void)
     CHECK(!sr_players[npc].active && sr_humans[human].despawn_timer == 0 && sr_humans[human].player_id == -1);
 }
 
+static int target_car, rider_car, rider_a, rider_b;
+
+/* A car with two faces for the line queries: face 0 in the plane x = 500 and face 1 in the plane z = 150. */
+static void make_target(void)
+{
+    static const vec3 corners[6] = { {500, 0, 0}, {500, 10, 0}, {500, 0, 10}, {80, 30, 150}, {130, 30, 150}, {80, 80, 150} };
+    static const vec3 at = { 300.0f, 20.0f, 300.0f };
+    Object *ob;
+    int i;
+    target_car = createobject(0, &at, NULL, rotation, 4);
+    CHECK(target_car > 0);
+    ob = &sr_objects[target_car];
+    ob->num_faces = 2;
+    for (i = 0; i < 6; ++i) {
+        ob->verts[i].pos = corners[i];
+        ob->verts[i].particle = 0;
+    }
+    for (i = 0; i < 2; ++i) {
+        ob->faces[i].health = 1;
+        ob->faces[i].corners = 3;
+        ob->faces[i].verts[0] = 3 * i;
+        ob->faces[i].verts[1] = 3 * i + 1;
+        ob->faces[i].verts[2] = 3 * i + 2;
+    }
+    ob->particles[0] = 0;
+    ob->box_min = (vec3){ -1, -1, -1 };
+    ob->box_max = (vec3){ 501, 81, 201 };
+}
+
+/* Two humans sit in one car. The first has a bone under the ground, so the exit must lift it to the ground. */
+static void seat_riders(void)
+{
+    static const vec3 at = { 300.0f, 0.5f, 300.0f };
+    float pos[3] = { 300.0f, 0.5f, 300.0f };
+    float rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    int k;
+    rider_car = createobject(0, &at, NULL, rotation, 2);
+    rider_a = createhuman(pos, rot, -1);
+    rider_b = createhuman(pos, rot, -1);
+    CHECK(rider_car > 0 && rider_a > 0 && rider_b > 0);
+    sr_humans[rider_a].vehicle_id = rider_car;
+    sr_humans[rider_a].vehicle_seat = 0;
+    sr_humans[rider_b].vehicle_id = rider_car;
+    sr_humans[rider_b].vehicle_seat = 1;
+    for (k = 0; k < 15; ++k)
+        sr_humans[rider_a].bones[k].vel = sr_humans[rider_b].bones[k].vel = (vec3){ 1.0f, 2.0f, 3.0f };
+    sr_humans[rider_a].bones[5].pos.y = -1.0f;
+}
+
+/* The exit of the first rider stops its bones. The exit of the second keeps the speed. */
+static void riders_check(void)
+{
+    int k;
+    CHECK(sr_humans[rider_a].vehicle_id == -1 && sr_humans[rider_b].vehicle_id == -1);
+    CHECK(sr_objects[rider_car].drive_buttons == 4);
+    for (k = 0; k < 15; ++k) {
+        const vec3 *a = &sr_humans[rider_a].bones[k].vel, *b = &sr_humans[rider_b].bones[k].vel;
+        CHECK(a->x == 0.0f && a->y == 0.0f && a->z == 0.0f);
+        CHECK(b->x == 1.0f && b->y == 2.0f && b->z == 3.0f);
+    }
+    CHECK(near_value(sr_humans[rider_a].bones[5].pos.y, 0.0625f));
+    CHECK(sr_humans[rider_a].exit_timer == 0 && sr_humans[rider_b].exit_timer == 0);
+}
+
 /* The fixture calls the write API in this tick. The game state shows what the calls did. */
 static void write_api_tick(void)
 {
@@ -208,6 +272,8 @@ static void write_api_tick(void)
     /* A train piece. Only the track system makes these, so the write API must refuse to remove it. */
     train_piece = createobject(12, &position, NULL, rotation, 0);
     CHECK(train_piece > 0);
+    make_target();
+    seat_riders();
     events = sr_numofevents;
     sr_server = 1;
     sv_plugins_tick();
@@ -225,6 +291,7 @@ static void write_api_tick(void)
     /* The packet writer sends a filler of 6 bits to the other connection, and the whole event to the target. */
     CHECK(event_bits((int)events + 5, 1) == 6);
     CHECK(event_bits((int)events + 5, 0) > 6 + 28 + 6 && event_bits((int)events, 0) == event_bits((int)events, 1));
+    riders_check();
     CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
     CHECK(sr_players[0].team == 3 && sr_humans[0].team == 3);
     CHECK(sr_players[0].look_b == 5 && sr_humans[0].look_b == 5 && sr_humans[0].look_e == 1);
@@ -308,6 +375,20 @@ static void npc_limit(void)
     sr_numofbonds = bonds;
 }
 
+/* A line query uses the shared hit record of the game. The record must keep its old content after the query. */
+static void line_mark(void)
+{
+    const Intersect before = sr_data_intersect;
+    sr_data_intersect.fraction = 0.25f;
+    sr_data_intersect.pos[0] = 7.0f;
+    sr_data_intersect.index = 55;
+    sr_data_intersect.tri_particles[0] = 9;
+    CHECK(sv_plugins_command(0, "linemark"));
+    CHECK(sr_data_intersect.fraction == 0.25f && sr_data_intersect.pos[0] == 7.0f && sr_data_intersect.index == 55 &&
+          sr_data_intersect.tri_particles[0] == 9);
+    sr_data_intersect = before;
+}
+
 int main(void)
 {
     SvEntity old;
@@ -354,6 +435,7 @@ int main(void)
     write_api_tick();
     chat_commands();
     npc_limit();
+    line_mark();
     sv_game_reset();
     sv_entities_clear(SV_ENTITY_HUMAN);
     sv_entities_clear(SV_ENTITY_ITEM);

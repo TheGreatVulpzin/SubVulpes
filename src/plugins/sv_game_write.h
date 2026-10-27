@@ -70,6 +70,10 @@ typedef struct {
     /* Asks the game to remove a bot. Its bot expiry removes the human and the player in the next world logic pass.
      * SV_DENIED for a player who is not a bot. */
     SvResult (SV_CALL *npc_remove)(SvOwner owner, SvEntity player);
+    /* Takes a human out of its vehicle as the exit button does, and moves a bone that the exit would put in a wall to the
+     * near side of it. With stop 1 the speed of every bone becomes 0, so the body does not fly out at the speed of the
+     * vehicle. SV_STATE when the human sits in no vehicle. stop must be 0 or 1. */
+    SvResult (SV_CALL *vehicle_exit)(SvOwner owner, SvEntity human, int32_t stop);
 } SvGameWrite;
 #pragma pack(pop)
 

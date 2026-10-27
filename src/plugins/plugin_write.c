@@ -432,9 +432,30 @@ static SvResult SV_CALL write_npc_remove(SvOwner owner, SvEntity player)
     return SV_OK;
 }
 
+static SvResult SV_CALL write_vehicle_exit(SvOwner owner, SvEntity human, int32_t stop)
+{
+    int32_t index;
+    Human *hu;
+    int k;
+    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
+    if (result != SV_OK)
+        return result;
+    if (stop != 0 && stop != 1)
+        return SV_INVALID;
+    hu = &sr_humans[index];
+    if (hu->vehicle_id < 0 || hu->vehicle_id >= SR_MAX_OBJECT || !sr_objects[hu->vehicle_id].active)
+        return SV_STATE;
+    human_leavevehicle(index);
+    if (stop)
+        for (k = 0; k < 15; ++k)
+            hu->bones[k].vel.x = hu->bones[k].vel.y = hu->bones[k].vel.z = 0.0f;
+    return SV_OK;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
     write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
-    write_object_create, write_object_remove, write_bleeding, write_stun, write_npc_create, write_npc_remove
+    write_object_create, write_object_remove, write_bleeding, write_stun, write_npc_create, write_npc_remove,
+    write_vehicle_exit
 };

@@ -87,6 +87,20 @@ typedef struct {
     uint32_t item_type_count, object_type_count;
 } SvWorldState;
 
+/* What a line query can hit. A query takes the nearest hit of the kinds in its flags. */
+enum { SV_HIT_NONE = 0, SV_HIT_LEVEL, SV_HIT_OBJECT, SV_HIT_HUMAN };
+enum { SV_LINE_LEVEL = 1, SV_LINE_OBJECTS = 2, SV_LINE_HUMANS = 4, SV_LINE_ALL = 7 };
+/* The longest line that a query accepts, in game units. */
+#define SV_LINE_LENGTH_MAX 4096.0f
+
+typedef struct {
+    uint32_t size, kind;
+    SvEntity entity;            /* The object or the human that the line hit. 0 for the level and for no hit. */
+    int32_t bone;               /* The bone of a human that the line hit, or -1. */
+    SvVector position, normal;  /* The hit point and the normal of the surface. Both are 0 for no hit. */
+    float fraction, distance;   /* The part of the line before the hit, and the length of that part. */
+} SvLineHit;
+
 typedef struct {
     uint32_t size, version;
     SvResult (SV_CALL *entities)(SvOwner owner, uint32_t kind, uint32_t cursor,
@@ -99,6 +113,13 @@ typedef struct {
     SvResult (SV_CALL *bone)(SvOwner owner, SvEntity human, uint32_t bone, SvBoneState *state);
     SvResult (SV_CALL *inventory)(SvOwner owner, SvEntity human, uint32_t slot, SvInventoryState *state);
     SvResult (SV_CALL *world)(SvOwner owner, SvWorldState *state);
+    /* The nearest hit on the line from "from" to "to". The line must be finite, inside 32768 units on each axis, and not longer
+     * than SV_LINE_LENGTH_MAX. flags has at least one SV_LINE_ bit. "ignore" is a human to skip, or 0. A line that hits
+     * nothing is a normal answer: the result is SV_OK and the kind is SV_HIT_NONE. The query does not change the game. */
+    SvResult (SV_CALL *line)(SvOwner owner, SvVector from, SvVector to, uint32_t flags, SvEntity ignore, SvLineHit *hit);
+    /* The same query along the aim of a human: from the middle of its head, in the direction that its head faces, for
+     * "distance" units (more than 0, at most SV_LINE_LENGTH_MAX). The human itself is never a hit. */
+    SvResult (SV_CALL *aim)(SvOwner owner, SvEntity human, float distance, uint32_t flags, SvLineHit *hit);
 } SvGameRead;
 #pragma pack(pop)
 

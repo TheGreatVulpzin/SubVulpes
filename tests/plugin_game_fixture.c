@@ -69,6 +69,19 @@ static SvResult SV_CALL npclimit_command(SvOwner owner, uint64_t actor, const ch
     return host->log(owner, "NPC_LIMIT_PASS");
 }
 
+/* The test program sets a mark in the shared hit record of the game, then runs this command. The queries must put it back. */
+static SvResult SV_CALL linemark_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    const SvVector from = { 600.0f, 10.0f, 600.0f }, to = { 600.0f, -10.0f, 600.0f };
+    SvLineHit hit = { sizeof hit };
+    (void)actor;
+    (void)arguments;
+    if (game->line(owner, from, to, SV_LINE_ALL, 0, &hit) != SV_OK || hit.kind != SV_HIT_LEVEL ||
+        game->aim(owner, human, 10.0f, SV_LINE_ALL, &hit) != SV_OK)
+        return host->log(owner, "LINE_MARK_FAILURE");
+    return host->log(owner, "LINE_MARK_PASS");
+}
+
 static DWORD WINAPI write_wrong_thread(void *argument)
 {
     (void)argument;
@@ -312,6 +325,90 @@ static int change_npc(SvOwner owner)
     return 0;
 }
 
+/* The test program seats two humans in one car. The first rider leaves with stop 1 and the second with stop 0.
+ * Returns 0 when all checks pass, or the line of the check that failed. */
+static int vehicle_checks(SvOwner owner)
+{
+    SvEntity page[16], rider_a = 0, rider_b = 0;
+    SvHumanState hs = { sizeof hs };
+    uint32_t count = 0, next = 0, i;
+    STEP(change->vehicle_exit(owner, human, 0) == SV_STATE);
+    STEP(change->vehicle_exit(owner, human, 2) == SV_INVALID && change->vehicle_exit(owner, human, -1) == SV_INVALID);
+    STEP(change->vehicle_exit(owner, player, 0) == SV_NOT_FOUND && change->vehicle_exit(owner, 0, 0) == SV_NOT_FOUND);
+    STEP(change->vehicle_exit(owner + 1, human, 0) == SV_STATE);
+    STEP(game->entities(owner, SV_ENTITY_HUMAN, 0, page, 16, &count, &next) == SV_OK);
+    for (i = 0; i < count; ++i)
+        if (game->human(owner, page[i], &hs) == SV_OK && hs.vehicle) {
+            if (hs.seat == 0)
+                rider_a = page[i];
+            else if (hs.seat == 1)
+                rider_b = page[i];
+        }
+    STEP(rider_a && rider_b);
+    STEP(change->vehicle_exit(owner, rider_a, 1) == SV_OK);
+    STEP(game->human(owner, rider_a, &hs) == SV_OK && hs.vehicle == 0);
+    STEP(change->vehicle_exit(owner, rider_a, 0) == SV_STATE);
+    STEP(change->vehicle_exit(owner, rider_b, 0) == SV_OK);
+    return 0;
+}
+
+/* The test program puts a car with two faces in the world. Face 0 is the plane x = 500 and face 1 is the plane z = 150.
+ * The head of the human faces -z from (100, 51, 200). The level is the flat ground at height 0. */
+static int line_checks(SvOwner owner)
+{
+    const SvVector across_a = { 490.0f, 2.0f, 2.0f }, across_b = { 510.0f, 2.0f, 2.0f };
+    const SvVector level_a = { 600.0f, 10.0f, 600.0f }, level_b = { 600.0f, -10.0f, 600.0f };
+    const SvVector body_a = { 100.0f, 50.0f, 190.0f }, body_b = { 100.0f, 50.0f, 210.0f };
+    SvVector bad = across_a, far_end = { 490.0f, 2.0f, 5000.0f };
+    SvLineHit hit = { sizeof hit }, small = { 4 };
+    SvObjectState os = { sizeof os };
+    uint32_t nan_bits = 0x7fc00000u;
+    float nan_value;
+    memcpy(&nan_value, &nan_bits, sizeof nan_value);
+    /* Bad input. */
+    STEP(game->line(owner + 1, across_a, across_b, SV_LINE_OBJECTS, 0, &hit) == SV_STATE);
+    STEP(game->line(owner, across_a, across_b, SV_LINE_OBJECTS, 0, NULL) == SV_INVALID);
+    STEP(game->line(owner, across_a, across_b, SV_LINE_OBJECTS, 0, &small) == SV_INVALID);
+    STEP(game->line(owner, across_a, across_b, 0, 0, &hit) == SV_INVALID);
+    STEP(game->line(owner, across_a, across_b, SV_LINE_ALL + 1, 0, &hit) == SV_INVALID);
+    STEP(game->line(owner, across_a, across_a, SV_LINE_ALL, 0, &hit) == SV_INVALID);
+    STEP(game->line(owner, across_a, far_end, SV_LINE_ALL, 0, &hit) == SV_INVALID);
+    bad.y = nan_value;
+    STEP(game->line(owner, bad, across_b, SV_LINE_ALL, 0, &hit) == SV_INVALID);
+    bad = across_a;
+    bad.x = SV_POSITION_LIMIT + 1.0f;
+    STEP(game->line(owner, bad, across_b, SV_LINE_ALL, 0, &hit) == SV_INVALID);
+    STEP(game->line(owner, across_a, across_b, SV_LINE_ALL, player, &hit) == SV_NOT_FOUND);
+    /* The car. */
+    hit.kind = 99;
+    STEP(game->line(owner, across_a, across_b, SV_LINE_OBJECTS, 0, &hit) == SV_OK && hit.kind == SV_HIT_OBJECT);
+    STEP(hit.entity && game->object(owner, hit.entity, &os) == SV_OK && os.color == 4 && hit.bone == -1);
+    STEP(hit.position.x > 499.99f && hit.position.x < 500.01f && hit.fraction > 0.49f && hit.fraction < 0.51f);
+    STEP(hit.distance > 9.9f && hit.distance < 10.1f);
+    STEP(game->line(owner, across_a, across_b, SV_LINE_LEVEL | SV_LINE_HUMANS, 0, &hit) == SV_OK && hit.kind == SV_HIT_NONE &&
+         hit.entity == 0 && hit.fraction == 1.0f && hit.position.x == 0.0f);
+    /* The level. */
+    STEP(game->line(owner, level_a, level_b, SV_LINE_LEVEL, 0, &hit) == SV_OK && hit.kind == SV_HIT_LEVEL && hit.entity == 0);
+    STEP(hit.position.y > -0.01f && hit.position.y < 0.01f && hit.fraction > 0.49f && hit.fraction < 0.51f);
+    STEP(game->line(owner, level_a, level_b, SV_LINE_OBJECTS | SV_LINE_HUMANS, 0, &hit) == SV_OK && hit.kind == SV_HIT_NONE);
+    /* A human, and the ignore rule. */
+    STEP(game->line(owner, body_a, body_b, SV_LINE_HUMANS, 0, &hit) == SV_OK && hit.kind == SV_HIT_HUMAN && hit.entity == human);
+    STEP(hit.bone >= 0 && hit.bone < 15 && hit.fraction > 0.3f && hit.fraction < 0.7f);
+    STEP(game->line(owner, body_a, body_b, SV_LINE_HUMANS, human, &hit) == SV_OK && hit.kind == SV_HIT_NONE);
+    /* The nearest of all kinds: the car plane z = 150 stands before the human when the line starts at z = 100. */
+    STEP(game->line(owner, (SvVector){ 100.0f, 51.0f, 100.0f }, body_b, SV_LINE_ALL, 0, &hit) == SV_OK &&
+         hit.kind == SV_HIT_OBJECT && hit.position.z > 149.99f && hit.position.z < 150.01f);
+    /* The aim of the human. */
+    STEP(game->aim(owner, human, 100.0f, SV_LINE_OBJECTS, &hit) == SV_OK && hit.kind == SV_HIT_OBJECT);
+    STEP(hit.distance > 49.0f && hit.distance < 51.0f && hit.position.z > 149.99f && hit.position.z < 150.01f);
+    STEP(game->aim(owner, human, 40.0f, SV_LINE_ALL, &hit) == SV_OK && hit.kind == SV_HIT_NONE);
+    STEP(game->aim(owner, human, 0.0f, SV_LINE_ALL, &hit) == SV_INVALID && game->aim(owner, human, nan_value, SV_LINE_ALL, &hit) == SV_INVALID);
+    STEP(game->aim(owner, human, SV_LINE_LENGTH_MAX + 1.0f, SV_LINE_ALL, &hit) == SV_INVALID);
+    STEP(game->aim(owner, player, 10.0f, SV_LINE_ALL, &hit) == SV_NOT_FOUND && game->aim(owner, human, 10.0f, 0, &hit) == SV_INVALID);
+    STEP(game->aim(owner + 1, human, 10.0f, SV_LINE_ALL, &hit) == SV_STATE);
+    return 0;
+}
+
 /* Bad input must change nothing. The test program checks the game state after the tick. */
 static SvResult write_checks(SvOwner owner)
 {
@@ -365,9 +462,13 @@ static SvResult write_checks(SvOwner owner)
     CHECK(change_objects(owner));
     {
         int bad_line = change_npc(owner);
+        if (!bad_line)
+            bad_line = vehicle_checks(owner);
+        if (!bad_line)
+            bad_line = line_checks(owner);
         if (bad_line) {
             char text[80];
-            snprintf(text, sizeof text, "NPC check failed at line %d.", bad_line);
+            snprintf(text, sizeof text, "Write check failed at line %d.", bad_line);
             host->log(owner, text);
             return SV_FAILED;
         }
@@ -491,6 +592,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->command(owner, "secret", SV_COMMAND_ADMIN, secret_command) == SV_OK);
     CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);
     CHECK(host->command(owner, "npclimit", SV_COMMAND_LOCAL, npclimit_command) == SV_OK);
+    CHECK(host->command(owner, "linemark", SV_COMMAND_LOCAL, linemark_command) == SV_OK);
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);

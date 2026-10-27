@@ -97,6 +97,23 @@ Invalid inventory or child counts return `SV_FAILED` without modifying the snaps
 Object reads reject `wheel_count` outside `0..32`, `wheel_body_count` outside `0..16` and `seat_count` outside `0..7`.
 `wheel_count` excludes the separately reported `wheel_body_count`.
 
+## Line queries
+
+Two methods follow the table of snapshot methods. They answer one question: what does a line hit first? They do not change the game.
+
+| Method | Effect | Result codes besides `SV_STATE` |
+| --- | --- | --- |
+| `line(from, to, flags, ignore, hit)` | Finds the nearest hit on the line. `flags` picks the kinds: `SV_LINE_LEVEL` (ground, blocks and city objects), `SV_LINE_OBJECTS` (the faces and wheels of vehicles) and `SV_LINE_HUMANS` (a sphere around each of the 15 bones). `ignore` is a human to skip, or 0. | `SV_INVALID` for a null or short `hit`, no flag or an unknown flag, a point that is not finite or is beyond 32768 in an axis, a line of zero length or more than 4096 units. `SV_NOT_FOUND` for an `ignore` that is not a human |
+| `aim(human, distance, flags, hit)` | The same query from the middle of the head of the human, along the direction that its head faces (the negative third row of the rotation of bone 2), for `distance` units. The human is never a hit. | `SV_INVALID` for a distance that is not above 0 or not finite, or above 4096, and the same `hit` and `flags` rules. `SV_NOT_FOUND` for a wrong reference |
+
+A line that hits nothing is a normal answer. The result is `SV_OK`, the kind is `SV_HIT_NONE`, the position and normal are 0 and the fraction is 1.
+`SvLineHit` holds the kind, the entity (the vehicle or the human, 0 for the level), the bone of a human (or -1), the hit point, the normal of the surface,
+the fraction of the line before the hit and the length of that part. The nearest hit wins across all the kinds in `flags`.
+A wheel counts as a hit on its vehicle. The game tests share one scratch record for their answers. The query saves it before the tests and puts it back after them,
+so a plugin callback does not change what the game wrote there.
+The cost is one pass over the active vehicles and the active humans. Call it a few times for each tick, not once for each body.
+The head direction is the one that the legacy tool used. It is read from the body and it is not a client value.
+
 ## Association and raw-field meanings
 
 `SvHumanState.account` comes from the body record. It can differ from the associated player's account.
@@ -212,6 +229,7 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `set_stun(human, ticks)` | Sets the stun timer from 0 to 3,600 ticks. The torso is weak while it runs, so the body staggers. The game counts it down by 1 each tick. | `SV_NOT_FOUND`, `SV_INVALID` out of range |
 | `npc_create(position, yaw, player, human)` | Makes a bot player named NPC in team 6, like the bots of the game, with a human on foot at the position and turned by the yaw angle. The bot has no route and no end time. Both references go out only on success. The position of the human reads the place at once. | `SV_INVALID` for a bad position or angle or a null pointer. `SV_LIMIT` when no player slot, human slot or bond is free, with nothing left behind |
 | `npc_remove(player)` | Gives the bot an end time in the past. The bot expiry of the game removes the human and the player in the next world logic pass. | `SV_NOT_FOUND`, `SV_DENIED` for a player who is not a bot |
+| `vehicle_exit(human, stop)` | Takes the human out of its vehicle the way the exit button does: the view angles become free, the vehicle gets the idle drive state and a bone that the exit would put in a wall moves to the near side of it. With `stop` 1 the speed of each bone becomes 0, so the body does not fly at the speed of the vehicle. | `SV_NOT_FOUND`, `SV_INVALID` for a `stop` other than 0 or 1, `SV_STATE` for a human who sits in no vehicle |
 | `teleport(human, position)` | Moves the 15 bones by the same offset so bone 0 reaches the position. It copies the new place to the previous place of each bone. The velocity does not change. | `SV_NOT_FOUND`, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle |
 
 The tests call every method from a real plugin callback against records that real constructors made.
@@ -221,6 +239,8 @@ Removing one check at a time (message bytes, money range, flag range, health ran
 For the item methods, removing the slot bound, the type bound, the check for a second parent item or the newspaper refusal made `game-api` fail each time (`build/logs/mutation10.log`).
 For the object methods, removing the type bound, the color bound, the refusal to remove a train piece and the angle check made `game-api` fail each time (`build/logs/mutation11.log`).
 Keys keep the index of their vehicle after the vehicle goes. This is the same as when the game removes a vehicle by itself.
+The exit method has a test of every error code. The test program seats two humans in one car. One leaves with `stop` 1 and one with `stop` 0, and the program checks the idle drive state, the bone speeds and a bone under the ground that the exit lifts to the ground.
+The line queries have a test of every error code, of a hit on a vehicle face, on the ground and on a human, of the ignore rule, of the nearest of three kinds and of the aim. The ground is flat at height 0 in this test, so it does not prove the shapes of the real level. A second test sets a mark in the shared record and checks that a query gives it back.
 The bleeding and stun methods have a test of every error code and of the stored value. They have no removal proof, because they guard no right, memory bound or privacy.
 The upper bound of 3,600 ticks (one minute) is a choice of this API. The game itself sets the timer to 3 or 6 times the damage of a hit.
 For the bots, removing the cleanup after a failed human and the bot check made `game-api` fail each time (`build/logs/mutation12.log`). A local command of the fixture leaves too few bonds for a human and checks that no player stays behind.

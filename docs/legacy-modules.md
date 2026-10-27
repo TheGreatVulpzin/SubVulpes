@@ -102,8 +102,8 @@ Its `/kill` writes health -5 and `bleeding` 1. So the "drunk level" is `stun_tim
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. Done: `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. |
 | N7 | Make and remove vehicles and other objects. Done: `object_create` and `object_remove`. Train pieces are refused. |
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. Done for bots: `npc_create` and `npc_remove`. Not done: delete the body of a real player. Kill it with `set_health` instead. |
-| N9 | Eject a human from a vehicle. |
-| N10 | Aim and line queries against the level, objects and humans. They copy the result out of the shared scratch record. |
+| N9 | Eject a human from a vehicle. Done: `vehicle_exit`, with the option to stop the bones. The exit code of the game is now one shared function, `human_leavevehicle`. |
+| N10 | Aim and line queries against the level, objects and humans. They copy the result out of the shared scratch record. Done: `line` and `aim` in the read table. Not done: a query of a surface material or a block, and a sphere query. |
 | N11 | Play a known sound at a position. |
 | N12 | Add a push or speed to a body part. |
 | N13 | Write the spawn protection timer. |
