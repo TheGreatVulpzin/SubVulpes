@@ -33,10 +33,10 @@ void sv_game_status(SvStatus *status)
     status->tick = 42;
 }
 
+/* Actor 7 is an administrator. Actor 8 is a player without administration rights. */
 int sv_game_actor_admin(uint64_t actor)
 {
-    (void)actor;
-    return 0;
+    return actor == 7;
 }
 
 #define CHECK(condition) do { if (!(condition)) { \
@@ -94,6 +94,27 @@ int main(int argc, char **argv)
         CHECK(ok);
         sv_plugins_tick();
         CHECK(sv_plugins_failed());
+    } else if (!strcmp(argv[1], "permissions")) {
+        CHECK(ok);
+        CHECK(sv_plugins_command(0, "perm_public") && sv_plugins_command(0, "perm_admin") &&
+              sv_plugins_command(0, "perm_local"));
+        CHECK(sv_plugins_command(8, "perm_public") && sv_plugins_command(8, "perm_admin") &&
+              sv_plugins_command(8, "perm_local"));
+        CHECK(sv_plugins_command(7, "perm_admin") && sv_plugins_command(7, "perm_local"));
+        CHECK(!sv_plugins_command(7, "perm_missing"));
+    } else if (!strcmp(argv[1], "limit")) {
+        CHECK(ok);
+        CHECK(sv_plugins_command(0, "lim126") && !sv_plugins_command(0, "lim127"));
+        CHECK(sv_plugins_disable("test.fixture") == SV_OK);
+        CHECK(!sv_plugins_command(0, "lim0") && !sv_plugins_command(0, "fixture"));
+        CHECK(sv_plugins_enable("test.fixture") == SV_OK);
+        CHECK(sv_plugins_command(0, "lim126") && sv_plugins_command(0, "fixture"));
+    } else if (!strcmp(argv[1], "metrics")) {
+        CHECK(ok);
+        sv_plugins_tick();
+        sv_plugins_tick();
+        sv_plugins_tick();
+        sv_plugins_list();
     } else if (!strcmp(argv[1], "fpu")) {
         CHECK(ok);
         _controlfp_s(&before, 0, 0);

@@ -120,7 +120,7 @@ Deliver the platform in this order:
    Demonstrate two NPC behaviors, a custom mission, an effect with an existing weapon representation and an external snapshot consumer.
    These examples exercise the contract. They are not its final ceiling.
 
-The current proof includes 52 native checks plus codec, handle, launcher and installation checks.
+The current proof includes 57 native checks plus codec, handle, launcher and installation checks.
 See [S3 evidence](s3.md) for recorded results and limits. This proof does not close S3 or the full API scope.
 
 Check invalid references, exhausted resources, wrong execution phases, conflicting commands, failed activation and dependency failures.

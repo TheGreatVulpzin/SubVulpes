@@ -2,6 +2,7 @@
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -46,7 +47,7 @@ def profile(entries, *, dependencies=None, approval=True, abi='1', live='1'):
     return folder
 
 
-def run(executable, arguments, folder, *, code=0, mode='normal', contains=(), input=None, marker=None):
+def run(executable, arguments, folder, *, code=0, mode='normal', contains=(), absent=(), input=None, marker=None):
     global completed
     environment = os.environ.copy()
     environment['SV_PLUGIN_TEST_MODE'] = mode
@@ -56,7 +57,8 @@ def run(executable, arguments, folder, *, code=0, mode='normal', contains=(), in
     result = subprocess.run([str(executable), *arguments], cwd=folder, env=environment,
                             input=input, text=True, capture_output=True, timeout=15)
     output = result.stdout + result.stderr
-    if result.returncode != code or any(text not in output for text in contains):
+    if result.returncode != code or any(text not in output for text in contains) or \
+            any(text in output for text in absent):
         raise AssertionError(f'{arguments}: exit {result.returncode}, expected {code}\n{output}')
     completed += 1
     return output
@@ -75,6 +77,18 @@ run(RUNNER, ['optional-fail'], profile(both), mode='enable-fail', contains=['Reg
 run(RUNNER, ['optional-fail'], profile(both), mode='conflict', contains=['PASS'])
 run(RUNNER, ['event-fail'], profile(both), mode='event-fail', contains=['PASS'])
 run(RUNNER, ['required-event-fail'], profile({'test.fixture': 'required'}), mode='event-fail', contains=['PASS'])
+# Actor 7 is an administrator and actor 8 is not. Actor 0 is the local operator.
+run(RUNNER, ['permissions'], profile(fixture), mode='permissions',
+    contains=['ran perm_public 0', 'ran perm_admin 0', 'ran perm_local 0', 'ran perm_public 8', 'ran perm_admin 7',
+              'permission denied: perm_admin', 'permission denied: perm_local', 'PASS'],
+    absent=['ran perm_admin 8', 'ran perm_local 7', 'ran perm_local 8'])
+header = (Path(__file__).resolve().parents[1] / 'src/plugins/plugin_host.h').read_text()
+command_max = int(re.search(r'SV_PLUGIN_COMMAND_MAX\s+(\d+)', header).group(1))
+output = run(RUNNER, ['limit'], profile(fixture), mode='limit', contains=['PASS'])
+assert output.count(f'commands registered {command_max}') == 2, 'The command table did not fill, then clear.'
+run(RUNNER, ['metrics'], profile(fixture), mode='normal', contains=['Plugin metrics: test.fixture, 3 callbacks', 'fixture stop event'])
+run(RUNNER, ['metrics'], profile(fixture), mode='resubscribe', contains=['PASS'], absent=['Plugin metrics'])
+run(RUNNER, ['lifecycle'], profile(fixture), contains=['fixture stop event'])
 run(RUNNER, ['fpu'], profile(fixture), mode='fpu', contains=['PASS'])
 run(RUNNER, ['control'], profile(fixture), input='x' * 400 + '\nplugins disable test.fixture\n', contains=['PASS'])
 

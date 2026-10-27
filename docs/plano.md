@@ -61,7 +61,7 @@ Classify A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time` before t
 Separate core invariants from plugin policy. Check compatible base fixes for OpenSubRosa24. See [placement notes](ideas.md).
 Define A10, D11 and D12 first. Their inherited identifiers still have no description.
 
-The current proof includes 52 native checks plus codec, handle, launcher and installation checks. See [S3 evidence](s3.md) for results and limits.
+The current proof includes 57 native checks plus codec, handle, launcher and installation checks. See [S3 evidence](s3.md) for results and limits.
 These checks do not close the full API coverage requirement or S3.
 
 Package and version production plugins separately. Check API and module dependencies before installation or activation.

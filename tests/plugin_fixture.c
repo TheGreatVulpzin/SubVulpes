@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <float.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "sv_plugin.h"
@@ -29,6 +30,32 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
     return api->log(owner, "fixture command");
 }
 
+static SvResult logged(SvOwner owner, const char *name, uint64_t actor)
+{
+    char text[96];
+    _snprintf(text, sizeof text, "ran %s %llu", name, (unsigned long long)actor);
+    text[sizeof text - 1] = 0;
+    return api->log(owner, text);
+}
+
+static SvResult SV_CALL public_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    (void)arguments;
+    return logged(owner, "perm_public", actor);
+}
+
+static SvResult SV_CALL admin_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    (void)arguments;
+    return logged(owner, "perm_admin", actor);
+}
+
+static SvResult SV_CALL local_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    (void)arguments;
+    return logged(owner, "perm_local", actor);
+}
+
 static DWORD WINAPI worker(void *unused)
 {
     SvStatus status = { sizeof status };
@@ -42,6 +69,8 @@ static SvResult SV_CALL event(SvOwner owner, const SvEvent *notification)
     (void)owner;
     if (notification->size != sizeof *notification)
         return SV_INVALID;
+    if (notification->kind == SV_EVENT_STOP)
+        return api->log(owner, "fixture stop event");
     if (notification->kind == SV_EVENT_TICK && !strcmp(mode, "event-fail"))
         return SV_FAILED;
     if (!strcmp(mode, "fpu"))
@@ -78,8 +107,38 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
         return SV_CONFLICT;
     if (api->command(owner, command_name, SV_COMMAND_LOCAL, command) != SV_CONFLICT)
         return SV_FAILED;
+    if (api->command(owner, "plugins", SV_COMMAND_PUBLIC, command) != SV_INVALID ||
+        api->command(owner, "bad_permission", SV_COMMAND_LOCAL + 1, command) != SV_INVALID ||
+        api->command(owner, "no_callback", SV_COMMAND_PUBLIC, NULL) != SV_INVALID ||
+        api->subscribe(owner, SV_EVENT_TICK, NULL) != SV_INVALID)
+        return SV_FAILED;
     if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP, event) != SV_OK)
         return SV_FAILED;
+    if (!strcmp(mode, "resubscribe") && api->subscribe(owner, 0, NULL) != SV_OK)
+        return SV_FAILED;
+    if (!strcmp(mode, "permissions") &&
+        (api->command(owner, "perm_public", SV_COMMAND_PUBLIC, public_command) != SV_OK ||
+         api->command(owner, "perm_admin", SV_COMMAND_ADMIN, admin_command) != SV_OK ||
+         api->command(owner, "perm_local", SV_COMMAND_LOCAL, local_command) != SV_OK))
+        return SV_FAILED;
+    if (!strcmp(mode, "limit")) {
+        char name[SV_PLUGIN_ID_SIZE];
+        unsigned count = 1;
+        SvResult result;
+        for (;;) {
+            _snprintf(name, sizeof name, "lim%u", count - 1);
+            name[sizeof name - 1] = 0;
+            result = api->command(owner, name, SV_COMMAND_PUBLIC, command);
+            if (result != SV_OK)
+                break;
+            ++count;
+        }
+        if (result != SV_LIMIT)
+            return SV_FAILED;
+        _snprintf(name, sizeof name, "commands registered %u", count);
+        name[sizeof name - 1] = 0;
+        api->log(owner, name);
+    }
     if (!strcmp(mode, "enable-fail"))
         return SV_FAILED;
     return api->log(owner, "fixture enabled");
