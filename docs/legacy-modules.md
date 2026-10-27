@@ -24,7 +24,7 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | Command | Behavior to keep | Needs |
 | --- | --- | --- |
 | `/imortal` | Toggle. Hold the health at 100 each tick without the god mode flag, so hits and pushes still show. Ends on body change, disconnect, reset or plugin stop. | Now (tick, `set_health`), N18 |
-| `/heal` | Health 100, clear the death mark and the drunk level. | N5 |
+| `/heal` | Health 100. The tool also clears a death mark and a drunk level, but this server has no field with those names. Clear `bleeding` and `stun_timer` instead, and read the newer tool before more work. | `set_health` now, N5 |
 | `/kill` | Kill the own body. | Now (`set_health`) |
 | `/item N` | Make item type 0 to 26 and put it in a free hand. A knife (24) starts in attack state. Fail without cost when there is no free hand or item. | N6 |
 | `/vehicle N` | Make vehicle type 0 to 13 four units in front of the head, color 0. Do not seat the player. | N7 |
@@ -32,7 +32,7 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | `/heavydude` | Multiply the 15 physical values of the body by 100000, once. A joke command. | N19 |
 | `/delh` | Delete the nearest human on the aim line, up to 100 units, never the caller. | N10, N8 |
 | `/team N` | Set team 0 to 5 and send the update. | N3 |
-| `/deactivate ID` | Toggle the active state of a player slot 0 to 255. The meaning needs analysis first. | N5 |
+| `/deactivate ID` | Toggle the active state of a player slot 0 to 255. The meaning needs analysis first. | Unknown |
 | `/give admin ID` | An admin gives the admin flag to a connected player. Reject empty slots and bots. Lasts until disconnect. The inherited `/give` is a different command (cash). | N2, N1 |
 | `/npc` | Make a pedestrian bot 3 meters in front, with no car. Queue the request to a safe point and refuse a second request while one waits. | N8 |
 | `/bmhelp` | Show the help to the caller only. | N1 |
@@ -73,7 +73,7 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 | N2 | Set the admin flag of a player and of its connection, as the password login does. Done: `set_admin`. |
 | N3 | Set the team of a player and send the update. Done: `set_team`. |
 | N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors are not done. |
-| N5 | Write the human fields for the drunk level and the death mark. Find the fields first. |
+| N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. The tool names a drunk level and a death mark. No field of this server matches those names, so they are not planned until the newer version of the tool shows what it clears. |
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. Done: `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. |
 | N7 | Make and remove vehicles and other objects. Done: `object_create` and `object_remove`. Train pieces are refused. |
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. |
