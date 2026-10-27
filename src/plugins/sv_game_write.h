@@ -7,7 +7,7 @@
 #define SV_GAME_WRITE_VERSION 1u
 
 /* Message kinds: 0 is a server message for every client. Kind 4 reaches only admins, as the replies of the chat commands do. */
-enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_CHAT = 4 };
+enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_ADMIN = 4 };
 /* The health range of the game: -100 is dead and 100 is full health. */
 enum { SV_HEALTH_MIN = -100, SV_HEALTH_MAX = 100 };
 /* The look selectors and the highest value of each, as the game makes them. */

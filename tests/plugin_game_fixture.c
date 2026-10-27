@@ -196,7 +196,7 @@ static SvResult write_checks(SvOwner owner)
     CHECK(change->message(owner, SV_MESSAGE_SERVER, longest) == SV_INVALID);
     CHECK(change->message(owner + 1, SV_MESSAGE_SERVER, "owner") == SV_STATE);
     CHECK(change->message(owner, SV_MESSAGE_SERVER, longest + 1) == SV_OK);
-    CHECK(change->message(owner, SV_MESSAGE_CHAT, "chat line") == SV_OK);
+    CHECK(change->message(owner, SV_MESSAGE_ADMIN, "admin line") == SV_OK);
     CHECK(change->add_money(owner, account, INT32_MAX) == SV_INVALID);
     CHECK(change->add_money(owner, human, 5) == SV_NOT_FOUND);
     CHECK(change->add_money(owner, account, 500) == SV_OK);

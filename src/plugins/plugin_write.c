@@ -31,7 +31,7 @@ static int finite(float value)
 static SvResult copy_text(uint32_t kind, const char *text, char buffer[MESSAGE_MAX + 1])
 {
     size_t i, length;
-    if ((kind != SV_MESSAGE_SERVER && kind != SV_MESSAGE_CHAT) || !text)
+    if ((kind != SV_MESSAGE_SERVER && kind != SV_MESSAGE_ADMIN) || !text)
         return SV_INVALID;
     length = strnlen(text, MESSAGE_MAX + 1);
     if (!length || length > MESSAGE_MAX)

@@ -161,7 +161,7 @@ static void write_api_tick(void)
     CHECK(sr_players[0].look_b == 5 && sr_humans[0].look_b == 5 && sr_humans[0].look_e == 1);
     CHECK(sr_events[events].type == 2 && sr_events[events].attach_type == SV_MESSAGE_SERVER &&
           sr_events[events].attach_id == -1 && strlen(sr_events[events].message) == 63);
-    CHECK(sr_events[events + 1].attach_type == SV_MESSAGE_CHAT && !strcmp(sr_events[events + 1].message, "chat line"));
+    CHECK(sr_events[events + 1].attach_type == SV_MESSAGE_ADMIN && !strcmp(sr_events[events + 1].message, "admin line"));
     CHECK(sr_accounts[0].money == 1500 && sr_players[0].money == 4742 && sr_players[0].godmode == 1);
     CHECK(hu->health == 80 && hu->pos.x == 100.0f && hu->pos.y == 50.0f && hu->pos.z == 200.0f);
     for (k = 0; k < 15; ++k)
