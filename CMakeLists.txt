@@ -126,6 +126,7 @@ if(BUILD_TESTING)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME game-api COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_game_api.py" "${CMAKE_BINARY_DIR}")
+    include(tests/systems/systems.cmake)
     add_executable(sv-handle-test tests/plugin_handles_test.c src/plugins/plugin_handles.c)
     target_include_directories(sv-handle-test PRIVATE src/plugins)
     target_compile_options(sv-handle-test PRIVATE /W4 /WX /utf-8)
