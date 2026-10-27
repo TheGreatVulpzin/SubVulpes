@@ -109,6 +109,10 @@ int main(int argc, char **argv)
         CHECK(!sv_plugins_command(0, "lim0") && !sv_plugins_command(0, "fixture"));
         CHECK(sv_plugins_enable("test.fixture") == SV_OK);
         CHECK(sv_plugins_command(0, "lim126") && sv_plugins_command(0, "fixture"));
+    } else if (!strcmp(argv[1], "status-local")) {
+        CHECK(ok);
+        CHECK(sv_plugins_command(0, "status"));
+        CHECK(sv_plugins_command(8, "status"));
     } else if (!strcmp(argv[1], "metrics")) {
         CHECK(ok);
         sv_plugins_tick();

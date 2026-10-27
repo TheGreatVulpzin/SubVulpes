@@ -86,6 +86,10 @@ header = (Path(__file__).resolve().parents[1] / 'src/plugins/plugin_host.h').rea
 command_max = int(re.search(r'SV_PLUGIN_COMMAND_MAX\s+(\d+)', header).group(1))
 output = run(RUNNER, ['limit'], profile(fixture), mode='limit', contains=['PASS'])
 assert output.count(f'commands registered {command_max}') == 2, 'The command table did not fill, then clear.'
+# The status answer goes to the server log, so a player must not run it.
+output = run(RUNNER, ['status-local'], profile({'sv.status': 'enabled'}),
+             contains=['Status: tick 42', 'Plugin command permission denied: status', 'PASS'])
+assert output.count('Status: tick') == 1, 'A player ran the status command.'
 run(RUNNER, ['metrics'], profile(fixture), mode='normal', contains=['Plugin metrics: test.fixture, 3 callbacks', 'fixture stop event'])
 run(RUNNER, ['metrics'], profile(fixture), mode='resubscribe', contains=['PASS'], absent=['Plugin metrics'])
 run(RUNNER, ['lifecycle'], profile(fixture), contains=['fixture stop event'])

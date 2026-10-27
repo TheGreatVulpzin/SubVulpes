@@ -28,7 +28,8 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
     if (host->abi != SV_PLUGIN_ABI || host->size < SV_HOST_V1_SIZE)
         return SV_INCOMPATIBLE;
     api = host;
-    return api->command(owner, "status", SV_COMMAND_PUBLIC, status_command);
+    /* The answer goes to the server log, so only the local operator runs it. */
+    return api->command(owner, "status", SV_COMMAND_LOCAL, status_command);
 }
 
 SV_EXPORT SvResult SV_CALL sv_plugin_entry(uint32_t abi, SvPlugin *plugin)
