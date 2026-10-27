@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory(prefix="game-api-", dir=build / "tests") as fol
     binary = build / "tests" / "game-read-fixture.dll"
     shutil.copyfile(binary, module / "read.dll")
     (module / "plugin.ini").write_text(
-        "[plugin]\nid=test.read\nversion=0.1.0\nlibrary=read.dll\napi=1\nlive=1\n", encoding="ascii"
+        "[plugin]\nid=test.read\nversion=0.1.0\nlibrary=read.dll\napi=1\nlive=1\nunsafe_events=1\n", encoding="ascii"
     )
     (root / "plugins" / "plugins.ini").write_text("[plugins]\ntest.read=required\n", encoding="ascii")
     (root / "plugins" / "native-approvals.ini").write_text(

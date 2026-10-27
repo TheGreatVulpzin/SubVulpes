@@ -229,7 +229,7 @@ static SvResult locate(SvOwner owner, uint32_t id, SvEntity entity, uint32_t slo
     int32_t *record)
 {
     const Prop *p;
-    if (context(owner) != SV_OK)
+    if (context(owner) != SV_OK || (op != SV_PROP_GET && !sv_plugins_write_context(owner)))
         return SV_STATE;
     p = row_at(id);
     if (!p)

@@ -34,6 +34,30 @@ typedef struct {
     SvEntity player;
     char text[64];
 } SvChatEvent;
+
+/* A damage that is about to happen, inside the simulation. This is the dangerous kind (kind 3 in docs/plugin-events.md).
+ * Only a plugin with `unsafe_events=1` in its plugin.ini may subscribe to it. The callback runs in the middle of a
+ * calculation of the game, so it can only read. Every write call, `command` and `subscribe` return SV_STATE.
+ *
+ * The callback answers SV_OK to allow the damage, or SV_DENIED to cancel it (the amount becomes 0). To change the amount, the
+ * plugin writes `new_amount` and answers SV_OK. The host passes the record by const pointer, but the memory is writable and
+ * `new_amount` is the only field that the plugin may write. A `new_amount` below 0 or above 100000 is ignored. The next
+ * plugin sees the new amount in `amount`. The amount is the damage after the scales of the property table.
+ *
+ * A decision should take a few microseconds. A plugin that takes more than 200 microseconds more than 10 times in one
+ * minute is disabled at the next safe point. */
+enum { SV_DAMAGE_BULLET = 1, SV_DAMAGE_VEHICLE = 2, SV_DAMAGE_OBJECT = 3 };
+#define SV_DAMAGE_MAX 100000
+typedef struct {
+    SvEvent base;
+    SvEntity attacker;     /* The human of the shooter for a bullet. 0 when the game does not know it. */
+    SvEntity human;        /* The human that takes the damage, or 0. */
+    SvEntity object;       /* The object that takes the damage, or 0. */
+    uint32_t source;       /* SV_DAMAGE_BULLET, SV_DAMAGE_VEHICLE or SV_DAMAGE_OBJECT. */
+    int32_t amount;        /* The damage before this plugin. */
+    int32_t new_amount;    /* The only field that the plugin may write. It starts equal to amount. */
+    uint32_t reserved;
+} SvDamageEvent;
 #pragma pack(pop)
 
 #endif

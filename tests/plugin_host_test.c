@@ -39,6 +39,17 @@ int sv_game_actor_admin(uint64_t actor)
     return actor == 7;
 }
 
+/* A damage decision of the host with this amount. The result is the final amount. */
+static int decide(int amount)
+{
+    SvDamageEvent damage;
+    memset(&damage, 0, sizeof damage);
+    damage.base.size = sizeof damage;
+    damage.base.kind = SV_EVENT_DAMAGE;
+    damage.amount = damage.new_amount = amount;
+    return sv_plugins_decide_damage(&damage);
+}
+
 #define CHECK(condition) do { if (!(condition)) { \
     fprintf(stderr, "Failed line %d: %s\n", __LINE__, #condition); return 1; } } while (0)
 
@@ -109,6 +120,28 @@ int main(int argc, char **argv)
         CHECK(!sv_plugins_command(0, "lim0") && !sv_plugins_command(0, "fixture"));
         CHECK(sv_plugins_enable("test.fixture") == SV_OK);
         CHECK(sv_plugins_command(0, "lim126") && sv_plugins_command(0, "fixture"));
+    } else if (!strcmp(argv[1], "unsafe-budget")) {
+        unsigned i;
+        /* The guard on 88 runs inside the plugin. A fast answer does not count. Ten slow answers are allowed, and the
+         * eleventh marks the plugin. The tick after it disables the plugin. */
+        CHECK(ok && sv_plugins_command(0, "fixture"));
+        CHECK(decide(88) == 88);
+        for (i = 0; i < 10; ++i)
+            CHECK(decide(99) == 99 && decide(1) == 1);
+        sv_plugins_tick();
+        CHECK(sv_plugins_command(0, "fixture"));
+        CHECK(decide(99) == 99);
+        CHECK(sv_plugins_command(0, "fixture"));
+        sv_plugins_tick();
+        CHECK(!sv_plugins_command(0, "fixture") && !sv_plugins_failed());
+        CHECK(decide(99) == 99);
+    } else if (!strcmp(argv[1], "unsafe-fail")) {
+        /* A failure in a decision marks the plugin, and the next tick disables it. The amount stays. */
+        CHECK(ok && sv_plugins_command(0, "fixture"));
+        CHECK(decide(7) == 7);
+        CHECK(sv_plugins_command(0, "fixture"));
+        sv_plugins_tick();
+        CHECK(!sv_plugins_command(0, "fixture") && !sv_plugins_failed());
     } else if (!strcmp(argv[1], "status-local")) {
         CHECK(ok);
         CHECK(sv_plugins_command(0, "status"));

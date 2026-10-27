@@ -33,6 +33,13 @@ void sv_game_ready(void);
 void sv_game_reset(void);
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
+/* Like sv_plugins_context, and 0 while a plugin runs a decision inside the simulation. Every call that changes the game or
+ * the host needs this one. */
+int sv_plugins_write_context(SvOwner owner);
+/* Gives a damage to the plugins that asked for SV_EVENT_DAMAGE. The result is the final amount: the amount of the event
+ * when no plugin changes it, 0 when a plugin cancels it. A call off the server thread or from inside a plugin callback
+ * returns the amount of the event. The plugins answer in load order. */
+int sv_plugins_decide_damage(SvDamageEvent *event);
 /* 1 when an active plugin asked for this kind of event and the call is on the server thread. */
 int sv_plugins_wants(uint32_t kind);
 /* The event queue (plugin_events.c). The core posts, and the host takes the records out at a safe point. */

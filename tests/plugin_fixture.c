@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "sv_plugin.h"
+#include "sv_game_events.h"
 
 static const SvHost *api;
 static const char *mode;
@@ -67,6 +68,19 @@ static SvResult SV_CALL event(SvOwner owner, const SvEvent *notification)
 {
     unsigned unused;
     (void)owner;
+    if (notification->kind == SV_EVENT_DAMAGE) {
+        /* A decision inside the simulation. A slow answer for 99, a failure in the mode unsafe-fail, and the guard on 88: a
+         * call that changes the host must give SV_STATE there. */
+        const SvDamageEvent *damage = (const SvDamageEvent *)notification;
+        if (notification->size != sizeof *damage || !strcmp(mode, "unsafe-fail"))
+            return SV_FAILED;
+        if (damage->amount == 99)
+            Sleep(2);
+        if (damage->amount == 88 && (api->command(owner, "late", SV_COMMAND_PUBLIC, command) != SV_STATE ||
+                                     api->subscribe(owner, SV_EVENT_TICK, event) != SV_STATE))
+            return SV_FAILED;
+        return SV_OK;
+    }
     if (notification->size != sizeof *notification)
         return SV_INVALID;
     if (notification->kind == SV_EVENT_STOP)
@@ -114,6 +128,13 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
         return SV_FAILED;
     if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP, event) != SV_OK)
         return SV_FAILED;
+    /* Decisions inside the simulation need unsafe_events=1 in the manifest. Only the unsafe modes have it. */
+    if (!strncmp(mode, "unsafe", 6)) {
+        if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_DAMAGE, event) != SV_OK)
+            return SV_FAILED;
+    } else if (api->subscribe(owner, SV_EVENT_DAMAGE, event) != SV_DENIED) {
+        return SV_FAILED;
+    }
     if (!strcmp(mode, "resubscribe") && api->subscribe(owner, 0, NULL) != SV_OK)
         return SV_FAILED;
     if (!strcmp(mode, "permissions") &&

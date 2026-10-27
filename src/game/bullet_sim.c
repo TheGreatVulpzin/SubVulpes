@@ -76,7 +76,7 @@ static void bullet_human_hit(Bullet *b, Hit *hit)
         else
             dmg = dmg * 4;
     }
-    dmg = sv_damage_human(hit->human, b->owner, dmg);
+    dmg = sv_damage_human(hit->human, b->owner, dmg, SV_DAMAGE_BULLET);
     /* The team kill tax works only in game type 3 (round mode). Game type 4 taxes a hit on a protected human of team 7. */
     if (sr_game.gametype == GAMETYPE_BASES) {
         if (b->owner != -1 && hu->player_id != -1 && b->owner != hu->player_id &&

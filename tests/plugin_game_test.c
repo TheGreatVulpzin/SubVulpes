@@ -342,10 +342,10 @@ static void post_events(void)
     float pos[3] = { 500.0f, 30.0f, 500.0f }, rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
     int temp;
     CHECK(sv_plugins_wants(SV_EVENT_SPAWN) && sv_plugins_wants(SV_EVENT_DEATH) && sv_plugins_wants(SV_EVENT_LEAVE));
-    CHECK(sv_plugins_wants(SV_EVENT_TICK) && !sv_plugins_wants(SV_EVENT_STOP) && !sv_plugins_wants(0x400u));
+    CHECK(sv_plugins_wants(SV_EVENT_TICK) && !sv_plugins_wants(SV_EVENT_STOP) && !sv_plugins_wants(0x4000u));
     sv_events_post(SV_EVENT_TICK, 1, player_ref, human_ref, 0);
     sv_events_post(SV_EVENT_STOP, 1, player_ref, human_ref, 0);
-    sv_events_post(0x400u, 1, player_ref, human_ref, 0);
+    sv_events_post(0x4000u, 1, player_ref, human_ref, 0);
     sv_events_post(0, 1, player_ref, human_ref, 0);
     sv_events_post(SV_EVENT_SPAWN | SV_EVENT_DEATH, 1, player_ref, human_ref, 0);
     CHECK(sv_events_pending() == 0);
@@ -376,11 +376,11 @@ static void post_flood(void)
  * for the damage of an object uses the scale. */
 static void damage_check(void)
 {
-    CHECK(sv_damage_human(0, -1, 3) == 2 && sv_damage_human(0, -1, 100) == 50);
-    CHECK(sv_damage_human(rider_b, -1, 100) == 100);
-    CHECK(sv_damage_human(rider_b, 0, 10) == 20 && sv_damage_human(0, 0, 10) == 10);
-    CHECK(sv_damage_human(0, -1, 0) == 0 && sv_damage_human(0, -1, -5) == -5);
-    CHECK(sv_damage_human(-1, -1, 7) == 7 && sv_damage_human(SR_MAX_HUMAN, SR_MAX_PLAYER, 7) == 7);
+    CHECK(sv_damage_human(0, -1, 3, SV_DAMAGE_BULLET) == 2 && sv_damage_human(0, -1, 100, SV_DAMAGE_BULLET) == 50);
+    CHECK(sv_damage_human(rider_b, -1, 100, SV_DAMAGE_BULLET) == 100);
+    CHECK(sv_damage_human(rider_b, 0, 10, SV_DAMAGE_BULLET) == 20 && sv_damage_human(0, 0, 10, SV_DAMAGE_BULLET) == 10);
+    CHECK(sv_damage_human(0, -1, 0, SV_DAMAGE_BULLET) == 0 && sv_damage_human(0, -1, -5, SV_DAMAGE_BULLET) == -5);
+    CHECK(sv_damage_human(-1, -1, 7, SV_DAMAGE_BULLET) == 7 && sv_damage_human(SR_MAX_HUMAN, SR_MAX_PLAYER, 7, SV_DAMAGE_BULLET) == 7);
     CHECK(sv_damage_scale_object(target_car) == 0.5f && sv_damage_scale_object(rider_car) == 1.0f);
     CHECK(sv_damage_scale_object(-1) == 1.0f && sv_damage_object(-1, 9) == 9 && sv_damage_object(SR_MAX_OBJECT, 9) == 9);
     CHECK(sv_damage_object(target_car, 1) == 1 && sv_damage_object(target_car, 40) == 20 && sv_damage_object(rider_car, 40) == 40);
@@ -391,14 +391,42 @@ static void damage_check(void)
     applydamageobject(rider_car, 40);
     CHECK(sr_objects[rider_car].health == 60);
     *sv_damage_field_human_taken(rider_b) = 100.0f;
-    CHECK(sv_damage_human(rider_b, -1, 10000) == 100000);
+    CHECK(sv_damage_human(rider_b, -1, 10000, SV_DAMAGE_BULLET) == 100000);
     *sv_damage_field_human_taken(rider_b) = 0.0f;
-    CHECK(sv_damage_human(rider_b, -1, 100) == 0);
+    CHECK(sv_damage_human(rider_b, -1, 100, SV_DAMAGE_BULLET) == 0);
     sv_damage_reset_human(rider_b);
-    CHECK(sv_damage_human(rider_b, -1, 100) == 100);
+    CHECK(sv_damage_human(rider_b, -1, 100, SV_DAMAGE_BULLET) == 100);
     sv_damage_reset_human(0);
     sv_damage_reset_object(target_car);
-    CHECK(sv_damage_human(0, 0, 100) == 100 && sv_damage_object(target_car, 40) == 40);
+    CHECK(sv_damage_human(0, 0, 100, SV_DAMAGE_BULLET) == 100 && sv_damage_object(target_car, 40) == 40);
+}
+
+/* A damage decision from another thread must not reach the plugin. */
+static DWORD WINAPI damage_other_thread(void *argument)
+{
+    (void)argument;
+    return sv_damage_human(0, -1, 77, SV_DAMAGE_BULLET) == 77 ? 0 : 1;
+}
+
+/* The plugin decides damage inside the simulation: it cancels 77, changes 55 to 11, and the host ignores a new amount that
+ * is below 0 or above the cap. The amount of a vehicle hit carries the shooter. The plugin runs the write guard on 88. A call
+ * with an amount of 0 or less asks nobody. The fixture checks the records and the guard in its next tick. */
+static void decision_check(void)
+{
+    HANDLE thread;
+    DWORD code;
+    CHECK(sv_damage_human(0, -1, 77, SV_DAMAGE_BULLET) == 0);
+    CHECK(sv_damage_human(0, -1, 55, SV_DAMAGE_BULLET) == 11);
+    CHECK(sv_damage_human(0, -1, 66, SV_DAMAGE_BULLET) == 66);
+    CHECK(sv_damage_human(0, -1, 67, SV_DAMAGE_BULLET) == 67);
+    CHECK(sv_damage_object(target_car, 55) == 11 && sv_damage_object(target_car, 77) == 0);
+    CHECK(sv_damage_human(rider_b, 0, 5, SV_DAMAGE_VEHICLE) == 5);
+    CHECK(sv_damage_human(0, -1, 88, SV_DAMAGE_BULLET) == 88);
+    CHECK(sv_damage_human(0, -1, 0, SV_DAMAGE_BULLET) == 0 && sv_damage_human(0, -1, -77, SV_DAMAGE_BULLET) == -77);
+    CHECK(sv_plugins_decide_damage(NULL) == 0);
+    thread = CreateThread(NULL, 0, damage_other_thread, NULL, 0, NULL);
+    CHECK(thread != NULL && WaitForSingleObject(thread, 5000) == WAIT_OBJECT_0 && GetExitCodeThread(thread, &code) && code == 0);
+    CloseHandle(thread);
 }
 
 /* A new body and a new object start at the scale 1, even when the slot had another value. */
@@ -479,6 +507,7 @@ static void write_api_tick(void)
     riders_check();
     effects_check(events, bone_before);
     damage_check();
+    decision_check();
     CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
     CHECK(sr_players[0].team == 3 && sr_humans[0].team == 3);
     CHECK(sr_players[0].look_b == 5 && sr_humans[0].look_b == 5 && sr_humans[0].look_e == 1);

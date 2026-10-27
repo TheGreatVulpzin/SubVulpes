@@ -22,7 +22,7 @@ SOURCE = {
 completed = 0
 
 
-def profile(entries, *, dependencies=None, approval=True, abi='1', live='1'):
+def profile(entries, *, dependencies=None, approval=True, abi='1', live='1', unsafe=None):
     folder = Path(tempfile.mkdtemp(prefix='native-', dir=CASES)).resolve()
     assert folder.is_relative_to(CASES.resolve())
     plugins = folder / 'plugins'
@@ -40,7 +40,8 @@ def profile(entries, *, dependencies=None, approval=True, abi='1', live='1'):
             shutil.copyfile(BUILD / 'tests/sv_test_helper_0e9b6.dll', target / 'sv_test_helper_0e9b6.dll')
         deps = (dependencies or {}).get(key, '')
         (target / 'plugin.ini').write_text(
-            f'[plugin]\nid={key}\nversion=0.1.0\nlibrary={binary.name}\napi={abi}\nlive={live}\ndependencies={deps}\n')
+            f'[plugin]\nid={key}\nversion=0.1.0\nlibrary={binary.name}\napi={abi}\nlive={live}\ndependencies={deps}\n' +
+            (f'unsafe_events={unsafe}\n' if unsafe is not None else ''))
         hashes.append(f'{key}={hashlib.sha256(binary.read_bytes()).hexdigest()}\n')
     if approval:
         (plugins / 'native-approvals.ini').write_text('[native]\n' + ''.join(hashes))
@@ -94,6 +95,16 @@ run(RUNNER, ['metrics'], profile(fixture), mode='normal', contains=['Plugin metr
 run(RUNNER, ['metrics'], profile(fixture), mode='resubscribe', contains=['PASS'], absent=['Plugin metrics'])
 run(RUNNER, ['lifecycle'], profile(fixture), contains=['fixture stop event'])
 run(RUNNER, ['fpu'], profile(fixture), mode='fpu', contains=['PASS'])
+# A decision inside the simulation needs unsafe_events=1. Without it the subscribe call is refused (every other run above
+# checks that in the fixture). A slow plugin and a failing plugin are disabled at the next tick.
+optional = {'test.fixture': 'enabled'}
+run(RUNNER, ['unsafe-budget'], profile(optional, unsafe='1'), mode='unsafe-budget',
+    contains=['Plugin failed: test.fixture: Too many slow damage decisions.', 'PASS'])
+run(RUNNER, ['unsafe-fail'], profile(optional, unsafe='1'), mode='unsafe-fail',
+    contains=['Plugin failed: test.fixture: Event callback reported failure.', 'PASS'])
+# The plugin list tells the administrator that this plugin takes damage decisions inside the simulation.
+run(RUNNER, ['metrics'], profile(fixture, unsafe='1'), mode='unsafe-budget',
+    contains=['takes damage decisions inside the simulation (unsafe_events)', 'PASS'])
 run(RUNNER, ['control'], profile(fixture), input='x' * 400 + '\nplugins disable test.fixture\n', contains=['PASS'])
 
 folder = profile({'sv.status': 'required'}, approval=False)

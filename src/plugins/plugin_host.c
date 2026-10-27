@@ -17,6 +17,8 @@ static uint32_t module_count;
 static SvOwner current;
 static DWORD server_thread;
 static int started, stopping, failed;
+/* 1 while a plugin runs a decision inside the simulation. Nothing that changes the game or the host may run then. */
+static int in_simulation;
 static HANDLE profile_lock = INVALID_HANDLE_VALUE;
 
 static SvModule *owner_module(SvOwner owner)
@@ -31,6 +33,11 @@ static SvModule *owner_module(SvOwner owner)
 int sv_plugins_context(SvOwner owner)
 {
     return !stopping && owner_module(owner) != NULL;
+}
+
+int sv_plugins_write_context(SvOwner owner)
+{
+    return sv_plugins_context(owner) && !in_simulation;
 }
 
 static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_t version, const void **api)
@@ -69,7 +76,7 @@ static SvResult SV_CALL host_status(SvOwner owner, SvStatus *status)
 static SvResult SV_CALL host_command(SvOwner owner, const char *name, uint32_t permission, SvCommandFn callback)
 {
     uint32_t i, slot = SV_PLUGIN_COMMAND_MAX;
-    if (!owner_module(owner) || stopping)
+    if (!owner_module(owner) || stopping || in_simulation)
         return SV_STATE;
     /* "plugins" is the management command. "admin" is the password login of the chat. */
     if (!sv_plugin_id(name) || !callback || permission > SV_COMMAND_LOCAL || !strcmp(name, "plugins") ||
@@ -93,10 +100,12 @@ static SvResult SV_CALL host_command(SvOwner owner, const char *name, uint32_t p
 static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn callback)
 {
     SvModule *module = owner_module(owner);
-    if (!module || stopping)
+    if (!module || stopping || in_simulation)
         return SV_STATE;
+    if ((events & SV_EVENT_DAMAGE) && !module->unsafe)
+        return SV_DENIED;
     if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
-                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL) ||
+                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE) ||
         (events && !callback))
         return SV_INVALID;
     module->events = events;
@@ -284,6 +293,8 @@ void sv_plugins_list(void)
         sv_log("PLUGIN\t%s\t%s\t%s\t%u\t%s\t%s", module->id, module->version,
             module->state == SV_MODULE_ACTIVE && !module->wanted ? "restart" : states[module->state],
             module->required, module->hash, module->reason);
+        if (module->unsafe && (module->events & SV_EVENT_DAMAGE))
+            sv_log("Plugin %s takes damage decisions inside the simulation (unsafe_events). Its owner takes the risk.", module->id);
         if (module->calls)
             sv_log("Plugin metrics: %s, %llu callbacks, %llu us total.", module->id,
                    (unsigned long long)module->calls, (unsigned long long)module->elapsed_us);
@@ -391,6 +402,83 @@ SvResult sv_plugins_decide(const SvEvent *event)
     return SV_OK;
 }
 
+/* The limits of a decision inside the simulation. A decision that takes longer than the first limit counts as slow. More
+ * than the second number of slow decisions in the window disables the plugin at the next safe point. */
+enum { DECISION_SLOW_US = 200, DECISION_SLOW_LIMIT = 10, DECISION_WINDOW_MS = 60000 };
+
+/* The host does not run the disable callback of a plugin in the middle of a calculation. It marks the plugin, and the next
+ * tick disables it. A marked plugin gets no more decisions. */
+static void note_slow(SvModule *module)
+{
+    ULONGLONG now = GetTickCount64();
+    if (!module->slow_count || now - module->slow_start_ms > DECISION_WINDOW_MS) {
+        module->slow_count = 0;
+        module->slow_start_ms = now;
+    }
+    if (++module->slow_count > DECISION_SLOW_LIMIT && !module->doom)
+        module->doom = "Too many slow damage decisions.";
+}
+
+int sv_plugins_decide_damage(SvDamageEvent *event)
+{
+    uint32_t i;
+    int amount;
+    if (!event)
+        return 0;
+    amount = event->amount;
+    if (!started || stopping || failed || current || in_simulation || GetCurrentThreadId() != server_thread)
+        return amount;
+    for (i = 0; i < module_count; ++i) {
+        SvModule *module = &modules[i];
+        SvResult result;
+        LARGE_INTEGER before, after, frequency;
+        unsigned control;
+        uint64_t microseconds;
+        if (module->state != SV_MODULE_ACTIVE || module->doom || !module->unsafe || !(module->events & SV_EVENT_DAMAGE))
+            continue;
+        event->amount = amount;
+        event->new_amount = amount;
+        QueryPerformanceCounter(&before);
+        control = enter(i);
+        in_simulation = 1;
+        result = module->event_callback(i + 1, &event->base);
+        in_simulation = 0;
+        leave(control);
+        QueryPerformanceCounter(&after);
+        QueryPerformanceFrequency(&frequency);
+        microseconds = (uint64_t)((after.QuadPart - before.QuadPart) * 1000000.0 / frequency.QuadPart);
+        ++module->calls;
+        module->elapsed_us += microseconds;
+        if (microseconds > DECISION_SLOW_US)
+            note_slow(module);
+        if (result == SV_DENIED) {
+            event->amount = event->new_amount = 0;
+            return 0;
+        }
+        if (result != SV_OK) {
+            module->doom = "Event callback reported failure.";
+            continue;
+        }
+        if (event->new_amount >= 0 && event->new_amount <= SV_DAMAGE_MAX)
+            amount = event->new_amount;
+    }
+    event->amount = event->new_amount = amount;
+    return amount;
+}
+
+static void reap(void)
+{
+    uint32_t i;
+    for (i = 0; i < module_count; ++i) {
+        const char *reason = modules[i].doom;
+        if (!reason)
+            continue;
+        modules[i].doom = NULL;
+        if (modules[i].state == SV_MODULE_ACTIVE)
+            deactivate(i, SV_MODULE_FAILED, reason);
+    }
+}
+
 /* The records that the core posted since the last tick. A record that a callback causes is for the next tick. */
 static void deliver_queue(void)
 {
@@ -414,6 +502,7 @@ int sv_plugins_wants(uint32_t kind)
 void sv_plugins_tick(void)
 {
     if (started && !stopping && !current && !failed) {
+        reap();
         deliver_queue();
         dispatch(SV_EVENT_TICK);
     }
@@ -586,11 +675,15 @@ int sv_plugins_cli(int argc, char **argv)
             return 2;
         }
         sv_log("Native code can read process data, corrupt memory, block or crash the server.");
+        if (module.unsafe)
+            sv_log("This plugin declares unsafe_events: it takes damage decisions inside the simulation, and the owner takes the risk.");
         sv_log("SHA256\t%s\t%s", module.id, module.hash);
         return 0;
     }
     if (argc == 4 && !strcmp(argv[1], "--plugin-approve")) {
         sv_log("Native approval accepts full process access and crash risk. A hash proves identity only.");
+        if (sv_plugin_inspect(argv[2], &module) && module.unsafe)
+            sv_log("This plugin declares unsafe_events: it takes damage decisions inside the simulation. A slow or wrong answer slows or breaks the game for every player, and the owner takes the risk.");
         if (!sv_plugin_approve(argv[2], argv[3])) {
             sv_log("Approval failed. Check the exact current SHA-256 and the private storage directory.");
             return 2;

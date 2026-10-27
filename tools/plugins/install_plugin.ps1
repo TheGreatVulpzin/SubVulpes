@@ -57,7 +57,7 @@ function Read-Manifest([byte[]]$Bytes) {
         if ($line -ceq '[plugin]' -and -not $section) { $section = $true; continue }
         if (-not $section -or $line -cnotmatch '^([a-z]+)=(.*)$') { throw 'Invalid manifest syntax.' }
         $key, $value = $Matches[1], $Matches[2]
-        if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies') -or $values.ContainsKey($key)) {
+        if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies', 'unsafe_events') -or $values.ContainsKey($key)) {
             throw 'Invalid or duplicate manifest field.'
         }
         $values[$key] = $value
@@ -70,6 +70,9 @@ function Read-Manifest([byte[]]$Bytes) {
     if ($values.library -cnotmatch '\.dll$' -or $values.library.Length -lt 5 -or
         $values.version -cnotmatch '^[A-Za-z0-9.+-]{1,23}$' -or $values.api -cne '1' -or $values.live -cnotmatch '^[01]$') {
         throw 'Invalid library, version, API or live setting.'
+    }
+    if ($values.ContainsKey('unsafe_events') -and $values.unsafe_events -cnotmatch '^[01]$') {
+        throw 'Invalid unsafe_events setting.'
     }
     $dependencies = @()
     if ($values.ContainsKey('dependencies') -and $values.dependencies) {

@@ -21,7 +21,7 @@ enum { MESSAGE_MAX = 63, KICK_IDLE_TICKS = 0x4b0 };
 
 static SvResult resolve(SvOwner owner, uint32_t kind, SvEntity entity, int32_t *index)
 {
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
         return SV_STATE;
     *index = sv_entity_resolve(kind, entity);
     return *index < 0 ? SV_NOT_FOUND : SV_OK;
@@ -53,7 +53,7 @@ static SvResult SV_CALL write_message(SvOwner owner, uint32_t kind, const char *
 {
     char buffer[MESSAGE_MAX + 1];
     SvResult result;
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
         return SV_STATE;
     result = copy_text(kind, text, buffer);
     if (result != SV_OK)
@@ -195,7 +195,7 @@ static SvResult SV_CALL write_item_create(SvOwner owner, uint32_t type, SvVector
     static const vec3 rotation[3] = { {1, 0, 0}, {0, 1, 0}, {0, 0, 1} };
     vec3 at;
     uint32_t index;
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
         return SV_STATE;
     if (type >= SV_ITEM_TYPE_COUNT || type == ITEM_NEWSPAPER || !item || !position_ok(position))
         return SV_INVALID;
@@ -276,7 +276,7 @@ static SvResult SV_CALL write_object_create(SvOwner owner, uint32_t type, SvVect
 {
     vec3 at, rotation[3];
     int index;
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
         return SV_STATE;
     if (type >= SV_OBJECT_TYPE_COUNT || color < 0 || color > SV_OBJECT_COLOR_MAX || !object || !position_ok(position) ||
         !finite(yaw))
@@ -309,7 +309,7 @@ static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float
 {
     vec3 at, rotation[3];
     int p, h;
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
         return SV_STATE;
     if (!player || !human || !position_ok(position) || !finite(yaw))
         return SV_INVALID;
@@ -376,7 +376,7 @@ static SvResult SV_CALL write_vehicle_exit(SvOwner owner, SvEntity human, int32_
 static SvResult SV_CALL write_sound(SvOwner owner, uint32_t index, SvVector position, float volume, float pitch)
 {
     vec3 at;
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
         return SV_STATE;
     if (index >= (uint32_t)sr_data_soundlist.num_sounds || !position_ok(position) || !finite(volume) || !finite(pitch) ||
         volume < 0.0f || volume > SV_SOUND_VOLUME_MAX || pitch < SV_SOUND_PITCH_MIN || pitch > SV_SOUND_PITCH_MAX)

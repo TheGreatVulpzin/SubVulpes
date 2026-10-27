@@ -1,7 +1,10 @@
 /* The damage scales of the plugin API. See plugin_damage.h. */
 #include "plugin_damage.h"
+#include "plugin_entities.h"
+#include "plugin_host.h"
 #include "sr_runtime.h"
 #include <math.h>
+#include <string.h>
 
 static float human_taken[SR_MAX_HUMAN], human_dealt[SR_MAX_HUMAN], object_taken[SR_MAX_OBJECT];
 static int ready;
@@ -28,7 +31,31 @@ static int scaled(int amount, float scale)
     return value > 100000.0 ? 100000 : (int)value;
 }
 
-int sv_damage_human(int victim, int shooter_player, int amount)
+/* Asks the plugins that decide damage inside the simulation. Most games have none, and then this is one check. */
+static int decide(unsigned source, int shooter_player, int human, int object, int amount)
+{
+    SvDamageEvent event;
+    if (amount <= 0 || !sv_plugins_wants(SV_EVENT_DAMAGE))
+        return amount;
+    memset(&event, 0, sizeof event);
+    event.base.size = sizeof event;
+    event.base.kind = SV_EVENT_DAMAGE;
+    event.base.tick = (uint32_t)sr_game.ticks;
+    event.source = source;
+    event.amount = event.new_amount = amount;
+    if (human >= 0 && human < SR_MAX_HUMAN)
+        event.human = sv_entity_at(SV_ENTITY_HUMAN, human);
+    if (object >= 0 && object < SR_MAX_OBJECT)
+        event.object = sv_entity_at(SV_ENTITY_OBJECT, object);
+    if (shooter_player >= 0 && shooter_player < SR_MAX_PLAYER) {
+        int body = sr_players[shooter_player].human_id;
+        if (body >= 0 && body < SR_MAX_HUMAN && sr_humans[body].active)
+            event.attacker = sv_entity_at(SV_ENTITY_HUMAN, body);
+    }
+    return sv_plugins_decide_damage(&event);
+}
+
+int sv_damage_human(int victim, int shooter_player, int amount, unsigned source)
 {
     float scale = 1.0f;
     ensure();
@@ -39,13 +66,15 @@ int sv_damage_human(int victim, int shooter_player, int amount)
         if (body >= 0 && body < SR_MAX_HUMAN)
             scale *= human_dealt[body];
     }
-    return scaled(amount, scale);
+    return decide(source, shooter_player, victim, -1, scaled(amount, scale));
 }
 
 int sv_damage_object(int object, int amount)
 {
     ensure();
-    return object >= 0 && object < SR_MAX_OBJECT ? scaled(amount, object_taken[object]) : amount;
+    if (object < 0 || object >= SR_MAX_OBJECT)
+        return amount;
+    return decide(SV_DAMAGE_OBJECT, -1, -1, object, scaled(amount, object_taken[object]));
 }
 
 float sv_damage_scale_object(int object)

@@ -25,6 +25,10 @@ typedef struct {
     SvEventFn event_callback;
     uint32_t events;
     uint32_t enabling;
+    uint32_t unsafe;
+    uint32_t slow_count;
+    uint64_t slow_start_ms;
+    const char *doom;
     uint32_t visiting;
     uint64_t calls;
     uint64_t elapsed_us;

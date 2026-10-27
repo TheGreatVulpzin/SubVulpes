@@ -568,7 +568,7 @@ static void human_levelcontacts(Human *hu, int h)
                                            (hu->bones[0].vel.x * hu->bones[0].vel.x +
                                             hu->bones[0].vel.y * hu->bones[0].vel.y)));
     if (0.25 < speed)
-      hu->health = hu->health - sv_damage_human((int)(hu - sr_humans), -1, 0x78);
+      hu->health = hu->health - sv_damage_human((int)(hu - sr_humans), -1, 0x78, SV_DAMAGE_VEHICLE);
   }
 }
 
@@ -710,7 +710,7 @@ static void human_objectcontacts(Human *hu, int h)
       s = (float)(g_intersect.normal[2] * rel.z + (rel.y * g_intersect.normal[1] + g_intersect.normal[0] * rel.x));
       if (!(0.1666666716337204 < s))
         continue;
-      hu->health = hu->health - sv_damage_human((int)(hu - sr_humans), -1, 0x78);
+      hu->health = hu->health - sv_damage_human((int)(hu - sr_humans), -1, 0x78, SV_DAMAGE_VEHICLE);
       if ((uint32_t)(hu->health + 0x77) < 0x78) {
         createevent_sound(g_soundlist.humanhit, &hu->pos, 1.0f, 0.5f);
         if (hu->player_id != -1 && sr_players[hu->player_id].team == 7 && 0 < hu->protect_timer && ob->driver != -1)

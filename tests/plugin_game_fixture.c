@@ -24,6 +24,10 @@ static int ref_ok[8];
 static uint32_t seen_chat, seen_chat_denied, seen_join;
 static char last_chat[64];
 static int chat_player_ok;
+/* What the fixture saw of the damage decisions: the amounts that the test program sends, in order, and the checks that run
+ * inside the callback. */
+static uint32_t damage_log_n, damage_log_source[8], damage_log_amount[8];
+static int damage_refs_ok = 1, damage_guard_ok;
 
 #define CHECK(test) do { if (!(test)) { \
     char text[160]; \
@@ -715,11 +719,58 @@ static SvResult runtime_reads(SvOwner owner)
     return host->log(owner, "PUBLIC_READ_RUNTIME_PASS");
 }
 
+static SvResult SV_CALL tick_forward(SvOwner owner, const SvEvent *event);
+
 /* A game event record: count it, and note the tick and whether its human reference is still valid. */
 static SvResult game_event(SvOwner owner, const SvEvent *event)
 {
     const SvGameEvent *record = (const SvGameEvent *)event;
     SvHumanState h = { sizeof h };
+    if (event->kind == SV_EVENT_DAMAGE) {
+        /* A decision inside the simulation. The amounts 77, 55, 66, 67, 88 and 5 are the ones that the test program uses. The
+         * record is writable, and new_amount is the only field that the fixture writes. */
+        SvDamageEvent *damage = (SvDamageEvent *)event;
+        SvValue value = { 0 };
+        SvObjectState object_state = { sizeof object_state };
+        if (event->size != sizeof *damage || damage->reserved || damage->new_amount != damage->amount)
+            return SV_FAILED;
+        if (damage->amount != 77 && damage->amount != 55 && damage->amount != 66 && damage->amount != 67 &&
+            damage->amount != 88 && damage->amount != 5)
+            return SV_OK;
+        if (damage_log_n < 8) {
+            damage_log_source[damage_log_n] = damage->source;
+            damage_log_amount[damage_log_n] = (uint32_t)damage->amount;
+            ++damage_log_n;
+        }
+        /* The references must resolve, and a read is allowed inside the decision. */
+        if (damage->human && game->human(owner, damage->human, &h) != SV_OK)
+            damage_refs_ok = 0;
+        if (damage->object && game->object(owner, damage->object, &object_state) != SV_OK)
+            damage_refs_ok = 0;
+        if (damage->attacker && game->human(owner, damage->attacker, &h) != SV_OK)
+            damage_refs_ok = 0;
+        if (damage->amount == 88) {
+            /* Every call that changes the game or the host is closed. */
+            value.i = 5;
+            damage_guard_ok = change->message(owner, SV_MESSAGE_SERVER, "late") == SV_STATE &&
+                change->sound(owner, 21, (SvVector){ 1.0f, 2.0f, 3.0f }, 1.0f, 1.0f) == SV_STATE &&
+                change->vehicle_exit(owner, human, 0) == SV_STATE && props->set(owner, pid_health, human, 0, value) == SV_STATE &&
+                props->add(owner, pid_health, human, 0, value) == SV_STATE &&
+                host->command(owner, "late", SV_COMMAND_PUBLIC, echo_command) == SV_STATE &&
+                host->subscribe(owner, SV_EVENT_TICK, tick_forward) == SV_STATE &&
+                props->get(owner, pid_health, human, 0, &value) == SV_OK && host->log(owner, "decision log") == SV_OK;
+            return SV_OK;
+        }
+        if (damage->amount == 77)
+            return SV_DENIED;
+        if (damage->amount == 55)
+            damage->new_amount = 11;
+        else if (damage->amount == 66)
+            damage->new_amount = -5;
+        else if (damage->amount == 67)
+            damage->new_amount = SV_DAMAGE_MAX + 1;
+        return SV_OK;
+    }
     if (event->kind == SV_EVENT_CHAT) {
         /* A decision: drop a text that has the word deny. */
         const SvChatEvent *chat = (const SvChatEvent *)event;
@@ -776,6 +827,13 @@ static int event_checks(void)
         ref_ok[0] == 1 && ref_ok[1] == 1 && ref_ok[2] == -1 && ref_ok[3] == 0;
 }
 
+static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event);
+/* The same function with the name that the guard test passes to subscribe. */
+static SvResult SV_CALL tick_forward(SvOwner owner, const SvEvent *event)
+{
+    return tick(owner, event);
+}
+
 static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
 {
     if (event->kind != SV_EVENT_TICK)
@@ -813,6 +871,14 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
         /* The chat texts that reached the plugin: hello, deny me (dropped), 63 letters and 99 letters cut to 63. */
         CHECK(seen_chat == 4 && seen_chat_denied == 1 && strlen(last_chat) == 63 && last_chat[0] == 'b' && chat_player_ok);
         CHECK(seen_join == 2);
+        /* The decisions of the test program, in order: deny, change, two bad answers, an object change and deny, a vehicle
+         * hit with a shooter, and the write guard. */
+        CHECK(damage_log_n == 8 && damage_refs_ok && damage_guard_ok);
+        CHECK(damage_log_source[0] == SV_DAMAGE_BULLET && damage_log_amount[0] == 77 && damage_log_amount[1] == 55 &&
+              damage_log_amount[2] == 66 && damage_log_amount[3] == 67);
+        CHECK(damage_log_source[4] == SV_DAMAGE_OBJECT && damage_log_amount[4] == 55 && damage_log_source[5] == SV_DAMAGE_OBJECT &&
+              damage_log_amount[5] == 77 && damage_log_source[6] == SV_DAMAGE_VEHICLE && damage_log_amount[6] == 5 &&
+              damage_log_source[7] == SV_DAMAGE_BULLET && damage_log_amount[7] == 88);
         CHECK(game->player(owner, player, &p) == SV_NOT_FOUND);
         CHECK(game->human(owner, human, &h) == SV_NOT_FOUND);
         CHECK(game->item(owner, item, &it) == SV_NOT_FOUND);
@@ -859,9 +925,9 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
-    CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x400u, tick) == SV_INVALID);
+    CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x4000u, tick) == SV_INVALID);
     return host->subscribe(owner, SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
-        SV_EVENT_CHAT | SV_EVENT_JOIN, tick);
+        SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE, tick);
 }
 
 static void SV_CALL disable(SvOwner owner)

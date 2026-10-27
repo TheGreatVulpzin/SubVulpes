@@ -88,6 +88,11 @@ static int metadata(const char *id, SvModule *module)
     if (!value(module->path, "live", number, sizeof number) || (strcmp(number, "0") && strcmp(number, "1")))
         return 0;
     module->live = number[0] == '1';
+    /* Optional: the plugin asks for decisions inside the simulation (SV_EVENT_DAMAGE). See docs/plugin-events.md. */
+    n = GetPrivateProfileStringA("plugin", "unsafe_events", "0", number, sizeof number, module->path);
+    if (n != 1 || (number[0] != '0' && number[0] != '1'))
+        return 0;
+    module->unsafe = number[0] == '1';
     if (!value(module->path, "library", library, sizeof library) || !sv_plugin_id(library) ||
         strlen(library) < 5 || strcmp(library + strlen(library) - 4, ".dll"))
         return 0;

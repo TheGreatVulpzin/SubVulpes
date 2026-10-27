@@ -1,6 +1,8 @@
 #ifndef SV_PLUGIN_DAMAGE_H
 #define SV_PLUGIN_DAMAGE_H
 
+#include "sv_game_events.h"
+
 /* The damage scales that plugins set through the property table. See docs/plugin-events.md.
  *
  * A scale is a decimal number from 0 to 100, 1 by default. The core multiplies each damage by the scales that apply and
@@ -9,9 +11,11 @@
  * and not in them, because the record layouts are fixed. */
 
 /* The damage of a hit on a human. The victim has its taken scale. The shooter, a player index or -1, has the dealt scale
- * of its human. An amount of 0 or less stays as it is. */
-int sv_damage_human(int victim, int shooter_player, int amount);
-/* The damage to the health of an object, from a bullet, a crash or any other cause. */
+ * of its human. An amount of 0 or less stays as it is. Then the plugins that asked for SV_EVENT_DAMAGE decide, with the
+ * source SV_DAMAGE_BULLET or SV_DAMAGE_VEHICLE. */
+int sv_damage_human(int victim, int shooter_player, int amount, unsigned source);
+/* The damage to the health of an object, from a bullet, a crash or any other cause. The scale applies, and then the
+ * plugins that asked for SV_EVENT_DAMAGE decide, with the source SV_DAMAGE_OBJECT. */
 int sv_damage_object(int object, int amount);
 /* The taken scale of an object, for the damage that is not a whole number (a window loses a decimal amount). */
 float sv_damage_scale_object(int object);
