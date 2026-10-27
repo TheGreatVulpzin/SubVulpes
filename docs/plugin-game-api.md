@@ -228,4 +228,4 @@ Actor zero is the local operator on the server console. The chat never sends it.
 The host refuses a denied command and logs `Plugin command permission denied`. The host reserves the names `plugins` and `admin`.
 The tests run the chat function against a real player record. They check the three levels, an unknown command, and a player with no reference.
 Removing the routing, the admin flag check, the zero-actor guard or the `admin` reservation made `game-api` fail each time.
-A plugin cannot yet answer one player: `message` goes to every client. The [legacy module list](legacy-modules.md) names this as N1.
+A plugin answers one player with `message_to`. The server filters that event for each connection, so the original client gets a normal message. The [legacy module list](legacy-modules.md) names this as N1.

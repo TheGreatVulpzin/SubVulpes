@@ -14,7 +14,8 @@ An absent API operation is work to plan, rather than a permanent restriction on 
 
 The inventory below describes target capabilities. It does not claim complete implementation.
 The implemented [read capability](plugin-game-api.md) covers copied entity, inventory, bone and world snapshots.
-Most mutations, decisions and owned game resources remain unimplemented.
+The [write capability](plugin-game-api.md#write-capability-version-1) has ten methods: messages, kick, money, god mode, health, teleport, admin flag, team and looks.
+Most other mutations, decisions that plugins can replace and owned game resources remain unimplemented.
 Internal C functions establish implementation seams. They are not a safe or stable external contract by themselves.
 
 ## Coverage by system
