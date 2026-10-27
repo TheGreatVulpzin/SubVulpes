@@ -134,3 +134,12 @@ It does not cover the level and object contacts in `humans.c` and `objects.c`, t
 The last-slot case of `chase_crew` and a full spawn with a free slot are also not run. A failed spawn can leave guards made before the failure.
 One behavior changed: `scenario_createchase` returns -1, not 0, when the city has no roads, and no mission is made then. See `docs/game/physics.md`.
 A first test run failed only because a new test cleared the humans that an older test used. The order is fixed.
+
+## OpenSubRosa24 launcher and package import
+
+Upstream `770193c`, `f856e3c` and `50a8177` are imported as local commits `abb364b`, `c70854c` and `be11b1f`. See [synchronization evidence](upstream-sync.md).
+The launcher makes an admin password when `config.txt` has none and refuses a blank one. The package has no `config.txt`.
+After a normal build, all seven CTest groups passed, including the new `package-contents` group (24 checks).
+The launcher window is not exercised. First-run password creation and the Start refusal have no automated or manual check.
+The remote `origin/main` is at `74dda0e`, not only at the initial commit `535c789`. Local `main` is 22 commits ahead and a fast-forward push applies.
+No push or tag was made.

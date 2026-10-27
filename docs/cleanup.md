@@ -20,6 +20,14 @@ Add new items here when you find them.
   Replace the copies with the shared names. Check that each value is equal before the change.
 - `NUM_SLOTS` has two meanings. It is 8 in `human_body.c` and 7 in `human_items.c`. Give each a clear name.
 
+## Backport candidates
+
+These are ideas to review for the sibling OpenSubRosa24 repository. Nothing here changes that repository.
+A backport there must pass its own verification tools, which this repository does not have.
+
+- The shared limit names from the first open item, when the same files exist there.
+- The bond capacity guards and spawn rollback. They change behavior when a pool is full, so they need their own review there.
+
 ## Done
 
 None yet.
