@@ -13,8 +13,6 @@
 #include "sr_runtime.h"
 #include "vectors.h"
 
-#define MAX_ITEMS 0x400
-#define MAX_HUMANS 0x200
 #define NO_LIMIT 0xffff       /* time_to_live of an item that stays */
 #define LOOSE_LIFE 18000      /* the longest life of a loose item, in ticks */
 #define PHONE_RING_LIFE 0x2ff /* the ticks that a phone rings before the call ends */
@@ -157,7 +155,7 @@ static void key_logic(const Item *it)
     uint32_t vehicle = (uint32_t)it->vehicle_id;
     int human;
 
-    if (vehicle >= MAX_ITEMS)
+    if (vehicle >= SR_MAX_ITEM)
         return;
     human = it->parent_human;
     g_object[vehicle].key_away = 1;
@@ -173,7 +171,7 @@ static void phone_dial(Item *it, int item)
 
     it->phone_number = 0;
     it->cooldown = PHONE_REDIAL;
-    for (j = 0; j < MAX_ITEMS; j++) {
+    for (j = 0; j < SR_MAX_ITEM; j++) {
         Item *other = &sr_items[j];
 
         if (other->active != 0 && j != item && other->type == ITEM_CELL_PHONE &&
@@ -224,7 +222,7 @@ static void phone_use(Item *it, int item)
     int j;
 
     if (other == -1) {
-        for (j = 0; j < MAX_ITEMS; j++) {
+        for (j = 0; j < SR_MAX_ITEM; j++) {
             Item *caller = &sr_items[j];
 
             if (caller->active != 0 && j != item && caller->type == ITEM_CELL_PHONE && caller->linked_item == item) {
@@ -294,7 +292,7 @@ static void bandage_logic(Item *it)
     int target = -1;
     int h;
 
-    for (h = 0; h < MAX_HUMANS; h++) {
+    for (h = 0; h < SR_MAX_HUMAN; h++) {
         const Human *hu = &sr_humans[h];
 
         if (hu->active != 0 && hu->health > -5 && (hu->bleeding != 0 || hu->health < 10)) {
@@ -320,7 +318,7 @@ void itemlogic(void)
 {
     int i;
 
-    for (i = 0; i < MAX_ITEMS; i++) {
+    for (i = 0; i < SR_MAX_ITEM; i++) {
         Item *it = &sr_items[i];
 
         if (it->active == 0)

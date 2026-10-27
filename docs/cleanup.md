@@ -14,10 +14,6 @@ Add new items here when you find them.
 
 ## Open items
 
-- Duplicate local limits. Several files define their own copy of a pool size, for example `NUM_HUMANS` in
-  `human_body.c` and `human_pose.c`, `MAX_HUMANS` in `item_logic.c` and `item_physics.c`, and `MAX_ITEMS` in
-  four files. `src/include/sr_limits.h` already defines `SR_MAX_HUMAN` and the other shared limits.
-  Replace the copies with the shared names. Check that each value is equal before the change.
 - `NUM_SLOTS` has two meanings. It is 8 in `human_body.c` and 7 in `human_items.c`. Give each a clear name.
 
 ## Backport candidates
@@ -30,4 +26,6 @@ A backport there must pass its own verification tools, which this repository doe
 
 ## Done
 
-None yet.
+- Duplicate pool limits. `NUM_HUMANS`, `MAX_HUMANS` and `MAX_ITEMS` are gone from seven files in `src/game/` and `src/net/`.
+  They now use `SR_MAX_HUMAN` and `SR_MAX_ITEM` from `sr_limits.h`. The values were equal (512 and 1024).
+  The build and all seven CTest groups pass. No test fails on a changed pool size, so a wrong value would not show there.

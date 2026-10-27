@@ -15,7 +15,6 @@
 /* Game globals. */
 #define g_body sr_data_body /* the bone tree: the parent and the offset of each bone */
 
-#define NUM_HUMANS 0x200
 #define NUM_SLOTS 8
 #define NUM_BONES 15
 #define EVENT_HUMAN 0x11 /* attach_type 1: a new human, 0: the end of a human */
@@ -28,7 +27,7 @@ void deletehuman(uint32_t human)
     Event *ev;
     int p, s, k;
 
-    if (human >= NUM_HUMANS)
+    if (human >= SR_MAX_HUMAN)
         return;
     hu = &sr_humans[human];
     p = hu->player_id;
@@ -246,10 +245,10 @@ int createhuman(float *posp, float *rot, int player)
 
     if (!bonds_available(28))
         return -1;
-    for (h = 0; h < NUM_HUMANS; h++)
+    for (h = 0; h < SR_MAX_HUMAN; h++)
         if (humans[h].active == 0)
             break;
-    if (h == NUM_HUMANS)
+    if (h == SR_MAX_HUMAN)
         return -1;
     hu = &humans[h];
     memset(hu, 0, sizeof *hu);

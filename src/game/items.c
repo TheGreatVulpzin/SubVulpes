@@ -15,7 +15,6 @@
 #include "plugin_entities.h"
 #include "sr_runtime.h"
 
-#define MAX_ITEMS 0x400
 #define NO_LIMIT 0xffff /* time_to_live of an item that stays */
 
 /* Game globals. */
@@ -130,7 +129,7 @@ void item_removehumanlink(uint32_t item, int human, int slot)
         }
         s->items[i] = s->items[--s->count];
         it->parent_human = -1;
-        if (sr_server && item < MAX_ITEMS) {
+        if (sr_server && item < SR_MAX_ITEM) {
             uint32_t *count = &sr_data_numofevents;
             uint32_t index = *count;
             Event *ev = sr_data_event + index;
@@ -171,7 +170,7 @@ uint32_t createitem(int type, const vec3 *pos, const vec3 *vel, const vec3 rot[3
     Item *it;
     uint32_t i;
     for (i = 0; sr_items[i].active != 0; i++)
-        if (i + 1 == MAX_ITEMS)
+        if (i + 1 == SR_MAX_ITEM)
             return 0xffffffff;
     it = &sr_items[i];
     memset(it, 0, sizeof *it);
@@ -231,7 +230,7 @@ int linkitem(uint32_t item, uint32_t child, int human, int slot)
 {
     Item *it = &sr_items[item];
     int count;
-    if (item >= MAX_ITEMS)
+    if (item >= SR_MAX_ITEM)
         return 0;
     if (child != 0xffffffff) {
         int old_slot = sr_items[child].parent_slot;
@@ -283,7 +282,7 @@ void itemtimetolive(void)
 {
     Item *it = sr_items;
     uint32_t i;
-    for (i = 0; i < MAX_ITEMS; i++, it++) {
+    for (i = 0; i < SR_MAX_ITEM; i++, it++) {
         if (it->active == 0)
             continue;
         if (it->time_to_live < NO_LIMIT)
@@ -301,7 +300,7 @@ void itemtimetolive(void)
         }
         if (it->parent_item != -1)
             item_removeitemlink(i, (uint32_t)it->parent_item);
-        if (it->type == ITEM_KEY && (uint32_t)it->vehicle_id < MAX_ITEMS)
+        if (it->type == ITEM_KEY && (uint32_t)it->vehicle_id < SR_MAX_ITEM)
             sr_objects[it->vehicle_id].time_to_live = 0; /* the vehicle goes with its key */
         it->active = 0;
         sv_entity_deleted(SV_ENTITY_ITEM, i);

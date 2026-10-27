@@ -13,7 +13,6 @@
 #define g_xaxis sr_data_xaxis /* (1 0 0) */
 #define g_body sr_data_body   /* the bone tree: the parent and the offset of each bone */
 
-#define NUM_HUMANS 0x200
 #define NUM_BONES 15
 #define MAX_KNEE 0.785398185f /* pi / 4 */
 
@@ -76,7 +75,7 @@ void human_collisionhuman(int human)
     float len, inv;
     int o, i, j;
 
-    for (o = human + 1; o < NUM_HUMANS; o++) {
+    for (o = human + 1; o < SR_MAX_HUMAN; o++) {
         const Human *other = &sr_humans[o];
         const vec3 *p = &other->bones[0].pos;
 

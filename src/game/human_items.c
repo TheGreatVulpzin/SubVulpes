@@ -23,7 +23,6 @@
 #include "sr_server.h"
 #include "vectors.h"
 
-#define MAX_ITEMS 0x400
 #define NUM_SLOTS 7 /* the slots that hold items on the body: two hands and five pockets */
 #define NUM_POCKETS 5
 #define FIRST_POCKET 2
@@ -140,7 +139,7 @@ static void pick_up(Human *hu, int human, int hand)
     to.x = (float)(head->pos.x - head->rot[2].x * 1.5);
     to.y = (float)(head->pos.y - head->rot[2].y * 1.5);
     to.z = (float)(head->pos.z - head->rot[2].z * 1.5);
-    for (i = 0; i < MAX_ITEMS; i++) {
+    for (i = 0; i < SR_MAX_ITEM; i++) {
         const Item *it = &sr_items[i];
 
         if (it->active != 0 && it->parent_human == -1 && it->parent_item == -1 &&
@@ -229,7 +228,7 @@ static void full_hand(Human *hu, int human, int hand, const Keys *k)
         it->flags |= 1;
     if (k->now & BTN_LOAD)
         it->flags |= 2;
-    if ((k->now & BTN_DROP) && (uint32_t)s->items[0] < MAX_ITEMS)
+    if ((k->now & BTN_DROP) && (uint32_t)s->items[0] < SR_MAX_ITEM)
         drop_item(s->items[0]);
     if (key_edge(k, BTN_LOAD) && s->count > 0 && hu->inventory[other].count > 0) {
         uint32_t held = s->items[0];
@@ -270,7 +269,7 @@ static void swap_hands(Human *hu, int human)
         } else {
             uint32_t right = hu->inventory[1].items[0];
 
-            if (left < MAX_ITEMS)
+            if (left < SR_MAX_ITEM)
                 drop_item(left);
             linkitem(right, 0xffffffff, human, 0);
             linkitem(left, 0xffffffff, human, 1);

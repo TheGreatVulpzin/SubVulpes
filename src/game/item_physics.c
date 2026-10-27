@@ -19,8 +19,6 @@
 #include "sr_runtime.h"
 #include "vectors.h"
 
-#define MAX_ITEMS 0x400
-#define MAX_HUMANS 0x200
 #define NUM_BONES 15
 #define BONE_LEFT_HAND 5
 #define BONE_RIGHT_HAND 8
@@ -158,7 +156,7 @@ void item_physicssimulation(int item)
     it->ang_momentum.y = (float)(it->ang_momentum.y + it->dw.y);
     it->ang_momentum.z = (float)(it->ang_momentum.z + it->dw.z);
 
-    for (h = 0; h < MAX_HUMANS; h++) {
+    for (h = 0; h < SR_MAX_HUMAN; h++) {
         Human *hu = &sr_humans[h];
 
         if (hu->active == 0)
@@ -388,7 +386,7 @@ void itemsimulation(void)
 {
     int i;
 
-    for (i = 0; i < MAX_ITEMS; i++) {
+    for (i = 0; i < SR_MAX_ITEM; i++) {
         Item *it = &sr_items[i];
 
         if (it->active == 0)
@@ -409,7 +407,7 @@ void itemsimulation(void)
         }
         it->pos_prev = it->pos;
     }
-    for (i = 0; i < MAX_ITEMS; i++) {
+    for (i = 0; i < SR_MAX_ITEM; i++) {
         if (sr_items[i].active != 0 && sr_items[i].parent_item != -1)
             item_follow(&sr_items[i]);
     }

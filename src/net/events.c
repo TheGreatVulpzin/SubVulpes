@@ -13,7 +13,6 @@
 #include "area.h"
 #include "sr_runtime.h"
 
-#define MAX_ITEMS 0x400
 #define sr_market sr_data_market
 /* The first event that eventsimulation did not handle yet (it lives in BlockTemp). */
 #define lastevent (*((uint32_t *)&sr_data_blocktemp.unused_7602c))
@@ -65,7 +64,7 @@ void createevent_updateitem(uint32_t item)
     Event *ev;
     uint32_t index;
     int param;
-    if (sr_server == 0 || item >= MAX_ITEMS)
+    if (sr_server == 0 || item >= SR_MAX_ITEM)
         return;
     param = (it->active + it->type * 2) * 0x400 + (int)item;
     index = *count;
@@ -84,7 +83,7 @@ void createevent_updateiteminfo(uint32_t item)
 {
     const Item *it = &sr_items[item];
     Event *ev;
-    if (sr_server == 0 || item >= MAX_ITEMS)
+    if (sr_server == 0 || item >= SR_MAX_ITEM)
         return;
     ev = new_event(6);
     ev->param = (int)item;
