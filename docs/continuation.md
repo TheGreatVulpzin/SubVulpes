@@ -130,8 +130,10 @@ After a normal build, all six CTest groups passed, with `game-api` at 0.90 secon
 `gen_storage.py --check`, `check_native.py` and `check_repo.py` passed.
 `tests/physics_bounds.c` covers these cases directly: contact bonds at full, one free and out-of-range counts; `createhuman` at 27 and 28 free bonds; the 32-joint and 128-muscle lists;
 door and gun holds in both hands; the human contact and door bond; a full player list and one free player slot; and rollback of traffic, chase and guard spawns when humans, bonds or objects are full.
-It does not cover the level and object contacts in `humans.c` and `objects.c`, the wheel and track bonds in `wheels.c`, or a failed `createhuman` in `game_setup.c` and `logic_sim.c`. They need level geometry.
-The last-slot case of `chase_crew` and a full spawn with a free slot are also not run. A failed spawn can leave guards made before the failure.
+A later pass adds a flat landscape and covers the wheel and wheel-body bonds, the level and object contacts of a human, the level contacts of an object (from its last place and from its center) and the contacts between two objects.
+It also sweeps `scenario_createchase` from 0 to all spare bonds, with 0 or 254 players taken, and checks that each new player keeps a living human. The 254 case reaches the last-slot case of `chase_crew`.
+Each guard was removed in turn, and `game-api` failed every time: `wheels.c` (wheel and wheel body), `humans.c` (level and object) and `objects.c` (two objects). With the guard in `contact_bond` removed and its direct test off, the object tests still failed.
+Not covered: the track bonds of `objecttrainsimulation`, and a failed `createhuman` in `game_setup.c`, `logic_sim.c` and `logic.c`. A failed spawn can leave guards made before the failure.
 One behavior changed: `scenario_createchase` returns -1, not 0, when the city has no roads, and no mission is made then. See `docs/game/physics.md`.
 A first test run failed only because a new test cleared the humans that an older test used. The order is fixed.
 
