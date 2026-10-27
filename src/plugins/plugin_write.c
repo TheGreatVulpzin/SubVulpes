@@ -9,6 +9,8 @@
 #include "events.h"
 #include "items.h"
 #include "objects.h"
+#include "player.h"
+#include "humans.h"
 #include "server.h"
 #include "sr_runtime.h"
 #include "sr_server.h"
@@ -382,9 +384,57 @@ static SvResult SV_CALL write_stun(SvOwner owner, SvEntity human, int32_t ticks)
     return SV_OK;
 }
 
+static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float yaw, SvEntity *player, SvEntity *human)
+{
+    vec3 at, rotation[3];
+    int p, h;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!player || !human || !position_ok(position) || !finite(yaw))
+        return SV_INVALID;
+    at.x = position.x;
+    at.y = position.y;
+    at.z = position.z;
+    p = createplayer();
+    if (p < 0)
+        return SV_LIMIT;
+    strcpy(sr_players[p].name, "NPC");
+    sr_players[p].team = 6;
+    sr_players[p].is_bot = 1;
+    createevent_updateplayer(p);
+    resetorientation(rotation);
+    rotateorientation(rotation, &rotation[1], yaw);
+    h = createhuman(&at.x, &rotation[0].x, p);
+    if (h < 0) {
+        deleteplayer(p);
+        return SV_LIMIT;
+    }
+    /* The game sets the position of a human at its first tick. Set it now so that a read sees the place. */
+    sr_humans[h].pos = sr_humans[h].bones[0].pos;
+    sr_players[p].yaw = yaw;
+    sr_players[p].human_id = h;
+    createevent_updateplayer(p);
+    *player = sv_entity_at(SV_ENTITY_PLAYER, p);
+    *human = sv_entity_at(SV_ENTITY_HUMAN, h);
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_npc_remove(SvOwner owner, SvEntity player)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
+    if (result != SV_OK)
+        return result;
+    if (!sr_players[index].is_bot)
+        return SV_DENIED;
+    /* A nonzero time in the past ends the bot in the next world logic pass. */
+    sr_players[index].despawn_time = -1;
+    return SV_OK;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
     write_godmode, write_health, write_teleport, write_admin, write_team, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
-    write_object_create, write_object_remove, write_bleeding, write_stun
+    write_object_create, write_object_remove, write_bleeding, write_stun, write_npc_create, write_npc_remove
 };

@@ -54,6 +54,21 @@ static SvResult SV_CALL localonly_command(SvOwner owner, uint64_t actor, const c
     return report(owner, "localonly", actor, arguments);
 }
 
+/* The test program leaves too few bonds for a human, then runs this command. A bot must not stay behind. */
+static SvResult SV_CALL npclimit_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    SvEntity page[SV_ENTITY_PAGE_MAX], none_player = 0, none_human = 0;
+    const SvVector at = { 10.0f, 20.0f, 30.0f };
+    uint32_t before = 0, after = 0, next = 0;
+    (void)actor;
+    (void)arguments;
+    if (game->entities(owner, SV_ENTITY_PLAYER, 0, page, SV_ENTITY_PAGE_MAX, &before, &next) != SV_OK ||
+        change->npc_create(owner, at, 0.0f, &none_player, &none_human) != SV_LIMIT || none_player || none_human ||
+        game->entities(owner, SV_ENTITY_PLAYER, 0, page, SV_ENTITY_PAGE_MAX, &after, &next) != SV_OK || before != after)
+        return host->log(owner, "NPC_LIMIT_FAILURE");
+    return host->log(owner, "NPC_LIMIT_PASS");
+}
+
 static DWORD WINAPI write_wrong_thread(void *argument)
 {
     (void)argument;
@@ -267,6 +282,36 @@ static int change_objects(SvOwner owner)
     return change->object_remove(owner, made) == SV_OK;
 }
 
+/* Make and remove a bot. Returns 0 when all checks pass, or the line of the check that failed. */
+#define STEP(condition) do { if (!(condition)) return __LINE__; } while (0)
+static int change_npc(SvOwner owner)
+{
+    const SvVector at = { 70.0f, 22.0f, 80.0f };
+    SvVector bad = at;
+    SvPlayerState ps = { sizeof ps };
+    SvHumanState hs = { sizeof hs };
+    SvBoneState bs = { sizeof bs };
+    SvEntity npc_player = 0, npc_human = 0, none = 0;
+    uint32_t nan_bits = 0x7fc00000u;
+    float yaw_nan;
+    memcpy(&bad.x, &nan_bits, sizeof bad.x);
+    memcpy(&yaw_nan, &nan_bits, sizeof yaw_nan);
+    STEP(change->npc_create(owner, at, 0.0f, NULL, &none) == SV_INVALID);
+    STEP(change->npc_create(owner, at, 0.0f, &none, NULL) == SV_INVALID);
+    STEP(change->npc_create(owner, bad, 0.0f, &none, &none) == SV_INVALID);
+    STEP(change->npc_create(owner, at, yaw_nan, &none, &none) == SV_INVALID && none == 0);
+    STEP(change->npc_create(owner, at, 1.0f, &npc_player, &npc_human) == SV_OK && npc_player && npc_human);
+    STEP(game->player(owner, npc_player, &ps) == SV_OK && ps.is_bot == 1 && ps.team == 6 && ps.human == npc_human);
+    STEP(strcmp(ps.name, "NPC") == 0);
+    STEP(game->human(owner, npc_human, &hs) == SV_OK && hs.player == npc_player && hs.health == 100);
+    STEP(game->bone(owner, npc_human, 0, &bs) == SV_OK && hs.position.x == bs.position.x && hs.position.y == bs.position.y &&
+         hs.position.z == bs.position.z && hs.position.x != 0.0f);
+    STEP(change->npc_remove(owner, npc_human) == SV_NOT_FOUND);
+    STEP(change->npc_remove(owner, player) == SV_DENIED);
+    STEP(change->npc_remove(owner, npc_player) == SV_OK);
+    return 0;
+}
+
 /* Bad input must change nothing. The test program checks the game state after the tick. */
 static SvResult write_checks(SvOwner owner)
 {
@@ -318,6 +363,15 @@ static SvResult write_checks(SvOwner owner)
     CHECK(change_player_fields(owner));
     CHECK(change_items(owner));
     CHECK(change_objects(owner));
+    {
+        int bad_line = change_npc(owner);
+        if (bad_line) {
+            char text[80];
+            snprintf(text, sizeof text, "NPC check failed at line %d.", bad_line);
+            host->log(owner, text);
+            return SV_FAILED;
+        }
+    }
     CHECK(change->kick(owner, human) == SV_NOT_FOUND);
     CHECK(change->kick(owner, player) == SV_OK);
     thread = CreateThread(NULL, 0, write_wrong_thread, NULL, 0, NULL);
@@ -436,6 +490,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->command(owner, "echo", SV_COMMAND_PUBLIC, echo_command) == SV_OK);
     CHECK(host->command(owner, "secret", SV_COMMAND_ADMIN, secret_command) == SV_OK);
     CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);
+    CHECK(host->command(owner, "npclimit", SV_COMMAND_LOCAL, npclimit_command) == SV_OK);
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);

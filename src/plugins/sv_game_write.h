@@ -63,6 +63,13 @@ typedef struct {
     /* Sets the stun timer of a human, from 0 to SV_STUN_MAX ticks. The torso is weak while it runs, so the body staggers.
      * The game counts it down by 1 each tick. */
     SvResult (SV_CALL *set_stun)(SvOwner owner, SvEntity human, int32_t ticks);
+    /* Makes a bot player on foot, named NPC, in team 6 like the bots of the game, with a human at the position turned by the
+     * yaw angle. It has no route and no end time. Both references go out only on success. SV_LIMIT means that no player
+     * slot, human slot or bond is free, and then nothing is left behind. */
+    SvResult (SV_CALL *npc_create)(SvOwner owner, SvVector position, float yaw, SvEntity *player, SvEntity *human);
+    /* Asks the game to remove a bot. Its bot expiry removes the human and the player in the next world logic pass.
+     * SV_DENIED for a player who is not a bot. */
+    SvResult (SV_CALL *npc_remove)(SvOwner owner, SvEntity player);
 } SvGameWrite;
 #pragma pack(pop)
 

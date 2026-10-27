@@ -164,6 +164,21 @@ static int event_bits(int index, int conn)
     return sr_bsdsocket.send_size * 8 + sr_bsdsocket.send_bit;
 }
 
+/* The bot of the fixture ends in the world logic pass of the game, and its human goes without a player. */
+static void npc_check(void)
+{
+    int i, npc = -1, human;
+    for (i = 2; i < 256; ++i)
+        if (sr_players[i].active && sr_players[i].is_bot && !strcmp(sr_players[i].name, "NPC"))
+            npc = i;
+    CHECK(npc >= 0 && sr_players[npc].team == 6 && sr_players[npc].despawn_time == -1);
+    human = sr_players[npc].human_id;
+    CHECK(human >= 0 && sr_humans[human].active && sr_humans[human].player_id == npc);
+    sr_game.state = 3;
+    logicsimulation_world();
+    CHECK(!sr_players[npc].active && sr_humans[human].despawn_timer == 0 && sr_humans[human].player_id == -1);
+}
+
 /* The fixture calls the write API in this tick. The game state shows what the calls did. */
 static void write_api_tick(void)
 {
@@ -244,6 +259,8 @@ static void write_api_tick(void)
     sv_entity_deleted(SV_ENTITY_PLAYER, 1);
     sr_players[1].active = 0;
     sr_players[1].is_bot = 0;
+    /* The fixture made a bot and asked for its removal. The world logic pass removes it. */
+    npc_check();
 }
 
 /* Plugin commands in the chat. Only the PUBLIC command runs for a player. The ADMIN command runs
@@ -275,6 +292,20 @@ static void chat_commands(void)
     strcpy(text, "/localonly two");
     CHECK(server_playermessage(0, text) == 1);
     sr_players[0].is_admin = 0;
+}
+
+/* With too few bonds for a human, npc_create must fail with no player left behind. */
+static void npc_limit(void)
+{
+    int bonds = sr_numofbonds, i, active_before = 0, active_after = 0;
+    for (i = 0; i < 256; ++i)
+        active_before += sr_players[i].active != 0;
+    sr_numofbonds = SR_MAX_BOND - 10;
+    CHECK(sv_plugins_command(0, "npclimit"));
+    for (i = 0; i < 256; ++i)
+        active_after += sr_players[i].active != 0;
+    CHECK(sr_numofbonds == SR_MAX_BOND - 10 && active_before == active_after);
+    sr_numofbonds = bonds;
 }
 
 int main(void)
@@ -322,6 +353,7 @@ int main(void)
     sr_data_object[0].num_wheels = 0;
     write_api_tick();
     chat_commands();
+    npc_limit();
     sv_game_reset();
     sv_entities_clear(SV_ENTITY_HUMAN);
     sv_entities_clear(SV_ENTITY_ITEM);
