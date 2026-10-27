@@ -25,18 +25,34 @@ void sv_game_reset(void) { ++reset_sequence; }
 int sv_game_is_ready(void) { return ready; }
 uint64_t sv_game_reset_sequence(void) { return reset_sequence; }
 
+/* Every capability has an id, one version and a table. The tables of the system areas are stubs
+ * until their owners add methods. See docs/parallel-work.md. */
+typedef struct {
+    uint32_t capability, version;
+    const void *table;
+} Capability;
+
+static const Capability capabilities[] = {
+    { SV_API_GAME_READ, SV_GAME_READ_VERSION, &sv_game_read },
+    { SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &sv_game_write },
+    { SV_API_AI, SV_GAME_AI_VERSION, &sv_game_ai },
+    { SV_API_ECONOMY, SV_GAME_ECONOMY_VERSION, &sv_game_economy },
+    { SV_API_MISSION, SV_GAME_MISSION_VERSION, &sv_game_mission },
+    { SV_API_SETTINGS, SV_GAME_SETTINGS_VERSION, &sv_game_settings },
+    { SV_API_STORAGE, SV_GAME_STORAGE_VERSION, &sv_game_storage },
+    { SV_API_ENGINE, SV_GAME_ENGINE_VERSION, &sv_game_engine },
+    { SV_API_SHOP, SV_GAME_SHOP_VERSION, &sv_game_shop },
+};
+
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api)
 {
-    if (capability == SV_API_GAME_READ) {
-        if (version != SV_GAME_READ_VERSION)
+    size_t i;
+    for (i = 0; i < sizeof capabilities / sizeof capabilities[0]; ++i) {
+        if (capabilities[i].capability != capability)
+            continue;
+        if (capabilities[i].version != version)
             return SV_INCOMPATIBLE;
-        *api = &sv_game_read;
-        return SV_OK;
-    }
-    if (capability == SV_API_GAME_WRITE) {
-        if (version != SV_GAME_WRITE_VERSION)
-            return SV_INCOMPATIBLE;
-        *api = &sv_game_write;
+        *api = capabilities[i].table;
         return SV_OK;
     }
     return SV_NOT_FOUND;
