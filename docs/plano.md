@@ -97,9 +97,11 @@ Step 3 (production plugins and examples) has not started.
 4. **Client limits.** New models, sounds, types and maps do not block S3. Record each limit with the operation that it affects.
    Idea, not verified: reuse an existing weapon type with new rules. The client might show the name of the old weapon.
 5. **Closing S3.** Do not close S3 because the written criteria are met. List each operation that has no support, with the reason, and ask the user to accept the list before the status changes to complete.
-6. **In-game test room (proposal).** An optional test plugin, off by default, that guides the user in the original client.
+6. **In-game test room.** An optional test plugin, off by default, that guides the user in the original client.
    The user types a command. The plugin says what it tests, what the user should see, and which command comes next.
-   Each new API operation adds one step. It is the first test with the real client, and it needs the user to play. Not started.
+   Each new API operation adds one step. It is the first test with the real client, and it needs the user to play.
+   The user decided on 2026-10-27 to build it at the halfway point of the API plan: when 10 of the 19 operations N1 to N19 are done.
+   On that date 5 are done: N1, N2, N3, N4 (the five look selectors, not the colors) and N6. Not started.
 7. **Second editor.** The user works without Codex for now. If another tool edits in a second worktree, two editors never touch one file.
    Each shared file (`CMakeLists.txt`, `sv_game_write.h`, `docs/s3.md`, `docs/continuation.md`) has one owner, and the user merges the branches.
 
