@@ -38,7 +38,8 @@ That release contains only `data/`. The public default config comes from the sou
 Extract `build/package/SubVulpes-server-v0.0.0-s2.zip` into a test folder.
 Open `subvulpes_launcher.exe`, set your server settings, then click **Start** and **Stop**.
 The window title is **SubVulpes Server**. The default UDP port is 27584.
-Set an admin password before public use. Keep `config.txt`, accounts, dumps and logs private.
+The launcher makes an admin password on first use and saves it only in `config.txt`. Use **Show** in Server settings to see it.
+The launcher does not start the server with an empty password. Keep `config.txt`, accounts, dumps and logs private.
 Launcher updates come from SubVulpes releases.
 
 ## AI Disclaimer / Aviso de IA

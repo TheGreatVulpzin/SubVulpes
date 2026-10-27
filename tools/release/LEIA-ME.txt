@@ -7,7 +7,8 @@ This package contains the Windows x86 server, launcher, data/ and public default
 4. Open Server. Click Start. Join with a Sub Rosa 0.24 client.
 5. Click Stop before closing the launcher.
 
-The default admin password is empty. Keep config.txt private after you save settings.
+The launcher makes an admin password on first use. Show reveals or masks the field.
+The launcher does not start the server with an empty password. Keep config.txt private after you save settings.
 For Internet play, allow the selected UDP port. The default port is 27584.
 The launcher checks SubVulpes releases and verifies update checksums.
 For manual updates, close the server and launcher. Copy only subvulpes_server.exe,
