@@ -12,6 +12,7 @@
 #include "collide.h"
 #include "economy.h"
 #include "events.h"
+#include "plugin_damage.h"
 #include "plugin_game_events.h"
 #include "objects.h"
 #include "sr_os.h"
@@ -75,6 +76,7 @@ static void bullet_human_hit(Bullet *b, Hit *hit)
         else
             dmg = dmg * 4;
     }
+    dmg = sv_damage_human(hit->human, b->owner, dmg);
     /* The team kill tax works only in game type 3 (round mode). Game type 4 taxes a hit on a protected human of team 7. */
     if (sr_game.gametype == GAMETYPE_BASES) {
         if (b->owner != -1 && hu->player_id != -1 && b->owner != hu->player_id &&
@@ -145,7 +147,7 @@ static void bullet_object_hit(Bullet *b, Hit *hit)
         Wheel *w = &obj->wheels[hit->part];
 
         if (w->health > 0) {
-            w->health -= bullet_damage(b, 1.5);
+            w->health -= sv_damage_object(hit->object, bullet_damage(b, 1.5));
             if (w->health < 1) {
                 w->radius = 0.25f;
                 w->popped = 1;
@@ -159,7 +161,7 @@ static void bullet_object_hit(Bullet *b, Hit *hit)
 
         if (f->is_window == 1) {
             if (f->armor < 8.0f)
-                f->health = (int)((double)f->health - (8.0 - f->armor));
+                f->health = (int)((double)f->health - (8.0 - f->armor) * (double)sv_damage_scale_object(hit->object));
             if (f->health < 1) {
                 createevent_updateobject(hit->object, 0, hit->face, &hit->pos, &b->vel);
                 f->health = 0;

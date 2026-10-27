@@ -14,6 +14,7 @@
 #include "object_types.h"
 #include "objects.h"
 #include "particles.h"
+#include "plugin_damage.h"
 #include "plugin_entities.h"
 #include "sr_runtime.h"
 
@@ -116,6 +117,7 @@ int createobject(int type, const vec3 *pos, const vec3 *vel, const vec3 rot[3], 
   memset(o, 0, sizeof *o);
   o->active = 1;
   sv_entity_created(SV_ENTITY_OBJECT, (uint32_t)object);
+  sv_damage_reset_object(object);
   o->type = type;
   o->health = 100;
   o->time_to_live = 0xffff;

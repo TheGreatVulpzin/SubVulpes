@@ -276,6 +276,21 @@ Rows of the first version. The range is the range that a `set` or an `add` may l
 | `human.protect` | human | int | get, set, add | 0 to 21600 | The spawn protection counter in ticks. 21600 is the longest value that the game gives (6 times 3600) |
 | `human.bone_velocity` | human | vector, 15 slots | get, add | change of at most 64 | The slot is the bone. An add changes the velocity of that bone |
 | `object.velocity` | object | vector | get, add | change of at most 64 | An add changes every particle of the object. A piece of the train gives `SV_DENIED` |
+| `human.damage_taken_scale` | human | float | get, set, add | 0 to 100 | Multiplies each damage that the human takes. See "Damage scales" |
+| `human.damage_dealt_scale` | human | float | get, set, add | 0 to 100 | Multiplies each bullet damage that the human deals to another human |
+| `object.damage_taken_scale` | object | float | get, set, add | 0 to 100 | Multiplies each damage to the health of the object, and the damage to its wheels and windows |
+
+### Damage scales
+
+A scale is a decimal number, 1 by default. The core multiplies each damage by the scales that apply, rounds to the nearest whole number (a half goes up), and caps the result at 100000. A scale of 0 cancels the damage. An amount of 0 or less is not changed. At the value 1 the number stays as the game made it.
+Where it applies:
+
+- A bullet on a human: the taken scale of the victim times the dealt scale of the human of the shooter. The stun, the bleeding chance, the team kill tax and the killer of the death events follow the scaled number, so a cancelled hit gives none of them.
+- A hit by a vehicle on a human (the 120 points of damage): the taken scale of the human.
+- The health of an object, from a bullet, a crash or any other cause (`applydamageobject`): the taken scale of the object. A bullet on a wheel and on a window uses the same scale.
+
+The scales live in a table beside the game records, because the record layouts are fixed. A new body and a new object start at 1.
+The plugin sets a scale at a safe point, so a rule that depends on a position can lag by one tick. The safe spawn area is one example: set the scale of a human to 0 while it stands in the area. A rule that must see each hit needs a decision inside the simulation (see [plugin events](plugin-events.md)).
 
 A plugin area adds its own group of rows with `sv_props_add_group` (see `plugin_props.h`) from its install function.
 The table refuses a row with no name, a name that is too long or repeated, no field function, no operation, a vector with `set`, or a vector with `add` and no add function.
@@ -284,7 +299,8 @@ A world property for each type of a list (for example each object type) uses the
 
 Tests: the fixture calls every row and every code, and the test program checks the records and the events after the tick. A group added by the test program shows the world kind, and the refusal of each bad row.
 Removing one check at a time made `game-api` fail each time (`build/logs/mutation14.log`, `mutation14b.log`, `mutation15.log`, `mutation15b.log`): the slot bound, the range of a set, the range of an add, the length and the finite check of a push, the bot check of the admin flag, the refusal of a train piece, the entity kind, the name length, the field function, the vector rules, the repeated name and the world entity rule.
-Not proven by removal: the bounds on the particle list of an object (the test world has no object with a bad list), and the float type (no row of the first version has it).
+The damage scales: removing the cap of the result, the index checks of the human, the shooter and the object tables, and the upper range of a float made `game-api` fail each time (`build/logs/mutation18.log`).
+Not proven by removal: the bounds on the particle list of an object (the test world has no object with a bad list), and the choice of the order of the two scales.
 
 ## Chat commands
 

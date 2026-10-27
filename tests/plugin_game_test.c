@@ -18,6 +18,7 @@
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
 #include "plugin_game_events.h"
+#include "plugin_damage.h"
 
 _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
 _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
@@ -370,6 +371,59 @@ static void post_flood(void)
     CHECK(sv_events_pending() == 1024 + 1);
 }
 
+/* The damage scales that the plugin set: human 0 takes 0.5 and deals 2, the car takes 0.5. The rounding goes to the nearest
+ * whole number, a half goes up, a small amount keeps its sign, and the result has a cap. The real function of the core
+ * for the damage of an object uses the scale. */
+static void damage_check(void)
+{
+    CHECK(sv_damage_human(0, -1, 3) == 2 && sv_damage_human(0, -1, 100) == 50);
+    CHECK(sv_damage_human(rider_b, -1, 100) == 100);
+    CHECK(sv_damage_human(rider_b, 0, 10) == 20 && sv_damage_human(0, 0, 10) == 10);
+    CHECK(sv_damage_human(0, -1, 0) == 0 && sv_damage_human(0, -1, -5) == -5);
+    CHECK(sv_damage_human(-1, -1, 7) == 7 && sv_damage_human(SR_MAX_HUMAN, SR_MAX_PLAYER, 7) == 7);
+    CHECK(sv_damage_scale_object(target_car) == 0.5f && sv_damage_scale_object(rider_car) == 1.0f);
+    CHECK(sv_damage_scale_object(-1) == 1.0f && sv_damage_object(-1, 9) == 9 && sv_damage_object(SR_MAX_OBJECT, 9) == 9);
+    CHECK(sv_damage_object(target_car, 1) == 1 && sv_damage_object(target_car, 40) == 20 && sv_damage_object(rider_car, 40) == 40);
+    sr_objects[target_car].health = 100;
+    applydamageobject(target_car, 40);
+    CHECK(sr_objects[target_car].health == 80);
+    sr_objects[rider_car].health = 100;
+    applydamageobject(rider_car, 40);
+    CHECK(sr_objects[rider_car].health == 60);
+    *sv_damage_field_human_taken(rider_b) = 100.0f;
+    CHECK(sv_damage_human(rider_b, -1, 10000) == 100000);
+    *sv_damage_field_human_taken(rider_b) = 0.0f;
+    CHECK(sv_damage_human(rider_b, -1, 100) == 0);
+    sv_damage_reset_human(rider_b);
+    CHECK(sv_damage_human(rider_b, -1, 100) == 100);
+    sv_damage_reset_human(0);
+    sv_damage_reset_object(target_car);
+    CHECK(sv_damage_human(0, 0, 100) == 100 && sv_damage_object(target_car, 40) == 40);
+}
+
+/* A new body and a new object start at the scale 1, even when the slot had another value. */
+static void damage_reset_check(void)
+{
+    float pos[3] = { 800.0f, 40.0f, 800.0f }, rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    int human = createhuman(pos, rot, -1), again, object, object_again;
+    CHECK(human >= 0);
+    *sv_damage_field_human_taken(human) = 0.0f;
+    *sv_damage_field_human_dealt(human) = 3.0f;
+    deletehuman((uint32_t)human);
+    again = createhuman(pos, rot, -1);
+    CHECK(again == human && *sv_damage_field_human_taken(again) == 1.0f && *sv_damage_field_human_dealt(again) == 1.0f);
+    deletehuman((uint32_t)again);
+    object = createobject(0, &position, NULL, rotation, 0);
+    CHECK(object >= 0);
+    *sv_damage_field_object_taken(object) = 0.0f;
+    sr_objects[object].time_to_live = 0;
+    objecttimetolive();
+    object_again = createobject(0, &position, NULL, rotation, 0);
+    CHECK(object_again == object && *sv_damage_field_object_taken(object_again) == 1.0f);
+    sr_objects[object_again].time_to_live = 0;
+    objecttimetolive();
+}
+
 /* The fixture calls the write API in this tick. The game state shows what the calls did. */
 static void write_api_tick(void)
 {
@@ -424,6 +478,7 @@ static void write_api_tick(void)
     CHECK(event_bits((int)events + 5, 0) > 6 + 28 + 6 && event_bits((int)events, 0) == event_bits((int)events, 1));
     riders_check();
     effects_check(events, bone_before);
+    damage_check();
     CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
     CHECK(sr_players[0].team == 3 && sr_humans[0].team == 3);
     CHECK(sr_players[0].look_b == 5 && sr_humans[0].look_b == 5 && sr_humans[0].look_e == 1);
@@ -621,6 +676,7 @@ int main(void)
     object_lifetime();
     account_lifetime();
     core_events();
+    damage_reset_check();
     props_groups();
     sr_players[0].money = 4242;
     memset(sr_players[0].name, 'P', sizeof sr_players[0].name);

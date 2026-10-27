@@ -2,6 +2,7 @@
 #include "plugin_game_events.h"
 #include "plugin_host.h"
 #include "plugin_entities.h"
+#include "plugin_damage.h"
 #include "sr_runtime.h"
 #include <string.h>
 
@@ -18,6 +19,7 @@ void sv_game_event_spawn(int player, int human)
     if (human < 0 || human >= SR_MAX_HUMAN)
         return;
     last_hit[human] = -1;
+    sv_damage_reset_human(human);
     if (player < 0 || player >= SR_MAX_PLAYER)
         return;
     sv_events_post(SV_EVENT_SPAWN, now(), sv_entity_at(SV_ENTITY_PLAYER, player), sv_entity_at(SV_ENTITY_HUMAN, human), 0);

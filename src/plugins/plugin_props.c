@@ -6,6 +6,7 @@
 #include "plugin_host.h"
 #include "plugin_entities.h"
 #include "plugin_props.h"
+#include "plugin_damage.h"
 #include "plugin_game_internal.h"
 #include "events.h"
 #include "objects.h"
@@ -31,6 +32,9 @@ FIELD(human_stun, sr_humans[i].stun_timer)
 FIELD(human_protect, sr_humans[i].protect_timer)
 FIELD(human_bone_velocity, sr_humans[i].bones[s].vel)
 FIELD(object_velocity, sr_objects[i].vel)
+FIELD(human_damage_taken, *sv_damage_field_human_taken(i))
+FIELD(human_damage_dealt, *sv_damage_field_human_dealt(i))
+FIELD(object_damage_taken, *sv_damage_field_object_taken(i))
 
 /* A bot cannot be an admin. */
 static SvResult admin_check(int32_t index, SvValue value)
@@ -97,6 +101,9 @@ static const Prop props[] = {
     { "human.protect", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 21600, human_protect, NULL, NULL, NULL },
     { "human.bone_velocity", SV_ENTITY_HUMAN, SV_PROP_VECTOR, 15, SV_PROP_GET | SV_PROP_ADD, 0, PUSH_MAX, human_bone_velocity, NULL, NULL, bone_add },
     { "object.velocity", SV_ENTITY_OBJECT, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_ADD, 0, PUSH_MAX, object_velocity, NULL, NULL, object_add },
+    { "human.damage_taken_scale", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, human_damage_taken, NULL, NULL, NULL },
+    { "human.damage_dealt_scale", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, human_damage_dealt, NULL, NULL, NULL },
+    { "object.damage_taken_scale", SV_ENTITY_OBJECT, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, object_damage_taken, NULL, NULL, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };

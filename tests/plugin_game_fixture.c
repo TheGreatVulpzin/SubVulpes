@@ -460,7 +460,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 10);
+    STEP(count == 13);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);
@@ -496,6 +496,45 @@ static int props_checks(SvOwner owner)
     STEP(props->add(owner, id, 0, 0, v) == SV_INVALID && props->get(owner, id, 0, 0, &v) == SV_OK && v.i == 6);
     v.i = 5;
     STEP(props->set(owner, id, 0, 0, v) == SV_OK);
+    return 0;
+}
+
+/* The damage scales: float rows with a range, an add, and the kind check. The test program sets the values that it
+ * reads after the tick: taken 0.5 and dealt 2 for the human, taken 0.5 for the car. */
+static int damage_checks(SvOwner owner)
+{
+    uint32_t taken = 0, dealt = 0, scale = 0, i, count = 0, next = 0;
+    SvEntity page[16], car = 0;
+    SvObjectState os = { sizeof os };
+    SvPropInfo info = { sizeof info };
+    SvValue v;
+    uint32_t nan_bits = 0x7fc00000u;
+    STEP(props->find(owner, "human.damage_taken_scale", &taken) == SV_OK && props->find(owner, "human.damage_dealt_scale", &dealt) == SV_OK);
+    STEP(props->find(owner, "object.damage_taken_scale", &scale) == SV_OK);
+    STEP(props->info(owner, taken, &info) == SV_OK && info.type == SV_PROP_FLOAT && info.entity_kind == SV_ENTITY_HUMAN &&
+         info.min == 0.0 && info.max == 100.0 && info.ops == (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD));
+    STEP(game->entities(owner, SV_ENTITY_OBJECT, 0, page, 16, &count, &next) == SV_OK);
+    for (i = 0; i < count; ++i)
+        if (game->object(owner, page[i], &os) == SV_OK && os.type != 12 && os.color == 4)
+            car = page[i];
+    STEP(car);
+    STEP(props->get(owner, taken, human, 0, &v) == SV_OK && v.f == 1.0f && props->get(owner, scale, car, 0, &v) == SV_OK && v.f == 1.0f);
+    v.f = -0.1f;
+    STEP(props->set(owner, taken, human, 0, v) == SV_INVALID);
+    v.f = 100.5f;
+    STEP(props->set(owner, taken, human, 0, v) == SV_INVALID);
+    memcpy(&v.f, &nan_bits, sizeof v.f);
+    STEP(props->set(owner, taken, human, 0, v) == SV_INVALID && props->add(owner, taken, human, 0, v) == SV_INVALID);
+    v.f = 0.25f;
+    STEP(props->set(owner, taken, human, 0, v) == SV_OK && props->add(owner, taken, human, 0, v) == SV_OK);
+    v.f = 99.9f;
+    STEP(props->add(owner, taken, human, 0, v) == SV_INVALID);
+    STEP(props->get(owner, taken, human, 0, &v) == SV_OK && v.f == 0.5f);
+    v.f = 2.0f;
+    STEP(props->set(owner, dealt, human, 0, v) == SV_OK);
+    v.f = 0.5f;
+    STEP(props->set(owner, scale, car, 0, v) == SV_OK);
+    STEP(props->set(owner, taken, player, 0, v) == SV_NOT_FOUND && props->set(owner, scale, human, 0, v) == SV_NOT_FOUND);
     return 0;
 }
 
@@ -617,6 +656,8 @@ static SvResult write_checks(SvOwner owner)
             bad_line = effect_checks(owner);
         if (!bad_line)
             bad_line = props_checks(owner);
+        if (!bad_line)
+            bad_line = damage_checks(owner);
         if (bad_line) {
             char text[80];
             snprintf(text, sizeof text, "Write check failed at line %d.", bad_line);

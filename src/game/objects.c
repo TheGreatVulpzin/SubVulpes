@@ -15,6 +15,7 @@
 #include "collide.h"
 #include "events.h"
 #include "objects.h"
+#include "plugin_damage.h"
 #include "plugin_entities.h"
 #include "profiler.h"
 #include "sr_math.h"
@@ -45,7 +46,7 @@ void applydamageobject(int obj, int damage)
 
   if (o->type == 12 || o->health <= 0)
     return;
-  o->health -= damage;
+  o->health -= sv_damage_object(obj, damage);
   if (o->health >= 1)
     return;
   for (i = 6; i < 8; i++) {

@@ -32,7 +32,7 @@ A plugin gets only the kinds that it asked for with `subscribe`. The record star
 Most damage rules do not need kind 3. The core can read a number that the plugin wrote before.
 The property table gets these rows when this design is built: `human.damage_taken_scale`, `human.damage_dealt_scale` and `object.damage_taken_scale`.
 Each is a decimal number, 1 by default. The core multiplies the amount by it. A value of 0 cancels the damage.
-This route covers the safe spawn area, the car that nothing destroys and the spawn protection fix. The plugin changes the number at a safe point, so the effect can come one tick late.
+This route covers the safe spawn area, the car that nothing destroys and the spawn protection fix. The wheels of a car follow the object scale. The plugin changes the number at a safe point, so the effect can come one tick late.
 It cannot express a rule that depends on one hit. That rule needs kind 3.
 
 ## Danger of kind 3
@@ -77,7 +77,7 @@ Use kind 3 only when the safe route cannot say the rule. Keep the answer short: 
    - Join (`SV_EVENT_JOIN`, record `SvGameEvent` with the player and the account): the join code in `server.c` asks after the account ban check. `SV_DENIED` releases the player at once, as a ban does, and the release posts a leave event. The test calls `sv_game_join_denied`, which is the function that the join code calls. The call site in `server.c` has no test, because the join function needs a socket.
    - The bits `SV_EVENT_PHONE_DIGIT` and `SV_EVENT_PHONE_CALL` are reserved for the phone area. Nothing posts them yet.
    - Removing the text bound, the no-reference guard, the thread guard and the null guard made `game-api` fail each time (`build/logs/mutation17.log`). The guard against a call from inside a plugin callback has no proof, because a plugin has no way to start a chat text.
-4. The safe route for damage: the three rows and the small change in the damage code. The result equals today while the scale is 1.
+4. Done. The safe route for damage: the rows `human.damage_taken_scale`, `human.damage_dealt_scale` and `object.damage_taken_scale`, kept in a table beside the records (`plugin_damage.c`), and a call at each damage site: a bullet on a human, a hit by a vehicle on a human, the health of an object, a wheel and a window. The damage stays the same number while the scale is 1. The rules are in [the property table](plugin-game-api.md#damage-scales). The test calls the damage function of the core for an object, and the functions that the bullet code calls. The bullet code itself has no test, because its function is private and needs a full world. The rounding, the cap and the index checks are proven by removal (`mutation18.log`).
 5. Kind 3: the restricted context, the time budget, the approval text and the tests of each limit.
 
 Each step has tests, a removal proof for each check that guards memory or a limit, and a note here. The original client sees no change: the core sends the same packets.

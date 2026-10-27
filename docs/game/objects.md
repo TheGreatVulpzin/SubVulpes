@@ -80,7 +80,7 @@ A particle that touches the level deep (its line from the center crosses the lev
 - `objectsimulation_heli` (0x24f60): the rotor speed follows the driver (`rpm_net` rises by 10 to 2000). With a driver and health, the 20 first particles get air drag, the particles 21 and up get the blade lift, and `addobjectrotation` (0x21e00) turns all the particles around `pos` with the stick input.
 - `object_rotorsimulation` (0x240e0): a spring model of six rotor points. Nothing calls it.
 - `objecttrainsimulation` (0x26f90): the four first particles of a train car test the track pieces whose box overlaps the car. A hit makes a bond and stores the track piece in `track_last` of the car and its linked car.
-- `applydamageobject` (0x22e20): lowers the health. At no health two particles get a random push along `rot[1]` and an update event goes out. A locomotive takes no damage.
+- `applydamageobject` (0x22e20): lowers the health by the damage times the taken scale of the object, which is 1 by default. The scales are a table beside the records and are set by plugins (`plugin_damage.c`). At no health two particles get a random push along `rot[1]` and an update event goes out. A locomotive takes no damage.
 - `objecttimetolive` (0x32340): counts `time_to_live` down. At 0 the particles lose their life, the humans in the object leave it, the object becomes free and an update event goes out.
 
 ## Odd behavior that the code keeps
