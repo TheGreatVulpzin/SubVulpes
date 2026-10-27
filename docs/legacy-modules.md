@@ -93,7 +93,7 @@ So health 100 revives a body that is dead for less than 900 ticks (15 seconds), 
 This reading is from the code and not tested. The newer version of the tool can confirm what its `/heal` clears.
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. Done: `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. |
 | N7 | Make and remove vehicles and other objects. Done: `object_create` and `object_remove`. Train pieces are refused. |
-| N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. |
+| N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. Done for bots: `npc_create` and `npc_remove`. Not done: delete the body of a real player. Kill it with `set_health` instead. |
 | N9 | Eject a human from a vehicle. |
 | N10 | Aim and line queries against the level, objects and humans. They copy the result out of the shared scratch record. |
 | N11 | Play a known sound at a position. |

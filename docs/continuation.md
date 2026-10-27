@@ -179,6 +179,9 @@ The real server starts it at launch.
 
 Bleeding and stun (`c80db6b`): `set_bleeding` and `set_stun`, 7 of the 19 operations of the legacy catalog are done now.
 
+Bots: `npc_create` and `npc_remove`. 8 of the 19 operations are done. The test fills the bond pool through a local command of the fixture to check the rollback.
+The AI of the bot has no route. Whether the original client shows it as a pedestrian is not tested.
+
 Not tested:
 
 - The original client. No write method, no private message and no filtered event ran against it. A teleport has no check for a wall at the target.

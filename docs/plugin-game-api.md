@@ -210,6 +210,8 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `object_remove(object)` | Sets the lifetime to zero. The game removes the object in its next object lifetime pass, and the humans inside get out. | `SV_NOT_FOUND`, `SV_DENIED` for a piece of the train |
 | `set_bleeding(human, enabled)` | Sets the bleeding flag to 0 or 1. A bleeding body loses health over time. | `SV_NOT_FOUND`, `SV_INVALID` for another value |
 | `set_stun(human, ticks)` | Sets the stun timer from 0 to 3,600 ticks. The torso is weak while it runs, so the body staggers. The game counts it down by 1 each tick. | `SV_NOT_FOUND`, `SV_INVALID` out of range |
+| `npc_create(position, yaw, player, human)` | Makes a bot player named NPC in team 6, like the bots of the game, with a human on foot at the position and turned by the yaw angle. The bot has no route and no end time. Both references go out only on success. The position of the human reads the place at once. | `SV_INVALID` for a bad position or angle or a null pointer. `SV_LIMIT` when no player slot, human slot or bond is free, with nothing left behind |
+| `npc_remove(player)` | Gives the bot an end time in the past. The bot expiry of the game removes the human and the player in the next world logic pass. | `SV_NOT_FOUND`, `SV_DENIED` for a player who is not a bot |
 | `teleport(human, position)` | Moves the 15 bones by the same offset so bone 0 reaches the position. It copies the new place to the previous place of each bone. The velocity does not change. | `SV_NOT_FOUND`, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle |
 
 The tests call every method from a real plugin callback against records that real constructors made.
@@ -221,6 +223,8 @@ For the object methods, removing the type bound, the color bound, the refusal to
 Keys keep the index of their vehicle after the vehicle goes. This is the same as when the game removes a vehicle by itself.
 The bleeding and stun methods have a test of every error code and of the stored value. They have no removal proof, because they guard no right, memory bound or privacy.
 The upper bound of 3,600 ticks (one minute) is a choice of this API. The game itself sets the timer to 3 or 6 times the damage of a hit.
+For the bots, removing the cleanup after a failed human and the bot check made `game-api` fail each time (`build/logs/mutation12.log`). A local command of the fixture leaves too few bonds for a human and checks that no player stays behind.
+`createhuman` of the game does not set the position of a human until its first tick. `npc_create` sets it at once, so a read right after the call shows the place.
 The game keeps no check of a loop of parent items, and the types of the tests cannot make one. That check has no test.
 For the checks that guard rights or privacy, the same removal made `game-api` fail too: the private-message filter, the stale-target test, the bot check and the connection admin flag of `set_admin`.
 The packet writer clamps the sent health to the range -10 to 117 and leaves the server value as written. So a client sees the same value for -100 and -10, and for 100 and 117. See [network limits](game/network.md#representation-limits).
