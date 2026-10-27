@@ -341,10 +341,10 @@ static void post_events(void)
     float pos[3] = { 500.0f, 30.0f, 500.0f }, rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
     int temp;
     CHECK(sv_plugins_wants(SV_EVENT_SPAWN) && sv_plugins_wants(SV_EVENT_DEATH) && sv_plugins_wants(SV_EVENT_LEAVE));
-    CHECK(sv_plugins_wants(SV_EVENT_TICK) && !sv_plugins_wants(SV_EVENT_STOP) && !sv_plugins_wants(0x40u));
+    CHECK(sv_plugins_wants(SV_EVENT_TICK) && !sv_plugins_wants(SV_EVENT_STOP) && !sv_plugins_wants(0x400u));
     sv_events_post(SV_EVENT_TICK, 1, player_ref, human_ref, 0);
     sv_events_post(SV_EVENT_STOP, 1, player_ref, human_ref, 0);
-    sv_events_post(0x40u, 1, player_ref, human_ref, 0);
+    sv_events_post(0x400u, 1, player_ref, human_ref, 0);
     sv_events_post(0, 1, player_ref, human_ref, 0);
     sv_events_post(SV_EVENT_SPAWN | SV_EVENT_DEATH, 1, player_ref, human_ref, 0);
     CHECK(sv_events_pending() == 0);
@@ -491,6 +491,61 @@ static void chat_commands(void)
     strcpy(text, "/localonly two");
     CHECK(server_playermessage(0, text) == 1);
     sr_players[0].is_admin = 0;
+    /* A chat text is a decision. The plugin drops a text with the word deny. A command is no chat text. A player with no
+     * reference gives no event. A text of 63 bytes arrives whole. */
+    strcpy(text, "deny me");
+    CHECK(server_playermessage(0, text) == 1);
+    strcpy(text, "deny me");
+    CHECK(server_playermessage(5, text) == 0);
+    strcpy(text, "/deny me");
+    CHECK(server_playermessage(0, text) == 1);
+    memset(text, 'a', 63);
+    text[63] = 0;
+    CHECK(server_playermessage(0, text) == 0);
+    sr_players[0].chat_block = 1;
+    strcpy(text, "deny me");
+    CHECK(server_playermessage(0, text) == 1);
+    sr_players[0].chat_block = 0;
+}
+
+/* A decision from another thread must not reach a plugin. */
+static DWORD WINAPI decide_other_thread(void *argument)
+{
+    SvChatEvent event;
+    (void)argument;
+    memset(&event, 0, sizeof event);
+    event.base.size = sizeof event;
+    event.base.kind = SV_EVENT_CHAT;
+    event.player = sv_entity_at(SV_ENTITY_PLAYER, 0);
+    strcpy(event.text, "deny me");
+    return sv_plugins_decide(&event.base) == SV_OK && !sv_game_chat_denied(0, "deny me") ? 0 : 1;
+}
+
+/* The join decision: the plugin drops a player named BANNED. The test calls the function that the join code calls.
+ * A bad index does nothing. */
+static void join_decision(void)
+{
+    int banned = createplayer(), fine = createplayer();
+    char big[100];
+    HANDLE thread;
+    DWORD code;
+    CHECK(banned >= 0 && fine >= 0);
+    strcpy(sr_players[banned].name, "BANNED");
+    strcpy(sr_players[fine].name, "Fine");
+    CHECK(sv_game_join_denied(banned) == 1 && sv_game_join_denied(fine) == 0);
+    CHECK(sv_game_join_denied(-1) == 0 && sv_game_join_denied(SR_MAX_PLAYER) == 0);
+    CHECK(sv_game_chat_denied(-1, "deny") == 0 && sv_game_chat_denied(SR_MAX_PLAYER, "deny") == 0 && sv_game_chat_denied(0, NULL) == 0);
+    CHECK(sv_plugins_decide(NULL) == SV_OK);
+    /* A text longer than the field arrives cut to 63 bytes. */
+    memset(big, 'b', sizeof big - 1);
+    big[sizeof big - 1] = 0;
+    CHECK(sv_game_chat_denied(0, big) == 0);
+    thread = CreateThread(NULL, 0, decide_other_thread, NULL, 0, NULL);
+    CHECK(thread != NULL && WaitForSingleObject(thread, 5000) == WAIT_OBJECT_0 && GetExitCodeThread(thread, &code) && code == 0);
+    CloseHandle(thread);
+    deleteplayer(banned);
+    deleteplayer(fine);
+    sv_events_clear();
 }
 
 /* With too few bonds for a human, npc_create must fail with no player left behind. */
@@ -598,6 +653,7 @@ int main(void)
     sr_data_object[0].num_wheels = 0;
     write_api_tick();
     chat_commands();
+    join_decision();
     npc_limit();
     line_mark();
     sv_game_reset();

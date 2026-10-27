@@ -16,6 +16,7 @@
 #include "objects.h"
 #include "plugin_entities.h"
 #include "plugin_host.h"
+#include "plugin_game_events.h"
 #include "scenario.h"
 #include "server.h"
 #include "sr_server.h"
@@ -270,7 +271,7 @@ int server_playermessage(int player, char *text)
         }
     }
     if (text[0] != '/')
-        return 0;
+        return sv_game_chat_denied(player, text);
     /* A plugin command comes first. An actor of zero is the local operator, so a player with no
      * reference never reaches the plugins. */
     actor = sv_entity_at(SV_ENTITY_PLAYER, player);

@@ -3,6 +3,7 @@
 #include "plugin_host.h"
 #include "plugin_entities.h"
 #include "sr_runtime.h"
+#include <string.h>
 
 /* The player whose bullet hit the human last, or -1. It lives as long as the human. */
 static int32_t last_hit[SR_MAX_HUMAN];
@@ -51,4 +52,38 @@ void sv_game_event_hit(int human, int owner)
     if (human < 0 || human >= SR_MAX_HUMAN)
         return;
     last_hit[human] = owner;
+}
+
+int sv_game_chat_denied(int player, const char *text)
+{
+    SvChatEvent event;
+    size_t length;
+    if (player < 0 || player >= SR_MAX_PLAYER || !text || !sv_plugins_wants(SV_EVENT_CHAT))
+        return 0;
+    memset(&event, 0, sizeof event);
+    event.player = sv_entity_at(SV_ENTITY_PLAYER, player);
+    if (!event.player)
+        return 0;
+    event.base.size = sizeof event;
+    event.base.kind = SV_EVENT_CHAT;
+    event.base.tick = now();
+    length = strnlen(text, sizeof event.text - 1);
+    memcpy(event.text, text, length);
+    return sv_plugins_decide(&event.base) == SV_DENIED;
+}
+
+int sv_game_join_denied(int player)
+{
+    SvGameEvent event;
+    if (player < 0 || player >= SR_MAX_PLAYER || !sv_plugins_wants(SV_EVENT_JOIN))
+        return 0;
+    memset(&event, 0, sizeof event);
+    event.player = sv_entity_at(SV_ENTITY_PLAYER, player);
+    event.account = sv_entity_at(SV_ENTITY_ACCOUNT, sr_players[player].account);
+    if (!event.player)
+        return 0;
+    event.base.size = sizeof event;
+    event.base.kind = SV_EVENT_JOIN;
+    event.base.tick = now();
+    return sv_plugins_decide(&event.base) == SV_DENIED;
 }

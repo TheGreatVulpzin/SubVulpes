@@ -21,6 +21,9 @@ static int runtime_probe;
 /* What the fixture saw of the game events. */
 static uint32_t seen_spawn, seen_death, seen_leave, seen_lost, seen_other, spawn_before_lost, seen_n, seen_ticks[8];
 static int ref_ok[8];
+static uint32_t seen_chat, seen_chat_denied, seen_join;
+static char last_chat[64];
+static int chat_player_ok;
 
 #define CHECK(test) do { if (!(test)) { \
     char text[160]; \
@@ -676,6 +679,34 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
 {
     const SvGameEvent *record = (const SvGameEvent *)event;
     SvHumanState h = { sizeof h };
+    if (event->kind == SV_EVENT_CHAT) {
+        /* A decision: drop a text that has the word deny. */
+        const SvChatEvent *chat = (const SvChatEvent *)event;
+        SvPlayerState ps = { sizeof ps };
+        if (event->size != sizeof *chat || chat->text[63] != 0)
+            return SV_FAILED;
+        ++seen_chat;
+        memcpy(last_chat, chat->text, sizeof last_chat);
+        chat_player_ok = game->player(owner, chat->player, &ps) == SV_OK;
+        if (strstr(chat->text, "deny")) {
+            ++seen_chat_denied;
+            return SV_DENIED;
+        }
+        return SV_OK;
+    }
+    if (event->kind == SV_EVENT_JOIN) {
+        /* A decision: drop a player named BANNED. The name needs a ready world, and a plugin that cannot read lets it pass. */
+        SvPlayerState ps = { sizeof ps };
+        SvAccountState acc = { sizeof acc };
+        if (event->size != sizeof *record || record->reserved)
+            return SV_FAILED;
+        ++seen_join;
+        if (game->player(owner, record->player, &ps) != SV_OK)
+            return SV_OK;
+        if (record->account && game->account(owner, record->account, &acc) != SV_OK)
+            return SV_FAILED;
+        return strcmp(ps.name, "BANNED") ? SV_OK : SV_DENIED;
+    }
     if (event->size != sizeof *record || record->reserved)
         return SV_FAILED;
     switch (event->kind) {
@@ -738,6 +769,9 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
         SvEntity page[1] = {0};
         uint32_t count = 777, next = 888;
         CHECK(seen_spawn == 1025 && seen_lost == 76 && spawn_before_lost == 1 && seen_other == 0);
+        /* The chat texts that reached the plugin: hello, deny me (dropped), 63 letters and 99 letters cut to 63. */
+        CHECK(seen_chat == 4 && seen_chat_denied == 1 && strlen(last_chat) == 63 && last_chat[0] == 'b' && chat_player_ok);
+        CHECK(seen_join == 2);
         CHECK(game->player(owner, player, &p) == SV_NOT_FOUND);
         CHECK(game->human(owner, human, &h) == SV_NOT_FOUND);
         CHECK(game->item(owner, item, &it) == SV_NOT_FOUND);
@@ -784,8 +818,9 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
-    CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x40u, tick) == SV_INVALID);
-    return host->subscribe(owner, SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE, tick);
+    CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x400u, tick) == SV_INVALID);
+    return host->subscribe(owner, SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
+        SV_EVENT_CHAT | SV_EVENT_JOIN, tick);
 }
 
 static void SV_CALL disable(SvOwner owner)

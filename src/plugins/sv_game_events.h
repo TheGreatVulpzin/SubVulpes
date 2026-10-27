@@ -14,6 +14,7 @@
  *   SV_EVENT_SPAWN  player and human of the new body
  *   SV_EVENT_DEATH  human that died, its player, and in actor the human that caused the death when the game knows it
  *   SV_EVENT_LEAVE  player that left
+ *   SV_EVENT_JOIN   decision. player is the new player and account its account. SV_DENIED drops the player, as a ban does
  *   SV_EVENT_LOST   lost is the number of records that the full queue dropped since the last delivery
  *
  * The host gives these records at a safe point, before the tick event, in the order in which they happened. The full
@@ -21,9 +22,18 @@
 #pragma pack(push, 8)
 typedef struct {
     SvEvent base;
-    SvEntity player, human, actor;
+    SvEntity player, human, actor, account;
     uint32_t lost, reserved;
 } SvGameEvent;
+
+/* A chat text: the player that typed it and the text, at most 63 bytes. It is a decision at a safe point. The plugin
+ * answers SV_OK to let the text go to the chat, or SV_DENIED to drop it. A text that starts with "/" is a command, and the
+ * command system handles it, so it gives no chat event. */
+typedef struct {
+    SvEvent base;
+    SvEntity player;
+    char text[64];
+} SvChatEvent;
 #pragma pack(pop)
 
 #endif

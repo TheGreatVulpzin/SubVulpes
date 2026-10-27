@@ -16,6 +16,7 @@
 #include "events.h"
 #include "packet.h"
 #include "player.h"
+#include "plugin_game_events.h"
 #include "profiler.h"
 #include "sr_math.h"
 #include "sr_os.h"
@@ -406,6 +407,10 @@ static void handle_join(uint32_t *ver)
         players[p].look_b = acc->look_b;
         players[p].look_c = acc->look_c;
         if (acc->ban_time > 0) {
+            deleteplayer(p);
+            return;
+        }
+        if (sv_game_join_denied(p)) {
             deleteplayer(p);
             return;
         }

@@ -80,11 +80,19 @@ Step 2 (common API) is in progress.
 - Writes, version 1: seventeen methods. They are `message`, `message_to`, `kick`, `add_money`, `teleport`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `npc_create`, `npc_remove`, `vehicle_exit` and `sound`.
 - Property table (capability 10): `find`, `info`, `get`, `set` and `add` over named numbers with a range. It holds god mode, admin, team, health, bleeding, stun, spawn protection and the velocity of a bone and of an object.
   Decision of 2026-10-27: a new number of the game adds a row, not a method. A plugin area adds a group of rows with `sv_props_add_group`.
-- Events (N16): the design is in [plugin events](plugin-events.md). Three kinds: notices in a queue, decisions at a safe point, and decisions inside the simulation. Built: the queue and the notices spawn, death and leave.
+- Events (N16): the design is in [plugin events](plugin-events.md). Three kinds: notices in a queue, decisions at a safe point, and decisions inside the simulation. Built: the queue, the notices spawn, death and leave, and the decisions at a safe point for chat and join.
   Decision of 2026-10-27: the user allows kind 3, a decision inside the simulation, with the danger documented. The owner of the plugin takes the responsibility. The host keeps the write API closed inside it.
 - Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
 - Private messages: the server writes an empty slot for each other connection (`0581091`).
 - Planned and not started: plugin configuration set by the administrator in the launcher or by command (N23).
+- Planned and not started: library plugins (idea of the user, 2026-10-27). Today a plugin can declare dependencies, and the host then starts it only when they are active. A dependency does not give functions to the dependent.
+  A library plugin offers its own table of functions with a name and a version. The dependents ask for it with `get_api`, as for the game tables. This needs four things:
+  1. a call for a plugin to register its table,
+  2. a version check between the library and the plugins that use it,
+  3. a safe stop (the host stops the dependents before the library, and a stale table gives an error and no crash), and
+  4. a copy of the table for each dependent that the host can invalidate.
+  Examples: a phone and shop library that several plugins use, a permission and group library, a rank library. It follows the events and the plugin configuration (N23), because the configuration also has to know the dependencies.
+  The first user is the C4 module, which finds its sales through the phones of the black market (see [the catalog](legacy-modules.md#changes-in-080)).
 - Catalog 2026-10-27: version 0.8.0 of the legacy tool is merged into the [legacy module catalog](legacy-modules.md#changes-in-080).
   It adds the C4, crazy NPC pair and team rounds modules, and the needs N24 to N29 (damage decision, world flow writes, road graph, vehicle seat, object protection).
   Every need is a general operation. See the rule of generality in the catalog.

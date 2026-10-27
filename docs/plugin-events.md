@@ -1,6 +1,6 @@
 # Plugin events (N16)
 
-Status: design of 2026-10-27. Steps 1 and 2 of the order of work are built: the record, the queue, the delivery of kind 1 events, and the three events that the core posts. It serves the need N16 and the damage decision N24 in the [legacy module catalog](legacy-modules.md).
+Status: design of 2026-10-27. Steps 1 to 3 of the order of work are built: the record, the queue, the delivery of kind 1 events, the three events that the core posts, and the decisions at a safe point for chat and join. It serves the need N16 and the damage decision N24 in the [legacy module catalog](legacy-modules.md).
 The plugin API today has two events, `SV_EVENT_TICK` and `SV_EVENT_STOP`. Both run between two ticks, so a plugin never meets the simulation.
 
 ## Three kinds of event
@@ -70,7 +70,13 @@ Use kind 3 only when the safe route cannot say the rule. Keep the answer short: 
    - The killer is the human of the player that owns the last bullet that hit the victim, when that player is still active and has a human. Other causes of death (a crash, bleeding, a fall) give no killer. The game has no field for the killer, so the core keeps a table of the last bullet owner for each human, and the spawn of a body clears its entry.
    - Leave is posted when a player slot is released (`deleteplayer`): a connection that ended, a bot that went, or a rollback of a failed `npc_create`. The player reference no longer resolves at delivery. A plugin matches it with the reference that it saved at the spawn.
    - The tests make real players and humans, run `humansimulation`, and read the queue. They also call each hook with indexes out of range. The bounds on the index of the last-bullet table are not proven by removal, because an out-of-range write has no visible effect in the test world.
-3. The decision at a safe point for chat and join.
+3. Done. The decision at a safe point: `sv_plugins_decide` in the host, and the events chat and join.
+   - The callback answers `SV_OK` (pass) or `SV_DENIED` (drop). The plugins answer in load order and the first `SV_DENIED` ends the call. Any other answer is a failure, and the plugin is disabled.
+   - `sv_plugins_decide` passes (`SV_OK`) with no callback when it is not on the server thread, when the host is stopping or failed, when the event is null, or when it comes from inside a plugin callback.
+   - Chat (`SV_EVENT_CHAT`, record `SvChatEvent`): `server_playermessage` asks after the word filter, for a text that does not start with a slash. A muted player never reaches it. A player with no reference gives no event, as for the commands. The text is cut to 63 bytes.
+   - Join (`SV_EVENT_JOIN`, record `SvGameEvent` with the player and the account): the join code in `server.c` asks after the account ban check. `SV_DENIED` releases the player at once, as a ban does, and the release posts a leave event. The test calls `sv_game_join_denied`, which is the function that the join code calls. The call site in `server.c` has no test, because the join function needs a socket.
+   - The bits `SV_EVENT_PHONE_DIGIT` and `SV_EVENT_PHONE_CALL` are reserved for the phone area. Nothing posts them yet.
+   - Removing the text bound, the no-reference guard, the thread guard and the null guard made `game-api` fail each time (`build/logs/mutation17.log`). The guard against a call from inside a plugin callback has no proof, because a plugin has no way to start a chat text.
 4. The safe route for damage: the three rows and the small change in the damage code. The result equals today while the scale is 1.
 5. Kind 3: the restricted context, the time budget, the approval text and the tests of each limit.
 

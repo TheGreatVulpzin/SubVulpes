@@ -95,7 +95,8 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
     SvModule *module = owner_module(owner);
     if (!module || stopping)
         return SV_STATE;
-    if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE) ||
+    if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
+                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL) ||
         (events && !callback))
         return SV_INVALID;
     module->events = events;
@@ -360,6 +361,34 @@ static void dispatch(uint32_t kind)
     sv_game_status(&status);
     event.tick = status.tick;
     deliver(&event);
+}
+
+SvResult sv_plugins_decide(const SvEvent *event)
+{
+    uint32_t i;
+    if (!started || stopping || failed || current || GetCurrentThreadId() != server_thread || !event)
+        return SV_OK;
+    for (i = 0; i < module_count; ++i) {
+        SvModule *module = &modules[i];
+        SvResult result;
+        LARGE_INTEGER before, after, frequency;
+        unsigned control;
+        if (module->state != SV_MODULE_ACTIVE || !(module->events & event->kind))
+            continue;
+        QueryPerformanceCounter(&before);
+        control = enter(i);
+        result = module->event_callback(i + 1, event);
+        leave(control);
+        QueryPerformanceCounter(&after);
+        QueryPerformanceFrequency(&frequency);
+        ++module->calls;
+        module->elapsed_us += (uint64_t)((after.QuadPart - before.QuadPart) * 1000000.0 / frequency.QuadPart);
+        if (result == SV_DENIED)
+            return SV_DENIED;
+        if (result != SV_OK)
+            deactivate(i, SV_MODULE_FAILED, "Event callback reported failure.");
+    }
+    return SV_OK;
 }
 
 /* The records that the core posted since the last tick. A record that a callback causes is for the next tick. */
