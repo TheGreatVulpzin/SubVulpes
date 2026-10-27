@@ -55,7 +55,10 @@ Continue implementation in this order:
 3. Only after the API coverage proof, build production gameplay and administration plugins.
    Include administration commands, permissions, ban policy and persistence, RCON and optional log output.
    Then demonstrate two NPC behaviors, a custom mission, an effect with an existing weapon representation and an external snapshot consumer.
+   Optional stress example: a stylized video where items are pixels, headlines carry text and known sounds play.
+   One object update sends at most 255 items and the item pool has 1,024 slots. The frame rate of the client is unknown.
    Core operations supply validated game access and lifecycle events. Plugins supply policy and features.
+   The [legacy module catalog](legacy-modules.md) lists the commands and modules that the official plugins must reimplement.
 
 Classify A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time` before their corresponding implementation.
 Separate core invariants from plugin policy. Check compatible base fixes for OpenSubRosa24. See [placement notes](ideas.md).
@@ -63,6 +66,39 @@ Define A10, D11 and D12 first. Their inherited identifiers still have no descrip
 
 The current proof includes 57 native checks plus codec, handle, launcher and installation checks. See [S3 evidence](s3.md) for results and limits.
 These checks do not close the full API coverage requirement or S3.
+
+### State on 2026-10-27
+
+Step 1 (framework) is done for the planned cases. Commit `6d26ee8` adds checks for command permission, the command limit,
+the stop event, metrics and subscriptions. `ctest --test-dir build/server` passes `plugin-lifecycle` with 57 native checks.
+
+Step 2 (common API) is in progress.
+
+- Reads: entity pages and eight snapshot methods (`92854b1`).
+- Writes, version 1: ten methods (`3590ba9`, `0581091`). They are `message`, `message_to`, `kick`, `add_money`, `set_godmode`,
+  `set_health`, `teleport`, `set_admin`, `set_team` and `set_looks`.
+- Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
+- Private messages: the server writes an empty slot for each other connection (`0581091`).
+- Not done: items, objects, NPCs, aim and line queries, sounds, pushes on body parts, shop and settings operations,
+  and the events of N5 to N19 in the [legacy module catalog](legacy-modules.md).
+
+Step 3 (production plugins and examples) has not started.
+
+### Decisions of 2026-10-27
+
+1. **Sending by connection.** The server picks, for each connection, which bytes go into the packet. The format that the original client reads does not change.
+   This allows private messages (done), private sounds, team chat and later a view that differs by player.
+   A filter that changes the world the client believes needs its own design and a test with the real client, which stays deferred. See [system coverage](plugin-api-map.md#sending-to-some-clients-only).
+2. **Legacy modules.** The commands and modules of the friend's script manager (version 0.7.1) become official plugins.
+   The operations are N1 to N19 in [legacy-modules.md](legacy-modules.md). A newer version of the manager exists. Compare the catalog with it when the user provides it.
+3. **Proof by removal.** Remove the check and show that the test fails. This is mandatory only for permission, memory bounds, overflow and privacy checks.
+   For the fast build, run `vcvars32`, then `cmake --build build\server --target sv-game-test sv-game-read-fixture`, then `ctest --test-dir build/server -R game-api`.
+   The scripts that apply the removals are not in the repository. Group several removals in one script and restore the source after each one.
+4. **Client limits.** New models, sounds, types and maps do not block S3. Record each limit with the operation that it affects.
+   Idea, not verified: reuse an existing weapon type with new rules. The client might show the name of the old weapon.
+5. **Closing S3.** Do not close S3 because the written criteria are met. List each operation that has no support, with the reason, and ask the user to accept the list before the status changes to complete.
+6. **Second editor.** The user works without Codex for now. If another tool edits in a second worktree, two editors never touch one file.
+   Each shared file (`CMakeLists.txt`, `sv_game_write.h`, `docs/s3.md`, `docs/continuation.md`) has one owner, and the user merges the branches.
 
 Package and version production plugins separately. Check API and module dependencies before installation or activation.
 Prove that a compatible plugin update needs no core rebuild and preserves private settings and plugin data.
