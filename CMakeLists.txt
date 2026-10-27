@@ -140,4 +140,6 @@ if(BUILD_TESTING)
     add_test(NAME launcher-update-paths COMMAND "${SV_LAUNCHER_TEST}")
     add_test(NAME plugin-package-install COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_SOURCE_DIR}/tests/plugin_install_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
+    add_test(NAME package-contents COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_SOURCE_DIR}/tests/package_test.ps1")
 endif()

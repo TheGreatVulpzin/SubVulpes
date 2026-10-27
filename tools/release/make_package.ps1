@@ -36,7 +36,6 @@ $sources = [ordered]@{
     'subvulpes_server.exe' = 'build\server\subvulpes_server.exe'
     'subvulpes_launcher.exe' = 'build\launcher\subvulpes_launcher.exe'
     'LEIA-ME.txt' = 'tools\release\LEIA-ME.txt'
-    'config.txt' = 'tools\release\default-config.ini'
     'readme.txt' = 'tools\release\newspaper.txt'
     'plugins/plugins.ini' = 'plugins\plugins.ini'
     'plugins/native-approvals.ini' = 'build\server\plugins\native-approvals.ini'
@@ -47,12 +46,12 @@ $sources = [ordered]@{
 $allowed = @($sources.Keys) + @('version.txt')
 $allowed += @($dataFiles | ForEach-Object { "data/$($_.Relative)" })
 $directories = @('data', 'data/block', 'data/building', 'data/texture', 'data/weapon', 'plugins', 'plugins/sv.status')
-$defaultConfig = [IO.File]::ReadAllBytes((Join-Path $repo $sources['config.txt']))
 $statusHash = (Get-FileHash -LiteralPath (Join-Path $repo $sources['plugins/sv.status/status.dll']) -Algorithm SHA256).Hash.ToLowerInvariant()
 $approvalText = [IO.File]::ReadAllText((Join-Path $repo $sources['plugins/native-approvals.ini'])).Replace("`r", '').Trim()
 if ($approvalText -cne "[native]`nsv.status=$statusHash") { throw 'The official native approval does not match the built status plugin.' }
 
 # Copy build outputs, package defaults and checked data files.
+# The package has no config.txt: the launcher creates it with a new admin password.
 foreach ($source in $sources.Values) {
     $path = Join-Path $repo $source
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -74,11 +73,6 @@ function Assert-Package {
         }
         if ($relative -cnotin $allowed) {
             throw "Forbidden package entry: $($item.Name)"
-        }
-        if ($relative -ceq 'config.txt' -and
-            [Convert]::ToBase64String([IO.File]::ReadAllBytes($item.FullName)) -cne
-            [Convert]::ToBase64String($defaultConfig)) {
-            throw 'The package config.txt must match the public default.'
         }
         if ($item.Extension -eq '.txt') {
             $text = [IO.File]::ReadAllText($item.FullName)

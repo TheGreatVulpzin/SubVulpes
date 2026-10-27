@@ -1,6 +1,6 @@
 SubVulpes Server
 
-This package contains the Windows x86 server, launcher, data/ and public default config.txt.
+This package contains the Windows x86 server, launcher, plugins and data/. The launcher creates config.txt on first use.
 1. Extract the package into a new folder.
 2. Open subvulpes_launcher.exe. The window title is SubVulpes Server.
 3. Open Server settings. Set the name, UDP port and admin password. Click Save.

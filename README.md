@@ -29,7 +29,8 @@ python -I tools\ci\check_native.py
 Outputs: `build/server/subvulpes_server.exe` and `build/launcher/subvulpes_launcher.exe`.
 Download `server-data-0.24.zip` and its checksum from the [upstream data release](https://github.com/TheGreatVulpzin/OpenSubRosa24/releases/tag/server-data-0.24).
 Check and extract the data with `tools/release/expand_data_zip.ps1`.
-That release contains only `data/`. The public default config comes from the source tag in `tools/release/default-config.ini`.
+That release contains only `data/`. The launcher creates `config.txt` on first use from the public template in `tools/release/default-config.ini`.
+The package has no `config.txt`.
 
 ```powershell
 .\tools\release\make_package.ps1 -Version v0.0.0-s2 -DataDir build\data-checked\data
