@@ -99,6 +99,8 @@ static void test_players(void)
         p->team = 0;
         resetorientation(rot);
         p->human_id = createhuman(&pos.x, &rot[0].x, i);
+        if (p->human_id < 0)
+            continue;
         if (i == 0) {
             resetorientation(rot);
             test_inventory(i, &pos, rot, 0);
@@ -274,6 +276,8 @@ void resetgame(void)
         resetorientation(rot);
         rotateorientation(rot, &rot[1], 3.1415927410125732f);
         sr_players[0].human_id = createhuman(&pos.x, &rot[0].x, 0);
+        if (sr_players[0].human_id < 0)
+            return;
         sr_humans[sr_players[0].human_id].axis = 3.1415927410125732f;
         sr_players[0].input_mode = 0;
         sr_players[0].unused_cc = 0;

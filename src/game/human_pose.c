@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 
+#include "bonds.h"
 #include "sr_math.h"
 #include "sr_runtime.h"
 #include "vectors.h"
@@ -96,6 +97,8 @@ void human_collisionhuman(int human)
                 len = vectorlength(&d);
                 if (!(len < 0.375))
                     continue;
+                if (!bonds_available(1))
+                    return;
                 inv = (float)(1.0 / len);
                 /* Only these fields change: the rest of the record keeps its old values. */
                 b = &sr_bonds[sr_numofbonds];

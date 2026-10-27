@@ -31,6 +31,9 @@ file(GLOB SV_PLUGIN_HEADERS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/plugins/*
 set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c plugins/status/status.c
     tests/plugin_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c
     APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
+set_property(SOURCE src/game/human_body.c src/game/human_arms.c src/game/human_pose.c
+    src/game/humans.c src/game/item_physics.c src/game/objects.c src/game/wheels.c tests/physics_bounds.c
+    APPEND PROPERTY OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/src/game/bonds.h;${CMAKE_SOURCE_DIR}/src/game/objects.h")
 target_link_options(subvulpes-server PRIVATE /LARGEADDRESSAWARE /MAP /DEBUG)
 set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 
@@ -106,7 +109,7 @@ if(BUILD_TESTING)
     target_link_options(sv-codec-test PRIVATE /LARGEADDRESSAWARE)
     set_target_properties(sv-codec-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME codec-bounds COMMAND sv-codec-test)
-    add_executable(sv-game-test tests/plugin_game_test.c tests/platform_support.c
+    add_executable(sv-game-test tests/plugin_game_test.c tests/physics_bounds.c tests/platform_support.c
         src/platform/x87_math.c src/platform/plat_imports.c ${SV_GAME_SOURCES})
     target_include_directories(sv-game-test PRIVATE src/include src/platform src/common src/net src/game src/plugins)
     target_compile_definitions(sv-game-test PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)

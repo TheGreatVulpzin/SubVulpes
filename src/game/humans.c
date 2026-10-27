@@ -10,6 +10,7 @@
 #include <math.h>
 #include <stdint.h>
 
+#include "bonds.h"
 #include "collide.h"
 #include "economy.h"
 #include "events.h"
@@ -539,23 +540,25 @@ static void human_levelcontacts(Human *hu, int h)
     bk = &hu->bones[k];
     if (sphereintersectlevel(&bk->pos.x, r) == 0)
       continue;
-    i = sr_numofbonds;
-    b = &sr_bonds[i];
-    b->type = 7;
-    b->owner = h;
-    b->bone_a = k;
-    b->rest_length = (float)(r - g_intersect.distance);
-    sr_numofbonds = i + 1;
-    b->stiffness = 0.0625f;
-    b->damping = 0.125f;
-    b->mode = 0;
-    b->normal.x = g_intersect.normal[0];
-    b->normal.y = g_intersect.normal[1];
-    b->normal.z = g_intersect.normal[2];
-    b->friction = 0.5f;
-    b->arm.x = (float)(g_intersect.pos[0] - bk->pos.x);
-    b->arm.y = (float)(g_intersect.pos[1] - bk->pos.y);
-    b->arm.z = (float)(g_intersect.pos[2] - bk->pos.z);
+    if (bonds_available(1)) {
+      i = sr_numofbonds;
+      b = &sr_bonds[i];
+      b->type = 7;
+      b->owner = h;
+      b->bone_a = k;
+      b->rest_length = (float)(r - g_intersect.distance);
+      sr_numofbonds = i + 1;
+      b->stiffness = 0.0625f;
+      b->damping = 0.125f;
+      b->mode = 0;
+      b->normal.x = g_intersect.normal[0];
+      b->normal.y = g_intersect.normal[1];
+      b->normal.z = g_intersect.normal[2];
+      b->friction = 0.5f;
+      b->arm.x = (float)(g_intersect.pos[0] - bk->pos.x);
+      b->arm.y = (float)(g_intersect.pos[1] - bk->pos.y);
+      b->arm.z = (float)(g_intersect.pos[2] - bk->pos.z);
+    }
     speed = (float)x87_sqrt((double)(float)(hu->bones[0].vel.z * hu->bones[0].vel.z +
                                            (hu->bones[0].vel.x * hu->bones[0].vel.x +
                                             hu->bones[0].vel.y * hu->bones[0].vel.y)));
@@ -662,33 +665,35 @@ static void human_objectcontacts(Human *hu, int h)
       if (sphereintersectobject(o, &bk->pos.x, r) == 0)
         continue;
       w0 = g_intersect.tri_weights[0];
+      w1 = g_intersect.tri_weights[1];
       p2 = g_intersect.tri_particles[2];
       p1 = g_intersect.tri_particles[1];
       p0 = g_intersect.tri_particles[0];
-      i = sr_numofbonds;
-      b = &sr_bonds[i];
-      b->type = 4;
-      b->owner = h;
-      b->bone_a = k;
-      last = hu->last_vehicle;
-      b->particle_b = p0;
-      b->particle_c = p1;
-      b->particle_d = p2;
-      b->weights[0] = w0;
-      w1 = g_intersect.tri_weights[1];
-      b->weights[1] = w1;
-      b->weights[2] = g_intersect.tri_weights[2];
-      b->rest_length = (float)(r - g_intersect.distance);
-      b->stiffness = 0.0625f;
-      if (o == last)
-        b->stiffness = (float)(((float)(100 - hu->last_vehicle_timer) * 0.0625) / 100.0);
-      sr_numofbonds = sr_numofbonds + 1;
-      b->damping = 0.25f;
-      b->mode = 0;
-      b->normal.x = g_intersect.normal[0];
-      b->normal.y = g_intersect.normal[1];
-      b->normal.z = g_intersect.normal[2];
-      b->friction = 0.1f;
+      if (bonds_available(1)) {
+        i = sr_numofbonds;
+        b = &sr_bonds[i];
+        b->type = 4;
+        b->owner = h;
+        b->bone_a = k;
+        last = hu->last_vehicle;
+        b->particle_b = p0;
+        b->particle_c = p1;
+        b->particle_d = p2;
+        b->weights[0] = w0;
+        b->weights[1] = w1;
+        b->weights[2] = g_intersect.tri_weights[2];
+        b->rest_length = (float)(r - g_intersect.distance);
+        b->stiffness = 0.0625f;
+        if (o == last)
+          b->stiffness = (float)(((float)(100 - hu->last_vehicle_timer) * 0.0625) / 100.0);
+        sr_numofbonds = sr_numofbonds + 1;
+        b->damping = 0.25f;
+        b->mode = 0;
+        b->normal.x = g_intersect.normal[0];
+        b->normal.y = g_intersect.normal[1];
+        b->normal.z = g_intersect.normal[2];
+        b->friction = 0.1f;
+      }
       if (o == hu->last_vehicle || k == 5 || k == 8 || k == 4 || k == 7)
         continue;
       v.x = (float)(sr_particles[p0].vel.x * w0);

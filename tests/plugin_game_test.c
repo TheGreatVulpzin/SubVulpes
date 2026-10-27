@@ -1,3 +1,5 @@
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +18,7 @@ _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
 _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
 _Static_assert(sizeof(SvEvent) == 12, "Preserve event ABI v1");
 _Static_assert(sizeof(SvPlugin) == 92, "Preserve plugin ABI v1");
+void test_physics_bounds(void);
 
 #define CHECK(test) do { if (!(test)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #test); exit(1); \
@@ -114,6 +117,7 @@ static void account_lifetime(void)
 int main(void)
 {
     SvEntity old;
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     CHECK(sv_entity_capacity(0) == 0);
     CHECK(sv_entity_capacity(UINT32_MAX) == 0);
     CHECK(sv_entity_at(0, 0) == 0);
@@ -172,6 +176,7 @@ int main(void)
     CHECK(sv_entity_at(SV_ENTITY_PLAYER, 0) != old);
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);
     sv_game_stop();
+    test_physics_bounds();
     puts("Game entity lifetimes passed against real constructors and retirement paths.");
     return 0;
 }

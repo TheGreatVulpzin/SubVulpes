@@ -1,6 +1,7 @@
 /* The body of a human: the joint bonds and the muscle bonds that hold its 15 bones together,
  * and the end of a human. */
 #include "humans.h"
+#include "bonds.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -79,10 +80,13 @@ static Bond *new_body_bond(int i, int type, int human, int bone_a, int target)
 int createjointbond(int human, int bone_a, int target, const vec3 *pos)
 {
     Human *hu = &sr_humans[human];
-    HumanJoint *j = &hu->joints[hu->num_joints];
+    HumanJoint *j;
     int i = sr_numofbonds;
     Bond *b;
 
+    if (!bonds_available(1) || (uint32_t)hu->num_joints >= 32)
+        return -1;
+    j = &hu->joints[hu->num_joints];
     j->bond = i;
     j->bone = bone_a;
     j->body = target;
@@ -104,7 +108,10 @@ void human_createmuscleball(int human, int parent, int bone, const vec3 *pos)
     HumanMuscle *m;
     int i;
 
-    createjointbond(human, parent, bone, pos);
+    if (!bonds_available(2) || (uint32_t)hu->num_muscles >= 128)
+        return;
+    if (createjointbond(human, parent, bone, pos) < 0)
+        return;
     i = sr_numofbonds;
     m = &hu->muscles[hu->num_muscles];
     m->bond = i;
@@ -124,6 +131,8 @@ void human_buildmuscles(int human)
     static const int limbs[4][2] = {{9, 0}, {12, 0}, {3, 1}, {6, 1}};
     int k, b;
 
+    if (!bonds_available(28))
+        return;
     human_createmuscleball(human, 0, 1, &g_body[1].joint);
     human_createmuscleball(human, 1, 2, &g_body[2].joint);
     for (k = 0; k < 4; k++) {
@@ -220,7 +229,7 @@ void setupbody(void)
 }
 
 /* Makes a human at pos, turned by rot (3 rows of 3 floats), for player `player` (-1: a human with
- * no player, with random colors). It returns the human, or -1 when all 512 are in use. */
+ * no player, with random colors). It returns the human, or -1 when all 512 are in use or fewer than 28 bonds are free. */
 int createhuman(float *posp, float *rot, int player)
 {
     Human *humans = sr_data_human;
@@ -235,6 +244,8 @@ int createhuman(float *posp, float *rot, int player)
     float lx, ly, lz, wx, wy, wz, f;
     int h, k, p, s;
 
+    if (!bonds_available(28))
+        return -1;
     for (h = 0; h < NUM_HUMANS; h++)
         if (humans[h].active == 0)
             break;

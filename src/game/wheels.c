@@ -338,6 +338,8 @@ void objectwheelcollision(int obj, int wheel)
 
   if (!circleintersectlevel(&c.x, &o->rot[0].x, w->radius))
     return;
+  if (!bonds_available(1))
+    return;
   d.x = (float)(c.x - ip[0]);
   d.y = (float)(c.y - ip[1]);
   d.z = (float)(c.z - ip[2]);
@@ -389,6 +391,8 @@ void objectwheelcollision2(int obj, int body)
     p.z = (float)(h * wb->rot[0].z + wb->pos.z);
     if (!circleintersectlevel(&p.x, &wb->rot[0].x, wb->radius))
       continue;
+    if (!bonds_available(1))
+      return;
     d.x = (float)(ip[0] - p.x);
     d.y = (float)(ip[1] - p.y);
     d.z = (float)(ip[2] - p.z);
@@ -423,16 +427,19 @@ static void track_bond(int particle, float stiffness, float damping)
   const Particle *p = &sr_particles[particle];
   vec3 d;
   float rest;
+  Bond *b;
 
   d.x = (float)(ip[0] - p->pos.x);
   d.y = (float)(ip[1] - p->pos.y);
   d.z = (float)(ip[2] - p->pos.z);
   rest = (float)((n[1] * d.y + n[0] * d.x) + n[2] * d.z);
-  contact_bond(1, particle, n, rest, stiffness, damping);
-  sr_bonds[sr_numofbonds - 1].surface_vel.x = 0.0f;
-  sr_bonds[sr_numofbonds - 1].surface_vel.y = 0.0f;
-  sr_bonds[sr_numofbonds - 1].surface_vel.z = 0.0f;
-  sr_bonds[sr_numofbonds - 1].friction = 0.0f;
+  b = contact_bond(1, particle, n, rest, stiffness, damping);
+  if (!b)
+    return;
+  b->surface_vel.x = 0.0f;
+  b->surface_vel.y = 0.0f;
+  b->surface_vel.z = 0.0f;
+  b->friction = 0.0f;
 }
 
 /* A train car: the first four particles touch the track pieces near the car. */

@@ -1,6 +1,4 @@
-/* People and vehicles for missions and street traffic.
- * A full player list leaves index -1. The spawn paths still use that index.
- */
+/* People and vehicles for missions and street traffic. */
 #include "scenario.h"
 
 #include <stdio.h>
@@ -96,6 +94,10 @@ int scenario_createguards(int building, int item_type, int expire)
         }
         g_guard_used[spot] = 1;
         player = createplayer();
+        if (player < 0) {
+            g_scenario.items[0] = -1;
+            return -1;
+        }
         os_rand();
         p = &sr_players[player];
         pos = list[spot].pos;
@@ -113,6 +115,11 @@ int scenario_createguards(int building, int item_type, int expire)
         resetorientation(rot);
         rotateorientation(rot, &g_yaxis, angle);
         human = createhuman(&pos.x, &rot[0].x, player);
+        if (human < 0) {
+            deleteplayer(player);
+            g_scenario.items[0] = -1;
+            return -1;
+        }
         p->yaw = angle;
         p->human_id = human;
         type = (os_rand() & 1) == 0 ? 6 : 10;
@@ -132,9 +139,12 @@ void scenario_createtraffic2(int n)
         return;
     for (k = 0; k < n; ++k) {
         int player = createplayer();
-        Player *p = &sr_players[player];
+        Player *p;
         int ra, road, rb, r, type, color, car, human, j;
         float dist;
+        if (player < 0)
+            break;
+        p = &sr_players[player];
         p->team = 6;
         sprintf(p->name, "");
         p->is_bot = 1;
@@ -147,7 +157,16 @@ void scenario_createtraffic2(int n)
         type = r < 2 ? 7 : r < 6 ? 2 : r < 12 ? 0 : r < 14 ? 8 : (r < 15) * 4 + 3;
         color = os_rand() % 6;
         car = scenario_createcar(type, color, road, ra & 1, rb & 1, dist);
+        if (car < 0) {
+            deleteplayer(player);
+            break;
+        }
         human = createhuman(&sr_objects[car].pos.x, &sr_objects[car].rot[0].x, player);
+        if (human < 0) {
+            deleteplayer(player);
+            sr_objects[car].time_to_live = 0;
+            break;
+        }
         p->human_id = human;
         sr_humans[human].vehicle_id = car;
         sr_humans[human].vehicle_seat = 0;
@@ -167,14 +186,21 @@ void scenario_createtraffic2(int n)
 static int chase_crew(int car, int seat, int expire)
 {
     int player = createplayer();
-    Player *p = &sr_players[player];
+    Player *p;
     int human, type;
+    if (player < 0)
+        return 0;
+    p = &sr_players[player];
     p->team = 6;
     sprintf(p->name, "");
     p->is_bot = 1;
     p->despawn_time = expire;
     createevent_updateplayer(player);
     human = createhuman(&sr_objects[car].pos.x, &sr_objects[car].rot[0].x, player);
+    if (human < 0) {
+        deleteplayer(player);
+        return 0;
+    }
     p->human_id = human;
     sr_humans[human].vehicle_id = car;
     sr_humans[human].vehicle_seat = seat;
@@ -187,9 +213,15 @@ int scenario_createchase(int item_type, int expire)
     int player, ra, road, car, human, key, briefcase, r;
     Player *p;
     vec3 pos = {62, 10, 60}, rot[3];
-    if (g_city.num_roads == 0)
-        return 0;
+    if (g_city.num_roads == 0) {
+        g_scenario.items[0] = -1;
+        return -1;
+    }
     player = createplayer();
+    if (player < 0) {
+        g_scenario.items[0] = -1;
+        return -1;
+    }
     p = &sr_players[player];
     p->team = 6;
     sprintf(p->name, "");
@@ -199,7 +231,18 @@ int scenario_createchase(int item_type, int expire)
     ra = os_rand();
     road = os_rand() % g_city.num_roads;
     car = scenario_createcar(3, 0, road, ra & 1, 1, 32.0f);
+    if (car < 0) {
+        deleteplayer(player);
+        g_scenario.items[0] = -1;
+        return -1;
+    }
     human = createhuman(&sr_objects[car].pos.x, &sr_objects[car].rot[0].x, player);
+    if (human < 0) {
+        deleteplayer(player);
+        sr_objects[car].time_to_live = 0;
+        g_scenario.items[0] = -1;
+        return -1;
+    }
     p->human_id = human;
     sr_humans[human].vehicle_id = car;
     sr_humans[human].vehicle_seat = 0;

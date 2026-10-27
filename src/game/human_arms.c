@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 
+#include "bonds.h"
 #include "items.h"
 #include "sr_math.h"
 #include "sr_runtime.h"
@@ -135,6 +136,8 @@ static int hold_right(int human, const Human *hu)
         grip.y = 0.0f;
         grip.z = 0.1875f;
     }
+    if (!bonds_available(it->type == ITEM_DOOR ? 1 : 2))
+        return it->type == ITEM_DOOR ? 0 : 1;
     b = sr_numofbonds;
     hold_points(item_bond(b, BOND_HOLD, human, 8, item, 0.25f, 0.25f), &grip);
     sr_numofbonds = b + 1;
@@ -201,6 +204,8 @@ static int hold_left(int human, const Human *hu)
     grip.x = 0.0f;
     if (in_slot1 == 0 && sr_itemtypes[it->type].one_handed != 0)
         return 1;
+    if (!bonds_available(it->type == ITEM_DOOR ? 1 : (in_slot1 > 0 ? 2 : 1)))
+        return it->type == ITEM_DOOR ? 0 : 1;
     if (it->type == ITEM_DOOR) {
         grip.y = 0.125f;
         grip.x = 0.5f;

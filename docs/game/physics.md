@@ -128,3 +128,8 @@ The type functions of the table above (`contact_*`, `bond_bodyrotbody`, `bond_bo
 - A small integer in a float field is a denormal on the x87. It makes the code slow.
 - `contact_wheel` writes the friction into `Wheel.slip`. The wheel code reads it in the next pass.
 - The wheel and engine steps use C implementations in `src/game/wheels.c` and `src/game/vehicles.c`.
+- The list of bonds holds 16384 records. `bonds_available(n)` tells whether `n` more fit. Every writer that adds a bond checks it first.
+  A contact that does not fit is skipped, so the body or object gets no push from it for that tick. `contact_bond` returns `NULL` then.
+  `createhuman` needs 28 free bonds. It returns -1 and changes nothing when they are not free. A held item or a door needs 1 or 2.
+  A failed spawn of a guard, a traffic car or a chase crew deletes the player it made and retires the car. `scenario_createchase` returns -1 when it makes nothing, including when the city has no roads.
+  The original code had no such checks. The new code differs only when the list or a pool is full.

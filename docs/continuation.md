@@ -2,7 +2,7 @@
 
 Checkpoint date: 2026-10-26. The framework and first game read slice are committed.
 Lifecycle integration is `3fbcbf3`. The read API implementation is `92854b1`.
-The full mapped API and S3 remain open. Core bond capacity guards are the current unvalidated work.
+The full mapped API and S3 remain open. Core bond capacity guards are committed and tested within the limits below.
 
 ## Read first
 
@@ -18,7 +18,7 @@ Make small English local commits without AI coauthor trailers. No push or tag is
 
 The framework implementation, lifecycle integration and first read API are committed.
 The SDK and read-contract documentation updates are ready but uncommitted at this checkpoint.
-Core bond capacity guards remain work in progress. They are not built, tested or committed yet.
+Core bond capacity guards are committed with their test. See the bond guard result below.
 Inspect the current working tree before changes. Preserve any new API work and unrelated user changes.
 Ignored staging snapshots under `build/plans/` are historical notes, not current source inputs.
 
@@ -115,11 +115,22 @@ The read slice now uses entity lifecycle integration, including retirement and r
 Keep creation, deletion, reuse and packed-pool relocation consistent as the API expands.
 Generation counters alone do not preserve packed survivor identity.
 
-The current work adds core bond capacity guards before creation and physics mutators.
-Those guard changes remain unbuilt, untested and uncommitted. Do not describe them as completed or covered by the earlier checks.
+The bond capacity guards check `bonds_available()` before creation and physics writers. See the bond guard result below.
 Review all contact-bond writers and legacy resource constructors before broad creation or physics exposure.
 Full mission lists return slot 16, and several constructors dereference failed allocations. Do not expose those paths without validated operations.
 Spare type slots and server geometry edits do not prove original-client support.
 A10, D11 and D12 remain undefined reserved identifiers.
 The storage generators and normal server remain independent from the original executable.
 The deferred S1/S2 client playtest does not prove new plugin behavior.
+
+## Bond guard result
+
+The guards add `bonds_available()`, a `Bond *` result for `contact_bond`, a 28-bond check in `createhuman` and rollback of a failed spawn.
+After a normal build, all six CTest groups passed, with `game-api` at 0.90 seconds.
+`gen_storage.py --check`, `check_native.py` and `check_repo.py` passed.
+`tests/physics_bounds.c` covers these cases directly: contact bonds at full, one free and out-of-range counts; `createhuman` at 27 and 28 free bonds; the 32-joint and 128-muscle lists;
+door and gun holds in both hands; the human contact and door bond; a full player list and one free player slot; and rollback of traffic, chase and guard spawns when humans, bonds or objects are full.
+It does not cover the level and object contacts in `humans.c` and `objects.c`, the wheel and track bonds in `wheels.c`, or a failed `createhuman` in `game_setup.c` and `logic_sim.c`. They need level geometry.
+The last-slot case of `chase_crew` and a full spawn with a free slot are also not run. A failed spawn can leave guards made before the failure.
+One behavior changed: `scenario_createchase` returns -1, not 0, when the city has no roads, and no mission is made then. See `docs/game/physics.md`.
+A first test run failed only because a new test cleared the humans that an older test used. The order is fixed.

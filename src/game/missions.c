@@ -181,6 +181,8 @@ int createmission_acquisition(int kind, int n, const int *teams)
             return quotient;
         result = scenario_createguards(building, type, expire);
     }
+    if (result < 0)
+        return 0;
     for (i = 0; i < n; ++i) {
         int team = teams[i];
         int slot = scenario_getnextmission(team);

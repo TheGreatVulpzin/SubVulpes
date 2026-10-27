@@ -13,6 +13,7 @@
 
 #include <math.h>
 
+#include "bonds.h"
 #include "collide.h"
 #include "solver.h"
 #include "sr_runtime.h"
@@ -125,7 +126,7 @@ static void door_end(Item *it, int e)
 }
 
 /* A door: it slows down, turns, falls and hangs at its two ends. A bone of a human that
- * touches it gets a contact bond. The list of bonds has no limit test here. */
+ * touches it gets a contact bond. */
 void item_physicssimulation(int item)
 {
     Item *it = &sr_items[item];
@@ -168,6 +169,8 @@ void item_physicssimulation(int item)
 
             if (b == BONE_LEFT_HAND || b == BONE_RIGHT_HAND || !item_sphereintersect(item, &bone->pos.x, 0.125f))
                 continue;
+            if (!bonds_available(1))
+                return;
             bond = &sr_bonds[sr_numofbonds++];
             bond->type = BOND_DOOR;
             bond->owner = h;

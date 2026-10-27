@@ -285,6 +285,8 @@ void logicsimulation_round(void)
                 rotateorientation(rot, &rot[1], angle);
                 human = createhuman(&pos.x, &rot[0].x, i);
                 p->human_id = human;
+                if (human < 0)
+                    continue;
                 sr_humans[human].axis = angle;
                 p->menu = 0;
                 player_loadinventory(i);

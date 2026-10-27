@@ -494,10 +494,11 @@ static int level_contacts(Object *o, int obj)
         d.x = (float)(ip[0] - pt->pos.x);
         d.y = (float)(ip[1] - pt->pos.y);
         d.z = (float)(ip[2] - pt->pos.z);
-        contact_bond(1, p, n, (float)((n[1] * d.y + n[0] * d.x) + n[2] * d.z), 0.125f, 0.25f);
-        b = &sr_bonds[sr_numofbonds - 1];
-        b->surface_vel.x = b->surface_vel.y = b->surface_vel.z = 0.0f;
-        b->friction = 0.6f;
+        b = contact_bond(1, p, n, (float)((n[1] * d.y + n[0] * d.x) + n[2] * d.z), 0.125f, 0.25f);
+        if (b) {
+          b->surface_vel.x = b->surface_vel.y = b->surface_vel.z = 0.0f;
+          b->friction = 0.6f;
+        }
         hit = 1;
       }
     } else {
@@ -532,10 +533,11 @@ static int level_contacts(Object *o, int obj)
           depth = d2;
         }
       }
-      contact_bond(1, p, nr, depth, broke ? 0.0078125f : 0.125f, broke ? 0.03125f : 0.25f);
-      b = &sr_bonds[sr_numofbonds - 1];
-      b->surface_vel.x = b->surface_vel.y = b->surface_vel.z = 0.0f;
-      b->friction = 0.6f;
+      b = contact_bond(1, p, nr, depth, broke ? 0.0078125f : 0.125f, broke ? 0.03125f : 0.25f);
+      if (b) {
+        b->surface_vel.x = b->surface_vel.y = b->surface_vel.z = 0.0f;
+        b->friction = 0.6f;
+      }
       if (o->state == 2 && 20 < k)
         applydamageobject(obj, 100);
     }
@@ -586,9 +588,12 @@ static void object_contacts(Object *a, int ia)
       if (lineintersectobject(j, &a->pos.x, &pt->pos.x, 0)) {
         const float *ip = g_intersect.pos;
         const float *n = g_intersect.normal;
-        Bond *bd = &sr_bonds[sr_numofbonds];
+        Bond *bd;
         vec3 d;
 
+        if (!bonds_available(1))
+          return;
+        bd = &sr_bonds[sr_numofbonds];
         d.x = (float)(ip[0] - pt->pos.x);
         d.y = (float)(ip[1] - pt->pos.y);
         d.z = (float)(ip[2] - pt->pos.z);
