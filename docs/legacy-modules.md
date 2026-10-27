@@ -73,7 +73,7 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 | N2 | Set the admin flag of a player and of its connection, as the password login does. Done: `set_admin`. |
 | N3 | Set the team of a player and send the update. Done: `set_team`. |
 | N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors are not done. |
-| N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. |
+| N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. Done: `set_bleeding` and `set_stun`. |
 
 About the "drunk" look. This server has no drunk field. A body staggers in two cases, and both come from the code:
 

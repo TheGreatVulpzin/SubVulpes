@@ -75,12 +75,12 @@ the stop event, metrics and subscriptions. `ctest --test-dir build/server` passe
 Step 2 (common API) is in progress.
 
 - Reads: entity pages and eight snapshot methods (`92854b1`).
-- Writes, version 1: seventeen methods (`3590ba9`, `0581091`, `b486fc1`, `83f34e0`). They are `message`, `message_to`, `kick`, `add_money`, `set_godmode`,
-  `set_health`, `teleport`, `set_admin`, `set_team`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create` and `object_remove`.
+- Writes, version 1: nineteen methods (`3590ba9`, `0581091`, `b486fc1`, `83f34e0`, `c80db6b`). They are `message`, `message_to`, `kick`, `add_money`, `set_godmode`,
+  `set_health`, `teleport`, `set_admin`, `set_team`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `set_bleeding` and `set_stun`.
 - Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
 - Private messages: the server writes an empty slot for each other connection (`0581091`).
 - Not done: NPCs, aim and line queries, sounds, pushes on body parts, shop and settings operations,
-  and the events of N5, N8 to N19 in the [legacy module catalog](legacy-modules.md).
+  and the events of N8 to N19 in the [legacy module catalog](legacy-modules.md).
 
 Step 3 (production plugins and examples) has not started.
 
@@ -101,7 +101,7 @@ Step 3 (production plugins and examples) has not started.
    The user types a command. The plugin says what it tests, what the user should see, and which command comes next.
    Each new API operation adds one step. It is the first test with the real client, and it needs the user to play.
    The user decided on 2026-10-27 to build it at the halfway point of the API plan: when 10 of the 19 operations N1 to N19 are done.
-   On that date 5 were done: N1, N2, N3, N4 (the five look selectors, not the colors) and N6. N7 followed in `83f34e0`, which makes 6. Not started.
+   On that date 5 were done: N1, N2, N3, N4 (the five look selectors, not the colors) and N6. N7 followed in `83f34e0` and N5 in `c80db6b`, which makes 7. Not started.
 7. **Second editor.** The user works without Codex for now. If another tool edits in a second worktree, two editors never touch one file.
    Each shared file (`CMakeLists.txt`, `sv_game_write.h`, `docs/s3.md`, `docs/continuation.md`) has one owner, and the user merges the branches.
 

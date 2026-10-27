@@ -177,6 +177,8 @@ Objects (`83f34e0`): `object_create` and `object_remove`. Removal proofs are in 
 The test needs `x87_init()` first, because the orientation helpers use the x87 math of the game.
 The real server starts it at launch.
 
+Bleeding and stun (`c80db6b`): `set_bleeding` and `set_stun`, 7 of the 19 operations of the legacy catalog are done now.
+
 Not tested:
 
 - The original client. No write method, no private message and no filtered event ran against it. A teleport has no check for a wall at the target.

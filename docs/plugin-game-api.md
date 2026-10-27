@@ -208,6 +208,8 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `item_detach(item)` | Takes the item out of its human or its parent item. | `SV_NOT_FOUND`, `SV_STATE` when the item has neither |
 | `object_create(type, position, yaw, color, object)` | Makes an object of type 0 to 11 at the position, turned by the yaw angle in radians, with color 0 to 5, and sends the creation event. Types 12 and 13 are the pieces of the train, which only the track system makes. The reference goes to `*object` only on success. | `SV_INVALID` for a bad type, color, position or angle, or a null pointer. `SV_LIMIT` when all 1,024 object slots are in use |
 | `object_remove(object)` | Sets the lifetime to zero. The game removes the object in its next object lifetime pass, and the humans inside get out. | `SV_NOT_FOUND`, `SV_DENIED` for a piece of the train |
+| `set_bleeding(human, enabled)` | Sets the bleeding flag to 0 or 1. A bleeding body loses health over time. | `SV_NOT_FOUND`, `SV_INVALID` for another value |
+| `set_stun(human, ticks)` | Sets the stun timer from 0 to 3,600 ticks. The torso is weak while it runs, so the body staggers. The game counts it down by 1 each tick. | `SV_NOT_FOUND`, `SV_INVALID` out of range |
 | `teleport(human, position)` | Moves the 15 bones by the same offset so bone 0 reaches the position. It copies the new place to the previous place of each bone. The velocity does not change. | `SV_NOT_FOUND`, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle |
 
 The tests call every method from a real plugin callback against records that real constructors made.
@@ -217,6 +219,8 @@ Removing one check at a time (message bytes, money range, flag range, health ran
 For the item methods, removing the slot bound, the type bound, the check for a second parent item or the newspaper refusal made `game-api` fail each time (`build/logs/mutation10.log`).
 For the object methods, removing the type bound, the color bound, the refusal to remove a train piece and the angle check made `game-api` fail each time (`build/logs/mutation11.log`).
 Keys keep the index of their vehicle after the vehicle goes. This is the same as when the game removes a vehicle by itself.
+The bleeding and stun methods have a test of every error code and of the stored value. They have no removal proof, because they guard no right, memory bound or privacy.
+The upper bound of 3,600 ticks (one minute) is a choice of this API. The game itself sets the timer to 3 or 6 times the damage of a hit.
 The game keeps no check of a loop of parent items, and the types of the tests cannot make one. That check has no test.
 For the checks that guard rights or privacy, the same removal made `game-api` fail too: the private-message filter, the stale-target test, the bot check and the connection admin flag of `set_admin`.
 The packet writer clamps the sent health to the range -10 to 117 and leaves the server value as written. So a client sees the same value for -100 and -10, and for 100 and 117. See [network limits](game/network.md#representation-limits).
