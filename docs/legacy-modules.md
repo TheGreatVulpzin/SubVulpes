@@ -216,6 +216,26 @@ No general operation serves it, so the plan is to refuse it and to list it as "n
 **Not in the catalog.** `/nick` has no code in the tool. The settings file keeps a grab module that is not installed. A cheat table in the package shows the older hand pose and punch code.
 The tool stays outside this repository, and none of its binaries or code is used here.
 
+## The original client and OverRosa
+
+The rule stays: each operation must work with the original client. The server may change its own protocol, but the original client does not read new events.
+When a change cannot reach that client, the operation does one of two things:
+
+1. It gives the same result by other means that the client understands. Example: to change the color of a vehicle, remove it and make a new one with the new color.
+2. It goes in the list below. It waits for OverRosa, the future modified client.
+
+**List for OverRosa.** These need a new event or a new field, and the original client cannot show them:
+
+- Change the color of a vehicle in place. The color goes to the clients only in the creation event.
+- Change the type of a vehicle or of an item in place. The type goes only in the creation event.
+- A new model, a new sound or a new menu.
+
+**Unknown until a test with the original client.** The game values that the client may simulate with its own tables, such as engine force or speed range.
+The server changes them, but the client may then differ from the server. Mark such a parameter "client effect unknown" in its documentation.
+
+**Plan for the later work.** The server marks each connection as OverRosa or original, and sends a new event only to the first kind.
+The packet writer already sends a different packet to each connection (the private message). The protocol may not have a field to tell the two clients apart. Check this first.
+
 ## Order
 
 1. N1 to N4, N6 to N8, N10 and N11 first. They serve the chat commands, which one official administration plugin can own.
