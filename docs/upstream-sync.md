@@ -131,3 +131,26 @@ Private settings, test accounts, logs, binaries and downloaded assets stay ignor
 
 Rollback uses local commits: revert the documentation update, then `f1d2c1c`, then `552ba2b`.
 No persistent data conversion or account format change needs rollback.
+
+## Launcher password and package fixes
+
+A second synchronization reads the sibling OpenSubRosa24 checkout without changing it. The upstream head is `50a8177`.
+It imports three upstream commits, one local commit for each:
+
+- Upstream `770193c`: the launcher makes a 16 character admin password when `config.txt` has none and refuses to start with a blank one. Local commit: `abb364b`.
+- Upstream `f856e3c`: README and LEIA-ME text for the generated password. Local commit: `c70854c`.
+- Upstream `50a8177`: the package has no `config.txt`. Local commit: `be11b1f`.
+
+The method is the same as above: the changes are adapted by hand to SubVulpes names, with no upstream verification directories.
+The local launcher and package script differ from upstream, so the patches do not apply as they are.
+The package here also carries plugin files, so it has 15 zip entries: ten root and plugin files and five data files.
+The upstream launcher UI test is not imported. This repository has no form-level launcher test.
+The local launcher test checks the password helpers: 50 generated passwords in the safe set with no repeat, and the blank-password rule.
+`tests/package_test.ps1` is new here and runs as the CTest group `package-contents`. It is adapted from the upstream package test.
+It checks that the zip has no `config.txt` and that a stray `config.txt` in the package folder is rejected with `Forbidden package entry`.
+
+Observed results after a normal build: all seven CTest groups passed, including `launcher-update-paths` and `package-contents`.
+The package test log reports 24 checks passed. The log is `build/logs/part2-package-test.log`.
+These checks do not run the launcher window. First-run creation of the password in `config.txt` and the Start refusal in Server settings have no automated or manual check yet.
+`docs/s0.md` is an earlier record and still describes a package with `config.txt`. The package no longer has it.
+The upstream test files under `instrumentation/` and the upstream `docs/release.md` are not imported.
