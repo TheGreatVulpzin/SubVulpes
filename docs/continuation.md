@@ -146,3 +146,38 @@ The user checked the launcher window by hand on 2026-10-27, in a copy of the pac
 The launcher made a password on the first run, refused Start with a blank password, and accepted Start with a typed one. The user reported all three as expected.
 Start with real game data was not checked in that run.
 `74dda0e..980705e` was pushed to `origin/main` at the user's request. No tag was made.
+
+## S3 progress on 2026-10-27
+
+Step 1 (framework) is done for the planned cases. Step 2 (common API) is in progress. Step 3 has not started. See [the plan](plano.md#state-on-2026-10-27).
+Local commits not pushed (`git log origin/main..HEAD --oneline`): `6d26ee8` framework tests, `3590ba9` write API v1,
+`d43e5af` chat commands, `0581091` admin, team, looks and private message, `9bb8f1c` rename of message kind 4,
+`50e59f1` and `876c6bf` documents, `a7c35d4` packet writer test.
+
+Results of this session:
+
+- `ctest --test-dir build/server --output-on-failure`: `100% tests passed out of 7` in 86.45 seconds, with `plugin-lifecycle` at 58 native checks.
+- `python -I tools/re/gen_storage.py --check`: 138 objects, 499799832 bytes.
+- `python -I tools/ci/check_native.py`: 75 sources.
+- `python -I tools/ci/check_repo.py`: 0 problems in 268 files.
+- Removal proofs for the new checks are in [S3 evidence](s3.md#removal-proofs). The logs are `build/logs/mutation3.log` to `mutation9.log`.
+
+Findings and fixes:
+
+- The enum `SV_MESSAGE_CHAT` named kind 4 as a chat line, but kind 4 reaches only admins. It is now `SV_MESSAGE_ADMIN` (`9bb8f1c`).
+- A note in `plugin-game-api.md` said that a plugin cannot answer one player. `message_to` does it. The note is fixed (`50e59f1`).
+- `s3.md` said eleven write methods. The header has ten.
+- The test for the private message called the filter directly. It did not check the packet writer. A new check counts the bits for the target and for another connection (`a7c35d4`).
+- The official `sv.status` module registered `status` as a public command. With the chat routing, any player could fill the server log. The command is local now. With the level set back to public, `plugin-lifecycle` failed. After the restore, 7 of 7 groups passed.
+
+Not tested:
+
+- The original client. No write method, no private message and no filtered event ran against it. A teleport has no check for a wall at the target.
+- A real server run with the write methods. The two real server cycles in `plugin-game-api.md` come before the write API.
+- A full kick list (41,368 addresses), and a private message after the slot of the player changed owner within 600 ticks. The target is a player slot, not a connection.
+- Removal proofs for the range checks of `set_team` and `set_looks`, and for the wrong-kind check of `message_to`.
+- The bond checks listed in the bond guard result above are unchanged: track bonds and a failed `createhuman` in three files.
+- The launcher with plugins. The manual check of 2026-10-27 covered the admin password only.
+
+Behavior changes against S0: a chat text that starts with `/` goes to the plugin command with that name first, when a plugin owns it.
+The names `plugins` and `admin` stay out of reach of plugins. See [network behavior](game/network.md#chat-and-admin-commands).

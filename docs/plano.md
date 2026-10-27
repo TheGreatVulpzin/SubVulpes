@@ -64,13 +64,13 @@ Classify A7 through A10, B5, C3, C4, D11, D12 and persistent `ban_time` before t
 Separate core invariants from plugin policy. Check compatible base fixes for OpenSubRosa24. See [placement notes](ideas.md).
 Define A10, D11 and D12 first. Their inherited identifiers still have no description.
 
-The current proof includes 57 native checks plus codec, handle, launcher and installation checks. See [S3 evidence](s3.md) for results and limits.
+The current proof includes 58 native checks plus codec, handle, launcher and installation checks. See [S3 evidence](s3.md) for results and limits.
 These checks do not close the full API coverage requirement or S3.
 
 ### State on 2026-10-27
 
 Step 1 (framework) is done for the planned cases. Commit `6d26ee8` adds checks for command permission, the command limit,
-the stop event, metrics and subscriptions. `ctest --test-dir build/server` passes `plugin-lifecycle` with 57 native checks.
+the stop event, metrics and subscriptions. `ctest --test-dir build/server` passes `plugin-lifecycle` with 58 native checks (57 at that commit, and one more with the `status` fix).
 
 Step 2 (common API) is in progress.
 
