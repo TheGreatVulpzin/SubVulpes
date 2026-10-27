@@ -75,12 +75,12 @@ the stop event, metrics and subscriptions. `ctest --test-dir build/server` passe
 Step 2 (common API) is in progress.
 
 - Reads: entity pages and eight snapshot methods (`92854b1`).
-- Writes, version 1: ten methods (`3590ba9`, `0581091`). They are `message`, `message_to`, `kick`, `add_money`, `set_godmode`,
-  `set_health`, `teleport`, `set_admin`, `set_team` and `set_looks`.
+- Writes, version 1: fifteen methods (`3590ba9`, `0581091`, `b486fc1`). They are `message`, `message_to`, `kick`, `add_money`, `set_godmode`,
+  `set_health`, `teleport`, `set_admin`, `set_team`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`.
 - Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
 - Private messages: the server writes an empty slot for each other connection (`0581091`).
-- Not done: items, objects, NPCs, aim and line queries, sounds, pushes on body parts, shop and settings operations,
-  and the events of N5 to N19 in the [legacy module catalog](legacy-modules.md).
+- Not done: objects, NPCs, aim and line queries, sounds, pushes on body parts, shop and settings operations,
+  and the events of N5, N7 to N19 in the [legacy module catalog](legacy-modules.md).
 
 Step 3 (production plugins and examples) has not started.
 
@@ -97,7 +97,10 @@ Step 3 (production plugins and examples) has not started.
 4. **Client limits.** New models, sounds, types and maps do not block S3. Record each limit with the operation that it affects.
    Idea, not verified: reuse an existing weapon type with new rules. The client might show the name of the old weapon.
 5. **Closing S3.** Do not close S3 because the written criteria are met. List each operation that has no support, with the reason, and ask the user to accept the list before the status changes to complete.
-6. **Second editor.** The user works without Codex for now. If another tool edits in a second worktree, two editors never touch one file.
+6. **In-game test room (proposal).** An optional test plugin, off by default, that guides the user in the original client.
+   The user types a command. The plugin says what it tests, what the user should see, and which command comes next.
+   Each new API operation adds one step. It is the first test with the real client, and it needs the user to play. Not started.
+7. **Second editor.** The user works without Codex for now. If another tool edits in a second worktree, two editors never touch one file.
    Each shared file (`CMakeLists.txt`, `sv_game_write.h`, `docs/s3.md`, `docs/continuation.md`) has one owner, and the user merges the branches.
 
 Package and version production plugins separately. Check API and module dependencies before installation or activation.

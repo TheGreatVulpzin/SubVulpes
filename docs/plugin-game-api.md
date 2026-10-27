@@ -201,12 +201,19 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `set_team(player, team)` | Sets the team 0 to 7 of the player and of its human, and sends the player update. | `SV_NOT_FOUND`, `SV_INVALID` out of range |
 | `set_looks(player, looks)` | Sets the five look selectors (highest values 2, 7, 3, 1 and 1, as the game makes them) of the player and of its human, and sends the player and human updates. | `SV_NOT_FOUND`, `SV_INVALID` for a null pointer or one value out of range (nothing changes) |
 | `message_to(kind, player, text)` | Like `message`, but only the connection of that player gets the text. The other clients get an empty slot in the event list. | As `message`, and `SV_NOT_FOUND` for a wrong kind of reference |
+| `item_create(type, position, item)` | Makes an item of type 0 to 26 at rest at the position, and sends the item update. The reference goes to `*item` only on success. Type 26 (newspaper) is refused, because the news system counts its newspapers. | `SV_INVALID` for a bad type, a null pointer or a bad position, `SV_LIMIT` when all 1,024 item slots are in use |
+| `item_remove(item)` | Sets the lifetime to zero. The game removes the item in its next item lifetime pass. The item leaves its human and its parent, its children leave it, and a key takes its vehicle with it. | `SV_NOT_FOUND` |
+| `item_equip(item, human, slot)` | Puts the item in slot 0 to 6 of a human, with the slot rules of the game: one item in a hand, only guns in slot 2, no guns in slots 3 to 6. | `SV_NOT_FOUND`, `SV_INVALID` for a slot of 7 or more, `SV_CONFLICT` when the rules refuse it |
+| `item_attach(parent, child)` | Puts the child in the parent, such as a magazine in a gun. | `SV_NOT_FOUND`, `SV_INVALID` for the same item twice, `SV_CONFLICT` when the child already has a parent item, when the types do not fit or when the parent is full |
+| `item_detach(item)` | Takes the item out of its human or its parent item. | `SV_NOT_FOUND`, `SV_STATE` when the item has neither |
 | `teleport(human, position)` | Moves the 15 bones by the same offset so bone 0 reaches the position. It copies the new place to the previous place of each bone. The velocity does not change. | `SV_NOT_FOUND`, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle |
 
 The tests call every method from a real plugin callback against records that real constructors made.
 They check each error code and a wrong-thread call. The test program then reads the game records.
 It checks the two message events, the balances, the flag, the health, the bone offsets, the kick list and the idle counter.
 Removing one check at a time (message bytes, money range, flag range, health range, finite position, position limit, vehicle) made `game-api` fail each time.
+For the item methods, removing the slot bound, the type bound, the check for a second parent item or the newspaper refusal made `game-api` fail each time (`build/logs/mutation10.log`).
+The game keeps no check of a loop of parent items, and the types of the tests cannot make one. That check has no test.
 For the checks that guard rights or privacy, the same removal made `game-api` fail too: the private-message filter, the stale-target test, the bot check and the connection admin flag of `set_admin`.
 The packet writer clamps the sent health to the range -10 to 117 and leaves the server value as written. So a client sees the same value for -100 and -10, and for 100 and 117. See [network limits](game/network.md#representation-limits).
 

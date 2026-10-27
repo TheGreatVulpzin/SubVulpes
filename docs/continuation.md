@@ -170,6 +170,9 @@ Findings and fixes:
 - The test for the private message called the filter directly. It did not check the packet writer. A new check counts the bits for the target and for another connection (`a7c35d4`).
 - The official `sv.status` module registered `status` as a public command. With the chat routing, any player could fill the server log. The command is local now. With the level set back to public, `plugin-lifecycle` failed. After the restore, 7 of 7 groups passed.
 
+Items (`b486fc1`): `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. Removal proofs are in `build/logs/mutation10.log`.
+The test checks both sides of every item link after the game removes an item. No test makes a loop of parent items.
+
 Not tested:
 
 - The original client. No write method, no private message and no filtered event ran against it. A teleport has no check for a wall at the target.
