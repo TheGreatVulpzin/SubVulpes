@@ -137,6 +137,24 @@ The design rules:
 | N27 | Road graph query: find a free street position and direction near a point, with the next node. The crazy NPC pair uses it to place the car. It copies out of the shared graph and returns a bounded result. |
 | N28 | Seat a human in a vehicle seat (driver 0, passenger 1) and take it out. The seat rule is in the core: `vehicle_id` and `vehicle_seat` of the human. Includes the eject of N9 as the second half. |
 | N29 | Object health and protection: set the health of an object, and mark an object or one of its wheels as protected from damage (use with N24). A health range wider than 100 for a human, if the core accepts it. |
+| N30 | Teleport an object and an item. A human has `teleport`. An object derives its frame from its particles, so the move shifts every particle and bond point by one offset and keeps the speeds. An item moves its position and, for a held item, refuses or lets go first. |
+| N31 | Property rows for items and objects: `item.ammo`, `item.time_to_live`, `object.time_to_live`. Each has a range. The health of an object is N29. |
+| N32 | A property row for the ban time of an account (`Account.ban_time`). Keeping a ban on disk after a restart needs N18. |
+| N33 | More notice events: round start and end, a human enters or leaves a vehicle, an item is picked up, dropped or used, a shot is fired, an object is destroyed, an account is saved. Each one is a row in the event mechanism (N16), with its own bit. |
+| N34 | Chat text replacement. Today a chat decision only allows or denies the text. Let it give a new text (at most 63 bytes, printable ASCII) for rank prefixes and filters. |
+| N35 | A plugin offers its own API to other plugins, with a version, and a plugin declares the dependency. Serves the C4 module that finds its sales through the black market. |
+| N36 | The `conflicts=` key in `plugin.ini`, and a clean result "refused to start" with a reason text for the log and the launcher. |
+| N37 | Cleanup of what a plugin owns when it stops: the phones, kits and bots that it made. The host keeps a list for each plugin and removes the entries at the stop. |
+| N38 | Library plugins: a plugin that has no game behavior and offers a shared API to others (N35), with load order and a version rule. |
+| N39 | Queries that are left from N10: a sphere (who is within a radius of a point), the surface material at a hit, and a block cell. A sphere makes an explosion cheap to build from existing parts. |
+| N40 | Block edits of the world: set, clear and read a block. The server may change its world state, but the original client may not show it. Mark "client effect unknown". |
+| N41 | A timer owned by the host (call me after N ticks) and a random generator that belongs to the plugin, so plugin randomness does not change the sequence of the engine. |
+| N42 | Visual events that the original client already reads: `bullet` (the event of a shot with type, position, speed and weapon item, with no bullet in the server) and `bullet_hit` (the impact effect). They give a pseudo-weapon a tracer and a spark. The client may also act on them. Mark "client effect unknown". |
+| N43 | Property rows for the 27 item types (price, mass, fire delay, bullet type, bullet speed, spread, recoil, magazine, one hand) and the 4 bullet types. They change every item of the type. N17 keeps object types and physics, so the two do not overlap. Mark "client effect unknown". |
+
+Groups of the new rows, in the order of work: A is N28 to N32 (small rows in the same mold), B is N26, N33 and N34 (events and decisions), C is N35 to N38 (the plugin system), D is N19, N27, N40 and N41 (large or low priority), E is N39, N42 and N43 (weapons and effects). Group E has a client test: change the name of an item type in the server table and check whether the original client shows it. The name is not in any packet, so the client most likely has its own list.
+
+The game has no explosion, fire or smoke event. The C4 module of the tool uses a damage in a radius, a push and a sound. A visual explosion needs OverRosa.
 
 Plugin configuration (N23) does not exist yet. N14 is different: it gives plugins the settings of the core, such as the player limit.
 N23 is the settings of one plugin, such as the price of the knife.
@@ -229,6 +247,8 @@ When a change cannot reach that client, the operation does one of two things:
 - Change the color of a vehicle in place. The color goes to the clients only in the creation event.
 - Change the type of a vehicle or of an item in place. The type goes only in the creation event.
 - A new model, a new sound or a new menu.
+- The name of an item type, most likely. The server sends only the type number, so the client has its own names. A test with the original client settles it (see N43).
+- A visual explosion, fire or smoke. The game has no such event.
 
 **Unknown until a test with the original client.** The game values that the client may simulate with its own tables, such as engine force or speed range.
 The server changes them, but the client may then differ from the server. Mark such a parameter "client effect unknown" in its documentation.
