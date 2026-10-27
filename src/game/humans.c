@@ -787,6 +787,31 @@ static float human_length(float sq)
   return (float)x87_sqrt((double)sq);
 }
 
+/* Takes a human out of its vehicle, as the exit button does: the view angles become the free
+ * angles and each bone that the line from the vehicle center crosses a wall of the level moves
+ * to the near side of that wall. The human must sit in a vehicle. */
+void human_leavevehicle(int h)
+{
+  Human *hu = &sr_humans[h];
+  Object *ob = &sr_objects[hu->vehicle_id];
+  Bone *bk;
+  int k;
+
+  hu->view_axis = hu->axis;
+  ob->drive_buttons = 4;
+  hu->view_pitch = hu->pitch;
+  hu->vehicle_id = -1;
+  hu->exit_timer = 0;
+  for (k = 0; k < 15; k++) {
+    bk = &hu->bones[k];
+    if (k != 11 && k != 14 && lineintersectlevel(&ob->pos.x, &bk->pos.x, 0) != 0) {
+      bk->pos.x = (float)(g_intersect.pos[0] + g_intersect.normal[0] * 0.0625);
+      bk->pos.y = (float)(g_intersect.normal[1] * 0.0625 + g_intersect.pos[1]);
+      bk->pos.z = (float)(g_intersect.normal[2] * 0.0625 + g_intersect.pos[2]);
+    }
+  }
+}
+
 /* A sitting human: bone 0 sits at the seat of the vehicle and turns with it. The driver gives
  * the vehicle its inputs. The other bones hang from their parent bone (g_body), with the head
  * and the arms turned by the view. Button 0x800 held for 30 ticks (more at speed) gets the
@@ -924,21 +949,8 @@ static void human_invehicle(int h, int vehicle, int seat, int has_item)
     t = hu->exit_timer + 1;
     hu->exit_timer = t;
     f = human_length((float)(hu->vel.z * hu->vel.z + (hu->vel.x * hu->vel.x + hu->vel.y * hu->vel.y)));
-    if ((int)(long long)(f * 60.0 + 1.0) + 0x1e <= t) {
-      hu->view_axis = hu->axis;
-      ob->drive_buttons = 4;
-      hu->view_pitch = hu->pitch;
-      hu->vehicle_id = -1;
-      hu->exit_timer = 0;
-      for (k = 0; k < 15; k++) {
-        bk = &hu->bones[k];
-        if (k != 11 && k != 14 && lineintersectlevel(&ob->pos.x, &bk->pos.x, 0) != 0) {
-          bk->pos.x = (float)(g_intersect.pos[0] + g_intersect.normal[0] * 0.0625);
-          bk->pos.y = (float)(g_intersect.normal[1] * 0.0625 + g_intersect.pos[1]);
-          bk->pos.z = (float)(g_intersect.normal[2] * 0.0625 + g_intersect.pos[2]);
-        }
-      }
-    }
+    if ((int)(long long)(f * 60.0 + 1.0) + 0x1e <= t)
+      human_leavevehicle(h);
   }
   if (hu->health < 1) {
     ob->drive_buttons = 4;

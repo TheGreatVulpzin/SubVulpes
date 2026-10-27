@@ -7,6 +7,7 @@
 #include "sr_types.h"
 
 void humansimulation(void);
+void human_leavevehicle(int human);
 
 /* human_body.c */
 void deletehuman(uint32_t human);
