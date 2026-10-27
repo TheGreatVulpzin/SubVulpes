@@ -81,6 +81,7 @@ Step 2 (common API) is in progress.
   `set_health`, `teleport`, `set_admin`, `set_team`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `set_bleeding`, `set_stun`, `npc_create` and `npc_remove`.
 - Chat commands: a plugin owns a command name with the public, admin or local level (`d43e5af`).
 - Private messages: the server writes an empty slot for each other connection (`0581091`).
+- Planned and not started: plugin configuration set by the administrator in the launcher or by command (N23).
 - Not done: aim and line queries, sounds, pushes on body parts, shop and settings operations,
   and the events of N9 to N19 in the [legacy module catalog](legacy-modules.md).
 

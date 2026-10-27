@@ -114,6 +114,35 @@ The design rules:
 - Each plugin has its own keys, a limit for each value and a limit for the total. The host saves at a safe point and in one step, so a crash leaves the old file whole.
 - Persistent bans, permission groups and ranks depend on the account scope.
 | N19 | Write the body part masses. Low priority. The effect is not known. |
+| N23 | Plugin configuration set by the administrator, in the launcher or with a command. See the notes below. |
+
+Plugin configuration (N23) does not exist yet. N14 is different: it gives plugins the settings of the core, such as the player limit.
+N23 is the settings of one plugin, such as the price of the knife.
+
+The difference from storage (N18):
+
+| | Configuration (N23) | Storage (N18) |
+| --- | --- | --- |
+| Who writes | The administrator | The plugin |
+| Shape | Keys that the plugin declares, with a type and a range | Any bytes, within a size limit |
+| Check | The host checks each value before the plugin sees it | The plugin checks its own data |
+| Shown to the user | Yes, in the launcher and by command | No |
+| On update | Kept for the keys that remain | Kept whole |
+
+The design rules:
+
+- **Declaration.** The plugin lists its settings in `plugin.ini`: key, type, default, minimum, maximum, label and help text.
+  The host must read them without loading the DLL, because the DLL stays unloaded until the administrator approves it.
+- **Types.** A flag, an integer, a float, a bounded text, a choice from a list, and a secret. The old script manager had the same idea: each parameter had a label, a type, a default and a range.
+- **Setting a value.** The local operator uses `plugins config <id>` to list and `plugins config <id> <key> <value>` to set, as with `plugins enable`.
+  The launcher builds a form on its Plugins page from the declaration. It sends the command to a running server on standard input, or writes the file when the server is stopped.
+  A player who is an admin may set a key only when the plugin marks it as editable by admins.
+- **Check and save.** The host refuses a value outside the declaration and keeps the old value. It saves to a private file in the folder that updates keep.
+- **Applying.** A key is live or needs a restart. A live key gives the plugin a change event with the old and the new value.
+- **Updates.** A key that stays keeps its value. A new key takes its default. A removed key is dropped. A key that changes type goes back to its default.
+- **Secrets.** The host never writes a secret to a log or shows it again after it is saved. The launcher already hides passwords in its log.
+- **Tests.** Every type, every error, a restart that keeps the values, and an update that adds, removes and retypes a key.
+  Removal proofs for the range check and for the hiding of secrets.
 
 ## Order
 
