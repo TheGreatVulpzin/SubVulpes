@@ -5,13 +5,13 @@ It guides the plugin API work in [system coverage](plugin-api-map.md) and the pr
 
 ## Source and use
 
-A friend of the group made a script manager for the original dedicated server, version 0.7.1.
+A friend of the group made a script manager for the original dedicated server.
 It patches the memory of the running original server and injects native DLLs. That method does not work in SubVulpes,
 because SubVulpes is a native server with no original image. The tool and its files stay outside this repository.
 
 This list keeps the behavior that players and administrators know. It does not copy code, addresses or text from the tool.
-Each plugin here is a new official plugin on the public API. The list uses version 0.7.1.
-A newer version exists. Compare this list with it when that version is available, and add the changes.
+Each plugin here is a new official plugin on the public API.
+The first list used version 0.7.1. Version 0.8.0 (with its documentation) is now compared and merged. See [Changes in 0.8.0](#changes-in-080).
 
 A command in the chat goes to the plugins first, after the host check of the permission level.
 The inherited commands in `src/net/commands.c` stay until a plugin replaces them and passes its checks.
@@ -24,22 +24,23 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | Command | Behavior to keep | Needs |
 | --- | --- | --- |
 | `/imortal` | Toggle. Hold the health at 100 each tick without the god mode flag, so hits and pushes still show. Ends on body change, disconnect, reset or plugin stop. | Now (tick, `set_health`), N18 |
-| `/heal` | Health 100, no bleeding and no stun. The tool says it clears a death mark and a drunk level. This server has no field with those names. The drunk look is most likely the stagger of a hurt or stunned body (see N5). | `set_health` now, N5 |
-| `/kill` | Kill the own body. | Now (`set_health`) |
+| `/heal` | Set health 100, `bleeding` 0 and `stun_timer` 0. The tool calls the stun timer "drunk level" and the bleeding flag "death mark". The source of 0.8.0 confirms these three writes and no others. | Now (`set_health`, `set_bleeding`, `set_stun`) |
+| `/kill` | Kill the own body: health -5 and `bleeding` 1. | Now (`set_health`, `set_bleeding`) |
 | `/item N` | Make item type 0 to 26 and put it in a free hand. A knife (24) starts in attack state. Fail without cost when there is no free hand or item. | N6 |
 | `/vehicle N` | Make vehicle type 0 to 13 four units in front of the head, color 0. Do not seat the player. | N7 |
 | `/arm N` | Uniform 1 to 6, clothes variant 4, two bandages in slot 6. The inherited `/arm` stays until then. | N4, N6 |
 | `/heavydude` | Multiply the 15 physical values of the body by 100000, once. A joke command. | N19 |
 | `/delh` | Delete the nearest human on the aim line, up to 100 units, never the caller. | N10, N8 |
 | `/team N` | Set team 0 to 5 and send the update. | N3 |
-| `/deactivate ID` | Toggle the active state of a player slot 0 to 255. The meaning needs analysis first. | Unknown |
+| `/deactivate ID` | Toggle the active record of the human of player ID (0 to 255). Another admin can toggle it back. Version 0.8.0 gives the target rule only, not the effect on the world. | N24 (see below) |
 | `/give admin ID` | An admin gives the admin flag to a connected player. Reject empty slots and bots. Lasts until disconnect. The inherited `/give` is a different command (cash). | N2, N1 |
+| `/give money ID N` | An admin adds N (1 to 100000000) to the money of the player and of the saved account. It takes nothing from the caller. Refuse a bot, a missing account and a sum that overflows. A numeric `/give ID N` stays with the inherited command. | N21 (economy), N1 |
 | `/npc` | Make a pedestrian bot 3 meters in front, with no car. Queue the request to a safe point and refuse a second request while one waits. | N8 |
 | `/bmhelp` | Show the help to the caller only. | N1 |
 | `/turn N` | Copy name, eyes, skin and hair from saved account N to the caller. Copy no money, identity, team or rights. | N4 (read exists) |
 | `/herobrine` | Set the eyes to type 3. | N4 |
 | `/tp` | Teleport to the surface on the aim line, up to 2000 units, 1 unit above it. Fail if the aim hits nothing. | N10, `teleport` now |
-| `/gobase N` | Teleport to base N (5 bases). Read the positions from the level data, not from fixed numbers. | Level read, `teleport` now |
+| `/gobase N` | Teleport to base N (0 to 4: Goldmen, Monsota, OXS, Nexaco, Pentacom). The tool uses fixed positions of the original map, height 25. Read them from the level data when it has them. Do not change the team. | Level read, `teleport` now |
 | `/sound N` | Play sound 0 to 47 at the aim point, volume 1, pitch 0.15. | N10, N11 |
 
 The tool lists `/nick` in a table but never runs it. Do not build it.
@@ -63,7 +64,12 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 | Spawn protection fix | Cancel the spawn protection when the body moves faster than a set speed. | N13 |
 | Safe spawn area | A zone where spawn protection applies. | N13, N16 |
 | Spawn at the dealership | Spawn at a set position. | N16 |
-| Aggressive bots, clunky ragdolls, critical health | The tool gives no description. Read the newer version before work. | Unknown |
+| Aggressive bots | Bots look at the torso (body part 1) and not at the head. Aim mode turns on when a bot adds a target and off when it drops one. The random 25% hesitation before a shot goes away. No change to damage, range or fire rate. | N20 |
+| Clunky ragdolls | Skip the step that resets the orientation of a body part, so a ragdoll reacts with less correction. A core physics switch, not a rule. | N17 |
+| Critical health | Below 10 health: the body bleeds and leaves its vehicle. The tool also moves nine health checks in the core to the value 9, so the death and drop steps start earlier. | N9, N5 now, N17 for the checks |
+| C4 and detonator | Phone 4 sells a kit (price 500, wait 400 ticks). The player drops the red disc, waits about one second, and dials 1 on the kit phone. The blast hurts and pushes all bodies in a radius. Defaults: damage 200 (0 to 500), radius 8 (1 to 30), push 3 (0 to 5). A price of 0 gives free kits. Disabling the module removes the live kits. It needs the phones of the black market. | N15, N6, N12, N16 |
+| Crazy NPC pair | `/npclouco` (admin, living, on foot) makes a driver (no weapon) and a shooter in the passenger seat. The car appears on a free street near the caller, found with the road graph. At most four pairs. `/npclouco limpar` removes the pairs and their cars. Weapon 0 to 5 (M16, AK-47, MP5, Uzi, 9 mm, Magnum), car color 0 to 5, car model 0 to 13, health values up to 1000000, names up to 20 bytes. The shooter fires 30 rounds, then waits 120 ticks to reload. If the driver dies or the car is destroyed, the shooter leaves the car and fights on foot. The module announces its own deaths with names and the killer. | N20, N27, N28, N29, N24, N8, N16 |
+| Team rounds (PvP) | Only in the Rounds gametype (3). Count the living humans of three teams at the round start (bots excluded). A death, a leave or a team change removes the player until the next round and sends a line with the survivors. The round ends on time (default 300 s) or, with the early option, when one team is left (two teams must have started). A tie is not a win. After the end the score freezes for a pause (default 5 s), then the round resets and the result is announced after the reset, because the reset clears the event queue. The module must not run with the death message modules. | N26, N16, N1 |
 
 ## Needs
 
@@ -90,7 +96,9 @@ The "death mark" of the tool is probably not a field. It is likely a state that 
 - In a building of type 6 (a hospital) a body with a player gains 1 health each 32 ticks and stops bleeding.
 
 So health 100 revives a body that is dead for less than 900 ticks (15 seconds), with no new write. After the release the body has no player, and a heal does not give it back. The player must respawn.
-This reading is from the code and not tested. The newer version of the tool can confirm what its `/heal` clears.
+This reading is from the code and not tested.
+Version 0.8.0 of the tool settles the open question. Its `/heal` writes health 100, the `bleeding` flag 0 and the `stun_timer` 0, and nothing else.
+Its `/kill` writes health -5 and `bleeding` 1. So the "drunk level" is `stun_timer` and the "death mark" is `bleeding`. Both fields have write methods already.
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. Done: `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. |
 | N7 | Make and remove vehicles and other objects. Done: `object_create` and `object_remove`. Train pieces are refused. |
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. Done for bots: `npc_create` and `npc_remove`. Not done: delete the body of a real player. Kill it with `set_health` instead. |
@@ -115,6 +123,12 @@ The design rules:
 - Persistent bans, permission groups and ranks depend on the account scope.
 | N19 | Write the body part masses. Low priority. The effect is not known. |
 | N23 | Plugin configuration set by the administrator, in the launcher or with a command. See the notes below. |
+| N24 | Damage decision. Before a bullet, a fist, a knife or a vehicle applies damage, a plugin can allow it, scale it or cancel it. It also covers a hit on a wheel or on a vehicle. Needed by the safe spawn area, the spawn protection fix and the crazy NPC cars (indestructible car and wheels). Also a decision on the `/deactivate` effect: the tool toggles an active record of a human, and the effect on the bonds, the items and the clients is not analyzed. This operation is likely a refusal. |
+| N25 | Read of the hand state of a human: the hand pose flag, the punch wait counter and the velocity of the hand body part. The punch module needs them. Part of the read table, not new state. |
+| N26 | Round control for the Rounds gametype: read the gametype, the round phase, the timer and the scores. Write the timer, set the phase to the break, and ask for the round reset. Read the order of events around the reset. |
+| N27 | Road graph query: find a free street position and direction near a point, with the next node. The crazy NPC pair uses it to place the car. It copies out of the shared graph and returns a bounded result. |
+| N28 | Seat a human in a vehicle seat (driver 0, passenger 1) and take it out. The seat rule is in the core: `vehicle_id` and `vehicle_seat` of the human. Includes the eject of N9 as the second half. |
+| N29 | Object health and protection: set the health of a vehicle at creation and mark it, or one wheel, as protected. Health values above 100 for a bot (the tool allows 1 to 1000000), if the core accepts them. |
 
 Plugin configuration (N23) does not exist yet. N14 is different: it gives plugins the settings of the core, such as the player limit.
 N23 is the settings of one plugin, such as the price of the knife.
@@ -144,11 +158,59 @@ The design rules:
 - **Tests.** Every type, every error, a restart that keeps the values, and an update that adds, removes and retypes a key.
   Removal proofs for the range check and for the hiding of secrets.
 
+## Changes in 0.8.0
+
+Version 0.8.0 of the tool has 20 modules and a long documentation. This section keeps only what changes this project.
+
+**New modules.** C4 and detonator, the crazy NPC pair and the team rounds. See the module table. Three modules gain a real description:
+aggressive bots, clunky ragdolls and critical health. The tool still has no grab module. It keeps only an old setting for it.
+
+**New command.** `/give money ID N`. The chat commands now share one admin check and one rule for target ids:
+`/give admin`, `/give money` and `/deactivate` take the public id of the player (the id in the lists of the original server),
+and reject an id that matches two records. `/team` takes a team, `/turn` an index in the saved accounts, `/item` an item type,
+`/vehicle` a model and `/sound` a sound index. Do not turn these arguments into one kind of id.
+A reply to the caller goes to the current living body, and only to the console when there is none.
+
+**Parameters.** Every module now has declared keys with a type, a default and a range. These are the targets of N23:
+
+| Module | Key: default (range) |
+| --- | --- |
+| Black market | `knife_price`: 125 (0 to 1000000); `bandage_price`: 70; `knife_wait`: 400 ticks (0 to 36000); `bandage_wait`: 200 ticks; `knife_damage`: 25 (0 to 100; 0 turns the attack off); `knife_range`: 1.5 (0.1 to 3); two phone positions (6 floats); `show_id` (flag); `commands_enabled` (flag) |
+| C4 | `c4_price`: 500; `c4_wait`: 400; `c4_damage`: 200 (0 to 500); `c4_radius`: 8 (1 to 30); `c4_impulse`: 3 (0 to 5) |
+| Crazy NPC pair | `weapon`: 0 (0 to 5); `car_color`: 0 (0 to 5); `car_model`: 5 (0 to 13); `shooter_health`, `driver_health`, `vehicle_health`: 10000 (1 to 1000000); `vehicle_infinite` and `wheels` (flags, default 1); `shooter_name`, `driver_name` (text, 20 bytes) |
+| Team rounds | `round_seconds`: 300 (10 to 86400); `pause_seconds`: 5 (1 to 60); `early_finish` (flag, default 1) |
+| Punch | `damage`: 100 (0 to 10000); `head_multiplier`: 5 (0 to 100); `knockback`: 8.5 (0 to 50); `threshold`: 3 (0 to 100); `cooldown`: 70 ticks (0 to 10000) |
+| Safe spawn area | Four limits of a rectangle on the ground plane, default 608 to 784 and 1428 to 2048. The tool names the axes in a confusing way. Use clear names and the real axes of this server. |
+| Spawn protection fix | `velocity_squared`: 0.02 (0 to 100). The unit is the squared internal speed of the vehicle. |
+| Faster truck | `speed` and `power`: 2 (1 to 4) |
+| Truck in the dealership | `price`: 12000 (0 to 1000000) |
+| Spawn at the dealership | Three floats, default 485, 26 and 655, in the order of the tool. Check the order against the vectors of this server before use. |
+| Starting money | `money`: 2500 (0 to 100000000) |
+| Maximum players | `value`: 32 (1 to 32). Lowering it does not kick anyone. |
+| NPC count | `value`: 32 (0 to 128). It does not add or remove bots that exist. |
+
+**Rules between modules.**
+
+- A module can declare a conflict with other modules (the team rounds conflict with the two death message modules). The loader has no such key yet. Add `conflicts=` to `plugin.ini` with N23.
+- The C4 module finds its sales through the phones of the black market. This is a contract between two plugins. It needs a plugin-owned API (see the decisions in [the plan](plano.md)) and a declared dependency.
+- A module can refuse to start when a condition fails. The rounds module returns an error when the gametype is not Rounds. The host needs a clean "refused to start" result with a reason.
+- Disabling a module that made phones, kits or pairs removes what it made. This is the rule for plugin-owned resources.
+
+**Facts about the death modules.** The instant death mode starts at health -5 or less and moves the despawn timer forward. The general messages say "an NPC" for a bot killer.
+A bot with its own name can do better. Check what the read API gives for a bot before work.
+The messages of the crazy NPC pair and the general death messages repeat each other in the tool.
+The official plugin must have one source of death messages.
+
+**Not in the catalog.** `/nick` has no code in the tool. The settings file keeps a grab module that is not installed. A cheat table in the package shows the older hand pose and punch code.
+The tool stays outside this repository, and none of its binaries or code is used here.
+
 ## Order
 
 1. N1 to N4, N6 to N8, N10 and N11 first. They serve the chat commands, which one official administration plugin can own.
 2. N16 and N12 next. They serve the death, punch, knife and eject modules.
-3. N14, N15 and N17 last. They need changes to core data that the API does not reach yet.
+3. N9, N24 and N25 with them. The eject, safe spawn, spawn protection and punch modules need them.
+4. N14, N15 and N17 last. They need changes to core data that the API does not reach yet.
+5. N26 to N29 with the crazy NPC pair and the team rounds, after N20.
 
 Each operation follows the rules in [system coverage](plugin-api-map.md#required-catalog-before-implementation):
 a documented phase, bounds, failure result and a focused test that fails when the check is removed.
