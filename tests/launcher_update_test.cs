@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace SubVulpes
 {
@@ -50,6 +52,19 @@ namespace SubVulpes
             }
         }
 
+        static void CheckAdminPassword()
+        {
+            var seen = new HashSet<string>();
+            for (int i = 0; i < 50; i++) {
+                string candidate = LauncherForm.NewAdminPassword();
+                if (!Regex.IsMatch(candidate, "^[A-HJ-NP-Za-km-z2-9]{16}$") || !seen.Add(candidate))
+                    throw new Exception("A generated admin password left the safe set or repeated.");
+            }
+            if (!LauncherForm.MissingAdminPassword(null) || !LauncherForm.MissingAdminPassword("") ||
+                !LauncherForm.MissingAdminPassword("   ") || LauncherForm.MissingAdminPassword("abc"))
+                throw new Exception("A blank admin password was not counted as missing.");
+        }
+
         static void Main()
         {
             Expect("subvulpes_server.exe", "subvulpes_server.exe");
@@ -78,7 +93,8 @@ namespace SubVulpes
             if (LauncherForm.QuoteProcessArgument("a\"b") != "\"a\\\"b\"")
                 throw new Exception("A quoted argument changed argument parsing.");
             CheckBackupDirectory();
-            Console.WriteLine("21 launcher update path checks and backup directory checks passed.");
+            CheckAdminPassword();
+            Console.WriteLine("21 launcher update path checks, backup directory checks and admin password checks passed.");
         }
     }
 }
