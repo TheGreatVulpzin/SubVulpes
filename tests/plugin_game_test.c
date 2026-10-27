@@ -121,6 +121,15 @@ static int near_value(float a, float b)
     return a - b < 0.001f && b - a < 0.001f;
 }
 
+/* The number of bits that packevent writes for one connection. */
+static int event_bits(int index, int conn)
+{
+    sr_bsdsocket.send_size = 0;
+    sr_bsdsocket.send_bit = 0;
+    packevent(index, conn);
+    return sr_bsdsocket.send_size * 8 + sr_bsdsocket.send_bit;
+}
+
 /* The fixture calls the write API in this tick. The game state shows what the calls did. */
 static void write_api_tick(void)
 {
@@ -156,6 +165,9 @@ static void write_api_tick(void)
     sr_events[events + 5].tick++;
     CHECK(!event_hidden_from((int)events + 5, 1));
     sr_events[events + 5].tick--;
+    /* The packet writer sends a filler of 6 bits to the other connection, and the whole event to the target. */
+    CHECK(event_bits((int)events + 5, 1) == 6);
+    CHECK(event_bits((int)events + 5, 0) > 6 + 28 + 6 && event_bits((int)events, 0) == event_bits((int)events, 1));
     CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
     CHECK(sr_players[0].team == 3 && sr_humans[0].team == 3);
     CHECK(sr_players[0].look_b == 5 && sr_humans[0].look_b == 5 && sr_humans[0].look_e == 1);
