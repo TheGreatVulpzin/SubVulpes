@@ -151,6 +151,6 @@ It checks that the zip has no `config.txt` and that a stray `config.txt` in the 
 
 Observed results after a normal build: all seven CTest groups passed, including `launcher-update-paths` and `package-contents`.
 The package test log reports 24 checks passed. The log is `build/logs/part2-package-test.log`.
-These checks do not run the launcher window. First-run creation of the password in `config.txt` and the Start refusal in Server settings have no automated or manual check yet.
+These checks do not run the launcher window. On 2026-10-27 the user checked it by hand: the password is made on the first run, Start refuses a blank password, and Start accepts a typed one. This was a manual check with fixture data only. No automated test covers it.
 `docs/s0.md` is an earlier record and still describes a package with `config.txt`. The package no longer has it.
 The upstream test files under `instrumentation/` and the upstream `docs/release.md` are not imported.

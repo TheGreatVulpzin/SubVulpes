@@ -140,6 +140,7 @@ A first test run failed only because a new test cleared the humans that an older
 Upstream `770193c`, `f856e3c` and `50a8177` are imported as local commits `abb364b`, `c70854c` and `be11b1f`. See [synchronization evidence](upstream-sync.md).
 The launcher makes an admin password when `config.txt` has none and refuses a blank one. The package has no `config.txt`.
 After a normal build, all seven CTest groups passed, including the new `package-contents` group (24 checks).
-The launcher window is not exercised. First-run password creation and the Start refusal have no automated or manual check.
-The remote `origin/main` is at `74dda0e`, not only at the initial commit `535c789`. Local `main` is 22 commits ahead and a fast-forward push applies.
-No push or tag was made.
+The user checked the launcher window by hand on 2026-10-27, in a copy of the package without `config.txt`. The package held test fixture data, not real game data.
+The launcher made a password on the first run, refused Start with a blank password, and accepted Start with a typed one. The user reported all three as expected.
+Start with real game data was not checked in that run.
+`74dda0e..980705e` was pushed to `origin/main` at the user's request. No tag was made.
