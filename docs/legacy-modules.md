@@ -82,7 +82,15 @@ About the "drunk" look. This server has no drunk field. A body staggers in two c
 
 So a heal needs health 100 and `stun_timer` 0. `body_strength` follows by itself. This is read from the code, not tested.
 The same two effects give a way to make a body stagger on purpose: set a high `stun_timer`. That needs a write for the timer, with an upper bound.
-The mention of a death mark in the tool stays unexplained until the newer version of the tool is read.
+The "death mark" of the tool is probably not a field. It is likely a state that existing game systems already use. In the code, death works like this (`humans.c`):
+
+- Health below 1: the body drops the first item of slots 0 to 6.
+- Health below -4: the body is dead. `despawn_timer` counts down from 3600. Below 2700 the game releases the player (`human_releaseplayer`): the death tax, the loss of team managers in gametype 4, `human_id` of the player set to -1 and `player_id` of the body set to -1.
+- While health is -4 or more and a player holds the body, the game sets `despawn_timer` back to 3600 on each tick.
+- In a building of type 6 (a hospital) a body with a player gains 1 health each 32 ticks and stops bleeding.
+
+So health 100 revives a body that is dead for less than 900 ticks (15 seconds), with no new write. After the release the body has no player, and a heal does not give it back. The player must respawn.
+This reading is from the code and not tested. The newer version of the tool can confirm what its `/heal` clears.
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. Done: `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. |
 | N7 | Make and remove vehicles and other objects. Done: `object_create` and `object_remove`. Train pieces are refused. |
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. |
