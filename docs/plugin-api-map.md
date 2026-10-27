@@ -153,6 +153,17 @@ So "add a mission to the pool" means a decision event at that point. The plugin 
 or start its own scenario instead. A scenario of the plugin fills mission slots with an existing kind for the display, and the plugin decides when it ends.
 Each team has 16 slots. `scenario_getnextmission` returns 16 when all are in use, so the API must check that case itself.
 
+About the text of a mission. The mission event (type 12) carries numbers only: the kind, the team, the ids, the expiry and the reward. It has no text.
+So the server cannot change the words that the client shows for a mission. The client most likely builds them from the numbers. This is read from the server code, and the client was not checked.
+The server does send text in these places, and a plugin can change them:
+
+- Server messages (kind 0, done in `message`) and admin messages (kind 4).
+- Headlines (kind 3): two lines of up to 63 bytes for each headline index. The API has no method for them yet.
+- Newspapers: the text comes from `readme.txt`, at most 1,013 lines, read at the load. The API has no method for it.
+- Player names, at most 31 bytes.
+
+A mission of a plugin can announce itself with a message or a headline, while the slots use an existing kind for the display.
+
 The original client shows a mission only through the existing kinds, the phone menu and the news. A new kind of display needs OverRosa.
 A plugin can reuse the display of a kind and change the rules behind it.
 
