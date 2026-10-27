@@ -24,7 +24,7 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | Command | Behavior to keep | Needs |
 | --- | --- | --- |
 | `/imortal` | Toggle. Hold the health at 100 each tick without the god mode flag, so hits and pushes still show. Ends on body change, disconnect, reset or plugin stop. | Now (tick, `set_health`), N18 |
-| `/heal` | Health 100. The tool also clears a death mark and a drunk level, but this server has no field with those names. Clear `bleeding` and `stun_timer` instead, and read the newer tool before more work. | `set_health` now, N5 |
+| `/heal` | Health 100, no bleeding and no stun. The tool says it clears a death mark and a drunk level. This server has no field with those names. The drunk look is most likely the stagger of a hurt or stunned body (see N5). | `set_health` now, N5 |
 | `/kill` | Kill the own body. | Now (`set_health`) |
 | `/item N` | Make item type 0 to 26 and put it in a free hand. A knife (24) starts in attack state. Fail without cost when there is no free hand or item. | N6 |
 | `/vehicle N` | Make vehicle type 0 to 13 four units in front of the head, color 0. Do not seat the player. | N7 |
@@ -73,7 +73,16 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 | N2 | Set the admin flag of a player and of its connection, as the password login does. Done: `set_admin`. |
 | N3 | Set the team of a player and send the update. Done: `set_team`. |
 | N4 | Write the look fields and colors of a player or human and send the update. Done for the five look selectors: `set_looks`. The colors are not done. |
-| N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. The tool names a drunk level and a death mark. No field of this server matches those names, so they are not planned until the newer version of the tool shows what it clears. |
+| N5 | Write the `bleeding` flag and the `stun_timer` of a human. Both fields exist and the read API already shows them. |
+
+About the "drunk" look. This server has no drunk field. A body staggers in two cases, and both come from the code:
+
+- A hit sets `stun_timer` to 3 or 6 times the damage (`bullet_sim.c`). It counts down by 1 each tick and weakens the muscles of the torso while it runs.
+- Below 25 health, `body_strength` drops and wobbles (`human_strength` in `humans.c`). The game recalculates it every tick from the health.
+
+So a heal needs health 100 and `stun_timer` 0. `body_strength` follows by itself. This is read from the code, not tested.
+The same two effects give a way to make a body stagger on purpose: set a high `stun_timer`. That needs a write for the timer, with an upper bound.
+The mention of a death mark in the tool stays unexplained until the newer version of the tool is read.
 | N6 | Make, remove, link and unlink items, with the checks that keep both sides of a link whole. Done: `item_create`, `item_remove`, `item_equip`, `item_attach` and `item_detach`. |
 | N7 | Make and remove vehicles and other objects. Done: `object_create` and `object_remove`. Train pieces are refused. |
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. |
