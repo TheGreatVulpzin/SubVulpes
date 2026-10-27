@@ -124,3 +124,27 @@ The design rules:
 Each operation follows the rules in [system coverage](plugin-api-map.md#required-catalog-before-implementation):
 a documented phase, bounds, failure result and a focused test that fails when the check is removed.
 The original client limits stay explicit. A new model, sound or menu needs OverRosa.
+
+## Bans
+
+What the server has today (from the code):
+
+- **IP list.** `serverrecv` compares the sender address of every packet with `sr_kickedip` (up to 41,368 addresses, one scan for each packet). A match drops the packet with no reply. The list is in memory only. `/clearkick` empties it and a restart loses it. The `kick` method adds to it.
+- **Account ban.** `Account.ban_time` above 0 drops the player at the join and during play. The count falls by 1 each 36,000 ticks of the world clock.
+- **No persistence.** `saveaccountsserver` writes the id, name, money, play time and three look values. It does not write `ban_time`. A restart ends every ban. (Read from the code, not run.)
+
+Ideas for an official ban plugin. They need plugin storage (N18) and a decision event at the join (N16):
+
+1. Bans kept on disk, with reason, author, date and end date.
+2. Ranges of addresses (a base address and a mask) instead of single addresses. The core list scans one by one, so the plugin keeps its own sorted table and the core only gets a yes or no.
+3. A strike system with longer bans each time, and a list of exceptions.
+4. A limit of join attempts for each address and each minute, with an automatic short ban.
+5. Link an address with an account to find a banned player on a new account. This stores an address history, which is personal data.
+6. A shadow mute: the muted player sees their own chat and nobody else does. The per-connection filter and the own-text rule of the packet writer already allow this.
+
+Limits:
+
+- The addresses are IPv4 only (32 bits).
+- Players behind one shared address (NAT) can be banned together. A VPN avoids an address ban.
+- The protocol has no hardware id. A client token would need OverRosa.
+- Stored addresses are personal data. Keep them in the private plugin folder and show them masked in admin output. Never put them in logs that leave the machine or in the repository.
