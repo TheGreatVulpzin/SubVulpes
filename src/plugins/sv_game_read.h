@@ -8,8 +8,6 @@
 #define SV_ENTITY_PAGE_MAX 256u
 
 #pragma pack(push, 8)
-typedef struct { float x, y, z; } SvVector;
-
 typedef struct {
     uint32_t size;
     SvEntity entity, account, human;

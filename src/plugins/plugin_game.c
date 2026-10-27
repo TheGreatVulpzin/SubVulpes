@@ -27,12 +27,19 @@ uint64_t sv_game_reset_sequence(void) { return reset_sequence; }
 
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api)
 {
-    if (capability != SV_API_GAME_READ)
-        return SV_NOT_FOUND;
-    if (version != SV_GAME_READ_VERSION)
-        return SV_INCOMPATIBLE;
-    *api = &sv_game_read;
-    return SV_OK;
+    if (capability == SV_API_GAME_READ) {
+        if (version != SV_GAME_READ_VERSION)
+            return SV_INCOMPATIBLE;
+        *api = &sv_game_read;
+        return SV_OK;
+    }
+    if (capability == SV_API_GAME_WRITE) {
+        if (version != SV_GAME_WRITE_VERSION)
+            return SV_INCOMPATIBLE;
+        *api = &sv_game_write;
+        return SV_OK;
+    }
+    return SV_NOT_FOUND;
 }
 
 void sv_game_status(SvStatus *status)

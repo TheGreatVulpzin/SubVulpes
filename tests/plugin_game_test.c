@@ -11,6 +11,7 @@
 #include "logic.h"
 #include "objects.h"
 #include "player.h"
+#include "server.h"
 #include "sr_server.h"
 #include "plugin_game_internal.h"
 
@@ -114,6 +115,46 @@ static void account_lifetime(void)
     CHECK(sv_entity_at(SV_ENTITY_ACCOUNT, account) != old);
 }
 
+static int near_value(float a, float b)
+{
+    return a - b < 0.001f && b - a < 0.001f;
+}
+
+/* The fixture calls the write API in this tick. The game state shows what the calls did. */
+static void write_api_tick(void)
+{
+    Human *hu = &sr_humans[0];
+    float offset[3];
+    uint32_t events;
+    int k;
+    sr_connections[0].player_id = 0;
+    sr_connections[0].ip = 0x01020304u;
+    sr_connections[0].idle_ticks = 0;
+    sr_numofconnections = 1;
+    sr_numofkicked = 0;
+    offset[0] = hu->bones[14].pos.x - hu->bones[0].pos.x;
+    offset[1] = hu->bones[14].pos.y - hu->bones[0].pos.y;
+    offset[2] = hu->bones[14].pos.z - hu->bones[0].pos.z;
+    events = sr_numofevents;
+    sr_server = 1;
+    sv_plugins_tick();
+    sr_server = 0;
+    CHECK(!sv_plugins_failed());
+    CHECK(sr_numofevents == events + 2);
+    CHECK(sr_events[events].type == 2 && sr_events[events].attach_type == SV_MESSAGE_SERVER &&
+          sr_events[events].attach_id == -1 && strlen(sr_events[events].message) == 63);
+    CHECK(sr_events[events + 1].attach_type == SV_MESSAGE_CHAT && !strcmp(sr_events[events + 1].message, "chat line"));
+    CHECK(sr_accounts[0].money == 1500 && sr_players[0].money == 4742 && sr_players[0].godmode == 1);
+    CHECK(hu->health == 80 && hu->pos.x == 100.0f && hu->pos.y == 50.0f && hu->pos.z == 200.0f);
+    for (k = 0; k < 15; ++k)
+        CHECK(hu->bones[k].pos_prev.x == hu->bones[k].pos.x && hu->bones[k].pos_prev.z == hu->bones[k].pos.z);
+    CHECK(near_value(hu->bones[14].pos.x - hu->bones[0].pos.x, offset[0]) &&
+          near_value(hu->bones[14].pos.y - hu->bones[0].pos.y, offset[1]) &&
+          near_value(hu->bones[14].pos.z - hu->bones[0].pos.z, offset[2]));
+    CHECK(sr_numofkicked == 1 && sr_kickedip[0] == 0x01020304u && sr_connections[0].idle_ticks == 0x4b0);
+    sr_numofconnections = 0;
+}
+
 int main(void)
 {
     SvEntity old;
@@ -156,8 +197,7 @@ int main(void)
     sr_humans[0].inventory[0].count = 0;
     sr_items[0].num_children = 0;
     sr_data_object[0].num_wheels = 0;
-    sv_plugins_tick();
-    CHECK(!sv_plugins_failed());
+    write_api_tick();
     sv_game_reset();
     sv_entities_clear(SV_ENTITY_HUMAN);
     sv_entities_clear(SV_ENTITY_ITEM);

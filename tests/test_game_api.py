@@ -27,5 +27,6 @@ with tempfile.TemporaryDirectory(prefix="game-api-", dir=build / "tests") as fol
                          capture_output=True, text=True, timeout=30)
     print(run.stdout, end="")
     print(run.stderr, end="", file=sys.stderr)
-    if run.returncode or "PUBLIC_READ_API_PASS" not in run.stdout or "STOP_READ_DENIED" not in run.stdout:
+    required = ("PUBLIC_READ_API_PASS", "STOP_READ_DENIED", "PUBLIC_WRITE_API_PASS", "STOP_WRITE_DENIED")
+    if run.returncode or any(text not in run.stdout for text in required):
         raise SystemExit(run.returncode or 1)

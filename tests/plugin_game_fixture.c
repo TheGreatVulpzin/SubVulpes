@@ -3,9 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 #include "sv_game_read.h"
+#include "sv_game_write.h"
 
 static const SvHost *host;
 static const SvGameRead *game;
+static const SvGameWrite *change;
 static SvOwner plugin_owner;
 static SvEntity player, human, item, object, account;
 static uint32_t stage;
@@ -25,6 +27,13 @@ static DWORD WINAPI wrong_thread(void *argument)
     (void)argument;
     return game->world(plugin_owner, &state) == SV_STATE &&
         host->get_api(plugin_owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_STATE ? 0 : 1;
+}
+
+static DWORD WINAPI write_wrong_thread(void *argument)
+{
+    (void)argument;
+    return change->message(plugin_owner, SV_MESSAGE_SERVER, "wrong thread") == SV_STATE &&
+        change->set_health(plugin_owner, human, 50) == SV_STATE ? 0 : 1;
 }
 
 static SvEntity first(SvOwner owner, uint32_t kind)
@@ -96,7 +105,60 @@ static SvResult initial_reads(SvOwner owner)
     CHECK(GetExitCodeThread(thread, &code));
     CloseHandle(thread);
     CHECK(code == 0);
+    /* The human sits in a vehicle in this tick, so a teleport must refuse and change nothing. */
+    CHECK(change->teleport(owner, human, (SvVector){ 1.0f, 2.0f, 3.0f }) == SV_STATE);
+    CHECK(game->human(owner, human, &h) == SV_OK && h.position.x != 1.0f);
     return SV_OK;
+}
+
+/* Bad input must change nothing. The test program checks the game state after the tick. */
+static SvResult write_checks(SvOwner owner)
+{
+    static const char longest[] = "0123456789012345678901234567890123456789012345678901234567890123";
+    SvHumanState h = { sizeof h };
+    SvVector target = { 100.0f, 50.0f, 200.0f }, bad = target;
+    uint32_t nan_bits = 0x7fc00000u, inf_bits = 0x7f800000u;
+    HANDLE thread;
+    DWORD code;
+    CHECK(change->message(owner, SV_MESSAGE_SERVER, NULL) == SV_INVALID);
+    CHECK(change->message(owner, 1, "kind") == SV_INVALID);
+    CHECK(change->message(owner, SV_MESSAGE_SERVER, "") == SV_INVALID);
+    CHECK(change->message(owner, SV_MESSAGE_SERVER, "bad\ntext") == SV_INVALID);
+    CHECK(change->message(owner, SV_MESSAGE_SERVER, longest) == SV_INVALID);
+    CHECK(change->message(owner + 1, SV_MESSAGE_SERVER, "owner") == SV_STATE);
+    CHECK(change->message(owner, SV_MESSAGE_SERVER, longest + 1) == SV_OK);
+    CHECK(change->message(owner, SV_MESSAGE_CHAT, "chat line") == SV_OK);
+    CHECK(change->add_money(owner, account, INT32_MAX) == SV_INVALID);
+    CHECK(change->add_money(owner, human, 5) == SV_NOT_FOUND);
+    CHECK(change->add_money(owner, account, 500) == SV_OK);
+    CHECK(change->set_godmode(owner, player, 2) == SV_INVALID);
+    CHECK(change->set_godmode(owner, human, 1) == SV_NOT_FOUND);
+    CHECK(change->set_godmode(owner, player, 1) == SV_OK);
+    CHECK(change->set_health(owner, human, SV_HEALTH_MAX + 1) == SV_INVALID);
+    CHECK(change->set_health(owner, human, SV_HEALTH_MIN - 1) == SV_INVALID);
+    CHECK(change->set_health(owner, player, 5) == SV_NOT_FOUND);
+    CHECK(change->set_health(owner, human, 80) == SV_OK);
+    memcpy(&bad.x, &nan_bits, sizeof bad.x);
+    CHECK(change->teleport(owner, human, bad) == SV_INVALID);
+    bad = target;
+    memcpy(&bad.y, &inf_bits, sizeof bad.y);
+    CHECK(change->teleport(owner, human, bad) == SV_INVALID);
+    bad = target;
+    bad.z = SV_POSITION_LIMIT + 1.0f;
+    CHECK(change->teleport(owner, human, bad) == SV_INVALID);
+    CHECK(change->teleport(owner, player, target) == SV_NOT_FOUND);
+    CHECK(change->teleport(owner, human, target) == SV_OK);
+    CHECK(game->human(owner, human, &h) == SV_OK);
+    CHECK(h.position.x == 100.0f && h.position.y == 50.0f && h.position.z == 200.0f && h.health == 80);
+    CHECK(change->kick(owner, human) == SV_NOT_FOUND);
+    CHECK(change->kick(owner, player) == SV_OK);
+    thread = CreateThread(NULL, 0, write_wrong_thread, NULL, 0, NULL);
+    CHECK(thread != NULL);
+    CHECK(WaitForSingleObject(thread, 5000) == WAIT_OBJECT_0);
+    CHECK(GetExitCodeThread(thread, &code));
+    CloseHandle(thread);
+    CHECK(code == 0);
+    return host->log(owner, "PUBLIC_WRITE_API_PASS");
 }
 
 static SvResult runtime_reads(SvOwner owner)
@@ -159,6 +221,7 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
     } else if (stage == 3) {
         SvObjectState o = { sizeof o };
         CHECK(game->object(owner, object, &o) == SV_OK && o.driver == 0);
+        return write_checks(owner);
     } else if (stage == 4) {
         SvPlayerState p = { sizeof p };
         SvHumanState h = { sizeof h };
@@ -196,6 +259,11 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     game = (const SvGameRead *)table;
     CHECK(game && game->size == sizeof *game && game->version == SV_GAME_READ_VERSION);
     CHECK(game->world(owner, &world) == SV_STATE);
+    CHECK(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION + 1, &table) == SV_INCOMPATIBLE && table == NULL);
+    CHECK(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
+    change = (const SvGameWrite *)table;
+    CHECK(change && change->size == sizeof *change && change->version == SV_GAME_WRITE_VERSION);
+    CHECK(change->message(owner, SV_MESSAGE_SERVER, "before ready") == SV_STATE);
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
@@ -206,6 +274,8 @@ static void SV_CALL disable(SvOwner owner)
 {
     SvWorldState world = { sizeof world };
     host->log(owner, game->world(owner, &world) == SV_STATE ? "STOP_READ_DENIED" : "STOP_READ_FAILURE");
+    host->log(owner, change->message(owner, SV_MESSAGE_SERVER, "stopping") == SV_STATE ?
+        "STOP_WRITE_DENIED" : "STOP_WRITE_FAILURE");
 }
 
 SV_EXPORT SvResult SV_CALL sv_plugin_entry(uint32_t abi, SvPlugin *plugin)

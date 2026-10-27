@@ -1,7 +1,7 @@
 # Game read API
 
 Status: first read slice implemented. The build, fixture and real server checks passed within the limits below.
-This first game API adds reads. It does not complete the [mapped API](plugin-api-map.md) or close S3.
+This first game API adds reads, and a small [write capability](#write-capability-version-1) follows. It does not complete the [mapped API](plugin-api-map.md) or close S3.
 Most mutation and gameplay hook capabilities remain future work.
 The user ordered framework tests, then the full mapped API, then production plugins.
 
@@ -174,8 +174,36 @@ This does not establish compatibility for every third-party module.
 
 ### Remaining limits
 
-The current slice introduces no public game mutation operations or original-client behavior changes.
+The read slice introduces no public game mutation operations or original-client behavior changes.
+The write capability below is a separate slice with its own limits.
 Original-client gameplay and manual launcher acceptance remain pending.
 The full mapped API and S3 remain open. Production gameplay and administration plugins follow the complete mapped API proof.
 These results do not establish client gameplay parity, broader hook coverage, Lua or WASM support.
 See [native SDK](plugin-sdk.md) and [S3 evidence](s3.md) for the framework contract and earlier package evidence.
+
+## Write capability (version 1)
+
+Include `sv_game_write.h`. The table type is `SvGameWrite`, with capability `SV_API_GAME_WRITE` (`2`) and version `SV_GAME_WRITE_VERSION` (`1`).
+Look it up with `get_api` as for the read table. An unsupported version returns `SV_INCOMPATIBLE` with a null output.
+
+A write call has the same context rule as a read. It needs a host callback on the server thread, a ready world and no stop transition.
+Otherwise it returns `SV_STATE`. The host starts callbacks between ticks, so a write never runs inside the simulation.
+Each call checks its input first. An error leaves the game unchanged. Entity arguments are the references from the read API.
+
+| Method | Effect | Result codes besides `SV_STATE` |
+| --- | --- | --- |
+| `message(kind, text)` | Sends a message event to every client. Kind `0` is a server message and kind `4` is a chat line. The text has 1 to 63 printable ASCII bytes. | `SV_INVALID` for another kind, a null or empty text, a long text or a control byte |
+| `kick(player)` | Adds the address of the connection to the kick list and sets its idle counter to the drop value, as `/kick` does. | `SV_NOT_FOUND` for a wrong kind or a player with no connection, `SV_LIMIT` when the kick list is full |
+| `add_money(account, amount)` | Adds the amount to the account and to each active player of it, as `/give` does. | `SV_NOT_FOUND`, `SV_INVALID` when any sum leaves the 32-bit range (no balance changes) |
+| `set_godmode(player, enabled)` | Sets the flag to 0 or 1. | `SV_NOT_FOUND`, `SV_INVALID` for another value |
+| `set_health(human, health)` | Sets the health from -100 to 100. -100 is the dead value of the game. | `SV_NOT_FOUND`, `SV_INVALID` out of range |
+| `teleport(human, position)` | Moves the 15 bones by the same offset so bone 0 reaches the position. It copies the new place to the previous place of each bone. The velocity does not change. | `SV_NOT_FOUND`, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle |
+
+The tests call every method from a real plugin callback against records that real constructors made.
+They check each error code and a wrong-thread call. The test program then reads the game records.
+It checks the two message events, the balances, the flag, the health, the bone offsets, the kick list and the idle counter.
+Removing one check at a time (message bytes, money range, flag range, health range, finite position, position limit, vehicle) made `game-api` fail each time.
+The packet writer clamps the sent health to the range -10 to 117 and leaves the server value as written. So a client sees the same value for -100 and -10, and for 100 and 117. See [network limits](game/network.md#representation-limits).
+
+Not covered: a full kick list (41,368 addresses), more than one connection for a player, a message when the event ring is full, and a client check of a teleport or a health value.
+The original client was not run. A teleport reaches the client only through the normal human state updates.
