@@ -55,6 +55,8 @@ Continue implementation in this order:
 3. Only after the API coverage proof, build production gameplay and administration plugins.
    Include administration commands, permissions, ban policy and persistence, RCON and optional log output.
    Then demonstrate two NPC behaviors, a custom mission, an effect with an existing weapon representation and an external snapshot consumer.
+   First candidate for the mission and NPC examples (idea of the user): a boss bot that hunts the employees of a company.
+   It needs the AI control, economy and mission operations N20 to N22 in [system coverage](plugin-api-map.md#planned-operations-for-ai-economy-and-missions).
    Optional stress example: a stylized video where items are pixels, headlines carry text and known sounds play.
    One object update sends at most 255 items and the item pool has 1,024 slots. The frame rate of the client is unknown.
    Core operations supply validated game access and lifecycle events. Plugins supply policy and features.

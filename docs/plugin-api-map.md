@@ -127,3 +127,31 @@ A private message exists (`message_to`). The core keeps the packet writer and th
 Hiding an entity from some players can leave the client with a world that differs from the server. It can also work as a defense against wallhacks.
 Do not call it done until the original client runs it.
 A new packet type, menu, HUD element or model still needs OverRosa.
+
+## Planned operations for AI, economy and missions
+
+The [legacy catalog](legacy-modules.md) (N1 to N19) has none of these. They come from the user's ideas, such as a boss bot that hunts the employees of a company.
+Status on 2026-10-27: planned, with no code. The facts below come from `docs/game/logic.md`.
+
+How the game works today:
+
+- **Missions.** Each team has 16 slots. A mission has a kind (0 to 6: guards, vehicle chase, three-way exchange, transactions), an expiry on the world clock and a reward.
+  `createscenario_world` picks the kind and the numbers. Completion pays the reward, moves stock prices and clears the linked missions.
+- **Economy.** Each company has a share count, a price, an opening price and a mission stake. Prices have a floor of 10 and split at 500 or more.
+  The death tax takes 5 percent of the money above 10,000.
+- **Bots.** `playerai` follows waypoints on foot or drives. Its target comes from a list of 16 threats. A chase bot uses a destination and waypoints.
+
+| Id | Operation or event | What it allows |
+| --- | --- | --- |
+| N20 | **AI control.** Read the threats of a bot. Set its destination, waypoints and target. Override its input (movement and buttons) for some ticks, with a way to give control back. | A bot that hunts chosen players. Two different NPC behaviors. |
+| N21 | **Economy.** Read the companies (shares, price, stake). Change a price or a share count under the split rules. Add or remove stocks of a player. | Rewards and penalties in stocks. A market event. |
+| N22 | **Missions.** Read the slots of a team (kind, expiry, reward). Start or cancel a mission with an existing kind. Events for start, completion and expiry, with a decision to replace the reward. | Change the rules of the existing missions. A mission of your own. |
+
+The original client shows a mission only through the existing kinds, the phone menu and the news. A new kind of display needs OverRosa.
+A plugin can reuse the display of a kind and change the rules behind it.
+
+What exists now for a boss bot that hunts the employees:
+
+- **Ready:** `npc_create` for the bot, `item_create` and `item_equip` for a heavy gun, `set_godmode` (a bot is a player, so the flag works), `add_money` for the reward, `message` for announcements, the tick event, and the read API for the positions and teams of the players.
+- **Missing:** a way to make the bot walk and aim at a chosen player (N20). Without it a plugin can only move the bot by teleport, which skips the physics.
+- **Missing for health:** the health range of the API is -100 to 100. A boss with more health needs a higher bound or a damage rule.
