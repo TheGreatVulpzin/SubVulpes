@@ -87,6 +87,10 @@ Document compatibility, examples and author tools against that tested contract.
 Optional modes, integrations and other custom features use the same extension system.
 See [plugin design](plugins.md).
 
+## Cleanup subplan
+
+Small style cleanups of inherited code are tracked in [cleanup](cleanup.md). They do not block a milestone.
+
 ## Later
 
 Add dynamic pools, 64-bit builds, other platforms, an independent server list and server anti-cheat.
