@@ -83,7 +83,8 @@ Step 2 (common API) is in progress.
 - Private messages: the server writes an empty slot for each other connection (`0581091`).
 - Planned and not started: plugin configuration set by the administrator in the launcher or by command (N23).
 - Catalog 2026-10-27: version 0.8.0 of the legacy tool is merged into the [legacy module catalog](legacy-modules.md#changes-in-080).
-  It adds the C4, crazy NPC pair and team rounds modules, and the needs N24 to N29 (damage decision, hand state, round control, road graph, vehicle seat, object protection).
+  It adds the C4, crazy NPC pair and team rounds modules, and the needs N24 to N29 (damage decision, world flow writes, road graph, vehicle seat, object protection).
+  Every need is a general operation. See the rule of generality in the catalog.
 - Vehicle exit (`vehicle_exit`) and line queries (`line`, `aim`): N9 and N10 are done. That makes 10 of the 19 legacy operations, so the in-game test room is due.
 - Not done: sounds, pushes on body parts, shop and settings operations,
   and the events of N11 to N19 in the [legacy module catalog](legacy-modules.md).

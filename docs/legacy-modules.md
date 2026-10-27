@@ -19,7 +19,7 @@ The inherited commands in `src/net/commands.c` stay until a plugin replaces them
 ## Chat commands
 
 All commands need the admin flag, a living player and, where noted, a body on foot.
-"Now" means the current read and write API is enough. The needs (N1 to N19) are in the next section.
+"Now" means the current read and write API is enough. The needs (N1 to N29) are in the next section.
 
 | Command | Behavior to keep | Needs |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | `/heavydude` | Multiply the 15 physical values of the body by 100000, once. A joke command. | N19 |
 | `/delh` | Delete the nearest human on the aim line, up to 100 units, never the caller. | N10, N8 |
 | `/team N` | Set team 0 to 5 and send the update. | N3 |
-| `/deactivate ID` | Toggle the active record of the human of player ID (0 to 255). Another admin can toggle it back. Version 0.8.0 gives the target rule only, not the effect on the world. | N24 (see below) |
+| `/deactivate ID` | Toggle the active record of the human of player ID (0 to 255). Another admin can toggle it back. Version 0.8.0 gives the target rule only, not the effect on the world. | Refusal likely (see below) |
 | `/give admin ID` | An admin gives the admin flag to a connected player. Reject empty slots and bots. Lasts until disconnect. The inherited `/give` is a different command (cash). | N2, N1 |
 | `/give money ID N` | An admin adds N (1 to 100000000) to the money of the player and of the saved account. It takes nothing from the caller. Refuse a bot, a missing account and a sum that overflows. A numeric `/give ID N` stays with the inherited command. | N21 (economy), N1 |
 | `/npc` | Make a pedestrian bot 3 meters in front, with no car. Queue the request to a safe point and refuse a second request while one waits. | N8 |
@@ -71,6 +71,14 @@ The tool lists `/nick` in a table but never runs it. Do not build it.
 | Crazy NPC pair | `/npclouco` (admin, living, on foot) makes a driver (no weapon) and a shooter in the passenger seat. The car appears on a free street near the caller, found with the road graph. At most four pairs. `/npclouco limpar` removes the pairs and their cars. Weapon 0 to 5 (M16, AK-47, MP5, Uzi, 9 mm, Magnum), car color 0 to 5, car model 0 to 13, health values up to 1000000, names up to 20 bytes. The shooter fires 30 rounds, then waits 120 ticks to reload. If the driver dies or the car is destroyed, the shooter leaves the car and fights on foot. The module announces its own deaths with names and the killer. | N20, N27, N28, N29, N24, N8, N16 |
 | Team rounds (PvP) | Only in the Rounds gametype (3). Count the living humans of three teams at the round start (bots excluded). A death, a leave or a team change removes the player until the next round and sends a line with the survivors. The round ends on time (default 300 s) or, with the early option, when one team is left (two teams must have started). A tie is not a win. After the end the score freezes for a pause (default 5 s), then the round resets and the result is announced after the reset, because the reset clears the event queue. The module must not run with the death message modules. | N26, N16, N1 |
 
+## Rule of generality
+
+Every operation in the next list is general. It has no name, price, number or item of one module. A module gives the meaning. The core gives access, bounds and events.
+When a need looks like one module, split it: the general operation goes in the core table and the rest stays in the plugin.
+A plugin keeps its own state in plugin storage (N18) and not in unused fields of the game records.
+The official plugins use only these operations and the events. They have no other door into the core.
+A plugin that needs a thing that the API does not give waits for a new general operation.
+
 ## Needs
 
 | Id | Operation or event |
@@ -104,13 +112,13 @@ Its `/kill` writes health -5 and `bleeding` 1. So the "drunk level" is `stun_tim
 | N8 | Make and delete a human, and make a bot player with a human at a safe point. The pool guards and rollback exist. Done for bots: `npc_create` and `npc_remove`. Not done: delete the body of a real player. Kill it with `set_health` instead. |
 | N9 | Eject a human from a vehicle. Done: `vehicle_exit`, with the option to stop the bones. The exit code of the game is now one shared function, `human_leavevehicle`. |
 | N10 | Aim and line queries against the level, objects and humans. They copy the result out of the shared scratch record. Done: `line` and `aim` in the read table. Not done: a query of a surface material or a block, and a sphere query. |
-| N11 | Play a known sound at a position. |
-| N12 | Add a push or speed to a body part. |
+| N11 | Play a known sound at a position, with a volume and a pitch. The index is from 0 to the size of the sound list. |
+| N12 | Add a velocity change (an impulse) to one bone of a human or to an object, with a bound on its size. |
 | N13 | Write the spawn protection timer. |
-| N14 | Settings that the core owns: player limit, starting money and bot count. |
+| N14 | Named settings of the core in one table. Each has a type and a range, a read, a write with a range check and a change event. The first entries are the player limit, the money of a new account and the bot count. Another setting adds a row, not a new method. |
 | N15 | Phones, in a general way. The core knows no shop and no price. A cell phone item keeps its dialed digits in `phone_number` and its state in `call_state`, and the game calls another phone at 4 digits (code read, not run). A plugin gets an event for each digit (phone item, number so far, the human that holds it) and one when the game is about to call. It can claim the number, so the game does not call, or let the game go on. A write puts a phone back to idle. The plugin gives the number its meaning with the methods that exist: a sale (`add_money`, `item_create`, `item_equip`), a command or a quiz. A short code such as 24 needs a rule for its end, for example a wait of some ticks. The plugin owns that rule. A second, separate part: read and replace the rows of the menu shops of a building (type and price), for the dealership truck. |
-| N16 | Events: chat text (observe), human death (observe and early processing), spawn (decide position), vehicle damage (observe), purchase (decide). |
-| N17 | Engine parameters of one object type. |
+| N16 | One event mechanism. Each event has a phase (observe or decide), a typed payload and a limit on what a decision can change. The first events: chat text (observe), human death (observe, and early processing), spawn (decide the position), damage (N24), menu purchase (decide), connect (decide) and phone (N15). Another event adds a row, not a new mechanism. |
+| N17 | Named engine parameters in one table: per object type (for example the speed range and the engine force) and global physics switches (for example the reset of the orientation of a ragdoll part, or the health value where the death steps start). Each has a type, a range and a default. The host puts the default back when the plugin stops. |
 | N18 | Plugin storage with a size bound, in three scopes: session (one player, cleared when the player leaves or the plugin stops), account (kept on disk, tied to an account) and server (kept on disk). See the notes below. |
 
 Plugin storage (N18) does not exist yet. A native plugin can write its own files, but the host does not bound or clean them.
@@ -123,12 +131,12 @@ The design rules:
 - Persistent bans, permission groups and ranks depend on the account scope.
 | N19 | Write the body part masses. Low priority. The effect is not known. |
 | N23 | Plugin configuration set by the administrator, in the launcher or with a command. See the notes below. |
-| N24 | Damage decision. Before a bullet, a fist, a knife or a vehicle applies damage, a plugin can allow it, scale it or cancel it. It also covers a hit on a wheel or on a vehicle. Needed by the safe spawn area, the spawn protection fix and the crazy NPC cars (indestructible car and wheels). Also a decision on the `/deactivate` effect: the tool toggles an active record of a human, and the effect on the bonds, the items and the clients is not analyzed. This operation is likely a refusal. |
-| N25 | Read of the hand state of a human: the hand pose flag, the punch wait counter and the velocity of the hand body part. The punch module needs them. Part of the read table, not new state. |
-| N26 | Round control for the Rounds gametype: read the gametype, the round phase, the timer and the scores. Write the timer, set the phase to the break, and ask for the round reset. Read the order of events around the reset. |
+| N24 | Damage decision. Before a bullet, a fist, a blade or a vehicle applies damage to a human, an object or a wheel, a plugin can allow it, scale it or cancel it. The event says the source, the target and the amount. |
+| N25 | Closed. The read table already gives the buttons, the velocity of each bone and `reload_ticks`. The punch module of the tool keeps a counter in a free field of the human record. A plugin keeps such a counter in its own storage (N18), and not in the game record. |
+| N26 | World flow. The world read already shows the mode, the round, the state and the timers. Add writes for the timers and the state, and a request to reset the round. No operation names a gametype. |
 | N27 | Road graph query: find a free street position and direction near a point, with the next node. The crazy NPC pair uses it to place the car. It copies out of the shared graph and returns a bounded result. |
 | N28 | Seat a human in a vehicle seat (driver 0, passenger 1) and take it out. The seat rule is in the core: `vehicle_id` and `vehicle_seat` of the human. Includes the eject of N9 as the second half. |
-| N29 | Object health and protection: set the health of a vehicle at creation and mark it, or one wheel, as protected. Health values above 100 for a bot (the tool allows 1 to 1000000), if the core accepts them. |
+| N29 | Object health and protection: set the health of an object, and mark an object or one of its wheels as protected from damage (use with N24). A health range wider than 100 for a human, if the core accepts it. |
 
 Plugin configuration (N23) does not exist yet. N14 is different: it gives plugins the settings of the core, such as the player limit.
 N23 is the settings of one plugin, such as the price of the knife.
@@ -201,6 +209,10 @@ A bot with its own name can do better. Check what the read API gives for a bot b
 The messages of the crazy NPC pair and the general death messages repeat each other in the tool.
 The official plugin must have one source of death messages.
 
+**About `/deactivate`.** The tool toggles the active record of a human. It gives the rule for the target and no effect on the world.
+A human record that is switched off while its bones, bonds, items and clients still know it can leave the world in a state that the game does not expect.
+No general operation serves it, so the plan is to refuse it and to list it as "no support" at the close of S3. The user decides.
+
 **Not in the catalog.** `/nick` has no code in the tool. The settings file keeps a grab module that is not installed. A cheat table in the package shows the older hand pose and punch code.
 The tool stays outside this repository, and none of its binaries or code is used here.
 
@@ -208,7 +220,7 @@ The tool stays outside this repository, and none of its binaries or code is used
 
 1. N1 to N4, N6 to N8, N10 and N11 first. They serve the chat commands, which one official administration plugin can own.
 2. N16 and N12 next. They serve the death, punch, knife and eject modules.
-3. N9, N24 and N25 with them. The eject, safe spawn, spawn protection and punch modules need them.
+3. N9 and N24 with them. The eject, safe spawn, spawn protection and punch modules need them.
 4. N14, N15 and N17 last. They need changes to core data that the API does not reach yet.
 5. N26 to N29 with the crazy NPC pair and the team rounds, after N20.
 
