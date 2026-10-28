@@ -44,7 +44,9 @@ No number exists for the cost of the plugin hooks. Write a timing run (for examp
 10,000 calls of `sv_shop_poll`, `sv_mission_before_tick`, `sv_game_event_poll`, `sv_actions_poll`, and `sv_ai_before_player` for 256 players; one `sv_plugins_tick` with one idle plugin; one `within` query of radius 4096 with 512 humans and 1,024 items.
 Write the numbers in `docs/plugin-abi.md` under "Cost". A target: all hooks together under 100 microseconds for each tick with 256 bots and no plugin that subscribes. If a loop is slower, fix it (for example keep a count of waiting phones so the poll can skip the scan).
 
-## API work that is left (after the SDK milestone M1, or before if the owner says so)
+## API work that is left (the first editor does it, after the ABI reset)
+
+The owner decided on 2026-10-28: the first editor builds R1 to R9, and not the second editor. They start after the planned ABI change on the branch `codex/abi-reset` is merged. Each item still follows the rules below.
 
 | Id | Work | Design notes |
 | --- | --- | --- |
