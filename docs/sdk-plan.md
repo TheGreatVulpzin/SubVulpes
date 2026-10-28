@@ -145,6 +145,21 @@ Total: about 12 days. Stop after each milestone, run the full checks and let the
 - **Native plugins stay unsafe.** The capability list cannot stop native code from touching memory. Say so in the review dialog.
 - **Size of the SDK.** Ship headers and text only. The user brings a compiler.
 
+## Two editors at the same time
+
+The first editor keeps working on the game API in the main checkout while the second editor builds the SDK. Each file has one owner.
+
+| Owner | Files |
+| --- | --- |
+| Second editor (SDK) | `plugin_host.c`, `plugin_files.c`, `plugin_internal.h`, `plugin_control.c`, `plugin_config.c`, the new `runtime*.c`, `tools/sdk/`, `tools/plugins/`, `tools/release/`, `tools/launcher/`, `tests/systems/world.c` and its users, `tests/sdk/`, `CMakeLists.txt`, `docs/sdk*.md`, `docs/plugins.md`, `docs/plugin-sdk.md`, `docs/plano.md` |
+| First editor (API) | `plugin_props.c`, `plugin_read.c`, `plugin_write.c`, `plugin_events.c`, `plugin_game*.c`, `plugin_made.c`, `plugin_collapse.h`, the `sv_game_*.h` headers, the game sources in `src/game` and `src/net`, `plugins/testroom/`, `tests/plugin_game_*.c`, `docs/plugin-game-api.md`, `docs/plugin-events.md`, `docs/plugin-coverage.md`, `docs/legacy-modules.md`, `docs/game/` |
+
+- The timers of N41 live in `plugin_host.c`. They wait until the second editor ends M1.
+- A new API method of the first editor has no binding in the Lua and WASM glue until WP7. When `check_bindings.py` exists, the first editor adds the entry in the same commit, or writes the reason "not exposed".
+- The second editor does not move `plugins/testroom/` in WP2. The first editor still owns it.
+- Both editors build in their own worktree, and each one has its own `build/` folder. Two builds at the same time can run out of memory (error 1455). Build one at a time.
+- The owner merges `codex/sdk` into `main`. Files that only one editor changed merge without a conflict.
+
 ## Rules for the second editor
 
 - Work in a new worktree: `git worktree add ..\SubVulpes-SVS-codex-sdk -b codex/sdk`. Do not use the old folder `..\SubVulpes-SVS-codex`, which the owner must delete by hand. Keep every temporary file under `build/` so the owner can delete the worktree.
