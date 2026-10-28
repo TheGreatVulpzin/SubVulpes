@@ -13,13 +13,19 @@ void *sr_import_ordinal(const char *dll, unsigned ordinal)
     return plat_lookup(dll, NULL, ordinal);
 }
 
+/* A test program can set this hook to read each log line. The plugin test runner uses it. */
+void (*sv_test_log_hook)(const char *line);
+
 void sv_log(const char *format, ...)
 {
+    char line[1024];
     va_list args;
     va_start(args, format);
-    vprintf(format, args);
+    vsnprintf(line, sizeof line, format, args);
     va_end(args);
-    putchar('\n');
+    if (sv_test_log_hook)
+        sv_test_log_hook(line);
+    puts(line);
 }
 
 int sv_stop_requested(void)

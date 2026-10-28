@@ -1,0 +1,7 @@
+# A scenario for the template plugin. Run it with tools/run_plugin_test.ps1 after you build and pack the plugin.
+expect log "Plugin active: my.hello"
+spawn player Ana
+console hello
+expect log "Hello from"
+expect log "1 players"
+expect no-failure

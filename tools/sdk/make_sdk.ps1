@@ -1,7 +1,9 @@
 # Makes SubVulpes-sdk-VERSION.zip: the public headers, a template plugin, the tools, the pages of the API and an example.
-# Usage: make_sdk.ps1 -Version v0.1.0 -OutputDir DIR
+# Usage: make_sdk.ps1 -Version v0.1.0 -OutputDir DIR -Runner subvulpes_plugin_test.exe -ProbeDir DIR
 param([Parameter(Mandatory=$true)][string]$Version,
-      [Parameter(Mandatory=$true)][string]$OutputDir)
+      [Parameter(Mandatory=$true)][string]$OutputDir,
+      [Parameter(Mandatory=$true)][string]$Runner,
+      [Parameter(Mandatory=$true)][string]$ProbeDir)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -21,11 +23,16 @@ foreach ($header in $headers) { $files["include/$($header.Name)"] = $header.Full
 foreach ($name in @('hello.c', 'plugin.ini', 'build.bat', 'CMakeLists.txt')) {
     $files["template/$name"] = Join-Path $repo "tools\sdk\template\$name"
 }
-foreach ($name in @('pack.ps1', 'sv_plugin.cmake')) { $files["tools/$name"] = Join-Path $repo "tools\sdk\$name" }
+foreach ($name in @('pack.ps1', 'sv_plugin.cmake', 'run_plugin_test.ps1')) { $files["tools/$name"] = Join-Path $repo "tools\sdk\$name" }
+# The test runner and the probe plugin come from the build. The scenario of the template sits in the template folder.
+$files['tools/subvulpes_plugin_test.exe'] = (Resolve-Path -LiteralPath $Runner).Path
+$files['tools/probe/probe.dll'] = Join-Path (Resolve-Path -LiteralPath $ProbeDir).Path 'probe.dll'
+$files['tools/probe/plugin.ini'] = Join-Path $repo 'tests\runner\probe\plugin.ini'
+$files['template/test.svtest'] = Join-Path $repo 'tools\sdk\template\test.svtest'
 foreach ($name in @('validate_plugin.ps1', 'install_plugin.ps1')) { $files["tools/$name"] = Join-Path $repo "tools\plugins\$name" }
 foreach ($name in @('plugin-abi.md', 'plugin-sdk.md', 'plugin-manifest.md', 'sdk-packaging.md', 'plugin-game-api.md',
         'plugin-events.md', 'plugin-config.md', 'plugin-libraries.md', 'plugin-ai.md', 'plugin-economy.md', 'plugin-engine.md',
-        'plugin-mission.md', 'plugin-settings.md', 'plugin-shop.md', 'plugin-storage.md')) {
+        'plugin-mission.md', 'plugin-settings.md', 'plugin-shop.md', 'plugin-storage.md', 'sdk-test-runner.md')) {
     $files["docs/$name"] = Join-Path $repo "docs\$name"
 }
 $files['examples/status/status.c'] = Join-Path $repo 'plugins\status\status.c'

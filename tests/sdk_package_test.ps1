@@ -29,11 +29,11 @@ function Run-Batch([string]$Name, [string[]]$Lines) {
 }
 
 # Make the package.
-$line = (& (Join-Path $repo 'tools\sdk\make_sdk.ps1') -Version 'v0.0.0-sdk-test' -OutputDir $work) | Select-Object -Last 1
+$line = (& (Join-Path $repo 'tools\sdk\make_sdk.ps1') -Version 'v0.0.0-sdk-test' -OutputDir $work -Runner (Join-Path $build 'subvulpes_plugin_test.exe') -ProbeDir (Join-Path $build 'plugins\sv.probe')) | Select-Object -Last 1
 Assert ($line -cmatch "^SDK`t(.+)`t[0-9a-f]{64}$") 'make_sdk.ps1 gave no SDK line.'
 $zipPath = $Matches[1]
 Assert ((Split-Path $zipPath -Leaf) -ceq 'SubVulpes-sdk-v0.0.0-sdk-test.zip') 'The package name is wrong.'
-$again = (& (Join-Path $repo 'tools\sdk\make_sdk.ps1') -Version 'v0.0.0-sdk-test' -OutputDir (Join-Path $work 'again')) | Select-Object -Last 1
+$again = (& (Join-Path $repo 'tools\sdk\make_sdk.ps1') -Version 'v0.0.0-sdk-test' -OutputDir (Join-Path $work 'again') -Runner (Join-Path $build 'subvulpes_plugin_test.exe') -ProbeDir (Join-Path $build 'plugins\sv.probe')) | Select-Object -Last 1
 Assert (($line -split "`t")[2] -ceq ($again -split "`t")[2]) 'The SDK package changed between two runs.'
 
 # The content: public headers, template, tools, docs, an example, and no internal header.
@@ -46,7 +46,8 @@ Assert (@($relative | Where-Object { $_ -clike 'include/sv_*.h' }).Count -eq 15)
 Assert (@($relative | Where-Object { $_ -clike 'include/*' -and $_ -cnotlike 'include/sv_*.h' }).Count -eq 0) 'The include folder holds a file that is not a public header.'
 foreach ($need in @('README.txt', 'VERSION.txt', 'template/hello.c', 'template/plugin.ini', 'template/build.bat', 'template/CMakeLists.txt',
         'tools/pack.ps1', 'tools/validate_plugin.ps1', 'tools/install_plugin.ps1', 'tools/sv_plugin.cmake', 'docs/plugin-abi.md',
-        'docs/plugin-manifest.md', 'examples/status/status.c')) {
+        'docs/plugin-manifest.md', 'examples/status/status.c', 'tools/run_plugin_test.ps1', 'tools/subvulpes_plugin_test.exe',
+        'tools/probe/probe.dll', 'tools/probe/plugin.ini', 'template/test.svtest', 'docs/sdk-test-runner.md')) {
     Assert ($need -cin $relative) "The package lacks $need."
 }
 foreach ($forbid in @('plugin_host.h', 'plugin_host.c', 'plugin_internal.h', 'config.txt')) {
@@ -91,6 +92,10 @@ New-Item -ItemType Directory -Path $target | Out-Null
 Copy-Item -LiteralPath $server -Destination (Join-Path $target 'subvulpes_server.exe')
 & (Join-Path $sdk 'tools\install_plugin.ps1') -ServerDir $target -Package $package | Out-Null
 Assert (Test-Path (Join-Path $target 'plugins\my.hello\hello.dll')) 'The installer did not install the package.'
+
+# Run the scenario of the template with the runner of the package.
+$run = @(& (Join-Path $sdk 'tools\run_plugin_test.ps1') -Plugin $package -Scenario (Join-Path $template 'test.svtest') -ServerExe $server)
+Assert ($LASTEXITCODE -eq 0 -and $run[-1] -clike 'PASS test.svtest*') "The scenario of the template failed:`n$($run -join "`n")"
 
 # Build the template with CMake. The package target makes the same file.
 $cmakeOut = Join-Path $work 'cmake-out'

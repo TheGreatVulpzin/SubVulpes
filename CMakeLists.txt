@@ -66,10 +66,6 @@ add_dependencies(sv-official-approvals ${SV_OFFICIAL_TARGETS})
 
 # The SDK package: the public headers, a template plugin, the tools and the pages of the API.
 set(SV_SDK_VERSION "v0.0.0-dev" CACHE STRING "The version of the SDK package")
-add_custom_target(sdk-package
-    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/tools/sdk/make_sdk.ps1"
-        -Version "${SV_SDK_VERSION}" -OutputDir "${CMAKE_BINARY_DIR}/packages"
-    VERBATIM)
 
 # The test room is a tool for developers. The server package does not carry it. It is the example of a plugin built with the SDK.
 sv_add_plugin(sv-testroom ID sv.testroom MANIFEST "${CMAKE_SOURCE_DIR}/plugins/testroom/plugin.ini"
