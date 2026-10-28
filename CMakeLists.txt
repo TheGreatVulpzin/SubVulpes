@@ -123,6 +123,14 @@ if(BUILD_TESTING)
     target_compile_options(sv-plugin-test PRIVATE /W4 /WX /utf-8)
     set_target_properties(sv-plugin-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_executable(sv-abi-snapshot tests/abi_snapshot.c)
+    set_property(SOURCE tests/abi_snapshot.c APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
+    target_include_directories(sv-abi-snapshot PRIVATE src/plugins)
+    target_compile_options(sv-abi-snapshot PRIVATE /W4 /WX /utf-8 /arch:IA32)
+    set_target_properties(sv-abi-snapshot PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME abi-snapshot COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/test_abi_snapshot.py" "$<TARGET_FILE:sv-abi-snapshot>"
+        "${CMAKE_SOURCE_DIR}/tests/abi_snapshot.txt")
     add_test(NAME plugin-lifecycle COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_plugins.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c

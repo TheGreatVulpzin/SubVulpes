@@ -1,0 +1,67 @@
+SvStatus size=20
+SvEvent size=12
+SvHost size=28
+SvPlugin size=92
+SvConfig size=20
+SvConfigEvent size=176
+SvPlugins size=24
+SvVector size=12
+SvPlayerState size=208
+SvHumanState size=224
+SvItemState size=232
+SvObjectState size=160
+SvAccountState size=72
+SvBoneState size=112
+SvInventoryState size=88
+SvWorldState size=168
+SvLineHit size=56
+SvGameRead size=60
+SvGameWrite size=104
+SvValue size=12
+SvPropInfo size=72
+SvGameProps size=28
+SvGameEvent size=80
+SvChatEvent size=152
+SvDamageEvent size=56
+SvAiThreat size=32
+SvAiThreats size=520
+SvAiInput size=32
+SvAiStreetPoint size=12
+SvGameAi size=52
+SvCompany size=24
+SvGameEconomy size=24
+SvEngineValue size=12
+SvEngineInfo size=96
+SvGameEngine size=20
+SvMissionRef size=32
+SvMissionState size=72
+SvMissionSlots size=1160
+SvMissionStart size=32
+SvGameMission size=20
+SvSettingValue size=12
+SvSettingInfo size=56
+SvSettingEvent size=60
+SvGameSettings size=20
+SvPhoneEvent size=40
+SvPhoneState size=56
+SvShopRow size=12
+SvShopCatalog size=136
+SvShopCatalogWrite size=128
+SvGameShop size=24
+SvStorageKey size=48
+SvStorageValue size=1032
+SvGameStorage size=20
+SvHost functions=5 prefix=0 first=log:8 last=get_api:24
+SvPlugin functions=2 prefix=0 first=enable:84 last=disable:88
+SvConfig functions=3 prefix=0 first=get_int:8 last=get_text:16
+SvPlugins functions=4 prefix=0 first=refuse:8 last=subscribe64:20
+SvGameRead functions=13 prefix=0 first=entities:8 last=within:56
+SvGameWrite functions=24 prefix=0 first=message:8 last=disown:100
+SvGameProps functions=5 prefix=0 first=find:8 last=add:24
+SvGameAi functions=11 prefix=0 first=threats:8 last=seated_target:48
+SvGameEconomy functions=4 prefix=0 first=company:8 last=add_stocks:20
+SvGameEngine functions=3 prefix=0 first=describe:8 last=set:16
+SvGameMission functions=3 prefix=0 first=slots:8 last=cancel:16
+SvGameSettings functions=3 prefix=0 first=describe:8 last=set:16
+SvGameShop functions=4 prefix=0 first=phone:8 last=catalog_replace:20
+SvGameStorage functions=3 prefix=0 first=get:8 last=erase:16
