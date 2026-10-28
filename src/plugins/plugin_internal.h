@@ -12,7 +12,16 @@ typedef struct {
     char path[MAX_PATH];
     char hash[65];
     char dependencies[SV_PLUGIN_DEP_MAX][SV_PLUGIN_ID_SIZE];
+    /* The lowest package version that the module accepts for each dependency. An empty text accepts any version. */
+    char dependency_min[SV_PLUGIN_DEP_MAX][SV_PLUGIN_VERSION_SIZE];
     uint32_t dependency_count;
+    /* The plugins that cannot be active at the same time as this one. */
+    char conflicts[SV_PLUGIN_DEP_MAX][SV_PLUGIN_ID_SIZE];
+    uint32_t conflict_count;
+    /* 1 for a library: it offers an API to other plugins and has no game behavior of its own. */
+    uint32_t library_role;
+    /* The reason that the plugin gave when it refused to start. */
+    char refusal[SV_PLUGIN_REASON_SIZE];
     uint32_t metadata_valid;
     uint32_t required;
     uint32_t wanted;
@@ -37,6 +46,11 @@ typedef struct {
 } SvModule;
 
 int sv_plugin_id(const char *text);
+/* 1 when the text is a version to compare: digits in groups, with one dot between two groups. */
+int sv_plugin_version_min(const char *text);
+/* 1 when the package version "have" is not lower than the version "want". The groups of digits at the start of "have"
+ * count, and a missing group is 0. A version that does not start with digits is lower than every other. */
+int sv_plugin_version_at_least(const char *have, const char *want);
 int sv_plugin_profile(SvModule *modules, uint32_t *count);
 SvResult sv_plugin_load(SvModule *module);
 void sv_plugin_unload(SvModule *module);

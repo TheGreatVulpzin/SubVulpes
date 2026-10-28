@@ -45,6 +45,43 @@ function Assert-Id([string]$Id) {
     if ($Id -cnotmatch '^[a-z0-9][a-z0-9._-]{0,46}$' -or $Id.Contains('..') -or $Id.EndsWith('.') -or
         $Id -cmatch '^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)') { throw 'Invalid module identifier.' }
 }
+# The groups of digits at the start of a version, as numbers. The host compares versions the same way.
+function Get-VersionGroups([string]$Version) {
+    $groups = @(0, 0, 0, 0, 0, 0, 0, 0)
+    $match = [regex]::Match($Version, '^[0-9]+(\.[0-9]+){0,7}')
+    if (-not $match.Success) { return $null }
+    $parts = $match.Value.Split('.')
+    for ($i = 0; $i -lt $parts.Count; $i++) { $groups[$i] = [decimal]$parts[$i] }
+    return $groups
+}
+function Test-VersionAtLeast([string]$Have, [string]$Want) {
+    $a = Get-VersionGroups $Have
+    if ($null -eq $a) { return $false }
+    $b = Get-VersionGroups $Want
+    for ($i = 0; $i -lt 8; $i++) {
+        if ($a[$i] -ne $b[$i]) { return $a[$i] -gt $b[$i] }
+    }
+    return $true
+}
+function Read-IdList([string]$Text, [string]$Self, [bool]$AllowVersion) {
+    $ids = @()
+    $minimum = @{}
+    if (-not $Text) { return [pscustomobject]@{ Ids=$ids; Minimum=$minimum } }
+    foreach ($item in $Text.Split(',')) {
+        $id, $version = $item, ''
+        if ($item.Contains('@')) {
+            if (-not $AllowVersion) { throw 'Invalid module conflict.' }
+            $id, $version = $item.Split('@', 2)
+            if ($version -cnotmatch '^[0-9]+(\.[0-9]+)*$' -or $version.Length -gt 23) { throw 'Invalid dependency version.' }
+        }
+        Assert-Id $id
+        if ($id -ceq $Self -or $id -cin $ids) { throw 'Invalid module dependency or conflict.' }
+        $ids += $id
+        $minimum[$id] = $version
+    }
+    if ($ids.Count -gt 8) { throw 'A module can have at most eight dependencies and eight conflicts.' }
+    return [pscustomobject]@{ Ids=$ids; Minimum=$minimum }
+}
 function Read-Manifest([byte[]]$Bytes) {
     if (-not $Bytes.Length -or $Bytes.Length -gt 65536 -or @($Bytes | Where-Object { $_ -gt 127 -or $_ -eq 0 }).Count) {
         throw 'The manifest must contain at most 64 KiB of ASCII text.'
@@ -73,7 +110,7 @@ function Read-Manifest([byte[]]$Bytes) {
             $current[$key] = $value
             continue
         }
-        if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies', 'unsafe_events') -or $values.ContainsKey($key)) {
+        if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies', 'unsafe_events', 'conflicts', 'role') -or $values.ContainsKey($key)) {
             throw 'Invalid or duplicate manifest field.'
         }
         $values[$key] = $value
@@ -90,16 +127,14 @@ function Read-Manifest([byte[]]$Bytes) {
     if ($values.ContainsKey('unsafe_events') -and $values.unsafe_events -cnotmatch '^[01]$') {
         throw 'Invalid unsafe_events setting.'
     }
-    $dependencies = @()
-    if ($values.ContainsKey('dependencies') -and $values.dependencies) {
-        foreach ($id in $values.dependencies.Split(',')) {
-            Assert-Id $id
-            if ($id -ceq $values.id -or $id -cin $dependencies) { throw 'Invalid module dependency.' }
-            $dependencies += $id
-        }
+    if ($values.ContainsKey('role') -and $values.role -cnotmatch '^(plugin|library)$') { throw 'Invalid module role.' }
+    $dependencyList = Read-IdList $(if ($values.ContainsKey('dependencies')) { $values.dependencies } else { '' }) $values.id $true
+    $conflictList = Read-IdList $(if ($values.ContainsKey('conflicts')) { $values.conflicts } else { '' }) $values.id $false
+    foreach ($id in $conflictList.Ids) {
+        if ($id -cin $dependencyList.Ids) { throw 'A module cannot depend on a module that it conflicts with.' }
     }
-    if ($dependencies.Count -gt 8) { throw 'A module can have at most eight dependencies.' }
-    return [pscustomobject]@{ Id=$values.id; Version=$values.version; Library=$values.library; Dependencies=$dependencies }
+    return [pscustomobject]@{ Id=$values.id; Version=$values.version; Library=$values.library;
+        Dependencies=$dependencyList.Ids; DependencyMinimum=$dependencyList.Minimum }
 }
 function Assert-Dll([byte[]]$Bytes) {
     if ($Bytes.Length -lt 90 -or $Bytes.Length -gt 67108864 -or $Bytes[0] -ne 0x4d -or $Bytes[1] -ne 0x5a) {
@@ -224,6 +259,9 @@ try {
         Assert-Target $dependencyPath
         $dependency = Read-Manifest ([IO.File]::ReadAllBytes($dependencyPath))
         if ($dependency.Id -cne $id) { throw 'A dependency manifest has a different identifier.' }
+        if ($manifest.DependencyMinimum[$id] -and -not (Test-VersionAtLeast $dependency.Version $manifest.DependencyMinimum[$id])) {
+            throw 'A module dependency has a lower version than the module needs.'
+        }
         $dependencyDll = Join-Path $public "$id/$($dependency.Library)"
         Assert-Target $dependencyDll
         if (-not (Test-Path -LiteralPath $dependencyDll -PathType Leaf)) { throw 'A dependency DLL is missing.' }

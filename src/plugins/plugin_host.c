@@ -1,5 +1,6 @@
 /* Call native modules only on the server thread and between lifecycle transitions. */
 #include "plugin_internal.h"
+#include "sv_plugins_api.h"
 #include <float.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -13,8 +14,17 @@ typedef struct {
     SvCommandFn callback;
 } Command;
 
+/* An API that a plugin offers to the plugins that depend on it. */
+typedef struct {
+    SvOwner owner;
+    char name[SV_PLUGIN_ID_SIZE];
+    uint32_t version;
+    const void *table;
+} Offer;
+
 static SvModule modules[SV_PLUGIN_MAX];
 static Command commands[SV_PLUGIN_COMMAND_MAX];
+static Offer offers[SV_PLUGINS_API_MAX];
 static uint32_t module_count;
 static SvOwner current;
 static DWORD server_thread;
@@ -105,6 +115,85 @@ static SvResult SV_CALL config_get_text(SvOwner owner, const char *key, char *bu
 
 static const SvConfig config_api = { sizeof(SvConfig), SV_CONFIG_VERSION, config_get_int, config_get_float, config_get_text };
 
+static int needs(const SvModule *module, const char *id);
+
+/* The reason for a refusal to start. The host keeps it until the enable callback returns. */
+static SvResult SV_CALL plugins_refuse(SvOwner owner, const char *reason)
+{
+    SvModule *module = owner_module(owner);
+    size_t i, length;
+    if (!module || !module->enabling)
+        return SV_STATE;
+    length = reason ? strnlen(reason, SV_PLUGIN_REASON_SIZE) : 0;
+    if (!length || length >= SV_PLUGIN_REASON_SIZE)
+        return SV_INVALID;
+    /* The text goes to the log and to the tab-separated list that the launcher reads. */
+    for (i = 0; i < length; ++i)
+        if ((unsigned char)reason[i] < 0x20 || (unsigned char)reason[i] > 0x7e)
+            return SV_INVALID;
+    memcpy(module->refusal, reason, length + 1);
+    return SV_OK;
+}
+
+static SvResult SV_CALL plugins_provide(SvOwner owner, const char *name, uint32_t version, const void *table)
+{
+    SvModule *module = owner_module(owner);
+    const uint32_t *head = (const uint32_t *)table;
+    size_t length;
+    uint32_t i, slot = SV_PLUGINS_API_MAX, own = 0;
+    if (!module || !module->enabling)
+        return SV_STATE;
+    if (!name || !table || version < 1 || !sv_plugin_id(name) || head[0] < 2 * sizeof head[0] || head[1] != version)
+        return SV_INVALID;
+    /* The name starts with the ID of the plugin, so a plugin cannot take the API name of another one. */
+    length = strlen(module->id);
+    if (strncmp(name, module->id, length) || (name[length] && name[length] != '.'))
+        return SV_DENIED;
+    for (i = 0; i < SV_PLUGINS_API_MAX; ++i) {
+        if (offers[i].owner && !strcmp(offers[i].name, name))
+            return SV_CONFLICT;
+        if (offers[i].owner == owner)
+            ++own;
+        if (!offers[i].owner && slot == SV_PLUGINS_API_MAX)
+            slot = i;
+    }
+    if (own >= SV_PLUGINS_API_PER_PLUGIN || slot == SV_PLUGINS_API_MAX)
+        return SV_LIMIT;
+    offers[slot].owner = owner;
+    offers[slot].version = version;
+    offers[slot].table = table;
+    strcpy(offers[slot].name, name);
+    return SV_OK;
+}
+
+static SvResult SV_CALL plugins_find(SvOwner owner, const char *name, uint32_t version, const void **table)
+{
+    uint32_t i;
+    if (!sv_plugins_context(owner))
+        return SV_STATE;
+    if (!name || !table)
+        return SV_INVALID;
+    *table = NULL;
+    for (i = 0; i < SV_PLUGINS_API_MAX; ++i) {
+        const SvModule *provider;
+        if (!offers[i].owner || strcmp(offers[i].name, name))
+            continue;
+        provider = &modules[offers[i].owner - 1];
+        if (provider->state != SV_MODULE_ACTIVE && !provider->enabling)
+            return SV_NOT_FOUND;
+        /* A dependency makes the offering plugin load first and stop last, so the table stays valid. */
+        if (offers[i].owner != owner && !needs(&modules[owner - 1], provider->id))
+            return SV_DEPENDENCY;
+        if (offers[i].version != version)
+            return SV_INCOMPATIBLE;
+        *table = offers[i].table;
+        return SV_OK;
+    }
+    return SV_NOT_FOUND;
+}
+
+static const SvPlugins plugins_api = { sizeof(SvPlugins), SV_PLUGINS_VERSION, plugins_refuse, plugins_provide, plugins_find };
+
 static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_t version, const void **api)
 {
     if (!sv_plugins_context(owner))
@@ -118,6 +207,15 @@ static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_
         *api = &config_api;
         return SV_OK;
     }
+    if (capability == SV_API_PLUGINS) {
+        if (version != SV_PLUGINS_VERSION)
+            return SV_INCOMPATIBLE;
+        *api = &plugins_api;
+        return SV_OK;
+    }
+    /* A library has no game behavior. The functions that it offers use the game tables of the plugin that calls them. */
+    if (modules[owner - 1].library_role)
+        return SV_DENIED;
     return sv_game_api(capability, version, api);
 }
 
@@ -149,6 +247,8 @@ static SvResult SV_CALL host_command(SvOwner owner, const char *name, uint32_t p
     uint32_t i, slot = SV_PLUGIN_COMMAND_MAX;
     if (!owner_module(owner) || stopping || in_simulation)
         return SV_STATE;
+    if (modules[owner - 1].library_role)
+        return SV_DENIED;
     /* "plugins" is the management command. "admin" is the password login of the chat. */
     if (!sv_plugin_id(name) || !callback || permission > SV_COMMAND_LOCAL || !strcmp(name, "plugins") ||
         !strcmp(name, "admin"))
@@ -174,6 +274,8 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
     if (!module || stopping || in_simulation)
         return SV_STATE;
     if ((events & SV_EVENT_DAMAGE) && !module->unsafe)
+        return SV_DENIED;
+    if (events && module->library_role)
         return SV_DENIED;
     if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
                    SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE | SV_EVENT_CONFIG | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
@@ -209,6 +311,30 @@ static int needs(const SvModule *module, const char *id)
     return 0;
 }
 
+static int conflicts_with(const SvModule *module, const char *id)
+{
+    uint32_t i;
+    for (i = 0; i < module->conflict_count; ++i)
+        if (!strcmp(module->conflicts[i], id))
+            return 1;
+    return 0;
+}
+
+/* The first plugin that cannot run at the same time as this one: one that is active, or with "wanted" one that the profile
+ * selects. Either side can name the other in its conflicts. -1 when there is none. */
+static int conflicting(uint32_t index, int wanted)
+{
+    uint32_t i;
+    for (i = 0; i < module_count; ++i) {
+        const SvModule *other = &modules[i];
+        if (i == index || !other->metadata_valid || !(wanted ? other->wanted : other->state == SV_MODULE_ACTIVE))
+            continue;
+        if (conflicts_with(&modules[index], other->id) || conflicts_with(other, modules[index].id))
+            return (int)i;
+    }
+    return -1;
+}
+
 /* The game layer sets this hook, so the host test links without the game. It runs when a plugin stops. */
 static void (*release_hook)(SvOwner owner);
 
@@ -232,6 +358,9 @@ static void clear_resources(uint32_t index)
     for (i = 0; i < SV_PLUGIN_COMMAND_MAX; ++i)
         if (commands[i].owner == index + 1)
             memset(&commands[i], 0, sizeof commands[i]);
+    for (i = 0; i < SV_PLUGINS_API_MAX; ++i)
+        if (offers[i].owner == index + 1)
+            memset(&offers[i], 0, sizeof offers[i]);
     modules[index].events = 0;
     modules[index].event_callback = NULL;
     if (release_hook)
@@ -283,6 +412,7 @@ static SvResult activate(uint32_t index, int initial)
     SvModule *module = &modules[index];
     SvResult result;
     uint32_t i;
+    int other;
     unsigned control;
     if (module->state == SV_MODULE_ACTIVE)
         return SV_OK;
@@ -297,12 +427,25 @@ static SvResult activate(uint32_t index, int initial)
         strcpy(module->reason, "Activation requires a server restart.");
         return SV_RESTART;
     }
+    other = conflicting(index, 0);
+    if (other >= 0) {
+        char reason[SV_PLUGIN_ID_SIZE + 40];
+        snprintf(reason, sizeof reason, "Conflicts with active plugin %s.", modules[other].id);
+        deactivate(index, SV_MODULE_FAILED, reason);
+        return SV_CONFLICT;
+    }
     module->visiting = 1;
     for (i = 0; i < module->dependency_count; ++i) {
         int dependency = find_module(module->dependencies[i]);
         if (dependency < 0 || !modules[dependency].wanted || activate((uint32_t)dependency, initial) != SV_OK) {
             module->visiting = 0;
             deactivate(index, SV_MODULE_FAILED, "A dependency is missing, disabled, incompatible or failed.");
+            return SV_DEPENDENCY;
+        }
+        if (module->dependency_min[i][0] &&
+            !sv_plugin_version_at_least(modules[dependency].version, module->dependency_min[i])) {
+            module->visiting = 0;
+            deactivate(index, SV_MODULE_FAILED, "A dependency has a lower version than the plugin needs.");
             return SV_DEPENDENCY;
         }
     }
@@ -317,15 +460,23 @@ static SvResult activate(uint32_t index, int initial)
         return result;
     }
     module->enabling = 1;
+    module->refusal[0] = 0;
     control = enter(index);
     result = module->plugin.enable(&host, index + 1);
     leave(control);
     if (result != SV_OK) {
+        char reason[sizeof module->reason];
         /* disable also runs after a partially completed enable attempt. */
         module->state = SV_MODULE_ACTIVE;
-        deactivate(index, SV_MODULE_FAILED, "Enable callback reported failure. Registrations removed.");
+        if (module->refusal[0])
+            snprintf(reason, sizeof reason, "Refused to start: %s", module->refusal);
+        else
+            strcpy(reason, "Enable callback reported failure. Registrations removed.");
+        module->refusal[0] = 0;
+        deactivate(index, SV_MODULE_FAILED, reason);
         return result;
     }
+    module->refusal[0] = 0;
     module->enabling = 0;
     module->state = SV_MODULE_ACTIVE;
     module->reason[0] = 0;
@@ -335,13 +486,18 @@ static SvResult activate(uint32_t index, int initial)
 
 SvResult sv_plugins_enable(const char *id)
 {
-    int index = find_module(id);
+    int index = find_module(id), other;
     if (!started || stopping || current || GetCurrentThreadId() != server_thread)
         return SV_STATE;
     if (index < 0)
         return SV_NOT_FOUND;
     if (!modules[index].metadata_valid)
         return SV_INCOMPATIBLE;
+    /* Refuse before the state is saved, so a restart does not let the plugin take the place of the other one. */
+    if (modules[index].state != SV_MODULE_ACTIVE && (other = conflicting((uint32_t)index, 0)) >= 0) {
+        sv_log("Plugin %s conflicts with the active plugin %s. Disable %s first.", id, modules[other].id, modules[other].id);
+        return SV_CONFLICT;
+    }
     if (!sv_plugin_save_state(id, 1))
         return SV_IO;
     modules[index].wanted = 1;
@@ -401,6 +557,7 @@ int sv_plugins_start(void)
     server_thread = GetCurrentThreadId();
     memset(modules, 0, sizeof modules);
     memset(commands, 0, sizeof commands);
+    memset(offers, 0, sizeof offers);
     failed = stopping = 0;
     sv_events_clear();
     started = 1;
@@ -826,6 +983,7 @@ int sv_plugins_cli(int argc, char **argv)
     SvModule module;
     if (argc == 2 && !strcmp(argv[1], "--plugins-list")) {
         uint32_t i;
+        int other;
         sv_log("SubVulpes-plugin-cli-v1");
         if (!sv_plugin_profile(modules, &module_count)) {
             sv_log("Plugin profile is invalid.");
@@ -838,6 +996,12 @@ int sv_plugins_cli(int argc, char **argv)
                 strcpy(item->hash, module.hash);
                 state = !item->wanted ? "disabled" : sv_plugin_approved(&module) ? "ready" : "approval";
                 strcpy(item->reason, "Changes apply at the next server start.");
+                /* The plugin that comes first in the profile wins at the start, so the later one fails. */
+                if (item->wanted && (other = conflicting(i, 1)) >= 0 && other < (int)i) {
+                    state = "failed";
+                    snprintf(item->reason, sizeof item->reason, "Conflicts with plugin %s, which starts first.",
+                        modules[other].id);
+                }
             }
             sv_log("PLUGIN\t%s\t%s\t%s\t%u\t%s\t%s", item->id, item->version, state,
                 item->required, item->hash, item->reason);
@@ -871,6 +1035,15 @@ int sv_plugins_cli(int argc, char **argv)
             if (!enabled && modules[i].wanted && needs(&modules[i], argv[2])) {
                 CloseHandle(lock);
                 sv_log("Disable dependent plugins first.");
+                return 2;
+            }
+        }
+        if (enabled && !modules[index].wanted) {
+            int other = conflicting((uint32_t)index, 1);
+            if (other >= 0) {
+                CloseHandle(lock);
+                sv_log("Plugin %s conflicts with the selected plugin %s. Disable %s first.", argv[2], modules[other].id,
+                    modules[other].id);
                 return 2;
             }
         }

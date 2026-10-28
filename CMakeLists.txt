@@ -29,7 +29,7 @@ set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c src/platform/x87_ma
     APPEND PROPERTY OBJECT_DEPENDS "${SV_STORAGE_HEADERS}")
 file(GLOB SV_PLUGIN_HEADERS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/plugins/*.h")
 set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c plugins/status/status.c
-    tests/plugin_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c
+    tests/plugin_fixture.c tests/plugin_api_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c
     APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
 set_property(SOURCE src/game/human_body.c src/game/human_arms.c src/game/human_pose.c
     src/game/humans.c src/game/item_physics.c src/game/objects.c src/game/wheels.c tests/physics_bounds.c
@@ -92,6 +92,18 @@ if(BUILD_TESTING)
     set_target_properties(sv-plugin-fixture PROPERTIES PREFIX "" OUTPUT_NAME fixture
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    # One source makes a library plugin and a plugin that uses its API.
+    foreach(role library consumer)
+        add_library(sv-plugin-${role} MODULE tests/plugin_api_fixture.c)
+        target_include_directories(sv-plugin-${role} PRIVATE src/plugins)
+        target_compile_definitions(sv-plugin-${role} PRIVATE _CRT_SECURE_NO_WARNINGS)
+        target_compile_options(sv-plugin-${role} PRIVATE /W4 /WX /utf-8)
+        target_link_options(sv-plugin-${role} PRIVATE /EXPORT:sv_plugin_entry)
+        set_target_properties(sv-plugin-${role} PROPERTIES PREFIX "" OUTPUT_NAME ${role}
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    endforeach()
+    target_compile_definitions(sv-plugin-library PRIVATE FIXTURE_LIBRARY)
     add_library(sv-plugin-helper SHARED tests/plugin_dependency_helper.c)
     set_target_properties(sv-plugin-helper PROPERTIES PREFIX "" OUTPUT_NAME sv_test_helper_0e9b6
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")

@@ -18,11 +18,14 @@ SOURCE = {
     'sv.status': BUILD / 'plugins/sv.status/status.dll',
     'test.fixture': BUILD / 'tests/fixture.dll',
     'test.dependent': BUILD / 'tests/dependent.dll',
+    'test.library': BUILD / 'tests/library.dll',
+    'test.consumer': BUILD / 'tests/consumer.dll',
 }
+VERSIONS = {'test.library': '1.2.0'}
 completed = 0
 
 
-def profile(entries, *, dependencies=None, approval=True, abi='1', live='1', unsafe=None, settings=''):
+def profile(entries, *, dependencies=None, approval=True, abi='1', live='1', unsafe=None, settings='', extra=None):
     folder = Path(tempfile.mkdtemp(prefix='native-', dir=CASES)).resolve()
     assert folder.is_relative_to(CASES.resolve())
     plugins = folder / 'plugins'
@@ -40,8 +43,9 @@ def profile(entries, *, dependencies=None, approval=True, abi='1', live='1', uns
             shutil.copyfile(BUILD / 'tests/sv_test_helper_0e9b6.dll', target / 'sv_test_helper_0e9b6.dll')
         deps = (dependencies or {}).get(key, '')
         (target / 'plugin.ini').write_text(
-            f'[plugin]\nid={key}\nversion=0.1.0\nlibrary={binary.name}\napi={abi}\nlive={live}\ndependencies={deps}\n' +
-            (f'unsafe_events={unsafe}\n' if unsafe is not None else '') + settings)
+            f'[plugin]\nid={key}\nversion={VERSIONS.get(key, "0.1.0")}\nlibrary={binary.name}\napi={abi}\nlive={live}\n'
+            f'dependencies={deps}\n' + (f'unsafe_events={unsafe}\n' if unsafe is not None else '') +
+            (extra or {}).get(key, '') + settings)
         hashes.append(f'{key}={hashlib.sha256(binary.read_bytes()).hexdigest()}\n')
     if approval:
         (plugins / 'native-approvals.ini').write_text('[native]\n' + ''.join(hashes))
@@ -76,6 +80,70 @@ run(RUNNER, ['required-fail'], profile({'sv.status': 'required', 'test.fixture':
     dependencies={'sv.status': 'test.fixture', 'test.fixture': 'sv.status'}), contains=['PASS'])
 run(RUNNER, ['optional-fail'], profile(both), mode='enable-fail', contains=['Registrations removed', 'PASS'])
 run(RUNNER, ['optional-fail'], profile(both), mode='conflict', contains=['PASS'])
+# Libraries (N35, N38): the API between plugins, the dependency rule, the version rule and the stop order.
+ROLE = 'role=library\n'
+pair = {'test.library': 'enabled', 'test.consumer': 'enabled'}
+output = run(RUNNER, ['library'], profile(pair, dependencies={'test.consumer': 'test.library@1.2'}, extra={'test.library': ROLE}),
+    contains=['[test.library] test.library enabled', '[test.consumer] test.consumer enabled', '[test.consumer] consumer sum 5',
+              '[test.consumer] library add', 'test.consumer disabled', 'PASS'],
+    absent=['fixture step failed', '[test.library] library add'])
+assert output.count('[test.consumer] consumer sum 5') == 2, 'The consumer did not use the API twice.'
+output = run(RUNNER, ['library-stop'], profile(pair, dependencies={'test.consumer': 'test.library'}, extra={'test.library': ROLE}),
+    contains=['PASS'])
+assert output.index('test.consumer disabled') < output.index('test.library disabled'), 'The library stopped first.'
+# The version rule: 1.2.0 satisfies 1.2, 1.2.0, 1.1.9 and 1, and it does not satisfy 1.3, 1.2.1 or 2.
+for need, accepted in (('1.2', True), ('1.2.0', True), ('1.1.9', True), ('1', True), ('1.3', False), ('1.2.1', False), ('2', False)):
+    run(RUNNER, ['library' if accepted else 'consumer-failed'],
+        profile(pair, dependencies={'test.consumer': 'test.library@' + need}, extra={'test.library': ROLE}),
+        contains=['PASS'] + ([] if accepted else ['A dependency has a lower version than the plugin needs.']))
+# Without a dependency the consumer cannot find the API.
+run(RUNNER, ['consumer-failed'], profile(pair, extra={'test.library': ROLE}), mode='nodependency',
+    contains=['find without dependency: 9', 'PASS'])
+# A library that gives an invalid reason keeps running.
+run(RUNNER, ['start-list'], profile({'test.library': 'enabled'}, extra={'test.library': ROLE}), mode='library-refuse',
+    contains=['PASS'], absent=['fixture step failed'])
+# A plugin that refuses to start gives its reason to the log and to the list.
+output = run(RUNNER, ['consumer-failed'], profile(pair, dependencies={'test.consumer': 'test.library'}, extra={'test.library': ROLE}),
+    mode='refuse', contains=['Plugin failed: test.consumer: Refused to start: needs a newer server', 'PASS'])
+assert 'test.consumer\t0.1.0\tfailed\t0\t' in output and '\tRefused to start: needs a newer server' in output
+# Conflicts: the plugin that comes first wins, from either side, and a runtime enable that conflicts is refused unsaved.
+CONFLICT = ROLE + 'conflicts=test.fixture\n'
+run(RUNNER, ['start-list'], profile({'test.fixture': 'enabled', 'test.library': 'enabled'}, extra={'test.library': CONFLICT}),
+    contains=['Plugin failed: test.library: Conflicts with active plugin test.fixture.', 'PASS'], absent=['test.library enabled'])
+run(RUNNER, ['start-list'], profile({'test.library': 'enabled', 'test.fixture': 'enabled'}, extra={'test.library': CONFLICT}),
+    contains=['Plugin failed: test.fixture: Conflicts with active plugin test.library.', 'PASS'], absent=['fixture enabled'])
+run(RUNNER, ['start-list'], profile({'test.library': 'enabled', 'test.fixture': 'enabled'},
+    extra={'test.library': ROLE, 'test.fixture': 'conflicts=test.library\n'}),
+    contains=['Plugin failed: test.fixture: Conflicts with active plugin test.library.', 'PASS'])
+folder = profile({'test.fixture': 'enabled', 'test.library': 'disabled'}, extra={'test.library': CONFLICT})
+run(RUNNER, ['conflict-enable'], folder, contains=['conflicts with the active plugin test.fixture', 'PASS'])
+state = (folder / 'user/plugins/state.ini').read_text()
+assert 'test.library=enabled' in state and 'test.fixture=disabled' in state, state
+folder = profile({'test.fixture': 'enabled', 'test.library': 'disabled'}, extra={'test.library': CONFLICT})
+run(SERVER, ['--plugin-enable', 'test.library'], folder, code=2, contains=['conflicts with the selected plugin test.fixture'])
+assert not (folder / 'user/plugins/state.ini').exists(), 'A refused enable saved its state.'
+run(SERVER, ['--plugins-list'], profile({'test.fixture': 'enabled', 'test.library': 'enabled'}, extra={'test.library': CONFLICT}),
+    contains=['test.library\t1.2.0\tfailed\t0\t', 'Conflicts with plugin test.fixture, which starts first.'])
+# Manifests that the host refuses. The fixture manifest has the key "dependencies=" first, so a case can replace it.
+MANIFEST_CASES = {
+    'conflict with itself': ('dependencies=', 'conflicts=test.fixture\ndependencies='),
+    'repeated conflict': ('dependencies=', 'conflicts=a.one,a.one\ndependencies='),
+    'nine conflicts': ('dependencies=', 'conflicts=a.1,a.2,a.3,a.4,a.5,a.6,a.7,a.8,a.9\ndependencies='),
+    'bad conflict id': ('dependencies=', 'conflicts=Bad\ndependencies='),
+    'conflict with a version': ('dependencies=', 'conflicts=a.one@1\ndependencies='),
+    'bad role': ('dependencies=', 'role=server\ndependencies='),
+    'empty version': ('dependencies=', 'dependencies=a.one@'),
+    'dependency and conflict': ('dependencies=', 'conflicts=a.one\ndependencies=a.one'),
+    'dependency with a version and a conflict': ('dependencies=', 'conflicts=a.one\ndependencies=a.one@1.0'),
+}
+for bad_version in ('1.x', '.1', '1.', '1..2', 'v1', '1.2-beta', '123456789012345678901234'):
+    MANIFEST_CASES['version ' + bad_version] = ('dependencies=', 'dependencies=a.one@' + bad_version)
+for name, (old, new) in MANIFEST_CASES.items():
+    print('manifest:', name)
+    folder = profile(fixture)
+    manifest = folder / 'plugins/test.fixture/plugin.ini'
+    manifest.write_text(manifest.read_text().replace(old, new, 1))
+    run(RUNNER, ['invalid-metadata'], folder, contains=['PASS'])
 run(RUNNER, ['event-fail'], profile(both), mode='event-fail', contains=['PASS'])
 run(RUNNER, ['required-event-fail'], profile({'test.fixture': 'required'}), mode='event-fail', contains=['PASS'])
 # Actor 7 is an administrator and actor 8 is not. Actor 0 is the local operator.

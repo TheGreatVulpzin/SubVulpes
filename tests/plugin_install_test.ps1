@@ -139,6 +139,27 @@ $badSettings = @(
     (Package 'setting-before-plugin' @((Entry 'plugin.ini' ([Text.Encoding]::ASCII.GetBytes("[setting.price]`ntype=flag`n[plugin]`nid=test.bad7`nversion=0.1.0`nlibrary=status.dll`napi=1`nlive=1`n"))), (Entry 'status.dll' $currentBytes))),
     (Package 'setting-count' @((Entry 'plugin.ini' (ManifestBody 'test.bad8' ((0..32 | ForEach-Object { "[setting.k$_]`ntype=flag`ndefault=1`nlabel=K`n" }) -join ''))), (Entry 'status.dll' $currentBytes)))
 )
+# Libraries and conflicts: the installer checks the shape of the new keys and copies the manifest as it is.
+$libraryOk = Package 'library-ok' @((Entry 'plugin.ini' (ManifestBody 'test.library' "role=library`nconflicts=other.one,other.two`n")), (Entry 'status.dll' $currentBytes))
+Install $server $libraryOk
+Assert-Test ([IO.File]::ReadAllText((Join-Path $server 'plugins/test.library/plugin.ini')).Contains('role=library')) 'The installer changed the library manifest.'
+function ManifestDependencies([string]$Id, [string]$Dependencies, [string]$Extra) {
+    return [Text.Encoding]::ASCII.GetBytes("[plugin]`nid=$Id`nversion=0.1.0`nlibrary=status.dll`napi=1`nlive=1`ndependencies=$Dependencies`n$Extra")
+}
+$nineIds = (1..9 | ForEach-Object { "a.$_" }) -join ','
+$badConflicts = @(
+    (Package 'role-value' @((Entry 'plugin.ini' (ManifestBody 'test.bad10' "role=server`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'role-repeat' @((Entry 'plugin.ini' (ManifestBody 'test.bad11' "role=library`nrole=library`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'conflict-self' @((Entry 'plugin.ini' (ManifestBody 'test.bad12' "conflicts=test.bad12`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'conflict-version' @((Entry 'plugin.ini' (ManifestBody 'test.bad13' "conflicts=other.one@1`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'conflict-repeat' @((Entry 'plugin.ini' (ManifestBody 'test.bad14' "conflicts=other.one,other.one`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'conflict-count' @((Entry 'plugin.ini' (ManifestBody 'test.bad15' "conflicts=$nineIds`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'conflict-device' @((Entry 'plugin.ini' (ManifestBody 'test.bad16' "conflicts=aux`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'conflict-dependency' @((Entry 'plugin.ini' (ManifestDependencies 'test.bad17' 'other.one' "conflicts=other.one`n")), (Entry 'status.dll' $currentBytes))),
+    (Package 'dependency-bad-version' @((Entry 'plugin.ini' (ManifestDependencies 'test.bad18' 'other.one@1.x' '')), (Entry 'status.dll' $currentBytes))),
+    (Package 'dependency-empty-version' @((Entry 'plugin.ini' (ManifestDependencies 'test.bad19' 'other.one@' '')), (Entry 'status.dll' $currentBytes)))
+)
+foreach ($zip in $badConflicts) { Install $server $zip $false }
 $stableProfile = Hash $profile
 $stableDll = Hash $installedDll
 foreach ($zip in $bad) { Install $server $zip $false }
@@ -167,6 +188,9 @@ $depDir = Join-Path $server 'plugins/test.dependency'
 [IO.File]::AppendAllText($profile, "`ntest.dependency=disabled`n")
 $withDependency = Package 'valid-dependency' @((Entry 'plugin.ini' (Manifest -Dependencies 'test.dependency')), (Entry 'status.dll' $currentBytes))
 Install $server $withDependency
+# The lowest version of a dependency: the installed one is 0.1.0.
+Install $server (Package 'dependency-version-ok' @((Entry 'plugin.ini' (Manifest -Dependencies 'test.dependency@0.1')), (Entry 'status.dll' $currentBytes)))
+Install $server (Package 'dependency-version-low' @((Entry 'plugin.ini' (Manifest -Dependencies 'test.dependency@0.2')), (Entry 'status.dll' $currentBytes))) $false
 [IO.File]::WriteAllBytes((Join-Path $depDir 'plugin.ini'), (Manifest -Id 'test.dependency' -Api '2'))
 Install $server $withDependency $false
 $indented = Join-Path $caseRoot 'indented-profile'

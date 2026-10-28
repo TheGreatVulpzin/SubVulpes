@@ -101,6 +101,31 @@ int main(int argc, char **argv)
         CHECK(sv_plugins_disable("test.fixture") == SV_DEPENDENCY);
         CHECK(sv_plugins_disable("sv.status") == SV_OK);
         CHECK(sv_plugins_disable("test.fixture") == SV_OK);
+    } else if (!strcmp(argv[1], "library")) {
+        /* The consumer finds the API of the library, and the library function logs as the consumer. */
+        CHECK(ok && sv_plugins_command(0, "consumer"));
+        CHECK(sv_plugins_disable("test.library") == SV_DEPENDENCY);
+        CHECK(sv_plugins_disable("test.consumer") == SV_OK);
+        CHECK(!sv_plugins_command(0, "consumer"));
+        CHECK(sv_plugins_disable("test.library") == SV_OK);
+    } else if (!strcmp(argv[1], "library-stop")) {
+        /* The server stops with both active. The consumer stops first. */
+        CHECK(ok && sv_plugins_command(0, "consumer"));
+    } else if (!strcmp(argv[1], "consumer-failed")) {
+        CHECK(ok && !sv_plugins_command(0, "consumer"));
+        sv_plugins_list();
+    } else if (!strcmp(argv[1], "conflict-enable")) {
+        /* A runtime enable that would conflict is refused and not saved. After the other plugin stops it works. */
+        CHECK(ok && sv_plugins_command(0, "fixture"));
+        CHECK(sv_plugins_enable("test.library") == SV_CONFLICT);
+        CHECK(sv_plugins_disable("test.fixture") == SV_OK);
+        CHECK(sv_plugins_enable("test.library") == SV_OK);
+        CHECK(sv_plugins_enable("test.fixture") == SV_CONFLICT);
+        sv_plugins_list();
+    } else if (!strcmp(argv[1], "start-list")) {
+        /* Start, then list the plugins. The first plugin of a conflict wins. */
+        CHECK(ok);
+        sv_plugins_list();
     } else if (!strcmp(argv[1], "event-fail")) {
         CHECK(ok);
         sv_plugins_tick();

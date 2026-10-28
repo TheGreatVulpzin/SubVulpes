@@ -43,6 +43,51 @@ int sv_plugin_id(const char *text)
     return 1;
 }
 
+int sv_plugin_version_min(const char *text)
+{
+    size_t i, length = text ? strlen(text) : 0;
+    if (!length || length >= SV_PLUGIN_VERSION_SIZE || !isdigit((unsigned char)text[0]) || text[length - 1] == '.')
+        return 0;
+    for (i = 0; i < length; ++i) {
+        if (text[i] == '.' ? text[i + 1] == '.' : !isdigit((unsigned char)text[i]))
+            return 0;
+    }
+    return 1;
+}
+
+/* The groups of digits at the start of a version, up to eight. Text after the groups, such as "-beta", does not count. */
+static unsigned version_groups(const char *text, unsigned long groups[8])
+{
+    unsigned count = 0;
+    memset(groups, 0, 8 * sizeof groups[0]);
+    while (count < 8 && isdigit((unsigned char)*text)) {
+        unsigned long number = 0;
+        while (isdigit((unsigned char)*text)) {
+            if (number < 100000000ul)
+                number = number * 10 + (unsigned long)(*text - '0');
+            ++text;
+        }
+        groups[count++] = number;
+        if (*text != '.' || !isdigit((unsigned char)text[1]))
+            break;
+        ++text;
+    }
+    return count;
+}
+
+int sv_plugin_version_at_least(const char *have, const char *want)
+{
+    unsigned long a[8], b[8];
+    unsigned i;
+    if (!version_groups(have, a))
+        return 0;
+    version_groups(want, b);
+    for (i = 0; i < 8; ++i)
+        if (a[i] != b[i])
+            return a[i] > b[i];
+    return 1;
+}
+
 static int absolute(const char *relative, char path[MAX_PATH])
 {
     DWORD n = GetFullPathNameA(relative, MAX_PATH, path, NULL);
@@ -59,12 +104,52 @@ static int value(const char *path, const char *key, char *out, DWORD size)
     return 1;
 }
 
+/* Reads a list of plugin IDs, separated by commas, from the key of the manifest. With "versions" an ID may carry a lowest
+ * version after an at sign, such as "sv.lib@1.2". The list has at most SV_PLUGIN_DEP_MAX items and no repeat, and it never
+ * names the plugin itself. */
+static int id_list(const char *path, const char *key, const char *self, char ids[][SV_PLUGIN_ID_SIZE],
+    char versions[][SV_PLUGIN_VERSION_SIZE], uint32_t *count)
+{
+    char text[512], *next, *part, *at;
+    DWORD n = GetPrivateProfileStringA("plugin", key, "", text, sizeof text, path);
+    uint32_t i;
+    *count = 0;
+    if (n >= sizeof text - 1)
+        return 0;
+    if (!n)
+        return 1;
+    part = text;
+    for (;;) {
+        next = strchr(part, ',');
+        if (next)
+            *next = 0;
+        at = strchr(part, '@');
+        if (at) {
+            *at++ = 0;
+            if (!versions || !sv_plugin_version_min(at))
+                return 0;
+        }
+        if (!sv_plugin_id(part) || !strcmp(part, self) || *count == SV_PLUGIN_DEP_MAX)
+            return 0;
+        for (i = 0; i < *count; ++i)
+            if (!strcmp(ids[i], part))
+                return 0;
+        strcpy(ids[*count], part);
+        if (versions)
+            strcpy(versions[*count], at ? at : "");
+        ++*count;
+        if (!next)
+            return 1;
+        part = next + 1;
+    }
+}
+
 static int metadata(const char *id, SvModule *module)
 {
     char folder[MAX_PATH], manifest[MAX_PATH], library[SV_PLUGIN_ID_SIZE];
-    char number[16], dependencies[512], *next, *part;
+    char number[16], role[16];
     DWORD n;
-    size_t i;
+    size_t i, j;
     if (!sv_plugin_id(id))
         return 0;
     memset(module, 0, sizeof *module);
@@ -96,26 +181,19 @@ static int metadata(const char *id, SvModule *module)
     if (!value(module->path, "library", library, sizeof library) || !sv_plugin_id(library) ||
         strlen(library) < 5 || strcmp(library + strlen(library) - 4, ".dll"))
         return 0;
-    n = GetPrivateProfileStringA("plugin", "dependencies", "", dependencies, sizeof dependencies, module->path);
-    if (n >= sizeof dependencies - 1)
+    if (!id_list(module->path, "dependencies", id, module->dependencies, module->dependency_min, &module->dependency_count) ||
+        !id_list(module->path, "conflicts", id, module->conflicts, NULL, &module->conflict_count))
         return 0;
-    if (n) {
-        part = dependencies;
-        for (;;) {
-            next = strchr(part, ',');
-            if (next)
-                *next = 0;
-            if (!sv_plugin_id(part) || !strcmp(part, id) || module->dependency_count == SV_PLUGIN_DEP_MAX)
+    /* A plugin that depends on another one cannot conflict with it. */
+    for (i = 0; i < module->dependency_count; ++i)
+        for (j = 0; j < module->conflict_count; ++j)
+            if (!strcmp(module->dependencies[i], module->conflicts[j]))
                 return 0;
-            for (i = 0; i < module->dependency_count; ++i)
-                if (!strcmp(module->dependencies[i], part))
-                    return 0;
-            strcpy(module->dependencies[module->dependency_count++], part);
-            if (!next)
-                break;
-            part = next + 1;
-        }
-    }
+    /* Optional: "library" marks a plugin that only offers an API to other plugins. See docs/plugin-libraries.md. */
+    n = GetPrivateProfileStringA("plugin", "role", "plugin", role, sizeof role, module->path);
+    if (n >= sizeof role - 1 || (strcmp(role, "plugin") && strcmp(role, "library")))
+        return 0;
+    module->library_role = !strcmp(role, "library");
     /* The settings: the sections [setting.KEY] of the manifest, and the saved values. module->path is still the manifest. */
     if (!sv_config_declare(&module->config, module->path))
         return 0;
