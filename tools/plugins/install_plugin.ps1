@@ -98,7 +98,7 @@ function Read-Manifest([byte[]]$Bytes) {
         if (-not $line -or $line.StartsWith(';') -or $line.StartsWith('#')) { continue }
         if ($line -ceq '[plugin]' -and -not $section) { $section = $true; continue }
         if ($section -and $line -cmatch '^\[setting\.([a-z][a-z0-9_]{0,31})\]$') {
-            if ($settingSections.ContainsKey($Matches[1]) -or $settingSections.Count -ge 32) { throw 'Invalid or duplicate setting section.' }
+            if ($settingSections.ContainsKey($Matches[1]) -or $settingSections.get_Count() -ge 32) { throw 'Invalid or duplicate setting section.' }
             $current = @{}
             $settingSections[$Matches[1]] = $current
             continue
@@ -180,7 +180,7 @@ function Read-Profile([string]$Text) {
         if ($entries.ContainsKey($id)) { throw 'The profile has duplicate modules.' }
         $entries[$id] = $state
     }
-    if ($entries.Count -gt 32) { throw 'The profile exceeds 32 modules.' }
+    if ($entries.get_Count() -gt 32) { throw 'The profile exceeds 32 modules.' }
     return ,$entries
 }
 function Write-Backup([string]$Path, [byte[]]$Manifest, [string]$Library, [byte[]]$Dll) {
@@ -267,7 +267,7 @@ try {
         if (-not (Test-Path -LiteralPath $dependencyDll -PathType Leaf)) { throw 'A dependency DLL is missing.' }
     }
     if (-not $profile.ContainsKey($manifest.Id)) {
-        if ($profile.Count -ge 32) { throw 'The profile exceeds 32 modules.' }
+        if ($profile.get_Count() -ge 32) { throw 'The profile exceeds 32 modules.' }
         $header = [regex]::Match($profileText, '(?im)^[ \t]*\[plugins\][ \t]*(?:\r?\n|$)')
         if ($header.Success) {
             $separator = if ($header.Value.EndsWith("`n")) { '' } else { "`r`n" }
