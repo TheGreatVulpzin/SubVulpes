@@ -10,7 +10,7 @@ Errors leave the game, the scenario counter and output buffers unchanged.
 
 | Method | Contract and errors |
 | --- | --- |
-| `slots(owner, team, out)` | Copy all 16 slots of team 0 to 4. Set the output size first. Invalid team, null output or short output returns `SV_INVALID`. |
+| `slots(owner, team, out)` | Copy all 16 slots of team 0 to 4. The host sets `item_size` to the size of one slot. Set the output size first. Invalid team, null output or short output returns `SV_INVALID`. |
 | `start(owner, team, input, out)` | Fill one free slot with an existing kind and an existing objective item. Invalid input returns `SV_INVALID`. A wrong item reference returns `SV_NOT_FOUND`. An expired item, unavailable core integration or scenario-id collision returns `SV_STATE`. A full set of eight client slots or an exhausted scenario counter returns `SV_LIMIT`. An item already used by a mission returns `SV_CONFLICT`. |
 | `cancel(owner, reference)` | Cancel every slot linked to that scenario through the existing game function. Invalid reference size, team or slot returns `SV_INVALID`. An inactive, stale or wrong reference returns `SV_NOT_FOUND`. A linked native stake or an unrepresentable linked slot returns `SV_STATE`. |
 

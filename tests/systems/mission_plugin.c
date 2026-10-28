@@ -130,6 +130,7 @@ int mission_fixture(const SvHost *host, SvOwner owner)
     STEP(!memcmp(&saved, &out, sizeof out));
     out.size = sizeof out;
     STEP(api->slots(owner, 4, &out) == SV_OK);
+    STEP(out.item_size == sizeof(SvMissionState));
     for (j = 0; j < 16; ++j) STEP(out.slots[j].active == 1);
     memset(&r, 0xa5, sizeof r);
     untouched = r;

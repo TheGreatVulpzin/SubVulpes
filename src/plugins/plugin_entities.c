@@ -50,8 +50,11 @@ int sv_entities_start(void)
 
 void sv_entities_clear(uint32_t kind)
 {
-    if (initialized && sv_entity_capacity(kind))
+    if (initialized && sv_entity_capacity(kind)) {
+        /* The values of the plugins for these things go before their handles do. */
+        sv_storage_clear(kind);
         sv_handle_pool_clear(&pools[kind]);
+    }
 }
 
 void sv_entities_stop(void)
@@ -73,8 +76,8 @@ void sv_entity_created(uint32_t kind, uint32_t index)
 void sv_entity_deleted(uint32_t kind, uint32_t index)
 {
     if (initialized && sv_entity_capacity(kind)) {
-        /* A player who leaves takes the session values of the plugin storage with it. */
-        if (kind == SV_ENTITY_PLAYER)
+        /* A player, a human, an item or a vehicle takes its values of the plugin storage with it. */
+        if (kind != SV_ENTITY_ACCOUNT)
             sv_storage_leave(sv_handle_pool_at(&pools[kind], index));
         sv_handle_pool_erase(&pools[kind], index);
     }

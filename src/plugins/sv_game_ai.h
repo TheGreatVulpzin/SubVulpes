@@ -18,8 +18,9 @@ typedef struct {
     int32_t timer;
 } SvAiThreat;
 
+/* The host sets item_size to the size of one SvAiThreat. A caller steps through the list with it. */
 typedef struct {
-    uint32_t size, count;
+    uint32_t size, count, item_size, reserved;
     SvAiThreat threats[SV_AI_THREATS_MAX];
 } SvAiThreats;
 

@@ -1,15 +1,17 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "plugin_host.h"
+#include "plugin_actions.h"
 #include "plugin_entities.h"
 #include "sv_game_shop.h"
 #include "plugin_game_internal.h"
 #include "items.h"
 #include "events.h"
 #include "sr_runtime.h"
+#include "plugin_lists.h"
 #include <string.h>
 
-/* main supplies this framework. The unmerged branch has no property registry. */
+/* The shared property registry owns the phone scalar rows. */
 #ifdef SV_API_GAME_PROPS
 #include "plugin_props.h"
 #endif
@@ -206,8 +208,9 @@ static SvResult SV_CALL phone_idle(SvOwner owner, SvEntity reference)
 }
 
 /* The phones that wait for a decision of the plugins. */
-enum { WAIT_DIGIT = 1, WAIT_CALL = 2, WAIT_GO = 4 };
-static uint8_t waiting[SR_MAX_ITEM];
+static SvEntity digit_waiting[SR_MAX_ITEM], call_phone[SR_MAX_ITEM];
+static int32_t call_number[SR_MAX_ITEM];
+static uint32_t digit_count;
 
 SvResult sv_shop_phone_retire(SvEntity reference)
 {
@@ -218,7 +221,12 @@ SvResult sv_shop_phone_retire(SvEntity reference)
         return SV_STATE;
     result = resolve_phone(reference, &item, &peer, &human);
     if (result == SV_OK) {
-        waiting[item] = 0;
+        if (digit_waiting[item]) {
+            digit_waiting[item] = 0;
+            --digit_count;
+        }
+        call_phone[item] = 0;
+        sv_action_cancel(call_event, item);
         idle_apply(item, peer);
     }
     return result;
@@ -258,15 +266,18 @@ static int row_valid(uint32_t kind, uint32_t index, const SvShopRow *row)
     return row->type == (int32_t)index && row->color == 0;
 }
 
+SV_LIST_ITEM_CHECK(row, SvShopRow, 12);
+
 static SvResult SV_CALL catalog(SvOwner owner, uint32_t building, SvShopCatalog *out)
 {
     SvShopCatalog value;
     int32_t count;
-    uint32_t i;
+    uint32_t i, stride;
     SvResult result = context(owner, 0);
     if (result != SV_OK)
         return result;
-    if (!out || out->size < sizeof *out)
+    stride = out ? sv_list_stride(out->size, (uint32_t)offsetof(SvShopCatalog, rows), SV_SHOP_ROWS, 12, sizeof(SvShopRow)) : 0;
+    if (!stride)
         return SV_INVALID;
     memset(&value, 0, sizeof value);
     result = catalog_location(building, &value.kind, &value.capacity);
@@ -275,7 +286,6 @@ static SvResult SV_CALL catalog(SvOwner owner, uint32_t building, SvShopCatalog 
     memcpy(&count, building_field(offsetof(City, shop_count), building), sizeof count);
     if (count < 0 || (uint32_t)count > value.capacity)
         return SV_STATE;
-    value.size = sizeof value;
     value.count = (uint32_t)count;
     for (i = 0; i < value.count; ++i) {
         memcpy(&value.rows[i], (const uint8_t *)building_field(offsetof(City, shop_rows), building) + i * sizeof(SvShopRow),
@@ -283,7 +293,12 @@ static SvResult SV_CALL catalog(SvOwner owner, uint32_t building, SvShopCatalog 
         if (!row_valid(value.kind, i, &value.rows[i]))
             return SV_STATE;
     }
-    *out = value;
+    out->size = (uint32_t)offsetof(SvShopCatalog, rows) + SV_SHOP_ROWS * stride;
+    out->kind = value.kind;
+    out->capacity = value.capacity;
+    out->count = value.count;
+    out->row_size = stride;
+    sv_list_put(out->rows, value.rows, value.count, SV_SHOP_ROWS, sizeof(SvShopRow), stride);
     return SV_OK;
 }
 
@@ -383,47 +398,71 @@ static int decisions_open(uint32_t kind)
     return decide_event && (features & SV_SHOP_SAFE_DECISIONS) && sv_plugins_wants(kind);
 }
 
+static SvResult deliver_call(int32_t item)
+{
+    int32_t resolved, peer;
+    SvEntity reference = call_phone[item], human;
+    SvResult result;
+    if (!reference || resolve_phone(reference, &resolved, &peer, &human) != SV_OK || resolved != item ||
+        sr_items[item].phone_number != call_number[item])
+        return SV_NOT_FOUND;
+    result = sv_shop_phone_decision(SV_PHONE_CALL_DECISION, reference, human);
+    if (result == SV_DENIED)
+        (void)sv_shop_phone_retire(reference);
+    return result;
+}
+
 void sv_shop_phone_digit_added(int32_t item)
 {
-    if ((uint32_t)item < SR_MAX_ITEM && decisions_open(digit_event))
-        waiting[item] |= WAIT_DIGIT;
+    if ((uint32_t)item < SR_MAX_ITEM && decisions_open(digit_event)) {
+        if (!digit_waiting[item])
+            ++digit_count;
+        digit_waiting[item] = sv_entity_at(SV_ENTITY_ITEM, item);
+        if (!digit_waiting[item])
+            --digit_count;
+        /* A changed number cannot reuse an earlier call result. */
+        sv_action_cancel(call_event, item);
+        call_phone[item] = 0;
+    }
 }
 
 int sv_shop_phone_call_wait(int32_t item)
 {
+    SvEntity reference;
+    int result;
     if ((uint32_t)item >= SR_MAX_ITEM)
         return 0;
-    if (!decisions_open(call_event) || (waiting[item] & WAIT_GO)) {
-        waiting[item] &= (uint8_t)~(WAIT_CALL | WAIT_GO);
+    if (!decisions_open(call_event)) {
+        sv_action_cancel(call_event, item);
+        call_phone[item] = 0;
         return 0;
     }
-    waiting[item] |= WAIT_CALL;
-    return 1;
+    reference = sv_entity_at(SV_ENTITY_ITEM, item);
+    if (call_phone[item] != reference || call_number[item] != sr_items[item].phone_number)
+        sv_action_cancel(call_event, item);
+    call_phone[item] = reference;
+    call_number[item] = sr_items[item].phone_number;
+    result = sv_action_gate(call_event, item, deliver_call);
+    if (result != SV_ACTION_HOLD)
+        call_phone[item] = 0;
+    return result != SV_ACTION_PROCEED;
 }
 
-/* Asks the plugins about each phone that waits. A plugin that answers SV_DENIED claims the number: the phone goes back to
- * idle. Any other answer, and any phone that changed in the meantime, lets the game go on. */
+/* Digit notices run before queued call decisions. A claimed digit cancels the call too. */
 void sv_shop_poll(void)
 {
     int32_t i, item, peer;
+    if (!digit_count)
+        return;
     for (i = 0; i < (int32_t)SR_MAX_ITEM; ++i) {
-        uint8_t bits = waiting[i];
-        SvEntity reference, human;
-        int claimed = 0;
-        if (!(bits & (WAIT_DIGIT | WAIT_CALL)))
+        SvEntity reference = digit_waiting[i], human;
+        if (!reference)
             continue;
-        waiting[i] = (uint8_t)(bits & WAIT_GO);
-        reference = sv_entity_at(SV_ENTITY_ITEM, i);
-        if (reference && resolve_phone(reference, &item, &peer, &human) == SV_OK) {
-            if (bits & WAIT_DIGIT)
-                claimed = sv_shop_phone_decision(SV_PHONE_DIGIT_DECISION, reference, human) == SV_DENIED;
-            if (!claimed && (bits & WAIT_CALL))
-                claimed = sv_shop_phone_decision(SV_PHONE_CALL_DECISION, reference, human) == SV_DENIED;
-        }
-        if (claimed)
+        digit_waiting[i] = 0;
+        --digit_count;
+        if (resolve_phone(reference, &item, &peer, &human) == SV_OK &&
+            sv_shop_phone_decision(SV_PHONE_DIGIT_DECISION, reference, human) == SV_DENIED)
             (void)sv_shop_phone_retire(reference);
-        else if (bits & WAIT_CALL)
-            waiting[i] |= WAIT_GO;
     }
 }
 

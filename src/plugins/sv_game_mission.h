@@ -26,8 +26,9 @@ typedef struct {
     SvEntity item;
 } SvMissionState;
 
+/* The host sets item_size to the size of one SvMissionState. A caller steps through the list with it. */
 typedef struct {
-    uint32_t size, team;
+    uint32_t size, team, item_size, reserved;
     SvMissionState slots[SV_MISSION_SLOTS];
 } SvMissionSlots;
 
@@ -45,7 +46,7 @@ typedef struct {
 } SvGameMission;
 #pragma pack(pop)
 
-/* Install only after the core owns completion checks, lifecycle and N16 event rows. */
+/* Install after the core owns completion checks and mission lifecycle. */
 void sv_mission_install(void);
 void sv_mission_before_tick(void);
 int sv_mission_before_complete(int32_t team, int32_t slot);

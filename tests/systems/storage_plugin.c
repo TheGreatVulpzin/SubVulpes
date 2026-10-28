@@ -135,7 +135,7 @@ static int invalid_inputs(SvOwner owner)
         STEP(missing(owner, &entry, SV_INVALID) == 0);
         STEP(storage->put(owner, &entry, &input) == SV_INVALID);
         STEP(storage->erase(owner, &entry) == SV_INVALID);
-        entry.scope = SV_STORAGE_SERVER + 1;
+        entry.scope = SV_STORAGE_ENTITY + 1;
     }
     entry = key(SV_STORAGE_SERVER, player, "missing");
     STEP(missing(owner, &entry, SV_INVALID) == 0);
@@ -232,6 +232,18 @@ static int persistent(SvOwner owner, int create)
     return 0;
 }
 
+static SvEntity tagged[3];
+static const uint32_t tag_kinds[3] = { SV_ENTITY_HUMAN, SV_ENTITY_ITEM, SV_ENTITY_OBJECT };
+
+static int first_entity(SvOwner owner, uint32_t kind, SvEntity *out)
+{
+    SvEntity list[SV_ENTITY_PAGE_MAX];
+    uint32_t count = 0, next = 0;
+    STEP(read_api->entities(owner, kind, 0, list, SV_ENTITY_PAGE_MAX, &count, &next) == SV_OK && count >= 1);
+    *out = list[0];
+    return 0;
+}
+
 static int command_checks(SvOwner owner, const char *arguments)
 {
     SvStorageKey entry = key(SV_STORAGE_SERVER, 0, "shared");
@@ -281,6 +293,60 @@ static int command_checks(SvOwner owner, const char *arguments)
         STEP(missing(owner, &entry, SV_NOT_FOUND) == 0);
         entry.subject = extra_player;
         STEP(missing(owner, &entry, SV_NOT_FOUND) == 0);
+    } else if (!strcmp(arguments, "entity")) {
+        for (i = 0; i < 3; ++i) {
+            STEP(first_entity(owner, tag_kinds[i], &tagged[i]) == 0);
+            entry = key(SV_STORAGE_ENTITY, tagged[i], "tag");
+            input = value((uint8_t)(61 + i), i + 1);
+            STEP(missing(owner, &entry, SV_NOT_FOUND) == 0);
+            STEP(storage->put(owner, &entry, &input) == SV_OK);
+        }
+        /* The same name on three things keeps three values. */
+        for (i = 0; i < 3; ++i) {
+            entry = key(SV_STORAGE_ENTITY, tagged[i], "tag");
+            STEP(present(owner, &entry, (uint8_t)(61 + i), i + 1) == 0);
+        }
+        /* A player, an account, no subject and a scope that does not exist never reach an entity row. */
+        input = value(9, 1);
+        entry = key(SV_STORAGE_ENTITY, player, "tag");
+        STEP(missing(owner, &entry, SV_NOT_FOUND) == 0);
+        STEP(storage->put(owner, &entry, &input) == SV_NOT_FOUND);
+        entry = key(SV_STORAGE_ENTITY, account, "tag");
+        STEP(storage->put(owner, &entry, &input) == SV_NOT_FOUND);
+        entry = key(SV_STORAGE_ENTITY, 0, "tag");
+        STEP(storage->put(owner, &entry, &input) == SV_NOT_FOUND);
+        entry = key(SV_STORAGE_ENTITY + 1, tagged[0], "tag");
+        STEP(storage->put(owner, &entry, &input) == SV_INVALID);
+    } else if (!strcmp(arguments, "entity_gone")) {
+        SvEntity fresh = 0;
+        input = value(9, 1);
+        /* The old references are stale: no read, no write and no erase reaches a row. */
+        for (i = 0; i < 3; ++i) {
+            entry = key(SV_STORAGE_ENTITY, tagged[i], "tag");
+            STEP(missing(owner, &entry, SV_NOT_FOUND) == 0);
+            STEP(storage->put(owner, &entry, &input) == SV_NOT_FOUND);
+            STEP(storage->erase(owner, &entry) == SV_NOT_FOUND);
+        }
+        /* A new thing in the same slot has no value of the old one. */
+        for (i = 0; i < 3; ++i) {
+            STEP(first_entity(owner, tag_kinds[i], &fresh) == 0);
+            STEP(fresh != tagged[i]);
+            entry = key(SV_STORAGE_ENTITY, fresh, "tag");
+            STEP(missing(owner, &entry, SV_NOT_FOUND) == 0);
+        }
+        /* The old rows freed their room: one persistent row set, one session row and 124 free entries. */
+        entry = key(SV_STORAGE_ENTITY, fresh, "gone");
+        input.length = 0;
+        for (i = 0; i < SV_STORAGE_ENTRY_MAX - 4; ++i) {
+            snprintf(entry.name, sizeof entry.name, "gone.%u", i);
+            STEP(storage->put(owner, &entry, &input) == SV_OK);
+        }
+        strcpy(entry.name, "gone.overflow");
+        STEP(storage->put(owner, &entry, &input) == SV_LIMIT);
+        for (i = 0; i < SV_STORAGE_ENTRY_MAX - 4; ++i) {
+            snprintf(entry.name, sizeof entry.name, "gone.%u", i);
+            STEP(storage->erase(owner, &entry) == SV_OK);
+        }
     } else if (!strcmp(arguments, "identity")) {
         entry = key(SV_STORAGE_ACCOUNT, extra_account, "shared");
         STEP(missing(owner, &entry, SV_NOT_FOUND) == 0);

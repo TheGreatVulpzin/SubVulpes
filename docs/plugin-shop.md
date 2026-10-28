@@ -15,7 +15,7 @@ No public method creates a purchase, charges money or changes an existing item t
 | --- | --- | --- |
 | `phone(owner, reference, out)` | Copies `SvPhoneState` after it checks the phone, its holder and its peer. | `SV_OK`, `SV_STATE`, `SV_INVALID`, `SV_NOT_FOUND` |
 | `phone_idle(owner, reference)` | Ends a valid outgoing ring, incoming ring or talk pair. It also clears an idle or dialing phone. | `SV_OK`, `SV_STATE`, `SV_INVALID`, `SV_NOT_FOUND` |
-| `catalog(owner, building, out)` | Copies `SvShopCatalog`, including kind, capacity, count and rows. It zeros unused output rows. | `SV_OK`, `SV_STATE`, `SV_INVALID`, `SV_NOT_FOUND` |
+| `catalog(owner, building, out)` | Copies `SvShopCatalog`, including kind, capacity, count, `row_size` and rows. It zeros unused output rows. | `SV_OK`, `SV_STATE`, `SV_INVALID`, `SV_NOT_FOUND` |
 | `catalog_replace(owner, building, input)` | Checks every row before it replaces the catalog. A count of zero clears it. | `SV_OK`, `SV_STATE`, `SV_INVALID`, `SV_NOT_FOUND` |
 
 `SV_STATE` covers a wrong callback owner, another thread, an unready game or a denied write context.

@@ -87,6 +87,7 @@ static int invalid_inputs(SvOwner owner)
     DWORD code;
     STEP(shop->phone(owner, phone, &initial_phone) == SV_OK);
     STEP(shop->catalog(owner, 0, &initial_catalog) == SV_OK);
+    STEP(initial_catalog.row_size == sizeof(SvShopRow));
     thread = CreateThread(NULL, 0, wrong_thread, &owner, 0, NULL);
     STEP(thread != NULL);
     STEP(WaitForSingleObject(thread, 5000) == WAIT_OBJECT_0);

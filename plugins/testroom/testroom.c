@@ -20,7 +20,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.2"
+#define VERSION "0.2.3"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -1499,11 +1499,11 @@ static SvResult t_plugins_calls(void)
     SvResult subscribe, refuse, find;
     if (!plugins_api)
         return SV_INCOMPATIBLE;
-    subscribe = plugins_api->subscribe64(self, EVENTS_BASE | SV_EVENT_EXT_BIT(0), on_event);
-    plugins_api->subscribe64(self, EVENTS_BASE, on_event);
+    subscribe = host->subscribe(self, EVENTS_BASE | SV_EVENT_EXT_BIT(0), on_event);
+    host->subscribe(self, EVENTS_BASE, on_event);
     refuse = plugins_api->refuse(self, "test");
     find = plugins_api->find(self, "sv.testroom", 1, &table);
-    sayf("subscribe64 gave %d (want %d), refuse %d (want %d), find %d (want %d).", (int)subscribe, (int)SV_OK, (int)refuse,
+    sayf("subscribe gave %d (want %d), refuse %d (want %d), find %d (want %d).", (int)subscribe, (int)SV_OK, (int)refuse,
         (int)SV_STATE, (int)find, (int)SV_DEPENDENCY);
     return subscribe == SV_OK && refuse == SV_STATE && find == SV_DEPENDENCY ? SV_OK : SV_FAILED;
 }
@@ -1632,6 +1632,49 @@ static SvResult t_frames(void)
     return SV_OK;
 }
 
+/* A tag on a car (SV_STORAGE_ENTITY): it reads back, and after the car goes the same reference finds nothing. */
+static int tag_step;
+
+static SvResult t_tag_go(void)
+{
+    SvStorageKey key = { sizeof key, SV_STORAGE_ENTITY, last_car, "tag" };
+    SvStorageValue value = { sizeof value };
+    SvResult r;
+    if (!storage)
+        return SV_INCOMPATIBLE;
+    if (tag_step == 0) {
+        r = change->object_remove(self, last_car);
+        if (r == SV_OK) {
+            tag_step = 1;
+            say("The car is gone. Wait 2 seconds, then type /test go to read the tag again.");
+        }
+        return r;
+    }
+    r = storage->get(self, &key, &value);
+    sayf("The tag of the removed car gave %d (want %d).", (int)r, (int)SV_NOT_FOUND);
+    return r == SV_NOT_FOUND ? SV_OK : SV_FAILED;
+}
+
+static SvResult t_tag(void)
+{
+    SvStorageKey key = { sizeof key, SV_STORAGE_ENTITY, 0, "tag" };
+    SvStorageValue value = { sizeof value, 5, "hello" };
+    SvStorageValue back = { sizeof back };
+    SvResult r = storage ? t_car() : SV_INCOMPATIBLE;
+    if (r != SV_OK)
+        return r;
+    tag_step = 0;
+    key.subject = last_car;
+    r = storage->put(self, &key, &value);
+    if (r == SV_OK)
+        r = storage->get(self, &key, &back);
+    if (r == SV_OK && (back.length != 5 || memcmp(back.bytes, "hello", 5)))
+        r = SV_FAILED;
+    if (r == SV_OK)
+        say("The car carries the tag 'hello'. Type /test go to remove the car, and again to read the tag.");
+    return r;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1688,11 +1731,12 @@ static const Test tests[] = {
     { "setting_bots", "Sets the bot count to 2 and shows the setting event.", "A chat line shows the change. The bots in the city fall to 2. The next test puts the value back.", t_setting_bots, NULL },
     { "engine_list", "Lists the engine parameters.", "Three parameters show a value.", t_engine_list, NULL },
     { "config_read", "Reads the three settings of this plugin from plugin.ini.", "The values are hello, 3 and 1.50. Change one with the plugins config command, and a chat line shows it.", t_config_read, NULL },
-    { "plugins_calls", "Calls subscribe64, refuse and find outside their normal use.", "All three answers match the wanted values.", t_plugins_calls, NULL },
+    { "plugins_calls", "Calls subscribe with an extended bit, refuse and find outside their normal use.", "All three answers match the wanted values.", t_plugins_calls, NULL },
     { "kick", "Removes the player whose name you type with /test kick NAME. It refuses you, bots and administrators.", "The player leaves the game and cannot join again until you type /clearkick in the chat.", t_kick_run, NULL },
     { "pitch_scale", "Plays a game sound in 25 steps, from half pitch to double pitch. Type /test go to start it.", "The sound rises like a musical scale, in even steps. Say no if it jumps or stays flat.", t_scale, t_scale_go },
     { "item_grid", "Makes 16 items in a grid and moves all of them every tick in a wave. Type /test go to change the speed.", "The items move smoothly as one picture. Say no if they stutter, fall or vanish.", t_grid, t_grid_go },
     { "headline_frames", "Moves you to a newspaper. Type /test go to rewrite its first line again and again.", "Hold the newspaper open. The pattern of # and . moves. Say no if it never changes.", t_frames, t_frames_go },
+    { "entity_tag", "Makes a car and stores a tag on it. Type /test go to remove the car, and again to read the tag.", "The tag reads back as hello. After the car goes, the same reference finds nothing (error 6).", t_tag, t_tag_go },
 };
 
 /* ------------------------------------------------------------ flow */

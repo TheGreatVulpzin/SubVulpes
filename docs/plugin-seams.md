@@ -15,7 +15,11 @@ Each area has its own page with the design: [AI](plugin-ai.md), [economy](plugin
 | AI | `sv_ai_perception_part` | `ai_assessthreats`. A result of 1 or 2 replaces the body part that the scan looks at. |
 | AI | `sv_ai_shot` | The two shot decisions of `playerai`. Without a policy the draw is the same as before. |
 | AI | `sv_ai_route_next` | `ai_car_nextwaypoint`. The game function is now `nextwaypoint_default`, and the new function calls it when no route is set. |
-| AI | `sv_ai_release_owner` | The release hook, when a plugin stops. |
+| AI | `sv_ai_release_owner` | The poll hook delivers digit decisions before the shared action gate delivers call decisions.
+The action gate keeps 256 entries and permits an action when the table is full.
+Start, stop and world reset clear the entries. See [the freeze checks](api-freeze-checks.md#f3-deferred-action-gate-checks).
+
+The release hook, when a plugin stops. |
 | Missions | `sv_mission_install` | `sv_systems_install` |
 | Missions | `sv_mission_before_complete` | The menu action that completes a mission (`logic.c`). A zero result leaves the mission as it is. |
 | Missions | `sv_mission_before_tick` | The start of each tick, the world mission pass (`logic_sim.c`), and each item retirement (`itemtimetolive`). |
@@ -30,7 +34,7 @@ Each area has its own page with the design: [AI](plugin-ai.md), [economy](plugin
 | Engine | `sv_engine_integer(SV_ENGINE_RAGDOLL_RESET)` | The identity reset of a collapsed body in `bonds.c`. |
 | Engine | `sv_engine_release_owner` | The release hook. |
 | Shop | `sv_shop_install` | `sv_systems_install`, with the shared decision and write-context functions, the bits 256 and 512, and both safe flags. It also registers the rows `item.phone_state` and `item.phone_number`. |
-| Shop | `sv_shop_phone_digit_added`, `sv_shop_phone_call_wait`, `sv_shop_poll` | The digit append in `logic.c`, the dial in `item_logic.c`, and the poll hook at the start of each tick. A phone that a plugin asked about waits one tick for the decision. |
+| Shop | `sv_shop_phone_digit_added`, `sv_shop_phone_call_wait`, `sv_shop_poll`, `sv_actions_poll` | The digit append in `logic.c`, the dial in `item_logic.c`, and the poll hook at the start of each tick. A phone that a plugin asked about waits one tick for the decision. |
 | Shop | The purchase fixes | `logic_gunstore_buy` and `logic_cardealer_buy` check their slots before they charge. |
 | Shop | `sv_shop_phone_retire` | `itemtimetolive`, for a phone (item type 23), before the game retires the reference. |
 

@@ -5,6 +5,7 @@
 #include "plugin_game_internal.h"
 #include "logic.h"
 #include "sr_os.h"
+#include "plugin_lists.h"
 #include <string.h>
 
 typedef struct {
@@ -78,16 +79,19 @@ static Control *claim(SvOwner owner, SvEntity bot, int32_t index)
     return c;
 }
 
+SV_LIST_ITEM_CHECK(threat, SvAiThreat, 32);
+
 static SvResult SV_CALL read_threats(SvOwner owner, SvEntity bot, SvAiThreats *out)
 {
     int32_t index;
-    uint32_t j;
+    uint32_t j, stride;
     SvAiThreats copy = {0};
     Player *p;
     SvResult result = resolve(owner, bot, &index);
     if (result != SV_OK)
         return result;
-    if (!out || out->size < sizeof *out)
+    stride = out ? sv_list_stride(out->size, (uint32_t)offsetof(SvAiThreats, threats), SV_AI_THREATS_MAX, 32, sizeof(SvAiThreat)) : 0;
+    if (!stride)
         return SV_INVALID;
     p = &sr_players[index];
     if (p->num_threats < 0 || p->num_threats > 16)
@@ -101,7 +105,11 @@ static SvResult SV_CALL read_threats(SvOwner owner, SvEntity bot, SvAiThreats *o
         copy.threats[j].level = t->level;
         copy.threats[j].timer = t->timer;
     }
-    *out = copy;
+    out->size = (uint32_t)offsetof(SvAiThreats, threats) + SV_AI_THREATS_MAX * stride;
+    out->count = copy.count;
+    out->item_size = stride;
+    out->reserved = 0;
+    sv_list_put(out->threats, copy.threats, copy.count, SV_AI_THREATS_MAX, sizeof(SvAiThreat), stride);
     return SV_OK;
 }
 

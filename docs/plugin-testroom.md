@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.2, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.3, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -89,13 +89,14 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 53 | `setting_bots` | `SvGameSettings.set` of `bot_count`, the setting event | A chat line, and 2 bots in the city |
 | 54 | `engine_list` | `SvGameEngine.describe`, `get` | Three parameters with values |
 | 55 | `config_read` | `SvConfig.get_int`, `get_float`, `get_text`, the config event | The values hello, 3 and 1.50, and a chat line after a change |
-| 56 | `plugins_calls` | `SvPlugins.subscribe64`, `refuse`, `find` | All three answers match the wanted codes |
+| 56 | `plugins_calls` | `SvHost.subscribe` with an extended bit, `refuse`, `find` | All three answers match the wanted codes |
 | 57 | `kick` | `kick` for the player that `/test kick NAME` names | The player leaves and cannot join again |
 | 58 | `pitch_scale` | `sound` with 25 pitches from 0.5 to 2.0, one every 15 ticks | A rising scale in even steps |
 | 59 | `item_grid` | `item_create` 16 times, then `teleport` of every item each tick | The items move as one smooth picture |
 | 60 | `headline_frames` | `headline` on line 0, one new text every 60, 20 or 6 ticks | A moving pattern in the open newspaper |
+| 61 | `entity_tag` | `SvGameStorage` with the scope `SV_STORAGE_ENTITY` on a car, then `object_remove` | The tag reads back, and after the car goes the same reference finds nothing |
 
-Tests 30 to 60 have not run against the original client yet.
+Tests 30 to 61 have not run against the original client yet.
 Tests 58 to 60 measure what a music and picture plugin needs: the sound pitch, many moving items and a newspaper that changes while it is open. They use the tick event. Each one stops by itself and reports the number of steps or the first error. Test 60 leaves line 0 of the news changed until the next round.
 Test 57 refuses the tester, bots and administrators. The kick puts the IP address of the player in the kick list of the server. The list lives in memory only. It blocks that address until the server restarts or an administrator types `/clearkick`. A friend on your own network shares your address, so you stay blocked too until you type `/clearkick`.
 Each test that changes money, stocks, a company price, a mission, a shop catalog or the bot count puts the old value back in the next test or in `/test stop`.

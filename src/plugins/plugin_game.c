@@ -3,6 +3,7 @@
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
 #include "plugin_made.h"
+#include "plugin_actions.h"
 #include "sv_game_ai.h"
 #include "sv_game_engine.h"
 #include "sv_game_mission.h"
@@ -41,6 +42,7 @@ static void poll(void)
 {
     sv_game_event_poll();
     sv_shop_poll();
+    sv_actions_poll();
 }
 
 /* The system areas that need a hook in the game. The server calls this once the world is ready. */
@@ -66,6 +68,7 @@ void sv_systems_install(void)
 int sv_game_start(void)
 {
     ready = 0;
+    sv_actions_clear();
     sv_made_clear();
     sv_plugins_set_release(release);
     sv_plugins_set_open(open_storage);
@@ -77,16 +80,16 @@ int sv_game_start(void)
 void sv_game_stop(void)
 {
     ready = 0;
+    sv_actions_clear();
     sv_entities_stop();
 }
 
 void sv_game_ready(void) { ready = 1; }
-void sv_game_reset(void) { ++reset_sequence; }
+void sv_game_reset(void) { ++reset_sequence; sv_actions_clear(); }
 int sv_game_is_ready(void) { return ready; }
 uint64_t sv_game_reset_sequence(void) { return reset_sequence; }
 
-/* Every capability has an id, one version and a table. The tables of the system areas are stubs
- * until their owners add methods. See docs/parallel-work.md. */
+/* Each capability has an id, an accepted version range and its current table. */
 typedef struct {
     uint32_t capability, version, minimum;
     const void *table;

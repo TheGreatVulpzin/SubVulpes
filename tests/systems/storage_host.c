@@ -238,6 +238,18 @@ void storage_prepare(void)
     CHECK(sr_players[account_player].account == -1);
 }
 
+/* The world clears the handles of all humans, items and vehicles at a reset. Then it gives a new handle to each live one. */
+static void rebind_things(void)
+{
+    static const uint32_t kinds[3] = { SV_ENTITY_HUMAN, SV_ENTITY_ITEM, SV_ENTITY_OBJECT };
+    uint32_t k, i;
+    for (k = 0; k < 3; ++k) {
+        sv_entities_clear(kinds[k]);
+        for (i = 0; i < sv_entity_capacity(kinds[k]); ++i)
+            sv_entity_created(kinds[k], i);
+    }
+}
+
 void storage_verify(void)
 {
     Blob valid = read_file(storage_file);
@@ -257,6 +269,21 @@ void storage_verify(void)
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, stale) == -1);
     sv_storage_leave(stale);
     command("left");
+    check_file(&valid);
+    /* Entity values: three things, then the death of each one, then a reset of the world. Nothing reaches the disk. */
+    command("entity");
+    check_file(&valid);
+    sv_entity_deleted(SV_ENTITY_HUMAN, (uint32_t)world_human);
+    sv_entity_created(SV_ENTITY_HUMAN, (uint32_t)world_human);
+    sv_entity_deleted(SV_ENTITY_ITEM, (uint32_t)world_item);
+    sv_entity_created(SV_ENTITY_ITEM, (uint32_t)world_item);
+    sv_entity_deleted(SV_ENTITY_OBJECT, (uint32_t)world_object);
+    sv_entity_created(SV_ENTITY_OBJECT, (uint32_t)world_object);
+    command("entity_gone");
+    check_file(&valid);
+    command("entity");
+    rebind_things();
+    command("entity_gone");
     check_file(&valid);
     sv_storage_release_owner(1);
     command("inactive");

@@ -123,6 +123,14 @@ if(BUILD_TESTING)
     target_compile_options(sv-plugin-test PRIVATE /W4 /WX /utf-8)
     set_target_properties(sv-plugin-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_executable(sv-abi-snapshot tests/abi_snapshot.c)
+    set_property(SOURCE tests/abi_snapshot.c APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
+    target_include_directories(sv-abi-snapshot PRIVATE src/plugins)
+    target_compile_options(sv-abi-snapshot PRIVATE /W4 /WX /utf-8 /arch:IA32)
+    set_target_properties(sv-abi-snapshot PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME abi-snapshot COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/test_abi_snapshot.py" "$<TARGET_FILE:sv-abi-snapshot>"
+        "${CMAKE_SOURCE_DIR}/tests/abi_snapshot.txt")
     add_test(NAME plugin-lifecycle COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_plugins.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c
@@ -133,7 +141,7 @@ if(BUILD_TESTING)
     target_link_options(sv-codec-test PRIVATE /LARGEADDRESSAWARE)
     set_target_properties(sv-codec-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME codec-bounds COMMAND sv-codec-test)
-    add_executable(sv-game-test tests/plugin_game_test.c tests/physics_bounds.c tests/platform_support.c
+    add_executable(sv-game-test tests/plugin_game_test.c tests/plugin_cost.c tests/physics_bounds.c tests/platform_support.c
         src/platform/x87_math.c src/platform/plat_imports.c ${SV_GAME_SOURCES})
     target_include_directories(sv-game-test PRIVATE src/include src/platform src/common src/net src/game src/plugins)
     target_compile_definitions(sv-game-test PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
@@ -150,6 +158,16 @@ if(BUILD_TESTING)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME game-api COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_game_api.py" "${CMAKE_BINARY_DIR}")
+    add_library(sv-cost-fixture MODULE tests/plugin_cost_fixture.c)
+    target_include_directories(sv-cost-fixture PRIVATE src/plugins)
+    target_compile_definitions(sv-cost-fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(sv-cost-fixture PRIVATE /W4 /WX /utf-8 /arch:IA32)
+    target_link_options(sv-cost-fixture PRIVATE /EXPORT:sv_plugin_entry)
+    set_target_properties(sv-cost-fixture PROPERTIES PREFIX "" OUTPUT_NAME cost-fixture
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME plugin-cost COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/test_plugin_cost.py" "${CMAKE_BINARY_DIR}")
     include(tests/systems/systems.cmake)
     add_executable(sv-handle-test tests/plugin_handles_test.c src/plugins/plugin_handles.c)
     target_include_directories(sv-handle-test PRIVATE src/plugins)

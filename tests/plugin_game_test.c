@@ -19,13 +19,16 @@
 #include "plugin_props.h"
 #include "plugin_game_events.h"
 #include "plugin_made.h"
+#include "plugin_actions.h"
 #include "plugin_damage.h"
+#include "plugin_lists.h"
 
 _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
 _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
 _Static_assert(sizeof(SvEvent) == 12, "Preserve event ABI v1");
 _Static_assert(sizeof(SvPlugin) == 92, "Preserve plugin ABI v1");
 void test_physics_bounds(void);
+int plugin_cost_run(void);
 
 #define CHECK(test) do { if (!(test)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #test); exit(1); \
@@ -1081,15 +1084,173 @@ static void line_mark(void)
     sr_data_intersect = before;
 }
 
-int main(void)
+static uint32_t action_deliveries;
+
+static SvResult action_deliver(int32_t key)
+{
+    SvGameEvent event = {0};
+    ++action_deliveries;
+    if (key == -1)
+        return SV_NOT_FOUND;
+    if (key == 10) {
+        CHECK(sv_action_gate(SV_EVENT_EXT(31), 11, action_deliver) == SV_ACTION_HOLD);
+        sv_actions_poll();
+    }
+    event.base = (SvEvent){sizeof event, SV_EVENT_EXT(31), 0};
+    event.value = key;
+    return sv_plugins_decide(&event.base);
+}
+
+static void actions_check(void)
+{
+    const uint32_t kind = SV_EVENT_EXT(31);
+    int32_t i;
+    CHECK(!sv_plugins_wants(SV_EVENT_EXT(30)) && sv_plugins_wants(kind));
+    CHECK(sv_action_gate(SV_EVENT_EXT(30), 6, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 6, NULL) == SV_ACTION_PROCEED);
+    sv_actions_poll();
+    CHECK(action_deliveries == 0);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_HOLD);
+    CHECK(action_deliveries == 0);
+    sv_actions_poll();
+    CHECK(action_deliveries == 1);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_HOLD);
+    sv_action_cancel(kind, 6);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    CHECK(action_deliveries == 2);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_DENIED);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    sv_action_cancel(kind, 7);
+    CHECK(sv_action_gate(kind, -1, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    CHECK(action_deliveries == 3);
+    CHECK(sv_action_gate(kind, -1, action_deliver) == SV_ACTION_PROCEED);
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 1000 + i, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 2000, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(action_deliveries == 3);
+    sv_actions_poll();
+    CHECK(action_deliveries == 259);
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 1000 + i, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 9, action_deliver) == SV_ACTION_HOLD);
+    sv_action_cancel(kind, 9);
+    sv_actions_poll();
+    CHECK(action_deliveries == 259);
+    CHECK(sv_action_gate(kind, 9, action_deliver) == SV_ACTION_HOLD);
+    sv_game_reset();
+    sv_actions_poll();
+    CHECK(action_deliveries == 259);
+    CHECK(sv_action_gate(kind, 10, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    CHECK(action_deliveries == 260);
+    sv_actions_poll();
+    CHECK(action_deliveries == 261);
+    CHECK(sv_action_gate(kind, 10, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 11, action_deliver) == SV_ACTION_PROCEED);
+    sv_actions_clear();
+    puts("ACTION_GATE_PASS");
+}
+
+static void actions_sweep_check(void)
+{
+    const uint32_t kind = SV_EVENT_EXT(31);
+    const int32_t saved_tick = sr_game.ticks;
+    uint32_t before;
+    int32_t i;
+    sr_game.ticks = 100;
+    CHECK(sv_action_gate(kind, 40, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 41, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    sr_game.ticks = 200;
+    sv_actions_poll();
+    sr_game.ticks = 799;
+    CHECK(sv_action_gate(kind, 50, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    sr_game.ticks = 800;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 40, action_deliver) == SV_ACTION_PROCEED);
+    before = action_deliveries;
+    sr_game.ticks = 801;
+    sv_actions_poll();
+    CHECK(action_deliveries == before);
+    CHECK(sv_action_gate(kind, 41, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 50, action_deliver) == SV_ACTION_PROCEED);
+    sv_actions_clear();
+
+    /* The unsigned age also works across the tick counter wrap. */
+    sr_game.ticks = -101;
+    CHECK(sv_action_gate(kind, 60, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 61, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    sr_game.ticks = 499;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 60, action_deliver) == SV_ACTION_PROCEED);
+    sr_game.ticks = 500;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 61, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_clear();
+
+    /* A full answered table becomes available without another call for its old keys. */
+    sr_game.ticks = 1000;
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 1000 + i, action_deliver) == SV_ACTION_HOLD);
+    sr_game.ticks = 1001;
+    sv_actions_poll();
+    sr_game.ticks = 1601;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 2000, action_deliver) == SV_ACTION_PROCEED);
+    sr_game.ticks = 1602;
+    sv_actions_poll();
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 2000 + i, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 5000, action_deliver) == SV_ACTION_PROCEED);
+    sv_actions_clear();
+    sr_game.ticks = saved_tick;
+    puts("ACTION_SWEEP_PASS");
+}
+
+/* Rule 6a: a caller with a smaller or a larger item than the host gets the items it can read, and never more bytes than it gave. */
+static void list_strides(void)
+{
+    unsigned char caller[16 + 8 * 40], host[16 + 8 * 40];
+    unsigned i;
+    /* The host item has 36 bytes. The first layout had 32. */
+    CHECK(sv_list_stride(16 + 8 * 32, 16, 8, 32, 36) == 32);
+    CHECK(sv_list_stride(16 + 8 * 36, 16, 8, 32, 36) == 36);
+    CHECK(sv_list_stride(16 + 8 * 40, 16, 8, 32, 36) == 36);
+    CHECK(sv_list_stride(16 + 8 * 32 - 1, 16, 8, 32, 36) == 0);
+    CHECK(sv_list_stride(15, 16, 8, 32, 36) == 0);
+    CHECK(sv_list_stride(100, 16, 0, 32, 36) == 0);
+    memset(caller, 0xee, sizeof caller);
+    for (i = 0; i < sizeof host; ++i)
+        host[i] = (unsigned char)(i + 1);
+    /* An old caller: two items of 36 bytes become two items of 32 bytes, and the room after them stays clear. */
+    sv_list_put(caller, host, 2, 8, 36, 32);
+    CHECK(!memcmp(caller, host, 32) && !memcmp(caller + 32, host + 36, 32));
+    CHECK(caller[64] == 0 && caller[8 * 32 - 1] == 0 && caller[8 * 32] == 0xee);
+    /* A count above the capacity never writes past the room. */
+    memset(caller, 0xee, sizeof caller);
+    sv_list_put(caller, host, 9, 8, 36, 32);
+    CHECK(caller[8 * 32 - 1] == host[7 * 36 + 31] && caller[8 * 32] == 0xee);
+}
+
+int main(int argc, char **argv)
 {
     SvEntity old;
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     x87_init();
+    if (argc == 2 && !strcmp(argv[1], "--cost"))
+        return plugin_cost_run();
     CHECK(sv_entity_capacity(0) == 0);
     CHECK(sv_entity_capacity(UINT32_MAX) == 0);
     CHECK(sv_entity_at(0, 0) == 0);
     CHECK(sv_plugins_start());
+    list_strides();
     player_lifetime();
     body_lifetime();
     item_lifetime();
@@ -1120,6 +1281,8 @@ int main(void)
     strcpy(sr_data_newspaper.lines[2], "third");
     CHECK(!sv_game_is_ready());
     sv_game_ready();
+    actions_check();
+    actions_sweep_check();
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
     sr_humans[0].inventory[0].count = 9;

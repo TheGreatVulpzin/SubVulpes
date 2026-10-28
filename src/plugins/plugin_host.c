@@ -192,10 +192,8 @@ static SvResult SV_CALL plugins_find(SvOwner owner, const char *name, uint32_t v
     return SV_NOT_FOUND;
 }
 
-static SvResult SV_CALL plugins_subscribe64(SvOwner owner, uint64_t events, SvEventFn callback);
-
 static const SvPlugins plugins_api = {
-    sizeof(SvPlugins), SV_PLUGINS_VERSION, plugins_refuse, plugins_provide, plugins_find, plugins_subscribe64
+    sizeof(SvPlugins), SV_PLUGINS_VERSION, plugins_refuse, plugins_provide, plugins_find
 };
 
 static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_t version, const void **api)
@@ -301,12 +299,7 @@ static SvResult subscribe_mask(SvOwner owner, uint64_t events, SvEventFn callbac
     return SV_OK;
 }
 
-static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn callback)
-{
-    return subscribe_mask(owner, events, callback);
-}
-
-static SvResult SV_CALL plugins_subscribe64(SvOwner owner, uint64_t events, SvEventFn callback)
+static SvResult SV_CALL host_subscribe(SvOwner owner, uint64_t events, SvEventFn callback)
 {
     return subscribe_mask(owner, events, callback);
 }
