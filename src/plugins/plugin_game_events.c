@@ -56,7 +56,19 @@ void sv_game_event_hit(int human, int owner)
     last_hit[human] = owner;
 }
 
-int sv_game_chat_denied(int player, const char *text)
+/* A replacement of the chat text: 1 to 63 printable ASCII bytes. */
+static int replacement_ok(const char *text)
+{
+    size_t i, length = strnlen(text, 64);
+    if (!length || length > 63)
+        return 0;
+    for (i = 0; i < length; ++i)
+        if ((unsigned char)text[i] < 0x20 || (unsigned char)text[i] > 0x7e)
+            return 0;
+    return 1;
+}
+
+int sv_game_chat_denied(int player, char *text)
 {
     SvChatEvent event;
     size_t length;
@@ -71,7 +83,17 @@ int sv_game_chat_denied(int player, const char *text)
     event.base.tick = now();
     length = strnlen(text, sizeof event.text - 1);
     memcpy(event.text, text, length);
-    return sv_plugins_decide(&event.base) == SV_DENIED;
+    memcpy(event.replacement, event.text, sizeof event.replacement);
+    if (sv_plugins_decide(&event.base) == SV_DENIED)
+        return 1;
+    /* The plugin may have written a new text. The last byte of the record is forced to zero before the check. */
+    event.replacement[sizeof event.replacement - 1] = 0;
+    if (strcmp(event.replacement, event.text) && replacement_ok(event.replacement)) {
+        length = strlen(event.replacement);
+        memcpy(text, event.replacement, length);
+        text[length] = 0;
+    }
+    return 0;
 }
 
 int sv_game_join_denied(int player)

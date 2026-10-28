@@ -13,7 +13,7 @@ void sv_game_event_leave(int player);
 /* A bullet of this player hit this human and did damage. */
 void sv_game_event_hit(int human, int owner);
 /* 1 when a plugin dropped a chat text. A player with no reference gives no event. */
-int sv_game_chat_denied(int player, const char *text);
+int sv_game_chat_denied(int player, char *text);
 /* 1 when a plugin dropped a new player. The player and its account are made. */
 int sv_game_join_denied(int player);
 

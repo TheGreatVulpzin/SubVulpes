@@ -1075,9 +1075,26 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
         SvPlayerState ps = { sizeof ps };
         if (event->size != sizeof *chat || chat->text[63] != 0)
             return SV_FAILED;
+        SvChatEvent *writable = (SvChatEvent *)chat;
         ++seen_chat;
         memcpy(last_chat, chat->text, sizeof last_chat);
         chat_player_ok = game->player(owner, chat->player, &ps) == SV_OK;
+        /* The replacement starts equal to the text. */
+        if (strcmp(chat->replacement, chat->text))
+            return SV_FAILED;
+        if (!strncmp(chat->text, "swapbad", 7))
+            strcpy(writable->replacement, "bad	text");
+        else if (!strncmp(chat->text, "swapempty", 9))
+            writable->replacement[0] = 0;
+        else if (!strncmp(chat->text, "swaplong", 8)) {
+            memset(writable->replacement, 'z', 63);
+            writable->replacement[63] = 0;
+        } else if (!strncmp(chat->text, "swapfull", 8)) {
+            memset(writable->replacement, 'y', 64);
+        } else if (!strncmp(chat->text, "swapslash", 9))
+            strcpy(writable->replacement, "/admin password");
+        else if (!strncmp(chat->text, "swap", 4))
+            strcpy(writable->replacement, "swapped");
         if (strstr(chat->text, "deny")) {
             ++seen_chat_denied;
             return SV_DENIED;
@@ -1167,7 +1184,7 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
         uint32_t count = 777, next = 888;
         CHECK(seen_spawn == 1025 && seen_lost == 76 && spawn_before_lost == 1 && seen_other == 0);
         /* The chat texts that reached the plugin: hello, deny me (dropped), 63 letters and 99 letters cut to 63. */
-        CHECK(seen_chat == 4 && seen_chat_denied == 1 && strlen(last_chat) == 63 && last_chat[0] == 'b' && chat_player_ok);
+        CHECK(seen_chat == 10 && seen_chat_denied == 1 && strlen(last_chat) == 63 && last_chat[0] == 'b' && chat_player_ok);
         CHECK(seen_join == 2);
         /* The decisions of the test program, in order: deny, change, two bad answers, an object change and deny, a vehicle
          * hit with a shooter, and the write guard. */

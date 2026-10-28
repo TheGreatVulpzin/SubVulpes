@@ -788,6 +788,23 @@ static void chat_commands(void)
     memset(text, 'a', 63);
     text[63] = 0;
     CHECK(server_playermessage(0, text) == 0);
+    /* A plugin may replace the text. A bad replacement, an empty one and a player with no reference change nothing. */
+    strcpy(text, "swap one");
+    CHECK(server_playermessage(0, text) == 0 && !strcmp(text, "swapped"));
+    strcpy(text, "swapbad one");
+    CHECK(server_playermessage(0, text) == 0 && !strcmp(text, "swapbad one"));
+    strcpy(text, "swapempty one");
+    CHECK(server_playermessage(0, text) == 0 && !strcmp(text, "swapempty one"));
+    strcpy(text, "swaplong one");
+    CHECK(server_playermessage(0, text) == 0 && strlen(text) == 63 && text[0] == 'z' && text[62] == 'z');
+    strcpy(text, "swapfull one");
+    CHECK(server_playermessage(0, text) == 0 && strlen(text) == 63 && text[0] == 'y' && text[62] == 'y');
+    strcpy(text, "swapslash one");
+    CHECK(server_playermessage(0, text) == 0 && !strcmp(text, "/admin password") && sr_players[0].is_admin == 0);
+    strcpy(text, "swap five");
+    CHECK(server_playermessage(5, text) == 0 && !strcmp(text, "swap five"));
+    strcpy(text, "/swap command");
+    CHECK(server_playermessage(0, text) == 1 && !strcmp(text, "/swap command"));
     sr_players[0].chat_block = 1;
     strcpy(text, "deny me");
     CHECK(server_playermessage(0, text) == 1);

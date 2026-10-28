@@ -19,7 +19,7 @@ A plugin gets only the kinds that it asked for with `subscribe`. The record star
 
 | Event | Kind | Fields | Answer |
 | --- | --- | --- | --- |
-| Chat text | 2 | Player, text | Allow or deny. A deny drops the text. The plugin commands already run at this point |
+| Chat text | 2 | Player, text | Allow, deny or replace. A deny drops the text. A plugin may write a replacement of 1 to 63 printable ASCII bytes. The plugin commands already run at this point |
 | Join | 2 | Player, account | Allow or deny. A deny ends the connection. The hook point is not found yet |
 | Leave | 1 | Player, account | None |
 | Spawn | 1 | Human, player | None. A plugin that wants another position moves the human at the same safe point, so the human shows the old place for one tick |
@@ -73,7 +73,7 @@ Use kind 3 only when the safe route cannot say the rule. Keep the answer short: 
 3. Done. The decision at a safe point: `sv_plugins_decide` in the host, and the events chat and join.
    - The callback answers `SV_OK` (pass) or `SV_DENIED` (drop). The plugins answer in load order and the first `SV_DENIED` ends the call. Any other answer is a failure, and the plugin is disabled.
    - `sv_plugins_decide` passes (`SV_OK`) with no callback when it is not on the server thread, when the host is stopping or failed, when the event is null, or when it comes from inside a plugin callback.
-   - Chat (`SV_EVENT_CHAT`, record `SvChatEvent`): `server_playermessage` asks after the word filter, for a text that does not start with a slash. A muted player never reaches it. A player with no reference gives no event, as for the commands. The text is cut to 63 bytes.
+   - Chat (`SV_EVENT_CHAT`, record `SvChatEvent`): `server_playermessage` asks after the word filter, for a text that does not start with a slash. The record has a second text, `replacement`, that starts equal to the text. A plugin writes a new text there and answers `SV_OK`. The host uses it when it has 1 to 63 printable ASCII bytes. The host forces the last byte of the record to zero before it checks. Any other content is ignored. A replacement that starts with a slash is chat and not a command, because the command test comes first. A plugin sees the replacement of the plugin before it in `replacement` and the original in `text`. A muted player never reaches it. A player with no reference gives no event, as for the commands. The text is cut to 63 bytes.
    - Join (`SV_EVENT_JOIN`, record `SvGameEvent` with the player and the account): the join code in `server.c` asks after the account ban check. `SV_DENIED` releases the player at once, as a ban does, and the release posts a leave event. The test calls `sv_game_join_denied`, which is the function that the join code calls. The call site in `server.c` has no test, because the join function needs a socket.
    - The bits `SV_EVENT_PHONE_DIGIT` and `SV_EVENT_PHONE_CALL` are reserved for the phone area. Nothing posts them yet.
    - Removing the text bound, the no-reference guard, the thread guard and the null guard made `game-api` fail each time (`build/logs/mutation17.log`). The guard against a call from inside a plugin callback has no proof, because a plugin has no way to start a chat text.

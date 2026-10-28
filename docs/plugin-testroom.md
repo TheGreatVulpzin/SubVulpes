@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.1.5, built on 2026-10-27. It is a tool for developers. The server package does not carry it.
+Status: version 0.1.6, built on 2026-10-27. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -59,7 +59,8 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 24 | `tracer` | `bullet`, `bullet_hit` for each `go` | A tracer and a spark where you aim, with no damage |
 | 25 | `strong_magnum` | `item_type.bullet_speed`, `bullet_type.mass` | The Magnum kills a bot in a few shots |
 | 26 | `bomb` | `within`, `human.health`, `human.bone_velocity`, `sound`, `bullet_hit` for each `go` | The bot flies up and loses health |
-| 27 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
+| 27 | `chat_prefix` | The chat decision with `replacement` | Your chat text appears with the prefix `[TEST]` while it is on |
+| 28 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
 
 ## First play test
 

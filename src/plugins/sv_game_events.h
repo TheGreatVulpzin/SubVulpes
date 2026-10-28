@@ -28,11 +28,18 @@ typedef struct {
 
 /* A chat text: the player that typed it and the text, at most 63 bytes. It is a decision at a safe point. The plugin
  * answers SV_OK to let the text go to the chat, or SV_DENIED to drop it. A text that starts with "/" is a command, and the
- * command system handles it, so it gives no chat event. */
+ * command system handles it, so it gives no chat event.
+ *
+ * To change the text, the plugin writes the new text in `replacement` and answers SV_OK. `replacement` starts equal to
+ * `text`, and it is the only field that the plugin may write. The host passes the record by const pointer, but the memory
+ * is writable. A replacement is used when it has 1 to 63 printable ASCII bytes (0x20 to 0x7e) and a zero after them. Any
+ * other content is ignored and the text stays. The next plugin sees the new text in `replacement` and the original in
+ * `text`. A replacement that starts with "/" is chat, and not a command. */
 typedef struct {
     SvEvent base;
     SvEntity player;
     char text[64];
+    char replacement[64];
 } SvChatEvent;
 
 /* A damage that is about to happen, inside the simulation. This is the dangerous kind (kind 3 in docs/plugin-events.md).

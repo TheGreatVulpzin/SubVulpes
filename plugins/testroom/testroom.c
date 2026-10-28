@@ -9,8 +9,9 @@
 #include "sv_game_read.h"
 #include "sv_game_write.h"
 #include "sv_game_props.h"
+#include "sv_game_events.h"
 
-#define VERSION "0.1.5"
+#define VERSION "0.1.6"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 32
 
@@ -44,6 +45,7 @@ static uint32_t sound_next;
 static SvEntity last_magazine, last_car, last_npc, last_npc_human, last_gun;
 static float saved_speed, saved_bullet_mass;
 static unsigned name_step;
+static int chat_prefix_on;
 
 /* ------------------------------------------------------------ text */
 
@@ -167,6 +169,7 @@ static void cleanup(void)
         change->item_remove(self, made_items[i]);
     }
     forget();
+    chat_prefix_on = 0;
     if (touched & T_TYPES) {
         SvValue v;
         v.f = saved_speed;
@@ -700,6 +703,35 @@ static SvResult t_bomb(void)
     return r;
 }
 
+/* The chat decision: while this is on, the text that the tester types gets a prefix. */
+static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event)
+{
+    (void)owner;
+    if (event->kind == SV_EVENT_CHAT && event->size == sizeof(SvChatEvent) && chat_prefix_on) {
+        SvChatEvent *chat = (SvChatEvent *)event;
+        if (chat->player == tester) {
+            char text[64];
+            snprintf(text, sizeof text, "[TEST] %.55s", chat->text);
+            memcpy(chat->replacement, text, sizeof chat->replacement);
+        }
+    }
+    return SV_OK;
+}
+
+static SvResult t_chat_prefix_go(void)
+{
+    chat_prefix_on = !chat_prefix_on;
+    sayf("The chat prefix is now %s. Type a text in the chat, then /test go to switch it.", chat_prefix_on ? "on" : "off");
+    return SV_OK;
+}
+
+static SvResult t_chat_prefix(void)
+{
+    chat_prefix_on = 0;
+    say("Type /test go to switch on a prefix for your chat texts.");
+    return SV_OK;
+}
+
 static SvResult t_dealt(void)
 {
     SvResult r = t_npc();
@@ -746,6 +778,7 @@ static const Test tests[] = {
     { "tracer", "Makes a loaded Magnum. Type /test go to fire a picture of a bullet along your aim.", "A tracer flies where you look, with a spark where it lands. Nothing takes damage.", t_tracer, t_tracer_go },
     { "strong_magnum", "Makes a bot and a Magnum, and makes the Magnum bullets fast and heavy.", "A few shots kill the bot. The next test puts the Magnum back.", t_strong, NULL },
     { "bomb", "Makes a bot. Type /test go to blow up everything within 12 units of it.", "The bot, and you if you stand near, lose 30 health and fly up. A sound and a spark play.", t_bomb, t_bomb_go },
+    { "chat_prefix", "Switches on a prefix for your chat texts with /test go. A plugin rewrites each text before it goes out.", "Your next chat text appears as '[TEST] ' and then your text. After a second go it is plain again.", t_chat_prefix, t_chat_prefix_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
 };
 
@@ -934,6 +967,9 @@ static SvResult SV_CALL enable(const SvHost *h, SvOwner owner)
         r = h->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, (const void **)&change);
     if (r == SV_OK)
         r = h->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, (const void **)&props);
+    if (r != SV_OK)
+        return r;
+    r = h->subscribe(owner, SV_EVENT_CHAT, on_event);
     if (r != SV_OK)
         return r;
     return h->command(owner, "test", SV_COMMAND_ADMIN, test_command);

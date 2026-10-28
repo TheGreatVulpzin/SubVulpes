@@ -141,7 +141,7 @@ The design rules:
 | N31 | Property rows for items and objects: `item.ammo`, `item.time_to_live`, `object.time_to_live`. Each has a range. The health of an object is N29. Done. |
 | N32 | A property row for the ban time of an account (`Account.ban_time`). Keeping a ban on disk after a restart needs N18. Done: the property `account.ban_time`. The disk part waits for N18. |
 | N33 | More notice events: round start and end, a human enters or leaves a vehicle, an item is picked up, dropped or used, a shot is fired, an object is destroyed, an account is saved. Each one is a row in the event mechanism (N16), with its own bit. |
-| N34 | Chat text replacement. Today a chat decision only allows or denies the text. Let it give a new text (at most 63 bytes, printable ASCII) for rank prefixes and filters. |
+| N34 | Chat text replacement. Today a chat decision only allows or denies the text. Let it give a new text (at most 63 bytes, printable ASCII) for rank prefixes and filters. Done: the field `replacement` of the chat event. |
 | N35 | A plugin offers its own API to other plugins, with a version, and a plugin declares the dependency. Serves the C4 module that finds its sales through the black market. |
 | N36 | The `conflicts=` key in `plugin.ini`, and a clean result "refused to start" with a reason text for the log and the launcher. |
 | N37 | Cleanup of what a plugin owns when it stops: the phones, kits and bots that it made. The host keeps a list for each plugin and removes the entries at the stop. Done for the type rows only: the host puts back the first value of each slot that the plugin changed. The things that a plugin makes (bots, items, vehicles) are not removed yet. |
