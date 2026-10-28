@@ -203,6 +203,7 @@ int ai_fixture(const SvHost *host, SvOwner owner)
     STEP(api->threats(owner, malformed, &out) == SV_FAILED);
     STEP(!memcmp(&out, &saved, sizeof out));
     STEP(api->threats(owner, bot, &out) == SV_OK);
+    STEP(out.item_size == sizeof(SvAiThreat));
     STEP(out.count == 1 && out.threats[0].human == human && out.threats[0].level == 9);
     STEP(api->waypoints(owner, bot, points, 65) == SV_INVALID);
     STEP(api->waypoints(owner, bot, NULL, 1) == SV_INVALID);

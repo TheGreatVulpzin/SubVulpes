@@ -94,6 +94,7 @@ static SvResult SV_CALL read_threats(SvOwner owner, SvEntity bot, SvAiThreats *o
         return SV_FAILED;
     copy.size = sizeof copy;
     copy.count = (uint32_t)p->num_threats;
+    copy.item_size = sizeof(SvAiThreat);
     for (j = 0; j < copy.count; ++j) {
         Threat *t = &p->threats[j];
         copy.threats[j].human = sv_entity_at(SV_ENTITY_HUMAN, t->human);

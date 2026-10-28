@@ -37,6 +37,7 @@ static SvResult SV_CALL read_slots(SvOwner owner, uint32_t team, SvMissionSlots 
     if (team >= SV_MISSION_TEAMS || !out || out->size < sizeof *out)
         return SV_INVALID;
     copy.team = team;
+    copy.item_size = sizeof(SvMissionState);
     for (j = 0; j < SV_MISSION_SLOTS; ++j) {
         Mission *m = &team_missions((int)team)[j];
         SvMissionState *s = &copy.slots[j];

@@ -283,6 +283,7 @@ static SvResult SV_CALL catalog(SvOwner owner, uint32_t building, SvShopCatalog 
     if (count < 0 || (uint32_t)count > value.capacity)
         return SV_STATE;
     value.size = sizeof value;
+    value.row_size = sizeof(SvShopRow);
     value.count = (uint32_t)count;
     for (i = 0; i < value.count; ++i) {
         memcpy(&value.rows[i], (const uint8_t *)building_field(offsetof(City, shop_rows), building) + i * sizeof(SvShopRow),
