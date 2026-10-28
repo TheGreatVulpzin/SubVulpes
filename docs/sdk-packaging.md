@@ -46,7 +46,28 @@ These pieces read the list:
 
 The test room is not in the list. It is the example of a plugin built with the function, and the server package does not carry it.
 
+## The SDK package
+
+The target `sdk-package` runs `tools/sdk/make_sdk.ps1`. It makes `SubVulpes-sdk-VERSION.zip` in `build/server/packages`. The default version is `v0.0.0-dev`. Set `SV_SDK_VERSION` for another one.
+
+| Folder | Content |
+| --- | --- |
+| `include/` | The 15 public headers `sv_*.h`. No other header. |
+| `template/` | A small plugin: `hello.c`, `plugin.ini`, `build.bat` and `CMakeLists.txt`. |
+| `tools/` | `pack.ps1`, `validate_plugin.ps1`, `install_plugin.ps1` and `sv_plugin.cmake`. |
+| `docs/` | The pages of the API, starting with the SDK page, the manifest page and the ABI rules. |
+| `examples/status/` | The source of the status plugin. |
+
+The package has a fixed order and a fixed time stamp, so the same sources give the same hash.
+The script stops when the count of public headers is not 15. A new public header must be a decision.
+The SDK does not carry the server program. The scripts ask for `-ServerExe`, because the server holds the manifest rules and the author knows which server runs the plugin.
+
 ## Tests
 
 `tests/test_manifest.py` (group `manifest-rules`) runs the pack script on the status plugin. It checks the name, the entries, the same bytes in two runs, the validate script and the installer. It checks that the script refuses a folder with an extra file, a bad manifest and a missing library.
 Removal proof on 2026-10-28: without the check for an extra file, the test fails. The restored script passes.
+
+`tests/sdk_package_test.ps1` (group `sdk-package`) builds the SDK, unpacks it in a clean folder and uses only what it holds.
+It compiles every public header alone and all together, builds the template with `build.bat` and with CMake, packs the result, checks it with the validate script and installs it on a test server.
+It checks that the package is the same in two runs and that no internal header is in it.
+Removal proof on 2026-10-28: with an internal header added to `include/`, the test fails. The restored script passes.

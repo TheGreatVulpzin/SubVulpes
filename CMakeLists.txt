@@ -64,6 +64,13 @@ add_custom_target(sv-official-approvals ALL
     VERBATIM)
 add_dependencies(sv-official-approvals ${SV_OFFICIAL_TARGETS})
 
+# The SDK package: the public headers, a template plugin, the tools and the pages of the API.
+set(SV_SDK_VERSION "v0.0.0-dev" CACHE STRING "The version of the SDK package")
+add_custom_target(sdk-package
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/tools/sdk/make_sdk.ps1"
+        -Version "${SV_SDK_VERSION}" -OutputDir "${CMAKE_BINARY_DIR}/packages"
+    VERBATIM)
+
 # The test room is a tool for developers. The server package does not carry it. It is the example of a plugin built with the SDK.
 sv_add_plugin(sv-testroom ID sv.testroom MANIFEST "${CMAKE_SOURCE_DIR}/plugins/testroom/plugin.ini"
     SOURCES plugins/testroom/testroom.c)
@@ -189,6 +196,8 @@ if(BUILD_TESTING)
     add_test(NAME launcher-update-paths COMMAND "${SV_LAUNCHER_TEST}")
     add_test(NAME plugin-package-install COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_SOURCE_DIR}/tests/plugin_install_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
+    add_test(NAME sdk-package COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_SOURCE_DIR}/tests/sdk_package_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
     add_test(NAME package-contents COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_SOURCE_DIR}/tests/package_test.ps1")
 endif()

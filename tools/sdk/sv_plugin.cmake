@@ -5,7 +5,16 @@
 # The version and the library name come from the manifest, so no value sits in two places.
 # OFFICIAL marks a plugin of the server package. It must also appear in plugins/official.ini.
 set(SV_SDK_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set(SV_PLUGIN_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../src/plugins" CACHE PATH "The folder of the public sv_*.h headers")
+# In the SDK package the headers are in ../include. In the source tree they are in src/plugins.
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../include/sv_plugin.h")
+    set(SV_PLUGIN_INCLUDE_DEFAULT "${CMAKE_CURRENT_LIST_DIR}/../include")
+else()
+    set(SV_PLUGIN_INCLUDE_DEFAULT "${CMAKE_CURRENT_LIST_DIR}/../../src/plugins")
+endif()
+set(SV_PLUGIN_INCLUDE_DIR "${SV_PLUGIN_INCLUDE_DEFAULT}" CACHE PATH "The folder of the public sv_*.h headers")
+# The package target needs the server program, which holds the manifest rules. The server build has the target
+# subvulpes-server. An author passes -DSV_SERVER_EXE=PATH.
+set(SV_SERVER_EXE "" CACHE FILEPATH "The path of subvulpes_server.exe, for the -package target")
 
 function(sv_add_plugin target)
     cmake_parse_arguments(PLUGIN "OFFICIAL" "ID;MANIFEST" "SOURCES;DEFINITIONS" ${ARGN})
@@ -40,10 +49,17 @@ function(sv_add_plugin target)
     file(MAKE_DIRECTORY "${plugin_dir}")
     configure_file("${PLUGIN_MANIFEST}" "${plugin_dir}/plugin.ini" COPYONLY)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PLUGIN_MANIFEST}")
+    if(TARGET subvulpes-server)
+        set(server_exe "$<TARGET_FILE:subvulpes-server>")
+        set(server_depends subvulpes-server)
+    else()
+        set(server_exe "${SV_SERVER_EXE}")
+        set(server_depends "")
+    endif()
     add_custom_target(${target}-package
         COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${SV_SDK_DIR}/pack.ps1"
-            -Folder "${plugin_dir}" -OutputDir "${CMAKE_BINARY_DIR}/packages" -ServerExe "$<TARGET_FILE:subvulpes-server>"
-        DEPENDS ${target} subvulpes-server VERBATIM)
+            -Folder "${plugin_dir}" -OutputDir "${CMAKE_BINARY_DIR}/packages" -ServerExe "${server_exe}"
+        DEPENDS ${target} ${server_depends} VERBATIM)
     if(PLUGIN_OFFICIAL)
         set_property(GLOBAL APPEND PROPERTY SV_OFFICIAL_PLUGIN_IDS "${PLUGIN_ID}")
         set_property(GLOBAL APPEND PROPERTY SV_OFFICIAL_PLUGIN_TARGETS "${target}")

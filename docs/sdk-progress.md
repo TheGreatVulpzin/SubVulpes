@@ -22,6 +22,8 @@ WP1 is complete (2026-10-28). The server reads `runtime`, `capabilities`, `name`
 One change from the plan: the server command checks a folder only. A ZIP needs a reader in C, so the PowerShell script unpacks a package and calls the server.
 
 WP2 is complete (2026-10-28). `sv_add_plugin` builds a plugin, `tools/sdk/pack.ps1` makes `ID-VERSION-RUNTIME.svplugin`, and `plugins/official.ini` drives the approval file and the server package. See [the packaging page](sdk-packaging.md). One removal proof holds.
-WP3 and WP4 remain open. No SDK package ships yet.
+
+WP3 is complete (2026-10-28). `make_sdk.ps1` makes the SDK package, and the test builds a plugin from the unpacked package only. See [the packaging page](sdk-packaging.md). One removal proof holds.
+WP4 remains open. The SDK has no test runner yet. No SDK package is published.
 
 Build state after the checks: idle. The marker file is `build/state.txt`.
