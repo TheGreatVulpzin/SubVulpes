@@ -89,7 +89,7 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 53 | `setting_bots` | `SvGameSettings.set` of `bot_count`, the setting event | A chat line, and 2 bots in the city |
 | 54 | `engine_list` | `SvGameEngine.describe`, `get` | Three parameters with values |
 | 55 | `config_read` | `SvConfig.get_int`, `get_float`, `get_text`, the config event | The values hello, 3 and 1.50, and a chat line after a change |
-| 56 | `plugins_calls` | `SvPlugins.subscribe64`, `refuse`, `find` | All three answers match the wanted codes |
+| 56 | `plugins_calls` | `SvHost.subscribe` with an extended bit, `refuse`, `find` | All three answers match the wanted codes |
 | 57 | `kick` | `kick` for the player that `/test kick NAME` names | The player leaves and cannot join again |
 | 58 | `pitch_scale` | `sound` with 25 pitches from 0.5 to 2.0, one every 15 ticks | A rising scale in even steps |
 | 59 | `item_grid` | `item_create` 16 times, then `teleport` of every item each tick | The items move as one smooth picture |

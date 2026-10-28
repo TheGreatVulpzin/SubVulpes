@@ -6,7 +6,7 @@ Read [the ABI rules](plugin-abi.md) first. Then read [the SDK plan](sdk-plan.md)
 ## Done by the first editor
 
 - A request for a table version accepts a range (`SV_VERSION_ACCEPTED`). Today the range is 1 to 1 for every table.
-- A 64-bit event mask: `SvPlugins.subscribe64`, the macros `SV_EVENT_EXT(i)` and `SV_EVENT_EXT_BIT(i)`. Test: the mode `ext` in `tests/plugin_fixture.c`.
+- A 64-bit event mask in `SvHost.subscribe`, the macros `SV_EVENT_EXT(i)` and `SV_EVENT_EXT_BIT(i)`. Test: the mode `ext` in `tests/plugin_fixture.c`.
 - The ABI rules in [plugin-abi.md](plugin-abi.md).
 - The file ownership table in the SDK plan. With the first editor away, the second editor may change any file. Keep each change small and tested.
 

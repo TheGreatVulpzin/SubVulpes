@@ -223,15 +223,9 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
         return SV_FAILED;
     /* The 64-bit mask: the numbered event 3 arrives, the others do not, and a bad low bit changes nothing. */
     if (!strcmp(mode, "ext")) {
-        const void *table = NULL;
-        const SvPlugins *plugins;
-        if (api->get_api(owner, SV_API_PLUGINS, SV_PLUGINS_VERSION, &table) != SV_OK)
-            return SV_FAILED;
-        plugins = (const SvPlugins *)table;
-        if (plugins->size < sizeof *plugins ||
-            plugins->subscribe64(owner, SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_EXT_BIT(3), event) != SV_OK ||
-            plugins->subscribe64(owner, 0x1000000u, event) != SV_INVALID ||
-            plugins->subscribe64(owner, SV_EVENT_TICK | SV_EVENT_EXT_BIT(3), NULL) != SV_INVALID)
+        if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_EXT_BIT(3), event) != SV_OK ||
+            api->subscribe(owner, 0x1000000u, event) != SV_INVALID ||
+            api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_EXT_BIT(3), NULL) != SV_INVALID)
             return SV_FAILED;
     }
     if (!strcmp(mode, "permissions") &&

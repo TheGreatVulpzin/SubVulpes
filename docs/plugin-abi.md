@@ -21,7 +21,7 @@ This page is the freeze rule for ABI version 1 (`SV_PLUGIN_ABI`). The first edit
 6. **No pointer into the game.** A record holds copies and 64-bit references. The only pointers are function tables that the host owns, and buffers that the caller gives.
 7. **Text is a fixed array of printable ASCII with a final zero.** The limit is part of the record.
 8. **Units.** A position is a float in game units. Time is in ticks (60 for each second), except `SvStatus.uptime_ms`. Money is an `int32_t`. An angle is in radians.
-9. **Events.** The first 32 events are bit values in a 32-bit kind. Any later event is numbered: kind `SV_EVENT_EXT(i)`, bit `SV_EVENT_EXT_BIT(i)` in `SvPlugins.subscribe64`, `i` from 0 to 31. A new event record starts with `SvEvent` and sets its own `size`.
+9. **Events.** The first 32 events are bit values in a 32-bit kind. Any later event is numbered: kind `SV_EVENT_EXT(i)`, bit `SV_EVENT_EXT_BIT(i)` in the 64-bit mask of `SvHost.subscribe`, `i` from 0 to 31. A new event record starts with `SvEvent` and sets its own `size`.
 10. **Results.** The twelve codes keep their meaning. A call that fails changes nothing, and it checks the context before the other arguments.
 
 ## Which tool for a new feature
