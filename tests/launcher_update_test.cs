@@ -65,7 +65,94 @@ namespace SubVulpes
                 throw new Exception("A blank admin password was not counted as missing.");
         }
 
-        static void Main()
+        static void CheckPluginMetadata()
+        {
+            string hash = new string('a', 64), packageHash = new string('b', 64);
+            string legacy = "PLUGIN\tsv.health\t0.1.0\tready\t0\t" + hash + "\tReady.";
+            string module = "MODULE\tsv.health\t0.1.0\t" + hash + "\t" + packageHash;
+            string[] display = { "native", "read,write,props,storage", "Health Commands", "Changes player health.", "An Author", "https://example.test/health" };
+            string suffix = "\t" + string.Join("\t", display);
+            var old = LauncherForm.ParsePluginRow(legacy, false);
+            var current = LauncherForm.ParsePluginRow(legacy + suffix, false);
+            var package = LauncherForm.ParsePluginRow(module + suffix, true);
+            if (old == null || old.DisplayName != "sv.health" || old.Runtime != "native" || old.Capabilities != "" ||
+                current == null || current.DisplayName != "Health Commands" || current.Id != "sv.health" ||
+                package == null || package.PackageHash != packageHash || package.Author != "An Author" ||
+                LauncherForm.ParsePluginRow(module, true) == null)
+                throw new Exception("Plugin metadata or legacy rows did not parse.");
+            current.Runtime = "lua";
+            string review = LauncherForm.PluginReviewDetails(current, "Approve this content?", true);
+            if (!review.Contains("Native code gets full process access.") || !review.Contains("crash the server."))
+                throw new Exception("Native approval lost its full process warning for a cached script row.");
+            current.Runtime = "native";
+            var item = LauncherForm.MakePluginItem(current);
+            if (item.Text != "Health Commands" || item.Name != "sv.health" || (string)item.Tag != hash ||
+                item.SubItems[1].Text != "sv.health" || item.SubItems[2].Text != "0.1.0" ||
+                item.SubItems[3].Text != "ready" || item.SubItems[4].Text != "No" || item.SubItems[5].Text != "Ready.")
+                throw new Exception("Plugin display changed identity, hash or column data.");
+            item.Text = "other.plugin";
+            if (LauncherForm.PluginActionId(item) != "sv.health")
+                throw new Exception("Plugin display text became an action identifier.");
+            item.Name = "../escape";
+            if (LauncherForm.PluginActionId(item) != null)
+                throw new Exception("The action accepted an invalid plugin identifier.");
+            display[2] = "";
+            if (LauncherForm.ParsePluginRow(legacy + "\t" + string.Join("\t", display), false).DisplayName != "sv.health")
+                throw new Exception("An empty display name did not use the identifier.");
+            foreach (string runtime in new[] { "native", "lua", "wasm" }) {
+                display[0] = runtime;
+                if (LauncherForm.ParsePluginRow(module + "\t" + string.Join("\t", display), true) == null)
+                    throw new Exception("The parser rejected a supported runtime.");
+            }
+            display[0] = "native";
+            int[] limits = { 48, 160, 48, 96 };
+            for (int i = 0; i < limits.Length; i++) {
+                int field = i + 2;
+                string saved = display[field];
+                display[field] = field == 5 ? "https://example.test/" + new string('x', limits[i] - 21) : new string('x', limits[i]);
+                if (LauncherForm.ParsePluginRow(legacy + "\t" + string.Join("\t", display), false) == null)
+                    throw new Exception("The parser rejected a display field at its size limit.");
+                display[field] += "x";
+                if (LauncherForm.ParsePluginRow(legacy + "\t" + string.Join("\t", display), false) != null ||
+                    LauncherForm.ParsePluginRow(module + "\t" + string.Join("\t", display), true) != null)
+                    throw new Exception("The parser accepted an oversized display field.");
+                foreach (string bad in new[] { "bad\ntext", "bad\ttext", "bad\x7f", "bad\u00e9" }) {
+                    display[field] = bad;
+                    if (LauncherForm.ParsePluginRow(legacy + "\t" + string.Join("\t", display), false) != null)
+                        throw new Exception("The parser accepted a display field outside printable ASCII.");
+                }
+                display[field] = saved;
+            }
+            foreach (string bad in new[] { "python", "Native", "" }) {
+                display[0] = bad;
+                if (LauncherForm.ParsePluginRow(module + "\t" + string.Join("\t", display), true) != null)
+                    throw new Exception("The parser accepted an unknown runtime.");
+            }
+            display[0] = "native";
+            foreach (string bad in new[] { "read,read", "Read", "read,,write", "read, write", new string('x', 256) }) {
+                display[1] = bad;
+                if (LauncherForm.ParsePluginRow(legacy + "\t" + string.Join("\t", display), false) != null)
+                    throw new Exception("The parser accepted an invalid capability list.");
+            }
+            display[1] = "";
+            display[5] = "ftp://example.test";
+            if (LauncherForm.ParsePluginRow(legacy + "\t" + string.Join("\t", display), false) != null ||
+                LauncherForm.ParsePluginRow(legacy + suffix + "\textra", false) != null ||
+                LauncherForm.ParsePluginRow(module + "\tnative", true) != null ||
+                LauncherForm.ParsePluginRow(module.Replace(packageHash, "invalid"), true) != null ||
+                LauncherForm.ParsePluginRow(module.Replace(hash, "invalid"), true) != null ||
+                LauncherForm.ParsePluginRow(legacy.Replace(hash, "invalid"), false) != null ||
+                LauncherForm.ParsePluginRow(legacy.Replace("sv.health", "con.health"), false) != null)
+                throw new Exception("The parser accepted invalid plugin metadata.");
+        }
+
+        static int Main()
+        {
+            try { Run(); return 0; }
+            catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
+        }
+
+        static void Run()
         {
             Expect("subvulpes_server.exe", "subvulpes_server.exe");
             Expect("package/subvulpes_launcher.exe", "subvulpes_launcher.exe");
@@ -94,7 +181,8 @@ namespace SubVulpes
                 throw new Exception("A quoted argument changed argument parsing.");
             CheckBackupDirectory();
             CheckAdminPassword();
-            Console.WriteLine("21 launcher update path checks, backup directory checks and admin password checks passed.");
+            CheckPluginMetadata();
+            Console.WriteLine("Launcher update, backup, admin password and plugin metadata checks passed.");
         }
     }
 }

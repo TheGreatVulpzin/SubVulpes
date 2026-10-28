@@ -873,14 +873,15 @@ namespace SubVulpes
             disable.Click += async delegate { await ChangePlugin(false); };
             var approve = new Button { Text = "Approve native DLL", AutoSize = true };
             approve.Click += async delegate { await ApprovePlugin(); };
-            var install = new Button { Text = "Install / update plugin zip", AutoSize = true };
+            var install = new Button { Text = "Install / update plugin package", AutoSize = true };
             install.Click += async delegate { await InstallPlugin(); };
             var pluginSettingsButton = new Button { Text = "Settings...", AutoSize = true };
             pluginSettingsButton.Click += async delegate { await EditPluginSettings(); };
             buttons.Controls.AddRange(new Control[] { refresh, enable, disable, approve, install, pluginSettingsButton });
             page.Controls.Add(buttons, 0, 0);
             pluginList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false };
-            pluginList.Columns.Add("Plugin", 160);
+            pluginList.Columns.Add("Plugin", 190);
+            pluginList.Columns.Add("ID", 160);
             pluginList.Columns.Add("Version", 85);
             pluginList.Columns.Add("State", 90);
             pluginList.Columns.Add("Required", 70);
@@ -911,32 +912,156 @@ namespace SubVulpes
             return page;
         }
 
+        internal sealed class PluginMetadata
+        {
+            internal string Id, Version, Hash, PackageHash, State, Required, Reason;
+            internal string Runtime = "native", Capabilities = "", Name = "", Description = "", Author = "", Homepage = "";
+            internal string DisplayName { get { return Name.Length == 0 ? Id : Name; } }
+        }
+
+        internal sealed class PluginListItem : ListViewItem
+        {
+            internal PluginMetadata Metadata;
+        }
+
+        static readonly Font PluginIdFont = new Font(SystemFonts.MessageBoxFont.FontFamily,
+            Math.Max(6f, SystemFonts.MessageBoxFont.Size - 1f));
+
+        static bool PluginText(string text, int maximum)
+        {
+            if (text.Length > maximum) return false;
+            foreach (char character in text) if (character < ' ' || character > '~') return false;
+            return true;
+        }
+
+        static bool PluginId(string id)
+        {
+            return Regex.IsMatch(id, @"\A[a-z0-9][a-z0-9_.-]{0,46}\z") && !id.Contains("..") &&
+                !id.EndsWith(".", StringComparison.Ordinal) &&
+                !Regex.IsMatch(id, @"\A(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|\z)");
+        }
+
+        internal static PluginMetadata ParsePluginRow(string line, bool package)
+        {
+            if (line == null) return null;
+            string[] fields = line.Split('\t');
+            int count = package ? 5 : 7;
+            if ((fields.Length != count && fields.Length != count + 6) ||
+                fields[0] != (package ? "MODULE" : "PLUGIN") || !PluginId(fields[1]) ||
+                !PluginText(fields[2], 23)) return null;
+            int hash = package ? 3 : 5;
+            if ((fields[hash].Length > 0 || package) && !Regex.IsMatch(fields[hash], @"\A[0-9a-f]{64}\z")) return null;
+            if (package && !Regex.IsMatch(fields[4], @"\A[0-9a-f]{64}\z")) return null;
+            var metadata = new PluginMetadata { Id = fields[1], Version = fields[2], Hash = fields[hash] };
+            if (package) metadata.PackageHash = fields[4];
+            else {
+                if (!PluginText(fields[3], 16) || (fields[4] != "0" && fields[4] != "1") || !PluginText(fields[6], 127)) return null;
+                metadata.State = fields[3]; metadata.Required = fields[4]; metadata.Reason = fields[6];
+            }
+            if (fields.Length == count) return metadata;
+            metadata.Runtime = fields[count]; metadata.Capabilities = fields[count + 1]; metadata.Name = fields[count + 2];
+            metadata.Description = fields[count + 3]; metadata.Author = fields[count + 4]; metadata.Homepage = fields[count + 5];
+            if ((metadata.Runtime != "native" && metadata.Runtime != "lua" && metadata.Runtime != "wasm") ||
+                !PluginText(metadata.Capabilities, 255) || !PluginText(metadata.Name, 48) ||
+                !PluginText(metadata.Description, 160) || !PluginText(metadata.Author, 48) || !PluginText(metadata.Homepage, 96)) return null;
+            var capabilities = new HashSet<string>(StringComparer.Ordinal);
+            if (metadata.Capabilities.Length > 0) foreach (string capability in metadata.Capabilities.Split(',')) {
+                if (!Regex.IsMatch(capability, @"\A[a-z][a-z_]{0,31}\z") || !capabilities.Add(capability)) return null;
+            }
+            if (metadata.Homepage.Length > 0) {
+                Uri homepage;
+                if (!Uri.TryCreate(metadata.Homepage, UriKind.Absolute, out homepage) ||
+                    (homepage.Scheme != "http" && homepage.Scheme != "https") || metadata.Homepage.Any(char.IsWhiteSpace)) return null;
+            }
+            return metadata;
+        }
+
+        internal static string PluginActionId(ListViewItem item)
+        {
+            return item != null && PluginId(item.Name) ? item.Name : null;
+        }
+
+        internal static PluginListItem MakePluginItem(PluginMetadata metadata)
+        {
+            var item = new PluginListItem();
+            item.UseItemStyleForSubItems = false;
+            item.SubItems.AddRange(new[] { "", "", "", "", "" });
+            SetPluginItem(item, metadata);
+            item.SubItems[1].Font = PluginIdFont;
+            return item;
+        }
+
+        static void SetPluginItem(PluginListItem item, PluginMetadata metadata)
+        {
+            item.Metadata = metadata;
+            item.Name = metadata.Id;
+            item.Text = metadata.DisplayName;
+            item.SubItems[1].Text = metadata.Id;
+            item.SubItems[2].Text = metadata.Version;
+            item.SubItems[3].Text = metadata.State;
+            item.SubItems[4].Text = metadata.Required == "1" ? "Yes" : "No";
+            item.SubItems[5].Text = metadata.Reason;
+            item.Tag = metadata.Hash;
+        }
+
         string SelectedPlugin()
         {
             if (pluginList.SelectedItems.Count != 1) {
                 message.Text = "Select a plugin first.";
                 return null;
             }
-            string id = pluginList.SelectedItems[0].Text;
-            return Regex.IsMatch(id, @"\A[a-z0-9][a-z0-9_.-]{0,46}\z") && !id.Contains("..") ? id : null;
+            return PluginActionId(pluginList.SelectedItems[0]);
         }
 
         void ReadPluginLine(string line)
         {
-            if (!line.StartsWith("PLUGIN\t", StringComparison.Ordinal)) return;
-            string[] fields = line.Split('\t');
-            if (fields.Length != 7 || !Regex.IsMatch(fields[1], @"\A[a-z0-9][a-z0-9_.-]{0,46}\z")) return;
-            ListViewItem item = pluginList.Items.ContainsKey(fields[1]) ? pluginList.Items[fields[1]] : null;
-            if (item == null) {
-                item = new ListViewItem(fields[1]) { Name = fields[1] };
-                for (int i = 0; i < 4; i++) item.SubItems.Add("");
-                pluginList.Items.Add(item);
+            PluginMetadata metadata = ParsePluginRow(line, false);
+            if (metadata == null) return;
+            var item = pluginList.Items[metadata.Id] as PluginListItem;
+            if (item == null) pluginList.Items.Add(MakePluginItem(metadata));
+            else SetPluginItem(item, metadata);
+        }
+
+        internal static string PluginReviewDetails(PluginMetadata metadata, string question, bool nativeApproval)
+        {
+            var text = new StringBuilder();
+            if (metadata.Description.Length > 0) text.AppendLine(metadata.Description).AppendLine();
+            if (metadata.Author.Length > 0) text.AppendLine("Author: " + metadata.Author);
+            if (metadata.Homepage.Length > 0) text.AppendLine("Homepage: " + metadata.Homepage);
+            text.AppendLine("Version: " + metadata.Version).AppendLine("Runtime: " + metadata.Runtime);
+            text.AppendLine("Capabilities: " + (metadata.Capabilities.Length == 0 ? "none declared" : metadata.Capabilities));
+            text.AppendLine("SHA-256: " + metadata.Hash).AppendLine();
+            if (nativeApproval || metadata.Runtime == "native") text.AppendLine("Native code gets full process access. It can read private data, corrupt memory, hang or crash the server.").AppendLine();
+            text.Append(question);
+            return text.ToString();
+        }
+
+        bool ReviewPlugin(PluginMetadata metadata, string title, string question, bool nativeApproval = false)
+        {
+            using (var dialog = new Form {
+                Text = title, StartPosition = FormStartPosition.CenterParent, Width = 640, Height = 490,
+                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false
+            })
+            using (var titleFont = new Font(Font, FontStyle.Bold)) {
+                var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(12) };
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                table.Controls.Add(new Label { Text = metadata.DisplayName, Font = titleFont, AutoSize = true, MaximumSize = new Size(590, 0) }, 0, 0);
+                table.Controls.Add(new Label { Text = metadata.Id, Font = PluginIdFont, AutoSize = true, Margin = new Padding(3, 3, 3, 12) }, 0, 1);
+                table.Controls.Add(new TextBox { Text = PluginReviewDetails(metadata, question, nativeApproval), Multiline = true, ReadOnly = true, Dock = DockStyle.Fill,
+                    ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None, BackColor = SystemColors.Control }, 0, 2);
+                var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
+                var accept = new Button { Text = "Yes", DialogResult = DialogResult.Yes, AutoSize = true };
+                var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+                buttons.Controls.AddRange(new Control[] { cancel, accept });
+                table.Controls.Add(buttons, 0, 3);
+                dialog.Controls.Add(table);
+                dialog.AcceptButton = accept; dialog.CancelButton = cancel;
+                return dialog.ShowDialog(this) == DialogResult.Yes;
             }
-            item.SubItems[1].Text = fields[2];
-            item.SubItems[2].Text = fields[3];
-            item.SubItems[3].Text = fields[4] == "1" ? "Yes" : "No";
-            item.SubItems[4].Text = fields[6];
-            item.Tag = fields[5];
         }
 
         static string RunPluginTool(string serverFolder, string arguments)
@@ -1192,10 +1317,10 @@ namespace SubVulpes
                 Match hash = Regex.Match(output, @"(?m)^SHA256\t[^\r\n\t]+\t([0-9a-f]{64})\r?$");
                 if (!hash.Success) throw new IOException("The server did not return a valid SHA-256.");
                 if (server != null || folder != selectedFolder) return;
-                if (MessageBox.Show(this,
-                    "This DLL gets full process access. It can read private data, corrupt memory, hang or crash the server.\r\n\r\n" +
-                    "Plugin: " + id + "\r\nSHA-256: " + hash.Groups[1].Value + "\r\n\r\nApprove this exact content?",
-                    "Approve native DLL", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+                var selected = pluginList.Items[id] as PluginListItem;
+                PluginMetadata metadata = selected == null ? new PluginMetadata { Id = id, Version = "" } : selected.Metadata;
+                metadata.Hash = hash.Groups[1].Value;
+                if (!ReviewPlugin(metadata, "Approve native DLL", "Approve this exact native content?", true)) return;
                 string digest = hash.Groups[1].Value;
                 message.Text = (await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-approve " + id + " " + digest))).Trim();
             } catch (Exception ex) { message.Text = "Cannot approve native DLL: " + ex.Message; }
@@ -1242,7 +1367,7 @@ namespace SubVulpes
         {
             if (pluginBusy || updating) return;
             string zip;
-            using (var dialog = new OpenFileDialog { Filter = "Plugin package (*.zip)|*.zip" }) {
+            using (var dialog = new OpenFileDialog { Filter = "Plugin package (*.svplugin;*.zip)|*.svplugin;*.zip" }) {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 zip = dialog.FileName;
             }
@@ -1253,15 +1378,17 @@ namespace SubVulpes
             SetState(serverState);
             try {
                 string inspection = await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, true));
-                Match metadata = Regex.Match(inspection, @"(?m)^MODULE\t([^\t\r\n]+)\t([^\t\r\n]+)\t([0-9a-f]{64})\t([0-9a-f]{64})\r?$");
-                if (!metadata.Success) throw new IOException("The installer did not return valid package metadata.");
-                string question = "Install " + metadata.Groups[1].Value + " " + metadata.Groups[2].Value +
-                    "?\r\nSHA-256: " + metadata.Groups[3].Value +
-                    "\r\n\r\nThe server stops first. Native approval is a separate step. New modules start disabled.";
-                if (MessageBox.Show(this, question, "Install plugin package", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+                PluginMetadata metadata = null;
+                foreach (string line in inspection.Replace("\r", "").Split('\n')) {
+                    PluginMetadata candidate = ParsePluginRow(line, true);
+                    if (candidate != null) { metadata = candidate; break; }
+                }
+                if (metadata == null) throw new IOException("The installer did not return valid package metadata.");
+                if (!ReviewPlugin(metadata, "Install plugin package",
+                    "Install this package? The server stops first. Native approval is a separate step. New modules start disabled.")) return;
                 if (!await StopServer()) return;
                 message.Text = "Installing plugin package...";
-                string packageHash = metadata.Groups[4].Value;
+                string packageHash = metadata.PackageHash;
                 string result = await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, false, packageHash));
                 message.Text = result.Trim();
             } catch (Exception ex) { message.Text = "Plugin installation failed: " + ex.Message; }
