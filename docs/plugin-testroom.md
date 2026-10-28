@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.3, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.4, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -21,6 +21,7 @@ The plugin sends each line to you only. It says the number and the name of the t
 | `/test skip` | Skip the test |
 | `/test go` | Repeat the action of the test, or take its next step, for the tests that have one (sound, vehicle exit, aim, bots, missions) |
 | `/test kick NAME` | Test 57. Removes the player with that name. See the note below |
+| `/test again` | Say the name, the action and the expected result of the current test again |
 | `/test <number>` | Go to a test |
 | `/test list` | One line for each test, with its result |
 | `/test report` | The count of results and the names of the failed tests |
@@ -28,6 +29,7 @@ The plugin sends each line to you only. It says the number and the name of the t
 
 When a test makes things (a car, a bot, items) or changes your body (health, bleeding, looks), the next test, `/test stop` or the end of the list undoes it.
 An API call that returns an error fails the test at once, with the error number in the chat.
+Every line that the room says to you also goes to the server log, with the prefix `SAY`. A line that leaves the chat too fast stays in the log.
 Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP code=<error>`.
 
 ## The tests
@@ -84,7 +86,7 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 48 | `mission_read` | `SvGameMission.slots` for 5 teams | The counts of active missions |
 | 49 | `mission_start` | `item_create` of an objective, `start`, then `cancel` for each `go` | A mission in the list, then it leaves |
 | 50 | `shop_catalog` | `SvGameShop.catalog`, `catalog_replace` | The first row of each shop costs 1 |
-| 51 | `shop_phone` | `phone`, `phone_idle` for each `go` | The state of the call, then the call ends |
+| 51 | `shop_phone` | `item_create` of a cell phone (item type 23), `phone`, `phone_idle` for each `go` | You hold a cell phone. After you dial, the state of the call shows, then the call ends |
 | 52 | `setting_list` | `SvGameSettings.describe`, `get` | Three settings with ranges |
 | 53 | `setting_bots` | `SvGameSettings.set` of `bot_count`, the setting event | A chat line, and 2 bots in the city |
 | 54 | `engine_list` | `SvGameEngine.describe`, `get` | Three parameters with values |

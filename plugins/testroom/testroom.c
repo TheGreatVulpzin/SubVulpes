@@ -20,7 +20,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.3"
+#define VERSION "0.2.4"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -99,6 +99,11 @@ static void say(const char *text)
                 }
         memcpy(line, text, take);
         line[take] = 0;
+        {
+            char logged[LINE_MAX_CHARS + 8];
+            snprintf(logged, sizeof logged, "SAY %s", line);
+            host->log(self, logged);
+        }
         change->message_to(self, SV_MESSAGE_SERVER, tester, line);
         text += take;
         length -= take;
@@ -139,6 +144,13 @@ static SvResult body(SvPlayerState *player, SvHumanState *human)
     if (!player->human)
         return SV_STATE;
     return game->human(self, player->human, human);
+}
+
+/* Puts an item in a hand of a human: the right hand first, then the left one. */
+static SvResult equip_hand(SvEntity item, SvEntity human)
+{
+    SvResult r = change->item_equip(self, item, human, 0);
+    return r == SV_CONFLICT ? change->item_equip(self, item, human, 1) : r;
 }
 
 static uint32_t prop_id(const char *name)
@@ -457,7 +469,7 @@ static SvResult t_item_hand(void)
     if (r != SV_OK)
         return r;
     remember(made_items, &made_item_count, 8, item);
-    return change->item_equip(self, item, player.human, 0);
+    return equip_hand(item, player.human);
 }
 
 static SvResult t_magnum(void)
@@ -481,7 +493,7 @@ static SvResult t_magnum(void)
     r = change->item_attach(self, gun, magazine);
     if (r != SV_OK)
         return r;
-    return change->item_equip(self, gun, player.human, 0);
+    return equip_hand(gun, player.human);
 }
 
 static SvResult t_car(void)
@@ -1098,7 +1110,7 @@ static SvResult arm(SvEntity human, SvVector at)
         return r;
     remember(made_items, &made_item_count, 8, magazine);
     r = change->item_attach(self, gun, magazine);
-    return r == SV_OK ? change->item_equip(self, gun, human, 0) : r;
+    return r == SV_OK ? equip_hand(gun, human) : r;
 }
 
 static SvResult t_threats_go(void)
@@ -1359,49 +1371,21 @@ static SvResult t_shop_catalog(void)
     return saved_shop_count ? SV_OK : SV_NOT_FOUND;
 }
 
-static SvResult find_phone(SvEntity *found, const SvHumanState *human)
-{
-    float best = 0.0f;
-    uint32_t cursor = 0, round;
-    *found = 0;
-    for (round = 0; round < 16; ++round) {
-        SvEntity page[SV_ENTITY_PAGE_MAX];
-        uint32_t count = 0, next = 0, i;
-        SvResult r = game->entities(self, SV_ENTITY_ITEM, cursor, page, SV_ENTITY_PAGE_MAX, &count, &next);
-        if (r != SV_OK)
-            return r;
-        for (i = 0; i < count; ++i) {
-            SvItemState item = { sizeof item };
-            if (game->item(self, page[i], &item) == SV_OK && item.phone_id > 0 && !item.parent_human) {
-                float dx = item.position.x - human->position.x, dz = item.position.z - human->position.z;
-                float distance = dx * dx + dz * dz;
-                if (!*found || distance < best) {
-                    *found = page[i];
-                    best = distance;
-                }
-            }
-        }
-        if (next <= cursor)
-            break;
-        cursor = next;
-    }
-    return *found ? SV_OK : SV_NOT_FOUND;
-}
-
 static SvResult t_phone_state(void)
 {
     SvPlayerState player = { sizeof player };
     SvHumanState human = { sizeof human };
-    SvItemState item = { sizeof item };
+    SvEntity phone = 0;
     SvResult r = shop ? body(&player, &human) : SV_INCOMPATIBLE;
     if (r == SV_OK)
-        r = find_phone(&phone_item, &human);
+        r = change->item_create(self, 23, human.position, &phone);
+    if (r == SV_OK) {
+        remember(made_items, &made_item_count, 24, phone);
+        phone_item = phone;
+        r = equip_hand(phone, player.human);
+    }
     if (r == SV_OK)
-        r = game->item(self, phone_item, &item);
-    if (r == SV_OK)
-        r = change->teleport(self, player.human, offset(item.position, 2.0f, 0.5f, 0.0f));
-    if (r == SV_OK)
-        say("You stand next to a phone. Dial a number, then type /test go to read the phone and end the call.");
+        say("You hold a cell phone. Dial a number, then type /test go to read the phone and end the call.");
     return r;
 }
 
@@ -1464,6 +1448,8 @@ static SvResult t_engine_list(void)
         SvEngineInfo info = { sizeof info };
         SvEngineValue value = { sizeof value };
         SvResult r = engine->describe(self, i, 0, &info);
+        if (r == SV_INVALID)
+            r = engine->describe(self, i, SV_ENGINE_GLOBAL, &info);
         if (r == SV_OK)
             r = engine->get(self, info.name, info.scope == SV_ENGINE_GLOBAL_SCOPE ? SV_ENGINE_GLOBAL : 0, &value);
         if (r != SV_OK)
@@ -1504,8 +1490,8 @@ static SvResult t_plugins_calls(void)
     refuse = plugins_api->refuse(self, "test");
     find = plugins_api->find(self, "sv.testroom", 1, &table);
     sayf("subscribe gave %d (want %d), refuse %d (want %d), find %d (want %d).", (int)subscribe, (int)SV_OK, (int)refuse,
-        (int)SV_STATE, (int)find, (int)SV_DEPENDENCY);
-    return subscribe == SV_OK && refuse == SV_STATE && find == SV_DEPENDENCY ? SV_OK : SV_FAILED;
+        (int)SV_STATE, (int)find, (int)SV_NOT_FOUND);
+    return subscribe == SV_OK && refuse == SV_STATE && find == SV_NOT_FOUND ? SV_OK : SV_FAILED;
 }
 
 /* The kick test. The player gives a name: /test kick NAME. The kick puts the address of the player in the kick list of the
@@ -1918,7 +1904,7 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         tester = actor;
         memset(result, 0, sizeof result);
         say("Test room started. Answer each test with /test yes, no or skip.");
-        say("Other commands: /test go, /test <number>, list, report, stop.");
+        say("Other commands: /test go, again, <number>, list, report, stop.");
         start_test(1);
         return SV_OK;
     }
@@ -1954,6 +1940,14 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         while (*name == ' ')
             ++name;
         kick_by_name(name);
+    } else if (!strcmp(word, "again")) {
+        if (!current) {
+            say("No test runs. Type /test start.");
+        } else {
+            sayf("[%d/%d] %s", current, test_count, tests[current - 1].name);
+            sayf("Does: %s", tests[current - 1].what);
+            sayf("Expect: %s", tests[current - 1].expect);
+        }
     } else if (!strcmp(word, "list")) {
         list();
     } else if (!strcmp(word, "report")) {
@@ -1964,7 +1958,7 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         say("Test room stopped.");
         report();
     } else {
-        say("Commands: /test start, yes, no, skip, go, kick NAME, <number>, list, report, stop.");
+        say("Commands: /test start, yes, no, skip, go, again, kick NAME, <number>, list, report, stop.");
     }
     return SV_OK;
 }
