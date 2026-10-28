@@ -10,7 +10,7 @@
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 
-#define VERSION "0.1.2"
+#define VERSION "0.1.4"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 32
 
@@ -41,6 +41,8 @@ static int32_t saved_looks[SV_LOOK_COUNT];
 static SvEntity made_objects[6], made_players[4], made_items[8];
 static int made_object_count, made_player_count, made_item_count;
 static uint32_t sound_next;
+static SvEntity last_magazine, last_car, last_npc, last_npc_human;
+static unsigned name_step;
 
 /* ------------------------------------------------------------ text */
 
@@ -377,6 +379,7 @@ static SvResult t_magnum(void)
     if (r != SV_OK)
         return r;
     remember(made_items, &made_item_count, 8, magazine);
+    last_magazine = magazine;
     r = change->item_attach(self, gun, magazine);
     if (r != SV_OK)
         return r;
@@ -393,6 +396,7 @@ static SvResult t_car(void)
         return r;
     r = change->object_create(self, 0, beside(&human, 8.0f, 1.0f, 0.0f), 0.0f, 1, &car);
     remember(made_objects, &made_object_count, 6, car);
+    last_car = car;
     return r;
 }
 
@@ -404,8 +408,10 @@ static SvResult t_npc(void)
     SvResult r = body(&player, &human);
     if (r != SV_OK)
         return r;
-    r = change->npc_create(self, beside(&human, 4.0f, 0.5f, 0.0f), 0.0f, &npc, &npc_human);
+    r = change->npc_create(self, beside(&human, 4.0f, 0.5f, 0.0f), 0.0f, "Guard", &npc, &npc_human);
     remember(made_players, &made_player_count, 4, npc);
+    last_npc = npc;
+    last_npc_human = npc_human;
     return r;
 }
 
@@ -490,6 +496,96 @@ static SvResult t_looks(void)
     return r;
 }
 
+/* The car moves 10 units for each go. */
+static SvResult t_car_move_go(void)
+{
+    SvObjectState car = { sizeof car };
+    SvResult r = game->object(self, last_car, &car);
+    if (r != SV_OK)
+        return r;
+    r = change->teleport(self, last_car, offset(car.position, 10.0f, 0.0f, 0.0f));
+    say("The car moved 10 units. Type /test go to move it again.");
+    return r;
+}
+
+static SvResult t_car_move(void)
+{
+    SvResult r = t_car();
+    if (r == SV_OK)
+        say("Type /test go to move the car 10 units.");
+    return r;
+}
+
+/* You sit in the driver seat of a car beside you. */
+static SvResult t_seat_go(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    r = change->vehicle_enter(self, player.human, last_car, 0);
+    if (r == SV_STATE)
+        say("You already sit in a vehicle. Get out first, then type /test go.");
+    if (r == SV_CONFLICT)
+        say("The seat is taken.");
+    return r == SV_STATE || r == SV_CONFLICT ? SV_OK : r;
+}
+
+static SvResult t_seat(void)
+{
+    SvResult r = t_car();
+    if (r == SV_OK)
+        say("Type /test go to sit in the car.");
+    return r;
+}
+
+/* A Magnum with one round in the magazine. */
+static SvResult t_ammo(void)
+{
+    SvValue v;
+    SvResult r = t_magnum();
+    if (r != SV_OK)
+        return r;
+    v.i = 1;
+    return props->set(self, prop_id("item.ammo"), last_magazine, 0, v);
+}
+
+/* The bot gets a new name for each go. */
+static SvResult t_rename_go(void)
+{
+    static const char *const names[] = { "Boss", "Cop", "Mr Smith", "A very long name of thirty-one", "" };
+    const char *name = names[name_step++ % 5];
+    SvResult r = change->set_name(self, last_npc, name);
+    sayf("The bot name is now '%s'. Type /test go for the next name.", name);
+    return r;
+}
+
+static SvResult t_rename(void)
+{
+    SvResult r = t_npc();
+    name_step = 0;
+    if (r == SV_OK)
+        say("The bot beside you is named Guard. Look at its name, then type /test go.");
+    return r;
+}
+
+/* The bot talks above its head. */
+static SvResult t_speak_go(void)
+{
+    SvResult r = change->speak(self, last_npc_human, "Hello, I am a bot.", 1);
+    say("The bot spoke. Type /test go to hear it again.");
+    return r;
+}
+
+static SvResult t_speak(void)
+{
+    SvResult r = t_npc();
+    if (r == SV_OK)
+        say("Look at the bot, then type /test go.");
+    return r;
+}
+
 static SvResult t_dealt(void)
 {
     SvResult r = t_npc();
@@ -524,10 +620,15 @@ static const Test tests[] = {
     { "item_in_hand", "Makes a bandage and puts it in your hand.", "You hold a bandage.", t_item_hand, NULL },
     { "magnum", "Makes a Magnum with a magazine and puts it in your hand.", "You hold a loaded Magnum. Shoot it.", t_magnum, NULL },
     { "car", "Makes a car 8 units beside you.", "A car (color 1) stands beside you.", t_car, NULL },
-    { "npc", "Makes a bot named NPC 4 units beside you.", "A bot stands beside you. It does not walk.", t_npc, NULL },
+    { "npc", "Makes a bot named Guard 4 units beside you.", "A bot stands beside you. It does not walk.", t_npc, NULL },
     { "vehicle_exit", "Makes a car. You get in. Then /test go throws you out of it.", "You leave the car at once, without flying away.", t_exit, t_exit_go },
     { "aim", "Reads what your aim hits. Type /test go after you look somewhere else.", "The answer matches what you look at: ground, a car or a human.", t_aim, t_aim_go },
     { "looks", "Sets your five look settings to 0, then raises one for each /test go.", "Each go changes one part of your look. Say yes if every part changes something. The next test puts your looks back.", t_looks, t_looks_go },
+    { "car_teleport", "Makes a car beside you. Type /test go to move it 10 units each time.", "The car jumps 10 units at once, without flying or breaking.", t_car_move, t_car_move_go },
+    { "vehicle_enter", "Makes a car beside you. Type /test go to sit in its driver seat.", "You sit in the driver seat at once. Try to drive.", t_seat, t_seat_go },
+    { "one_round", "Makes a Magnum with one round in the magazine and puts it in your hand.", "You fire one shot, and the next trigger pull does nothing.", t_ammo, NULL },
+    { "npc_name", "Makes a bot named Guard. Type /test go to give it a new name.", "The name above the bot changes at once for each go. The last name is empty.", t_rename, t_rename_go },
+    { "npc_speak", "Makes a bot. Type /test go to make it talk.", "A speech bubble with the text shows above the bot.", t_speak, t_speak_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
 };
 

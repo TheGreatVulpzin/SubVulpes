@@ -642,3 +642,59 @@ void objectsimulation(void)
   }
   stoptimer(g_timerlist.objectsim);
 }
+
+/* Moves an object and everything that belongs to its place by one offset: the particles, the wheels, the wheel bodies,
+ * the points of a rotor and the box. The speeds stay, and the previous places move too, so the move is not a jump
+ * of speed. Returns 0 when the object is a free vehicle that was moved, and 1 when it was not changed: no vehicle, a piece
+ * of the train (the track system moves those), or a particle, wheel or wheel body list that is out of range. */
+int object_translate(int obj, const vec3 *delta)
+{
+  Object *o;
+  int i;
+
+  if ((unsigned)obj >= 1024 || !sr_objects[obj].active)
+    return 1;
+  o = &sr_objects[obj];
+  if (o->type >= 12 || o->num_particles < 0 || o->num_particles > 64 || o->num_wheels < 0 || o->num_wheels > 32 ||
+      o->num_wheel_bodies < 0 || o->num_wheel_bodies > 16)
+    return 1;
+  for (i = 0; i < o->num_particles; i++)
+    if ((unsigned)o->particles[i] >= SR_MAX_PARTICLE)
+      return 1;
+  for (i = 0; i < o->num_particles; i++) {
+    Particle *p = &sr_particles[o->particles[i]];
+    p->pos.x = (float)(p->pos.x + delta->x);
+    p->pos.y = (float)(p->pos.y + delta->y);
+    p->pos.z = (float)(p->pos.z + delta->z);
+    p->pos_prev = p->pos;
+  }
+  for (i = 0; i < o->num_wheels; i++) {
+    Wheel *w = &o->wheels[i];
+    w->pos.x = (float)(w->pos.x + delta->x);
+    w->pos.y = (float)(w->pos.y + delta->y);
+    w->pos.z = (float)(w->pos.z + delta->z);
+  }
+  for (i = 0; i < o->num_wheel_bodies; i++) {
+    WheelBody *w = &o->wheel_bodies[i];
+    w->pos.x = (float)(w->pos.x + delta->x);
+    w->pos.y = (float)(w->pos.y + delta->y);
+    w->pos.z = (float)(w->pos.z + delta->z);
+  }
+  if (o->state == 2)
+    for (i = 0; i < 6; i++) {
+      o->rotor[i].pos.x = (float)(o->rotor[i].pos.x + delta->x);
+      o->rotor[i].pos.y = (float)(o->rotor[i].pos.y + delta->y);
+      o->rotor[i].pos.z = (float)(o->rotor[i].pos.z + delta->z);
+    }
+  o->pos.x = (float)(o->pos.x + delta->x);
+  o->pos.y = (float)(o->pos.y + delta->y);
+  o->pos.z = (float)(o->pos.z + delta->z);
+  o->pos_prev = o->pos;
+  o->box_min.x = (float)(o->box_min.x + delta->x);
+  o->box_min.y = (float)(o->box_min.y + delta->y);
+  o->box_min.z = (float)(o->box_min.z + delta->z);
+  o->box_max.x = (float)(o->box_max.x + delta->x);
+  o->box_max.y = (float)(o->box_max.y + delta->y);
+  o->box_max.z = (float)(o->box_max.z + delta->z);
+  return 0;
+}

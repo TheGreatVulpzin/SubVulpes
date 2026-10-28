@@ -27,8 +27,10 @@ typedef struct {
     SvResult (SV_CALL *kick)(SvOwner owner, SvEntity player);
     /* Adds money to an account and to each active player of it. The sum must fit in 32 bits. */
     SvResult (SV_CALL *add_money)(SvOwner owner, SvEntity account, int32_t amount);
-    /* Moves every bone of a human on foot by the same offset. The velocity does not change. */
-    SvResult (SV_CALL *teleport)(SvOwner owner, SvEntity human, SvVector position);
+    /* Moves a human on foot, a vehicle or a free item so that its place reaches the position: bone 0 of a human, the
+     * center of a vehicle, the position of an item. The offset is the same for every part, and the speeds do not change.
+     * SV_STATE for a human in a vehicle or an item that a human or another item holds. SV_DENIED for a piece of the train. */
+    SvResult (SV_CALL *teleport)(SvOwner owner, SvEntity entity, SvVector position);
     /* Sets the five look selectors of a player and of its human, and sends the updates. */
     SvResult (SV_CALL *set_looks)(SvOwner owner, SvEntity player, const int32_t looks[SV_LOOK_COUNT]);
     /* Like message, but only the connection of this player gets the text. Other clients see an empty slot. */
@@ -54,10 +56,12 @@ typedef struct {
     /* Ends the life of an object. The game removes it in its next object lifetime pass, and the humans inside get out.
      * SV_DENIED for a train piece. */
     SvResult (SV_CALL *object_remove)(SvOwner owner, SvEntity object);
-    /* Makes a bot player on foot, named NPC, in team 6 like the bots of the game, with a human at the position turned by the
-     * yaw angle. It has no route and no end time. Both references go out only on success. SV_LIMIT means that no player
-     * slot, human slot or bond is free, and then nothing is left behind. */
-    SvResult (SV_CALL *npc_create)(SvOwner owner, SvVector position, float yaw, SvEntity *player, SvEntity *human);
+    /* Makes a bot player on foot in team 6 like the bots of the game, with a human at the position turned by the yaw angle.
+     * The name is 0 to 31 printable ASCII bytes, or NULL for "NPC". The client shows the name above the body, and the very
+     * first update event of the bot already carries it. The bot has no route and no end time. Both references go out only on
+     * success. SV_LIMIT means that no player slot, human slot or bond is free, and then nothing is left behind. */
+    SvResult (SV_CALL *npc_create)(SvOwner owner, SvVector position, float yaw, const char *name, SvEntity *player,
+        SvEntity *human);
     /* Asks the game to remove a bot. Its bot expiry removes the human and the player in the next world logic pass.
      * SV_DENIED for a player who is not a bot. */
     SvResult (SV_CALL *npc_remove)(SvOwner owner, SvEntity player);
@@ -73,6 +77,16 @@ typedef struct {
      * the two lines that the newspaper shows. SV_INVALID for a gap in the index or a bad text, SV_LIMIT when 1,024 lines
      * exist. The next round loads the news again, so a plugin that wants its line every round writes it again. */
     SvResult (SV_CALL *headline)(SvOwner owner, uint32_t index, const char *text);
+    /* Seats a human on foot in a free seat of a vehicle (seat 0 is the driver), as the use button does for the nearest seat.
+     * The seat must be below the seat count of the vehicle. SV_DENIED for a piece of the train, SV_INVALID for a bad seat,
+     * SV_STATE for a human that is dead or already sits in a vehicle, SV_CONFLICT when the seat is taken. */
+    SvResult (SV_CALL *vehicle_enter)(SvOwner owner, SvEntity human, SvEntity vehicle, int32_t seat);
+    /* Gives a player, a bot included, a new name of 0 to 31 printable ASCII bytes, and sends the update to the clients. The
+     * name of the account stays. Players who joined before may keep the old name on screen if their client reads it once. */
+    SvResult (SV_CALL *set_name)(SvOwner owner, SvEntity player, const char *name);
+    /* Makes a human say a text of 1 to 63 printable ASCII bytes, as the chat of a player does: the clients near the human
+     * see it above the head. The range is 0 (short), 1 (normal) or 2 (long). SV_STATE for a human that is dead. */
+    SvResult (SV_CALL *speak)(SvOwner owner, SvEntity human, const char *text, int32_t range);
 } SvGameWrite;
 #pragma pack(pop)
 

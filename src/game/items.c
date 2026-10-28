@@ -307,3 +307,21 @@ void itemtimetolive(void)
         createevent_updateitem(i);
     }
 }
+
+/* Moves a free item by one offset. The previous place moves too, and the item wakes up if it was at rest. Returns 0 when
+ * the item moved, and 1 when it was not changed: no item, or an item that a human or another item holds. */
+int item_translate(int item, const vec3 *delta)
+{
+    Item *it;
+    if ((unsigned)item >= SR_MAX_ITEM || !sr_items[item].active)
+        return 1;
+    it = &sr_items[item];
+    if (it->parent_human != -1 || it->parent_item != -1)
+        return 1;
+    it->pos.x = (float)(it->pos.x + delta->x);
+    it->pos.y = (float)(it->pos.y + delta->y);
+    it->pos.z = (float)(it->pos.z + delta->z);
+    it->pos_prev = it->pos;
+    it->at_rest = 0;
+    return 0;
+}

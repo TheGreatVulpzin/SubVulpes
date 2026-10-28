@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "sv_game_read.h"
@@ -78,7 +79,7 @@ static SvResult SV_CALL npclimit_command(SvOwner owner, uint64_t actor, const ch
     (void)actor;
     (void)arguments;
     if (game->entities(owner, SV_ENTITY_PLAYER, 0, page, SV_ENTITY_PAGE_MAX, &before, &next) != SV_OK ||
-        change->npc_create(owner, at, 0.0f, &none_player, &none_human) != SV_LIMIT || none_player || none_human ||
+        change->npc_create(owner, at, 0.0f, NULL, &none_player, &none_human) != SV_LIMIT || none_player || none_human ||
         game->entities(owner, SV_ENTITY_PLAYER, 0, page, SV_ENTITY_PAGE_MAX, &after, &next) != SV_OK || before != after)
         return host->log(owner, "NPC_LIMIT_FAILURE");
     return host->log(owner, "NPC_LIMIT_PASS");
@@ -358,28 +359,53 @@ static int change_objects(SvOwner owner)
 static int change_npc(SvOwner owner)
 {
     const SvVector at = { 70.0f, 22.0f, 80.0f };
+    static const char long_name[] = "0123456789012345678901234567890123456789";
     SvVector bad = at;
     SvPlayerState ps = { sizeof ps };
     SvHumanState hs = { sizeof hs };
     SvBoneState bs = { sizeof bs };
-    SvEntity npc_player = 0, npc_human = 0, none = 0;
+    SvEntity npc_player = 0, npc_human = 0, bob_player = 0, bob_human = 0, none = 0;
     uint32_t nan_bits = 0x7fc00000u;
     float yaw_nan;
     memcpy(&bad.x, &nan_bits, sizeof bad.x);
     memcpy(&yaw_nan, &nan_bits, sizeof yaw_nan);
-    STEP(change->npc_create(owner, at, 0.0f, NULL, &none) == SV_INVALID);
-    STEP(change->npc_create(owner, at, 0.0f, &none, NULL) == SV_INVALID);
-    STEP(change->npc_create(owner, bad, 0.0f, &none, &none) == SV_INVALID);
-    STEP(change->npc_create(owner, at, yaw_nan, &none, &none) == SV_INVALID && none == 0);
-    STEP(change->npc_create(owner, at, 1.0f, &npc_player, &npc_human) == SV_OK && npc_player && npc_human);
+    STEP(change->npc_create(owner, at, 0.0f, NULL, NULL, &none) == SV_INVALID);
+    STEP(change->npc_create(owner, at, 0.0f, NULL, &none, NULL) == SV_INVALID);
+    STEP(change->npc_create(owner, bad, 0.0f, NULL, &none, &none) == SV_INVALID);
+    STEP(change->npc_create(owner, at, yaw_nan, NULL, &none, &none) == SV_INVALID && none == 0);
+    STEP(change->npc_create(owner, at, 0.0f, long_name + 8, &none, &none) == SV_INVALID);
+    STEP(change->npc_create(owner, at, 0.0f, "bad\nname", &none, &none) == SV_INVALID && none == 0);
+    STEP(change->npc_create(owner, at, 1.0f, NULL, &npc_player, &npc_human) == SV_OK && npc_player && npc_human);
     STEP(game->player(owner, npc_player, &ps) == SV_OK && ps.is_bot == 1 && ps.team == 6 && ps.human == npc_human);
     STEP(strcmp(ps.name, "NPC") == 0);
     STEP(game->human(owner, npc_human, &hs) == SV_OK && hs.player == npc_player && hs.health == 100);
     STEP(game->bone(owner, npc_human, 0, &bs) == SV_OK && hs.position.x == bs.position.x && hs.position.y == bs.position.y &&
          hs.position.z == bs.position.z && hs.position.x != 0.0f);
+    /* A bot with a name from the first update event, a longest name, a rename and a speech. */
+    STEP(change->npc_create(owner, at, 2.0f, "Bob", &bob_player, &bob_human) == SV_OK);
+    STEP(game->player(owner, bob_player, &ps) == SV_OK && strcmp(ps.name, "Bob") == 0);
+    STEP(change->set_name(owner + 1, bob_player, "Zed") == SV_STATE);
+    STEP(change->set_name(owner, bob_human, "Zed") == SV_NOT_FOUND && change->set_name(owner, 0, "Zed") == SV_NOT_FOUND);
+    STEP(change->set_name(owner, bob_player, NULL) == SV_INVALID && change->set_name(owner, bob_player, long_name) == SV_INVALID);
+    STEP(change->set_name(owner, bob_player, "a\tb") == SV_INVALID && change->set_name(owner, bob_player, "caf\xc3\xa9") == SV_INVALID);
+    STEP(game->player(owner, bob_player, &ps) == SV_OK && strcmp(ps.name, "Bob") == 0);
+    STEP(change->set_name(owner, bob_player, long_name + 9) == SV_OK);
+    STEP(game->player(owner, bob_player, &ps) == SV_OK && strlen(ps.name) == 31);
+    STEP(change->set_name(owner, bob_player, "") == SV_OK && game->player(owner, bob_player, &ps) == SV_OK && ps.name[0] == 0);
+    STEP(change->set_name(owner, bob_player, "Alice") == SV_OK && game->player(owner, bob_player, &ps) == SV_OK && strcmp(ps.name, "Alice") == 0);
+    STEP(change->speak(owner + 1, bob_human, "hello", 1) == SV_STATE);
+    STEP(change->speak(owner, bob_player, "hello", 1) == SV_NOT_FOUND && change->speak(owner, 0, "hello", 1) == SV_NOT_FOUND);
+    STEP(change->speak(owner, bob_human, "hello", -1) == SV_INVALID && change->speak(owner, bob_human, "hello", 3) == SV_INVALID);
+    STEP(change->speak(owner, bob_human, NULL, 1) == SV_INVALID && change->speak(owner, bob_human, "", 1) == SV_INVALID);
+    STEP(change->speak(owner, bob_human, "bad\ntext", 1) == SV_INVALID);
+    STEP(change->speak(owner, bob_human, "0123456789012345678901234567890123456789012345678901234567890123", 1) == SV_INVALID);
+    STEP(change->speak(owner, bob_human, "hello there", 2) == SV_OK);
+    STEP(put(owner, pid_health, bob_human, -5) == SV_OK);
+    STEP(change->speak(owner, bob_human, "I am dead", 1) == SV_STATE);
     STEP(change->npc_remove(owner, npc_human) == SV_NOT_FOUND);
     STEP(change->npc_remove(owner, player) == SV_DENIED);
     STEP(change->npc_remove(owner, npc_player) == SV_OK);
+    STEP(change->npc_remove(owner, bob_player) == SV_OK);
     return 0;
 }
 
@@ -387,8 +413,9 @@ static int change_npc(SvOwner owner)
  * Returns 0 when all checks pass, or the line of the check that failed. */
 static int vehicle_checks(SvOwner owner)
 {
-    SvEntity page[16], rider_a = 0, rider_b = 0;
+    SvEntity page[16], rider_a = 0, rider_b = 0, vehicle = 0, train = 0;
     SvHumanState hs = { sizeof hs };
+    SvObjectState os = { sizeof os };
     uint32_t count = 0, next = 0, i;
     STEP(change->vehicle_exit(owner, human, 0) == SV_STATE);
     STEP(change->vehicle_exit(owner, human, 2) == SV_INVALID && change->vehicle_exit(owner, human, -1) == SV_INVALID);
@@ -397,16 +424,123 @@ static int vehicle_checks(SvOwner owner)
     STEP(game->entities(owner, SV_ENTITY_HUMAN, 0, page, 16, &count, &next) == SV_OK);
     for (i = 0; i < count; ++i)
         if (game->human(owner, page[i], &hs) == SV_OK && hs.vehicle) {
+            vehicle = hs.vehicle;
             if (hs.seat == 0)
                 rider_a = page[i];
             else if (hs.seat == 1)
                 rider_b = page[i];
         }
-    STEP(rider_a && rider_b);
+    STEP(rider_a && rider_b && vehicle);
     STEP(change->vehicle_exit(owner, rider_a, 1) == SV_OK);
     STEP(game->human(owner, rider_a, &hs) == SV_OK && hs.vehicle == 0);
     STEP(change->vehicle_exit(owner, rider_a, 0) == SV_STATE);
     STEP(change->vehicle_exit(owner, rider_b, 0) == SV_OK);
+    /* Seat both riders again, then take them out the same way, so the test program sees the same end state. */
+    STEP(game->entities(owner, SV_ENTITY_OBJECT, 0, page, 16, &count, &next) == SV_OK);
+    for (i = 0; i < count; ++i)
+        if (game->object(owner, page[i], &os) == SV_OK && os.type == 12)
+            train = page[i];
+    STEP(train);
+    STEP(change->vehicle_enter(owner + 1, rider_a, vehicle, 0) == SV_STATE);
+    STEP(change->vehicle_enter(owner, player, vehicle, 0) == SV_NOT_FOUND && change->vehicle_enter(owner, rider_a, rider_b, 0) == SV_NOT_FOUND);
+    STEP(change->vehicle_enter(owner, rider_a, train, 0) == SV_DENIED);
+    STEP(change->vehicle_enter(owner, rider_a, vehicle, -1) == SV_INVALID && change->vehicle_enter(owner, rider_a, vehicle, 7) == SV_INVALID);
+    STEP(game->human(owner, rider_a, &hs) == SV_OK && hs.vehicle == 0);
+    STEP(change->vehicle_enter(owner, rider_a, vehicle, 0) == SV_OK);
+    STEP(game->human(owner, rider_a, &hs) == SV_OK && hs.vehicle == vehicle && hs.seat == 0);
+    STEP(change->vehicle_enter(owner, rider_a, vehicle, 1) == SV_STATE);
+    STEP(change->vehicle_enter(owner, rider_b, vehicle, 0) == SV_CONFLICT);
+    STEP(change->vehicle_enter(owner, rider_b, vehicle, 1) == SV_OK);
+    STEP(game->human(owner, rider_b, &hs) == SV_OK && hs.vehicle == vehicle && hs.seat == 1);
+    STEP(change->vehicle_exit(owner, rider_a, 1) == SV_OK);
+    STEP(change->vehicle_exit(owner, rider_b, 0) == SV_OK);
+    return 0;
+}
+
+/* Teleport of a vehicle and of an item, and the rows for items, vehicles and accounts. The test program checks the
+ * particles of the moved car afterwards. Returns 0 when all checks pass, or the line of the check that failed. */
+static int move_checks(SvOwner owner)
+{
+    const SvVector target = { 720.0f, 6.0f, 740.0f }, spot = { 20.0f, 6.0f, 30.0f };
+    SvVector bad = target;
+    SvEntity car = 0, thing = 0, held = 0, rider = 0, train = 0, page[16];
+    SvObjectState os = { sizeof os };
+    SvItemState is = { sizeof is };
+    SvHumanState hs = { sizeof hs };
+    SvAccountState as = { sizeof as };
+    uint32_t nan_bits = 0x7fc00000u, count = 0, next = 0, i, ammo = 0, item_life = 0, car_life = 0, car_health = 0, ban = 0;
+    SvValue v;
+    float nan_value;
+    memcpy(&nan_value, &nan_bits, sizeof nan_value);
+    bad.y = nan_value;
+    STEP(change->object_create(owner, 0, (SvVector){ 700.0f, 5.0f, 700.0f }, 0.0f, 5, &car) == SV_OK);
+    STEP(game->entities(owner, SV_ENTITY_OBJECT, 0, page, 16, &count, &next) == SV_OK);
+    for (i = 0; i < count; ++i)
+        if (game->object(owner, page[i], &os) == SV_OK && os.type == 12)
+            train = page[i];
+    STEP(train);
+    STEP(change->teleport(owner + 1, car, target) == SV_STATE);
+    STEP(change->teleport(owner, car, bad) == SV_INVALID);
+    bad = target;
+    bad.x = SV_POSITION_LIMIT + 1.0f;
+    STEP(change->teleport(owner, car, bad) == SV_INVALID);
+    STEP(change->teleport(owner, player, target) == SV_NOT_FOUND && change->teleport(owner, 0, target) == SV_NOT_FOUND);
+    STEP(change->teleport(owner, account, target) == SV_NOT_FOUND);
+    STEP(change->teleport(owner, train, target) == SV_DENIED);
+    STEP(change->teleport(owner, car, target) == SV_OK);
+    STEP(game->object(owner, car, &os) == SV_OK && fabsf(os.position.x - 720.0f) < 0.05f && fabsf(os.position.y - 6.0f) < 0.05f &&
+         fabsf(os.position.z - 740.0f) < 0.05f);
+    /* A free item moves, and an item that a human holds does not. */
+    STEP(change->item_create(owner, 12, (SvVector){ 10.0f, 5.0f, 10.0f }, &thing) == SV_OK);
+    STEP(change->teleport(owner, thing, spot) == SV_OK);
+    STEP(game->item(owner, thing, &is) == SV_OK && fabsf(is.position.x - 20.0f) < 0.001f && fabsf(is.position.z - 30.0f) < 0.001f);
+    STEP(game->entities(owner, SV_ENTITY_HUMAN, 0, page, 16, &count, &next) == SV_OK);
+    for (i = 0; i < count; ++i)
+        if (game->human(owner, page[i], &hs) == SV_OK && !hs.vehicle && page[i] != human && !hs.player)
+            rider = page[i];
+    STEP(rider);
+    STEP(change->item_create(owner, 12, (SvVector){ 10.0f, 5.0f, 10.0f }, &held) == SV_OK);
+    STEP(change->item_equip(owner, held, rider, 3) == SV_OK);
+    STEP(change->teleport(owner, held, spot) == SV_STATE);
+    STEP(change->item_detach(owner, held) == SV_OK);
+    STEP(change->teleport(owner, held, spot) == SV_OK);
+    STEP(change->item_remove(owner, held) == SV_OK);
+    /* The rows. */
+    STEP(props->find(owner, "item.ammo", &ammo) == SV_OK && props->find(owner, "item.time_to_live", &item_life) == SV_OK);
+    STEP(props->find(owner, "object.time_to_live", &car_life) == SV_OK && props->find(owner, "object.health", &car_health) == SV_OK);
+    STEP(props->find(owner, "account.ban_time", &ban) == SV_OK);
+    v.i = 5;
+    STEP(props->set(owner, ammo, thing, 0, v) == SV_OK && props->get(owner, ammo, thing, 0, &v) == SV_OK && v.i == 5);
+    v.i = 1001;
+    STEP(props->set(owner, ammo, thing, 0, v) == SV_INVALID);
+    v.i = -6;
+    STEP(props->add(owner, ammo, thing, 0, v) == SV_INVALID);
+    v.i = 2;
+    STEP(props->add(owner, ammo, thing, 0, v) == SV_OK && props->get(owner, ammo, thing, 0, &v) == SV_OK && v.i == 7);
+    STEP(props->set(owner, ammo, human, 0, v) == SV_NOT_FOUND);
+    v.i = 600;
+    STEP(props->set(owner, item_life, thing, 0, v) == SV_OK && props->get(owner, item_life, thing, 0, &v) == SV_OK && v.i == 600);
+    v.i = 65536;
+    STEP(props->set(owner, item_life, thing, 0, v) == SV_INVALID);
+    STEP(props->add(owner, item_life, thing, 0, v) == SV_DENIED);
+    v.i = 77;
+    STEP(props->set(owner, car_health, car, 0, v) == SV_OK && game->object(owner, car, &os) == SV_OK && os.health == 77);
+    v.i = -1;
+    STEP(props->set(owner, car_health, car, 0, v) == SV_INVALID);
+    v.i = 1000001;
+    STEP(props->set(owner, car_health, car, 0, v) == SV_INVALID);
+    v.i = 90;
+    STEP(props->add(owner, car_health, car, 0, v) == SV_OK && props->get(owner, car_health, car, 0, &v) == SV_OK && v.i == 167);
+    v.i = 65535;
+    STEP(props->set(owner, car_life, car, 0, v) == SV_OK && game->object(owner, car, &os) == SV_OK && os.time_to_live == 65535);
+    STEP(props->set(owner, car_life, train, 0, v) == SV_DENIED);
+    v.i = 3;
+    STEP(props->set(owner, ban, account, 0, v) == SV_OK && props->get(owner, ban, account, 0, &v) == SV_OK && v.i == 3);
+    v.i = -1;
+    STEP(props->set(owner, ban, account, 0, v) == SV_INVALID && props->set(owner, ban, player, 0, v) == SV_NOT_FOUND);
+    v.i = 0;
+    STEP(props->set(owner, ban, account, 0, v) == SV_OK);
+    STEP(game->account(owner, account, &as) == SV_OK);
     return 0;
 }
 
@@ -514,7 +648,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 13);
+    STEP(count == 18);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);
@@ -710,6 +844,8 @@ static SvResult write_checks(SvOwner owner)
             bad_line = effect_checks(owner);
         if (!bad_line)
             bad_line = headline_checks(owner);
+        if (!bad_line)
+            bad_line = move_checks(owner);
         if (!bad_line)
             bad_line = props_checks(owner);
         if (!bad_line)

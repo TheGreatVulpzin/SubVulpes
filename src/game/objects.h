@@ -12,6 +12,7 @@ int createvehicle(int type, const vec3 *pos, vec3 rot[3]);
 
 void objectsimulation(void);
 void objecttimetolive(void);
+int object_translate(int obj, const vec3 *delta);
 void applydamageobject(int obj, int damage);
 
 void objectsimulation_car(int obj);

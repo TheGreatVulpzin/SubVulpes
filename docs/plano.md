@@ -77,7 +77,7 @@ the stop event, metrics and subscriptions. `ctest --test-dir build/server` passe
 Step 2 (common API) is in progress.
 
 - Reads: entity pages and eight snapshot methods (`92854b1`).
-- Writes, version 1: eighteen methods. They are `message`, `message_to`, `kick`, `add_money`, `teleport`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `npc_create`, `npc_remove`, `vehicle_exit`, `sound` and `headline`.
+- Writes, version 1: twenty-one methods. They are `message`, `message_to`, `kick`, `add_money`, `teleport`, `set_looks`, `item_create`, `item_remove`, `item_equip`, `item_attach`, `item_detach`, `object_create`, `object_remove`, `npc_create`, `npc_remove`, `vehicle_exit`, `vehicle_enter`, `set_name`, `speak`, `sound` and `headline`. `teleport` moves a human, a vehicle or a free item.
 - Property table (capability 10): `find`, `info`, `get`, `set` and `add` over named numbers with a range. It holds god mode, admin, team, health, bleeding, stun, spawn protection and the velocity of a bone and of an object.
   Decision of 2026-10-27: a new number of the game adds a row, not a method. A plugin area adds a group of rows with `sv_props_add_group`.
 - Events (N16): the design is in [plugin events](plugin-events.md). Three kinds: notices in a queue, decisions at a safe point, and decisions inside the simulation. Built: the queue, the notices spawn, death and leave, the decisions at a safe point for chat and join, the damage scales, and the decisions inside the simulation (`unsafe_events`).

@@ -35,6 +35,11 @@ FIELD(object_velocity, sr_objects[i].vel)
 FIELD(human_damage_taken, *sv_damage_field_human_taken(i))
 FIELD(human_damage_dealt, *sv_damage_field_human_dealt(i))
 FIELD(object_damage_taken, *sv_damage_field_object_taken(i))
+FIELD(item_ammo, sr_items[i].ammo)
+FIELD(item_ttl, sr_items[i].time_to_live)
+FIELD(object_ttl, sr_objects[i].time_to_live)
+FIELD(object_health, sr_objects[i].health)
+FIELD(account_ban, sr_data_accounts.records[i].ban_time)
 
 /* A bot cannot be an admin. */
 static SvResult admin_check(int32_t index, SvValue value)
@@ -58,6 +63,13 @@ static void team_after(int32_t index)
     if (sr_players[index].human_id >= 0)
         sr_humans[sr_players[index].human_id].team = sr_players[index].team;
     createevent_updateplayer(index);
+}
+
+/* A piece of the train belongs to the track system, which ends its life. */
+static SvResult train_check(int32_t index, SvValue value)
+{
+    (void)value;
+    return sr_objects[index].type >= 12 ? SV_DENIED : SV_OK;
 }
 
 static SvResult bone_add(int32_t index, uint32_t slot, SvVector change)
@@ -104,6 +116,11 @@ static const Prop props[] = {
     { "human.damage_taken_scale", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, human_damage_taken, NULL, NULL, NULL },
     { "human.damage_dealt_scale", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, human_damage_dealt, NULL, NULL, NULL },
     { "object.damage_taken_scale", SV_ENTITY_OBJECT, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, object_damage_taken, NULL, NULL, NULL },
+    { "item.ammo", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000, item_ammo, NULL, NULL, NULL },
+    { "item.time_to_live", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 65535, item_ttl, NULL, NULL, NULL },
+    { "object.time_to_live", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 65535, object_ttl, train_check, NULL, NULL },
+    { "object.health", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000000, object_health, NULL, NULL, NULL },
+    { "account.ban_time", SV_ENTITY_ACCOUNT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000000, account_ban, NULL, NULL, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };

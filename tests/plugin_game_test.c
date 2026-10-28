@@ -223,6 +223,7 @@ static void seat_riders(void)
     float rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
     int k;
     rider_car = createobject(0, &at, NULL, rotation, 2);
+    sr_objects[rider_car].num_seats = 2;
     rider_a = createhuman(pos, rot, -1);
     rider_b = createhuman(pos, rot, -1);
     CHECK(rider_car > 0 && rider_a > 0 && rider_b > 0);
@@ -309,6 +310,120 @@ static void headline_check(uint32_t events)
             break;
         }
     sr_game.ticks = (int)ticks;
+}
+
+/* The names and the speech of the fixture: the first update event of the named bot already had the name, the rename sent
+ * another update, and the speech is a message event of kind 1 with the human as source. */
+static void names_check(uint32_t events)
+{
+    uint32_t i;
+    int bob_events = 0, alice_events = 0, speech = 0, loud = 0, dead_speech = 0;
+    for (i = events; i != sr_numofevents; i = (i + 1) & 0xffff) {
+        const Event *ev = &sr_events[i];
+        if (ev->type == 7 && !strcmp(ev->message, "Bob"))
+            ++bob_events;
+        if (ev->type == 7 && !strcmp(ev->message, "Alice"))
+            ++alice_events;
+        if (ev->type == 2 && ev->attach_type == 1 && !strcmp(ev->message, "hello there")) {
+            ++speech;
+            loud += ev->range_mode == 2;
+        }
+        if (ev->type == 2 && !strcmp(ev->message, "I am dead"))
+            ++dead_speech;
+    }
+    CHECK(bob_events >= 1 && alice_events >= 1);
+    CHECK(speech == 1 && loud == 1 && dead_speech == 0);
+}
+
+/* The car that the fixture moved with teleport stands at the target, and its previous place moved with it. */
+static void move_check(void)
+{
+    int o, found = -1;
+    for (o = 0; o < 1024; ++o)
+        if (sr_objects[o].active && sr_objects[o].type == 0 && sr_objects[o].color == 5)
+            found = o;
+    CHECK(found > 0);
+    CHECK(near_value(sr_objects[found].pos.x, 720.0f) && near_value(sr_objects[found].pos.y, 6.0f) &&
+          near_value(sr_objects[found].pos.z, 740.0f));
+    CHECK(sr_objects[found].pos_prev.x == sr_objects[found].pos.x && sr_objects[found].pos_prev.z == sr_objects[found].pos.z);
+}
+
+/* The move of a vehicle shifts every part of it by one offset, and it leaves the object alone when a list is out of range. */
+static void translate_check(void)
+{
+    static const vec3 at = { 400.0f, 10.0f, 400.0f };
+    const vec3 d = { 1.0f, 2.0f, 3.0f };
+    float before[3][3];
+    vec3 wheel_before, body_before, box_before;
+    Object *ob;
+    int o, i, held;
+    o = createobject(0, &at, NULL, rotation, 3);
+    CHECK(o > 0);
+    ob = &sr_objects[o];
+    ob->num_particles = 3;
+    for (i = 0; i < 3; ++i) {
+        ob->particles[i] = 20 + i;
+        sr_particles[20 + i].pos = (vec3){ 400.0f + (float)i, 10.0f, 400.0f };
+        sr_particles[20 + i].pos_prev = (vec3){ 0.0f, 0.0f, 0.0f };
+        before[i][0] = sr_particles[20 + i].pos.x;
+        before[i][1] = sr_particles[20 + i].pos.y;
+        before[i][2] = sr_particles[20 + i].pos.z;
+    }
+    ob->num_wheels = 1;
+    ob->wheels[0].pos = (vec3){ 5.0f, 6.0f, 7.0f };
+    ob->num_wheel_bodies = 1;
+    ob->wheel_bodies[0].pos = (vec3){ 8.0f, 9.0f, 10.0f };
+    ob->box_min = (vec3){ 1.0f, 1.0f, 1.0f };
+    wheel_before = ob->wheels[0].pos;
+    body_before = ob->wheel_bodies[0].pos;
+    box_before = ob->box_min;
+    CHECK(object_translate(o, &d) == 0);
+    for (i = 0; i < 3; ++i) {
+        const Particle *p = &sr_particles[20 + i];
+        CHECK(p->pos.x == before[i][0] + d.x && p->pos.y == before[i][1] + d.y && p->pos.z == before[i][2] + d.z);
+        CHECK(p->pos_prev.x == p->pos.x && p->pos_prev.y == p->pos.y && p->pos_prev.z == p->pos.z);
+    }
+    CHECK(ob->wheels[0].pos.x == wheel_before.x + d.x && ob->wheels[0].pos.z == wheel_before.z + d.z);
+    CHECK(ob->wheel_bodies[0].pos.y == body_before.y + d.y);
+    CHECK(ob->box_min.x == box_before.x + d.x);
+    CHECK(ob->pos_prev.x == ob->pos.x);
+    /* A list out of range, a free slot, a bad index and a piece of the train change nothing. */
+    sr_particles[20].pos.x = 50.0f;
+    ob->num_particles = 65;
+    CHECK(object_translate(o, &d) == 1 && sr_particles[20].pos.x == 50.0f);
+    ob->num_particles = 3;
+    ob->particles[1] = SR_MAX_PARTICLE;
+    CHECK(object_translate(o, &d) == 1 && sr_particles[20].pos.x == 50.0f);
+    ob->particles[1] = 21;
+    ob->num_wheels = 33;
+    CHECK(object_translate(o, &d) == 1 && sr_particles[20].pos.x == 50.0f);
+    ob->num_wheels = 1;
+    ob->num_wheel_bodies = 17;
+    CHECK(object_translate(o, &d) == 1 && sr_particles[20].pos.x == 50.0f);
+    ob->num_wheel_bodies = 1;
+    CHECK(object_translate(-1, &d) == 1 && object_translate(1024, &d) == 1);
+    ob->active = 0;
+    CHECK(object_translate(o, &d) == 1 && sr_particles[20].pos.x == 50.0f);
+    ob->active = 1;
+    ob->type = 12;
+    CHECK(object_translate(o, &d) == 1 && sr_particles[20].pos.x == 50.0f);
+    ob->type = 0;
+    CHECK(object_translate(o, &d) == 0 && sr_particles[20].pos.x == 51.0f);
+    ob->time_to_live = 0;
+    /* An item. A held item, a free slot and a bad index stay where they are. */
+    held = createitem(12, &at, NULL, rotation);
+    CHECK(held >= 0);
+    sr_items[held].at_rest = 1;
+    CHECK(item_translate(held, &d) == 0 && sr_items[held].pos.x == 401.0f && sr_items[held].pos_prev.x == 401.0f &&
+          sr_items[held].at_rest == 0);
+    sr_items[held].parent_human = 0;
+    CHECK(item_translate(held, &d) == 1 && sr_items[held].pos.x == 401.0f);
+    sr_items[held].parent_human = -1;
+    sr_items[held].parent_item = 0;
+    CHECK(item_translate(held, &d) == 1 && sr_items[held].pos.x == 401.0f);
+    sr_items[held].parent_item = -1;
+    CHECK(item_translate(-1, &d) == 1 && item_translate(1024, &d) == 1);
+    sr_items[held].time_to_live = 0;
 }
 
 /* The places in the core that post events, run with real constructors: a spawn for a human with a player (and none for a
@@ -548,6 +663,8 @@ static void write_api_tick(void)
     riders_check();
     effects_check(events, bone_before);
     headline_check(events);
+    move_check();
+    names_check(events);
     damage_check();
     decision_check();
     CHECK(sr_players[0].is_admin == 1 && sr_connections[0].is_admin == 1 && sr_connections[1].is_admin == 0);
@@ -818,6 +935,7 @@ int main(void)
     write_api_tick();
     chat_commands();
     menu_return_check();
+    translate_check();
     join_decision();
     npc_limit();
     line_mark();

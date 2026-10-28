@@ -18,7 +18,7 @@
 #include "vectors.h"
 #include <string.h>
 
-enum { MESSAGE_MAX = 63, KICK_IDLE_TICKS = 0x4b0 };
+enum { MESSAGE_MAX = 63, NAME_MAX_CHARS = 31, KICK_IDLE_TICKS = 0x4b0 };
 
 static SvResult resolve(SvOwner owner, uint32_t kind, SvEntity entity, int32_t *index)
 {
@@ -121,21 +121,17 @@ static SvResult SV_CALL write_add_money(SvOwner owner, SvEntity account, int32_t
     return SV_OK;
 }
 
-static SvResult SV_CALL write_teleport(SvOwner owner, SvEntity human, SvVector position)
+static int position_ok(SvVector p)
 {
-    int32_t index;
-    Human *hu;
+    return finite(p.x) && finite(p.y) && finite(p.z) && p.x <= SV_POSITION_LIMIT && p.x >= -SV_POSITION_LIMIT &&
+        p.y <= SV_POSITION_LIMIT && p.y >= -SV_POSITION_LIMIT && p.z <= SV_POSITION_LIMIT && p.z >= -SV_POSITION_LIMIT;
+}
+
+static SvResult teleport_human(int32_t index, SvVector position)
+{
+    Human *hu = &sr_humans[index];
     vec3 delta;
     int k;
-    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
-    if (result != SV_OK)
-        return result;
-    if (!finite(position.x) || !finite(position.y) || !finite(position.z) ||
-        position.x > SV_POSITION_LIMIT || position.x < -SV_POSITION_LIMIT ||
-        position.y > SV_POSITION_LIMIT || position.y < -SV_POSITION_LIMIT ||
-        position.z > SV_POSITION_LIMIT || position.z < -SV_POSITION_LIMIT)
-        return SV_INVALID;
-    hu = &sr_humans[index];
     if (hu->vehicle_id != -1)
         return SV_STATE;
     delta.x = position.x - hu->bones[0].pos.x;
@@ -149,6 +145,53 @@ static SvResult SV_CALL write_teleport(SvOwner owner, SvEntity human, SvVector p
     }
     hu->pos = hu->bones[0].pos;
     return SV_OK;
+}
+
+static SvResult teleport_object(int32_t index, SvVector position)
+{
+    const Object *ob = &sr_objects[index];
+    vec3 delta;
+    if (ob->type >= 12)
+        return SV_DENIED;
+    delta.x = position.x - ob->pos.x;
+    delta.y = position.y - ob->pos.y;
+    delta.z = position.z - ob->pos.z;
+    return object_translate(index, &delta) ? SV_FAILED : SV_OK;
+}
+
+static SvResult teleport_item(int32_t index, SvVector position)
+{
+    const Item *it = &sr_items[index];
+    vec3 delta;
+    if (it->parent_human != -1 || it->parent_item != -1)
+        return SV_STATE;
+    delta.x = position.x - it->pos.x;
+    delta.y = position.y - it->pos.y;
+    delta.z = position.z - it->pos.z;
+    return item_translate(index, &delta) ? SV_FAILED : SV_OK;
+}
+
+static SvResult SV_CALL write_teleport(SvOwner owner, SvEntity entity, SvVector position)
+{
+    int32_t index;
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if ((index = sv_entity_resolve(SV_ENTITY_HUMAN, entity)) >= 0) {
+        if (!position_ok(position))
+            return SV_INVALID;
+        return teleport_human(index, position);
+    }
+    if ((index = sv_entity_resolve(SV_ENTITY_OBJECT, entity)) >= 0) {
+        if (!position_ok(position))
+            return SV_INVALID;
+        return teleport_object(index, position);
+    }
+    if ((index = sv_entity_resolve(SV_ENTITY_ITEM, entity)) >= 0) {
+        if (!position_ok(position))
+            return SV_INVALID;
+        return teleport_item(index, position);
+    }
+    return SV_NOT_FOUND;
 }
 
 static SvResult SV_CALL write_looks(SvOwner owner, SvEntity player, const int32_t *looks)
@@ -181,14 +224,6 @@ static SvResult SV_CALL write_looks(SvOwner owner, SvEntity player, const int32_
     if (human >= 0)
         createevent_updatehuman(human, index);
     return SV_OK;
-}
-
-static int position_ok(SvVector position)
-{
-    return finite(position.x) && finite(position.y) && finite(position.z) &&
-        position.x <= SV_POSITION_LIMIT && position.x >= -SV_POSITION_LIMIT &&
-        position.y <= SV_POSITION_LIMIT && position.y >= -SV_POSITION_LIMIT &&
-        position.z <= SV_POSITION_LIMIT && position.z >= -SV_POSITION_LIMIT;
 }
 
 static SvResult SV_CALL write_item_create(SvOwner owner, uint32_t type, SvVector position, SvEntity *item)
@@ -306,13 +341,29 @@ static SvResult SV_CALL write_object_remove(SvOwner owner, SvEntity object)
     return SV_OK;
 }
 
-static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float yaw, SvEntity *player, SvEntity *human)
+/* A name of 0 to 31 printable ASCII bytes. The player record keeps 31 characters and a zero. */
+static SvResult name_check(const char *name)
+{
+    size_t i, length;
+    if (!name)
+        return SV_INVALID;
+    length = strnlen(name, NAME_MAX_CHARS + 1);
+    if (length > NAME_MAX_CHARS)
+        return SV_INVALID;
+    for (i = 0; i < length; ++i)
+        if ((unsigned char)name[i] < 0x20 || (unsigned char)name[i] > 0x7e)
+            return SV_INVALID;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float yaw, const char *name, SvEntity *player,
+    SvEntity *human)
 {
     vec3 at, rotation[3];
     int p, h;
     if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
         return SV_STATE;
-    if (!player || !human || !position_ok(position) || !finite(yaw))
+    if (!player || !human || !position_ok(position) || !finite(yaw) || (name && name_check(name) != SV_OK))
         return SV_INVALID;
     at.x = position.x;
     at.y = position.y;
@@ -320,7 +371,7 @@ static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float
     p = createplayer();
     if (p < 0)
         return SV_LIMIT;
-    strcpy(sr_players[p].name, "NPC");
+    strcpy(sr_players[p].name, name ? name : "NPC");
     sr_players[p].team = 6;
     sr_players[p].is_bot = 1;
     createevent_updateplayer(p);
@@ -389,6 +440,67 @@ static SvResult SV_CALL write_sound(SvOwner owner, uint32_t index, SvVector posi
     return SV_OK;
 }
 
+static SvResult SV_CALL write_vehicle_enter(SvOwner owner, SvEntity human, SvEntity vehicle, int32_t seat)
+{
+    int32_t hi, oi;
+    Human *hu;
+    const Object *ob;
+    int other;
+    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &hi);
+    if (result != SV_OK)
+        return result;
+    oi = sv_entity_resolve(SV_ENTITY_OBJECT, vehicle);
+    if (oi < 0)
+        return SV_NOT_FOUND;
+    hu = &sr_humans[hi];
+    ob = &sr_objects[oi];
+    if (ob->type >= 12)
+        return SV_DENIED;
+    if (ob->num_seats < 0 || ob->num_seats > 7)
+        return SV_FAILED;
+    if (seat < 0 || seat >= ob->num_seats)
+        return SV_INVALID;
+    if (hu->vehicle_id != -1 || hu->health < 1)
+        return SV_STATE;
+    for (other = 0; other < SR_MAX_HUMAN; ++other)
+        if (sr_humans[other].active && sr_humans[other].vehicle_id == oi && sr_humans[other].vehicle_seat == seat)
+            return SV_CONFLICT;
+    hu->vehicle_id = oi;
+    hu->vehicle_seat = seat;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_set_name(SvOwner owner, SvEntity player, const char *name)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
+    if (result != SV_OK)
+        return result;
+    if (name_check(name) != SV_OK)
+        return SV_INVALID;
+    strcpy(sr_players[index].name, name);
+    createevent_updateplayer(index);
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_speak(SvOwner owner, SvEntity human, const char *text, int32_t range)
+{
+    char buffer[MESSAGE_MAX + 1];
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_HUMAN, human, &index);
+    if (result != SV_OK)
+        return result;
+    if (range < 0 || range > 2)
+        return SV_INVALID;
+    result = copy_text(SV_MESSAGE_SERVER, text, buffer);
+    if (result != SV_OK)
+        return result;
+    if (sr_humans[index].health < 1)
+        return SV_STATE;
+    sr_createevent_message(1, buffer, index, range);
+    return SV_OK;
+}
+
 static SvResult SV_CALL write_headline(SvOwner owner, uint32_t index, const char *text)
 {
     size_t i, length;
@@ -415,5 +527,5 @@ const SvGameWrite sv_game_write = {
     write_teleport, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
     write_object_create, write_object_remove, write_npc_create, write_npc_remove,
-    write_vehicle_exit, write_sound, write_headline
+    write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak
 };

@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.1.2, built on 2026-10-27. It is a tool for developers. The server package does not carry it.
+Status: version 0.1.4, built on 2026-10-27. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -47,11 +47,16 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 12 | `item_in_hand` | `item_create`, `item_equip` | A bandage in your hand |
 | 13 | `magnum` | `item_create`, `item_attach`, `item_equip` | A loaded Magnum in your hand |
 | 14 | `car` | `object_create` | A car beside you |
-| 15 | `npc` | `npc_create` | A bot beside you |
+| 15 | `npc` | `npc_create` with the name Guard | A bot named Guard beside you |
 | 16 | `vehicle_exit` | `vehicle_exit` after `/test go` | You leave the car without flying away |
 | 17 | `aim` | `npc_create`, then `aim` for each `go` | The answer matches what you look at: the bot, the ground or the sky |
 | 18 | `looks` | `set_looks`, one look setting for each `go` | Each go changes one part of your look |
-| 19 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
+| 19 | `car_teleport` | `object_create`, then `teleport` of the car for each `go` | The car jumps 10 units at once |
+| 20 | `vehicle_enter` | `object_create`, then `vehicle_enter` after `/test go` | You sit in the driver seat |
+| 21 | `one_round` | `item_create`, `item_attach`, `item.ammo` 1 | One shot, then the Magnum does nothing |
+| 22 | `npc_name` | `npc_create` with a name, then `set_name` for each `go` | The name above the bot changes at once |
+| 23 | `npc_speak` | `speak` for each `go` | A speech bubble above the bot |
+| 24 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
 
 ## First play test
 
