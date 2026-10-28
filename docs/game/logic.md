@@ -90,12 +90,14 @@ The action ring advances with `(tail + 1) & 63`.
 | 4 | 1 to 4 buy item types 10, 6, 0 and 2. Value 16 returns to menu 3. |
 | 5 | 1 to 4 buy item types 11, 7, 1 and 3. Value 16 returns to menu 3. |
 | 6 | A row buys a team car and key. Value 16 returns to menu 3. |
-| 7 | 1 buys type 12. Value 2 buys type 13. |
-| 8 | Odd values 1, 3, 5 and 7 buy 1, 10, 100 and 5000 shares. The following even values sell them. |
+| 7 | 1 buys type 12. Value 2 buys type 13. Value 16 returns to menu 3 (a change from the base, see below). |
+| 8 | Odd values 1, 3, 5 and 7 buy 1, 10, 100 and 5000 shares. The following even values sell them. Value 16 returns to menu 3 (a change from the base). |
 | 9 | 1 opens shop menu 10 |
 | 10 | A row buys a suit, car or gun from the selected building |
 | 11 | 1 to 6 withdraw bills from the team stake. Value 7 deposits money or completes a mission. Value 16 returns. |
 | 12 | 1 to 6 withdraw bills from player money. Value 7 deposits money. Value 16 returns. |
+
+Change from the base (2026-10-27): the base code had no return for menus 7 and 8. A player who opened the equipment menu stayed in it until he left the base, because leaving sets the menu to 0. The user saw this in a play test. The public OpenSubRosa24 source has the same gap in `logic_playeractions` (read on GitHub on 2026-10-27). Both menus now return to menu 3 with value 16, as menus 4, 5 and 6 do. The value 16 is what those menus use, but the original client was not checked for what its Back button sends for menus 7 and 8. A test in the game-api program runs the action pass and checks the return.
 
 Weapon purchases stop at ten per player. Small bill withdrawals stop at forty.
 Car purchases stop at three per player. The periodic reset reduces this count by one when it is positive.

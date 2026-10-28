@@ -649,6 +649,39 @@ static DWORD WINAPI decide_other_thread(void *argument)
 
 /* The join decision: the plugin drops a player named BANNED. The test calls the function that the join code calls.
  * A bad index does nothing. */
+/* Queues one menu action for player 0 and runs the action pass of the game. */
+static void menu_action(int menu, int id, int value)
+{
+    Player *p = &sr_players[0];
+    PlayerAction *a;
+    p->action_tail = p->num_actions;
+    a = &p->actions[p->num_actions];
+    p->menu = menu;
+    a->kind = 0;
+    a->arg_a = id;
+    a->arg_b = value;
+    p->num_actions = (p->num_actions + 1) & 63;
+    logic_playeractions(0);
+}
+
+/* The equipment menu (7) and the stock menu (8) return to menu 3 with value 16, as the other menus do. */
+static void menu_return_check(void)
+{
+    CHECK(sr_players[0].human_id != -1 && sr_players[0].team != -1);
+    menu_action(7, 7, 16);
+    CHECK(sr_players[0].menu == 3);
+    menu_action(8, 8, 16);
+    CHECK(sr_players[0].menu == 3);
+    menu_action(4, 4, 16);
+    CHECK(sr_players[0].menu == 3);
+    /* Another value, or an action for another menu, keeps the menu. */
+    menu_action(7, 7, 3);
+    CHECK(sr_players[0].menu == 7);
+    menu_action(7, 8, 16);
+    CHECK(sr_players[0].menu == 7);
+    sr_players[0].menu = 0;
+}
+
 static void join_decision(void)
 {
     int banned = createplayer(), fine = createplayer();
@@ -784,6 +817,7 @@ int main(void)
     sr_data_object[0].num_wheels = 0;
     write_api_tick();
     chat_commands();
+    menu_return_check();
     join_decision();
     npc_limit();
     line_mark();
