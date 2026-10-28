@@ -131,6 +131,8 @@ if(BUILD_TESTING)
     add_test(NAME abi-snapshot COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_abi_snapshot.py" "$<TARGET_FILE:sv-abi-snapshot>"
         "${CMAKE_SOURCE_DIR}/tests/abi_snapshot.txt")
+    add_test(NAME sdk-runtime-download COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/sdk/test_runtime_download.py")
     add_test(NAME plugin-lifecycle COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_plugins.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c
