@@ -37,35 +37,36 @@ set_property(SOURCE src/game/human_body.c src/game/human_arms.c src/game/human_p
 target_link_options(subvulpes-server PRIVATE /LARGEADDRESSAWARE /MAP /DEBUG)
 set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 
-add_library(sv-status MODULE plugins/status/status.c)
-target_include_directories(sv-status PRIVATE src/plugins)
-target_compile_definitions(sv-status PRIVATE _CRT_SECURE_NO_WARNINGS)
-target_compile_options(sv-status PRIVATE /W4 /WX /utf-8)
-target_link_options(sv-status PRIVATE /EXPORT:sv_plugin_entry)
-set_target_properties(sv-status PROPERTIES OUTPUT_NAME status PREFIX ""
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.status"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.status")
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.status")
-configure_file(plugins/status/plugin.ini "${CMAKE_BINARY_DIR}/plugins/sv.status/plugin.ini" COPYONLY)
+include(tools/sdk/sv_plugin.cmake)
+sv_add_plugin(sv-status ID sv.status MANIFEST "${CMAKE_SOURCE_DIR}/plugins/status/plugin.ini"
+    SOURCES plugins/status/status.c OFFICIAL)
 configure_file(plugins/plugins.ini "${CMAKE_BINARY_DIR}/plugins/plugins.ini" COPYONLY)
+# The official list, the declared official plugins and the default profile must agree.
+get_property(SV_OFFICIAL_IDS GLOBAL PROPERTY SV_OFFICIAL_PLUGIN_IDS)
+get_property(SV_OFFICIAL_TARGETS GLOBAL PROPERTY SV_OFFICIAL_PLUGIN_TARGETS)
+file(STRINGS plugins/official.ini SV_OFFICIAL_LINES REGEX "^[a-z0-9][a-z0-9_.-]*=(enabled|disabled|required)$")
+set(SV_OFFICIAL_LISTED "")
+foreach(line IN LISTS SV_OFFICIAL_LINES)
+    string(REGEX REPLACE "=.*$" "" listed_id "${line}")
+    list(APPEND SV_OFFICIAL_LISTED "${listed_id}")
+endforeach()
+list(SORT SV_OFFICIAL_LISTED)
+list(SORT SV_OFFICIAL_IDS)
+if(NOT "${SV_OFFICIAL_LISTED}" STREQUAL "${SV_OFFICIAL_IDS}")
+    message(FATAL_ERROR "plugins/official.ini lists [${SV_OFFICIAL_LISTED}] but CMake declares [${SV_OFFICIAL_IDS}] as official.")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/plugins/official.ini")
 add_custom_target(sv-official-approvals ALL
     COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
-        "${CMAKE_SOURCE_DIR}/tools/plugins/write_approval.ps1"
-        -Binary "$<TARGET_FILE:sv-status>" -Id sv.status
+        "${CMAKE_SOURCE_DIR}/tools/plugins/write_official_approvals.ps1"
+        -Official "${CMAKE_SOURCE_DIR}/plugins/official.ini" -PluginsDir "${CMAKE_BINARY_DIR}/plugins"
         -Output "${CMAKE_BINARY_DIR}/plugins/native-approvals.ini"
-    DEPENDS sv-status VERBATIM)
+    VERBATIM)
+add_dependencies(sv-official-approvals ${SV_OFFICIAL_TARGETS})
 
-# The test room is a tool for developers. The server package does not carry it.
-add_library(sv-testroom MODULE plugins/testroom/testroom.c)
-target_include_directories(sv-testroom PRIVATE src/plugins)
-target_compile_definitions(sv-testroom PRIVATE _CRT_SECURE_NO_WARNINGS)
-target_compile_options(sv-testroom PRIVATE /W4 /WX /utf-8)
-target_link_options(sv-testroom PRIVATE /EXPORT:sv_plugin_entry)
-set_target_properties(sv-testroom PROPERTIES OUTPUT_NAME testroom PREFIX ""
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.testroom"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.testroom")
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.testroom")
-configure_file(plugins/testroom/plugin.ini "${CMAKE_BINARY_DIR}/plugins/sv.testroom/plugin.ini" COPYONLY)
+# The test room is a tool for developers. The server package does not carry it. It is the example of a plugin built with the SDK.
+sv_add_plugin(sv-testroom ID sv.testroom MANIFEST "${CMAKE_SOURCE_DIR}/plugins/testroom/plugin.ini"
+    SOURCES plugins/testroom/testroom.c)
 
 set(SV_LAUNCHER "${CMAKE_SOURCE_DIR}/build/launcher/subvulpes_launcher.exe")
 add_custom_command(OUTPUT "${SV_LAUNCHER}"

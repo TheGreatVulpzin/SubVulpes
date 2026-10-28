@@ -18,7 +18,10 @@ Nine removal checks fail with their check removed and pass after restoration.
 The test catches errors and returns 1, so expected failures do not open a Windows crash dialog.
 No visual launcher check, Start/Stop check or client playtest ran for this change.
 
-WP1 remains open. The server parser, capability check, validation command and installer changes are next.
-WP2 through WP4 remain open. No SDK package ships yet.
+WP1 is complete (2026-10-28). The server reads `runtime`, `capabilities`, `name`, `description`, `author` and `homepage`. The capability list is a wall at `get_api`. The command `--plugin-validate-folder` prints every problem, and `tools/plugins/validate_plugin.ps1` checks a folder or a package. The installer asks the server before it copies a file. See [the manifest page](plugin-manifest.md). Three removal proofs hold.
+One change from the plan: the server command checks a folder only. A ZIP needs a reader in C, so the PowerShell script unpacks a package and calls the server.
+
+WP2 is complete (2026-10-28). `sv_add_plugin` builds a plugin, `tools/sdk/pack.ps1` makes `ID-VERSION-RUNTIME.svplugin`, and `plugins/official.ini` drives the approval file and the server package. See [the packaging page](sdk-packaging.md). One removal proof holds.
+WP3 and WP4 remain open. No SDK package ships yet.
 
 Build state after the checks: idle. The marker file is `build/state.txt`.

@@ -138,4 +138,60 @@ code, output, server_dir = install(script_runtime)
 assert code != 0 and not (server_dir / 'plugins/test.manifest').exists(), output
 checked += 4
 
+# pack.ps1 makes ID-VERSION-RUNTIME.svplugin from a folder, with the same bytes each time, and it refuses a bad folder.
+pack_script = ROOT / 'tools/sdk/pack.ps1'
+status_dir = BUILD / 'plugins/sv.status'
+
+
+def pack(folder, out_dir):
+    result = subprocess.run([*POWERSHELL, str(pack_script), '-Folder', str(folder), '-OutputDir', str(out_dir),
+                             '-ServerExe', str(SERVER)], capture_output=True, text=True, timeout=120)
+    return result.returncode, result.stdout + result.stderr
+
+
+status_version = next(line.split('=', 1)[1].strip() for line in (status_dir / 'plugin.ini').read_text(encoding='ascii').splitlines()
+                      if line.startswith('version='))
+out_one = CASES / 'pack-one'
+out_two = CASES / 'pack-two'
+for folder in (out_one, out_two):
+    if folder.exists():
+        shutil.rmtree(folder)
+code, output = pack(status_dir, out_one)
+name = f'sv.status-{status_version}-native.svplugin'
+assert code == 0 and (out_one / name).is_file() and f'PACKAGE\t' in output, output
+with zipfile.ZipFile(out_one / name) as archive:
+    assert archive.namelist() == ['plugin.ini', 'status.dll'], archive.namelist()
+code, output = pack(status_dir, out_two)
+assert code == 0 and (out_one / name).read_bytes() == (out_two / name).read_bytes(), 'The package bytes changed between two runs.'
+code, output = run_script(out_one / name)
+assert code == 0 and 'MANIFEST\tsv.status\t' in output, output
+code, output, server_dir = install(out_one / name)
+assert code == 0 and (server_dir / 'plugins/sv.status/status.dll').is_file(), output
+checked += 4
+
+
+def copy_of_status(extra=None, manifest_extra='', drop_library=False):
+    folder = Path(tempfile.mkdtemp(prefix='pack-', dir=CASES)).resolve()
+    shutil.copyfile(status_dir / 'plugin.ini', folder / 'plugin.ini')
+    if not drop_library:
+        shutil.copyfile(status_dir / 'status.dll', folder / 'status.dll')
+    if manifest_extra:
+        with open(folder / 'plugin.ini', 'a', encoding='ascii') as manifest_file:
+            manifest_file.write(manifest_extra)
+    for extra_name in (extra or []):
+        (folder / extra_name).write_text('private notes', encoding='ascii')
+    return folder
+
+
+out_three = CASES / 'pack-three'
+if out_three.exists():
+    shutil.rmtree(out_three)
+code, output = pack(copy_of_status(extra=['notes.txt']), out_three)
+assert code != 0 and 'notes.txt' in output and not list(out_three.glob('*.svplugin')), output
+code, output = pack(copy_of_status(manifest_extra='capabilities=fly\n'), out_three)
+assert code != 0 and 'INVALID' in output and not list(out_three.glob('*.svplugin')), output
+code, output = pack(copy_of_status(drop_library=True), out_three)
+assert code != 0 and not list(out_three.glob('*.svplugin')), output
+checked += 3
+
 print(f'MANIFEST_PASS {checked}')

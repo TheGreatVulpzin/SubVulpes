@@ -32,6 +32,15 @@ $output = Join-Path $repo 'build\package'
 $package = Join-Path $output $name
 $zip = Join-Path $output "$name.zip"
 $checksum = "$zip.sha256"
+# The official plugins come from plugins/official.ini. Each one needs its built manifest and DLL.
+$official = [ordered]@{}
+foreach ($line in Get-Content -LiteralPath (Join-Path $repo 'plugins\official.ini')) {
+    if ($line -cmatch '^([a-z0-9][a-z0-9_.-]{0,46})=(enabled|disabled|required)$') {
+        if ($official.Contains($Matches[1]) -or $Matches[1].Contains('..')) { throw 'official.ini repeats a plugin or holds a bad identifier.' }
+        $official[$Matches[1]] = $Matches[2]
+    }
+}
+if ($official.Count -eq 0) { throw 'official.ini lists no plugin.' }
 $sources = [ordered]@{
     'subvulpes_server.exe' = 'build\server\subvulpes_server.exe'
     'subvulpes_launcher.exe' = 'build\launcher\subvulpes_launcher.exe'
@@ -39,16 +48,34 @@ $sources = [ordered]@{
     'readme.txt' = 'tools\release\newspaper.txt'
     'plugins/plugins.ini' = 'plugins\plugins.ini'
     'plugins/native-approvals.ini' = 'build\server\plugins\native-approvals.ini'
-    'plugins/sv.status/plugin.ini' = 'plugins\status\plugin.ini'
-    'plugins/sv.status/status.dll' = 'build\server\plugins\sv.status\status.dll'
     'install_plugin.ps1' = 'tools\plugins\install_plugin.ps1'
+}
+$directories = @('data', 'data/block', 'data/building', 'data/texture', 'data/weapon', 'plugins')
+$libraries = @{}
+foreach ($id in $official.Keys) {
+    $built = "build\server\plugins\$id"
+    $manifestFile = Join-Path $repo "$built\plugin.ini"
+    if (-not (Test-Path -LiteralPath $manifestFile -PathType Leaf)) { throw "Build or source file is missing: $built\plugin.ini" }
+    $library = (Select-String -LiteralPath $manifestFile -Pattern '^library=(.+)$' | Select-Object -First 1).Matches[0].Groups[1].Value.Trim()
+    if ($library -cnotmatch '^[A-Za-z0-9_.-]+\.dll$') { throw "The manifest of $id names a bad library." }
+    $libraries[$id] = "plugins/$id/$library"
+    $sources["plugins/$id/plugin.ini"] = "$built\plugin.ini"
+    $sources[$libraries[$id]] = "$built\$library"
+    $directories += "plugins/$id"
 }
 $allowed = @($sources.Keys) + @('version.txt')
 $allowed += @($dataFiles | ForEach-Object { "data/$($_.Relative)" })
-$directories = @('data', 'data/block', 'data/building', 'data/texture', 'data/weapon', 'plugins', 'plugins/sv.status')
-$statusHash = (Get-FileHash -LiteralPath (Join-Path $repo $sources['plugins/sv.status/status.dll']) -Algorithm SHA256).Hash.ToLowerInvariant()
+$officialKeys = [string[]]@($official.Keys)
+[Array]::Sort($officialKeys, [StringComparer]::Ordinal)
+$approvalLines = @('[native]')
+foreach ($id in $officialKeys) {
+    $approvalLines += "$id=$((Get-FileHash -LiteralPath (Join-Path $repo $sources[$libraries[$id]]) -Algorithm SHA256).Hash.ToLowerInvariant())"
+}
 $approvalText = [IO.File]::ReadAllText((Join-Path $repo $sources['plugins/native-approvals.ini'])).Replace("`r", '').Trim()
-if ($approvalText -cne "[native]`nsv.status=$statusHash") { throw 'The official native approval does not match the built status plugin.' }
+if ($approvalText -cne ($approvalLines -join "`n")) { throw 'The official native approval does not match the built official plugins.' }
+$profileText = [IO.File]::ReadAllText((Join-Path $repo $sources['plugins/plugins.ini'])).Replace("`r", '').Trim()
+$expectedProfile = (@('[plugins]') + @($official.Keys | ForEach-Object { "$_=$($official[$_])" })) -join "`n"
+if ($profileText -cne $expectedProfile) { throw 'plugins/plugins.ini does not match plugins/official.ini.' }
 
 # Copy build outputs, package defaults and checked data files.
 # The package has no config.txt: the launcher creates it with a new admin password.
