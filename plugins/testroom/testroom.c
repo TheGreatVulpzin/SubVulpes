@@ -20,7 +20,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.1"
+#define VERSION "0.2.2"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -43,7 +43,7 @@ enum { TODO, PASS, FAIL, SKIP };
 /* What a test changed on the player, so the next test or /test stop can undo it. */
 enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16, T_TYPES = 32, T_DEATH = 64, T_PHONE = 128, T_AI = 256, T_MONEY = 512, T_ECON = 1024, T_MISSION = 2048, T_SHOP = 4096,
     T_SETTING = 8192 };
-#define EVENTS_BASE (SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM |\
+#define EVENTS_BASE (SV_EVENT_TICK | SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM |\
     SV_EVENT_SETTING | SV_EVENT_CONFIG)
 
 typedef struct Test {
@@ -60,7 +60,7 @@ static int current;
 static unsigned char result[MAX_TESTS + 1];
 static unsigned touched;
 static int32_t saved_looks[SV_LOOK_COUNT];
-static SvEntity made_objects[6], made_players[4], made_items[8];
+static SvEntity made_objects[6], made_players[4], made_items[24];
 static int made_object_count, made_player_count, made_item_count;
 static uint32_t sound_next;
 static SvEntity last_magazine, last_car, last_npc, last_npc_human, last_gun;
@@ -75,6 +75,13 @@ static int mission_live;
 static struct { uint32_t building; SvShopCatalog old; } saved_shop[32];
 static int saved_shop_count, duel_stage;
 static SvEntity duel_a, duel_b;
+/* A timed show, driven by the tick event: a scale of sounds, a grid of moving items or a newspaper that changes. */
+enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES };
+#define GRID_ITEMS 16
+static int anim_kind, grid_count;
+static uint32_t anim_next, anim_step, anim_every, anim_limit;
+static SvEntity grid_items[GRID_ITEMS];
+static SvVector grid_origin;
 
 /* ------------------------------------------------------------ text */
 
@@ -191,6 +198,7 @@ static SvResult set_engine_int(const char *name, int32_t value)
 }
 
 static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event);
+static void animate(uint32_t tick);
 
 /* Put back what the economy, mission, shop, setting and money tests changed. */
 static void undo_services(void)
@@ -233,6 +241,8 @@ static void cleanup(void)
     if (touched & T_PHONE)
         host->subscribe(self, EVENTS_BASE, on_event);
     phone_claim_on = 0;
+    anim_kind = ANIM_NONE;
+    grid_count = 0;
     undo_services();
     for (i = 0; i < made_object_count; ++i)
         change->object_remove(self, made_objects[i]);
@@ -796,6 +806,8 @@ static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event)
         else if (event->kind == SV_EVENT_OBJECT_GONE)
             sayf("[vehicle gone] type %d.", (int)record->value);
     }
+    if (anim_kind && event->kind == SV_EVENT_TICK)
+        animate(event->tick);
     if (tester && event->kind == SV_EVENT_SETTING && event->size == sizeof(SvSettingEvent) && setting_notice_on) {
         const SvSettingEvent *changed = (const SvSettingEvent *)event;
         sayf("[setting] %s went from %d to %d.", changed->name, (int)changed->before, (int)changed->after);
@@ -1505,6 +1517,121 @@ static SvResult t_kick_run(void)
     return SV_OK;
 }
 
+/* ------------------------------------------------------------ timed shows (for a music and picture plugin) */
+
+static void animate(uint32_t tick)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = SV_OK;
+    if (tick < anim_next)
+        return;
+    anim_next = tick + anim_every;
+    if (body(&player, &human) != SV_OK) {
+        anim_kind = ANIM_NONE;
+        return;
+    }
+    if (anim_kind == ANIM_SCALE) {
+        float pitch = 0.5f * powf(2.0f, (float)anim_step / 12.0f);
+        r = change->sound(self, 21, human.position, 1.0f, pitch);
+        if (anim_step % 4 == 0)
+            sayf("Note %u, pitch %.2f.", anim_step, pitch);
+    } else if (anim_kind == ANIM_GRID) {
+        int i;
+        for (i = 0; i < grid_count && r == SV_OK; ++i) {
+            float wave = sinf((float)anim_step * 0.2f + (float)(i / 4 + i % 4)) * 2.0f;
+            r = change->teleport(self, grid_items[i], offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f + wave, (float)(i % 4) * 2.0f));
+        }
+    } else if (anim_kind == ANIM_FRAMES) {
+        char text[SV_HEADLINE_TEXT_MAX + 1];
+        uint32_t x;
+        for (x = 0; x < SV_HEADLINE_TEXT_MAX; ++x)
+            text[x] = ((x % 62) + anim_step) % 16 < 8 ? '#' : '.';
+        text[SV_HEADLINE_TEXT_MAX] = 0;
+        r = change->headline(self, 0, text);
+    }
+    ++anim_step;
+    if (r != SV_OK) {
+        sayf("The show stopped with error %d after %u steps.", (int)r, anim_step);
+        anim_kind = ANIM_NONE;
+    } else if (anim_step >= anim_limit) {
+        sayf("The show ended after %u steps, one every %u ticks. No error.", anim_step, anim_every);
+        anim_kind = ANIM_NONE;
+    }
+}
+
+static void anim_start(int kind, uint32_t every, uint32_t limit)
+{
+    anim_kind = kind;
+    anim_every = every;
+    anim_limit = limit;
+    anim_step = 0;
+    anim_next = 0;
+}
+
+static SvResult t_scale(void)
+{
+    say("Type /test go. A scale of 25 sounds plays, one every 15 ticks.");
+    return SV_OK;
+}
+
+static SvResult t_scale_go(void)
+{
+    anim_start(ANIM_SCALE, 15, 25);
+    return SV_OK;
+}
+
+static SvResult t_grid_go(void)
+{
+    anim_every = anim_every == 1 ? 4 : anim_every == 4 ? 12 : 1;
+    sayf("The grid moves every %u ticks now.", anim_every);
+    anim_start(ANIM_GRID, anim_every, 300);
+    return SV_OK;
+}
+
+static SvResult t_grid(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = body(&player, &human);
+    int i;
+    if (r != SV_OK)
+        return r;
+    grid_count = 0;
+    grid_origin = beside(&human, 6.0f, 0.0f, -3.0f);
+    for (i = 0; i < GRID_ITEMS; ++i) {
+        SvEntity item = 0;
+        r = change->item_create(self, 12, offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f, (float)(i % 4) * 2.0f), &item);
+        if (r != SV_OK)
+            break;
+        remember(made_items, &made_item_count, 24, item);
+        grid_items[grid_count++] = item;
+    }
+    sayf("%d items made. They move in a wave. Type /test go to change the speed.", grid_count);
+    if (!grid_count)
+        return r;
+    anim_start(ANIM_GRID, 1, 300);
+    return SV_OK;
+}
+
+static SvResult t_frames_go(void)
+{
+    anim_every = anim_every == 60 ? 20 : anim_every == 20 ? 6 : 60;
+    sayf("The newspaper changes every %u ticks now.", anim_every);
+    anim_start(ANIM_FRAMES, anim_every, 60);
+    return SV_OK;
+}
+
+static SvResult t_frames(void)
+{
+    SvResult r = to_newspaper();
+    if (r != SV_OK)
+        return r;
+    say("Pick up the newspaper and read the first line. Type /test go to start the show.");
+    anim_every = 60;
+    return SV_OK;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1563,6 +1690,9 @@ static const Test tests[] = {
     { "config_read", "Reads the three settings of this plugin from plugin.ini.", "The values are hello, 3 and 1.50. Change one with the plugins config command, and a chat line shows it.", t_config_read, NULL },
     { "plugins_calls", "Calls subscribe64, refuse and find outside their normal use.", "All three answers match the wanted values.", t_plugins_calls, NULL },
     { "kick", "Removes the player whose name you type with /test kick NAME. It refuses you, bots and administrators.", "The player leaves the game and cannot join again until you type /clearkick in the chat.", t_kick_run, NULL },
+    { "pitch_scale", "Plays a game sound in 25 steps, from half pitch to double pitch. Type /test go to start it.", "The sound rises like a musical scale, in even steps. Say no if it jumps or stays flat.", t_scale, t_scale_go },
+    { "item_grid", "Makes 16 items in a grid and moves all of them every tick in a wave. Type /test go to change the speed.", "The items move smoothly as one picture. Say no if they stutter, fall or vanish.", t_grid, t_grid_go },
+    { "headline_frames", "Moves you to a newspaper. Type /test go to rewrite its first line again and again.", "Hold the newspaper open. The pattern of # and . moves. Say no if it never changes.", t_frames, t_frames_go },
 };
 
 /* ------------------------------------------------------------ flow */
