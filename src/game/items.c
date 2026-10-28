@@ -14,6 +14,8 @@
 #include "events.h"
 #include "plugin_entities.h"
 #include "plugin_game_events.h"
+#include "sv_game_mission.h"
+#include "sv_game_shop.h"
 #include "sr_runtime.h"
 
 #define NO_LIMIT 0xffff /* time_to_live of an item that stays */
@@ -292,6 +294,9 @@ void itemtimetolive(void)
             it->time_to_live--;
         if (it->time_to_live >= 1)
             continue;
+        /* A phone (type 23) closes its call link for the shop API before the game retires its reference. */
+        if (it->type == 23)
+            (void)sv_shop_phone_retire(sv_entity_at(SV_ENTITY_ITEM, (int32_t)i));
         if (it->type == ITEM_NEWSPAPER)
             sr_game.num_newspapers--;
         if (it->parent_human != -1)
@@ -308,6 +313,8 @@ void itemtimetolive(void)
         it->active = 0;
         sv_entity_deleted(SV_ENTITY_ITEM, i);
         createevent_updateitem(i);
+        /* A mission of a plugin that held this item ends before a new item can take the slot. */
+        sv_mission_before_tick();
     }
 }
 

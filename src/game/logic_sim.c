@@ -2,6 +2,7 @@
 #include "logic.h"
 #include "plugin_entities.h"
 #include "sv_game_settings.h"
+#include "sv_game_mission.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -116,6 +117,7 @@ void logicsimulation_world(void)
         return;
     }
     stale = 16;
+    sv_mission_before_tick();
     for (team = 0; team < 5; ++team) {
         g_market.stocks[team].price_int = (int)g_market.stocks[team].price;
         for (slot = 0; slot < 16; ++slot) {

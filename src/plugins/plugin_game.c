@@ -7,6 +7,7 @@
 #include "sv_game_engine.h"
 #include "sv_game_mission.h"
 #include "sv_game_settings.h"
+#include "sv_game_shop.h"
 #include "sv_game_storage.h"
 #include "plugin_game_events.h"
 #include "events.h"
@@ -49,6 +50,9 @@ void sv_systems_install(void)
         sv_log("Cannot install the core settings.");
     if (!sv_engine_install(SV_ENGINE_OWNER_CLEANUP))
         sv_log("Cannot install the engine parameters.");
+    /* No safe feature flag yet: the phone rows and the phone reads work, and the catalog writes stay closed. */
+    if (!sv_shop_install(sv_plugins_decide, sv_plugins_write_context, SV_EVENT_PHONE_DIGIT, SV_EVENT_PHONE_CALL, 0))
+        sv_log("Cannot install the shop hooks.");
 }
 
 int sv_game_start(void)

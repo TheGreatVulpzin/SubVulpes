@@ -6,6 +6,7 @@
 
 #include "collide.h"
 #include "economy.h"
+#include "sv_game_mission.h"
 #include "events.h"
 #include "humans.h"
 #include "items.h"
@@ -340,7 +341,8 @@ static void bank_action(int player, int value, int own)
                 int j;
                 for (j = 0; j < 16; ++j) {
                     Mission *m = &team_missions(p->team)[j];
-                    if (m->active && m->item == item)
+                    /* A mission that a plugin made can refuse the completion, for example when the reward does not fit. */
+                    if (m->active && m->item == item && sv_mission_before_complete(p->team, j))
                         logic_teammissioncomplete(p->team, j);
                 }
             }

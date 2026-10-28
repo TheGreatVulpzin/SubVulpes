@@ -36,6 +36,7 @@
 #include "plugin_host.h"
 #include "plugin_entities.h"
 #include "sv_game_ai.h"
+#include "sv_game_mission.h"
 
 #ifndef SR_STANDALONE
 #include "loop_calls.h"
@@ -96,6 +97,7 @@ static void tick(void)
     sv_plugins_tick();
     if (sv_plugins_failed())
         return;
+    sv_mission_before_tick();
 
     if (sr_game.state == 2) {
         for (i = 0; i < 256; i++) {

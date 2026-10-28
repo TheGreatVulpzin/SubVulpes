@@ -1,6 +1,8 @@
 # Parallel work on the plugin API
 
 Two editors can work at the same time if they never edit the same file. This page says who owns what.
+
+The second editor finished on 2026-10-28 and the branch is merged into `main`. The page stays as the record of the split. [Core seams](plugin-seams.md) says which hooks the server calls now.
 Use a git worktree for the second editor: `git worktree add ..\SubVulpes-SVS-codex -b codex/systems-api`.
 
 ## System areas
