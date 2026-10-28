@@ -1,6 +1,7 @@
 /* The pose of a human: the angles that the muscles of the legs hold, and the contacts between
  * the bones of two humans. */
 #include "humans.h"
+#include "plugin_collapse.h"
 
 #include <stdint.h>
 
@@ -33,7 +34,7 @@ void human_calculatelegangles(int human)
     float angle;
     int k;
 
-    if (hu->health < 1) {
+    if (human_collapsed(hu->health)) {
         for (k = 9; k < NUM_BONES; k++) {
             const Bone *p = &hu->bones[g_body[k].parent];
             Bone *b = &hu->bones[k];

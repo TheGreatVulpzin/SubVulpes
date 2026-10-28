@@ -1,5 +1,6 @@
 #include "systems_host.h"
 #include "sv_game_engine.h"
+#include "plugin_collapse.h"
 #include <math.h>
 
 static int old_truck, other_object;
@@ -102,6 +103,8 @@ void engine_verify(void)
     CHECK(sr_data_objecttype[0].engine_power == untouched_power);
     CHECK(sv_engine_integer(SV_ENGINE_RAGDOLL_RESET, 77) == 0);
     CHECK(sv_engine_integer(SV_ENGINE_DEATH_START, 77) == 9);
+    /* The collapse threshold is inclusive, and the final death number does not move with it. */
+    CHECK(human_collapsed(-100) && human_collapsed(0) && human_collapsed(9) && !human_collapsed(10) && !human_collapsed(100));
     new_truck = make_object(9);
     CHECK(sr_objects[new_truck].engine_power == 852);
     engine_force(new_truck);
@@ -115,6 +118,7 @@ void engine_verify(void)
     CHECK(sr_data_objecttype[2].engine_power == 2 && sr_objects[other_object].engine_power == 426);
     CHECK(sv_engine_integer(SV_ENGINE_RAGDOLL_RESET, 77) == 1);
     CHECK(sv_engine_integer(SV_ENGINE_DEATH_START, 77) == 0);
+    CHECK(human_collapsed(-1) && human_collapsed(0) && !human_collapsed(1));
     command("default");
     puts("ENGINE_PASS");
 }

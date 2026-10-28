@@ -14,7 +14,7 @@ An absent API operation is work to plan, rather than a permanent restriction on 
 
 The inventory below describes target capabilities. It does not claim complete implementation.
 The implemented [read capability](plugin-game-api.md) covers copied entity, inventory, bone and world snapshots.
-The [write capability](plugin-game-api.md#write-capability-version-1) has twenty-three methods: messages, kick, money, teleport (human, vehicle or item), looks, five item operations, two object operations, two bot operations, the vehicle exit and entry, the sound, the news line, the name of a player, the speech of a human, a shot and a hit that only the clients see. The [property table](plugin-game-api.md#property-table-capability-10) holds the numbers that a plugin reads and changes: god mode, admin, team, health, bleeding, stun, spawn protection, the velocity of a bone and of an object, the damage scales, the ammunition and lifetime of an item, the health and lifetime of a vehicle and the ban time of an account, and the tables of the item types and the bullet types.
+The [write capability](plugin-game-api.md#write-capability-version-1) has twenty-four methods: messages, kick, money, teleport (human, vehicle or item), looks, five item operations, two object operations, two bot operations, the vehicle exit and entry, the sound, the news line, the name of a player, the speech of a human, a shot and a hit that only the clients see, and `disown`. The [property table](plugin-game-api.md#property-table-capability-10) holds the numbers that a plugin reads and changes: god mode, admin, team, health, bleeding, stun, spawn protection, the velocity of a bone and of an object, the damage scales, the ammunition and lifetime of an item, the health and lifetime of a vehicle and the ban time of an account, and the tables of the item types and the bullet types.
 Most other mutations, decisions that plugins can replace and owned game resources remain unimplemented.
 Internal C functions establish implementation seams. They are not a safe or stable external contract by themselves.
 
@@ -170,5 +170,5 @@ A plugin can reuse the display of a kind and change the rules behind it.
 What exists now for a boss bot that hunts the employees:
 
 - **Ready:** `npc_create` for the bot, `item_create` and `item_equip` for a heavy gun, the property `player.godmode` (a bot is a player, so the flag works), `add_money` for the reward, `message` for announcements, the tick event, and the read API for the positions and teams of the players.
-- **Missing:** a way to make the bot walk and aim at a chosen player (N20). Without it a plugin can only move the bot by teleport, which skips the physics.
+- **Done since:** the AI area (N20) makes a bot walk to a point, follow waypoints, aim at a chosen player and hold a street route. See [AI control](plugin-ai.md).
 - **Missing for health:** the health range of the API is -100 to 100. A boss with more health needs a higher bound or a damage rule.

@@ -1,6 +1,7 @@
 /* The arms of a human: the angles that the muscles of the chest, the head and the arms hold, the
  * bonds that hold an item in each hand, and the turn that moves each arm toward its target. */
 #include "humans.h"
+#include "plugin_collapse.h"
 
 #include <stdint.h>
 
@@ -261,7 +262,7 @@ void human_calculatearmangles(int human)
 
     if (0 < count0 && sr_itemtypes[sr_items[hu->inventory[0].items[0]].type].is_gun != 0)
         has_gun = 1;
-    if (hu->health < 1) {
+    if (human_collapsed(hu->health)) {
         for (k = 1; k <= 8; k++) {
             const Bone *p = &hu->bones[g_body[k].parent];
             Bone *b = &hu->bones[k];

@@ -14,6 +14,7 @@
 #include "events.h"
 #include "plugin_damage.h"
 #include "plugin_game_events.h"
+#include "plugin_collapse.h"
 #include "objects.h"
 #include "sr_os.h"
 #include "area.h"
@@ -98,7 +99,7 @@ static void bullet_human_hit(Bullet *b, Hit *hit)
     /* A bone takes the share of the momentum that its mass gives. The sum stays in a register. */
     bm = bone->mass * 0.125;
     k = (float)(b->mass / (bm + b->mass));
-    if (hu->health < 1 && hu->health + dmg > 0) {
+    if (human_collapsed(hu->health) && !human_collapsed(hu->health + dmg)) {
         k = (float)(b->mass / (bm * 0.25 + b->mass));
         hu->bones[1].vel.y = (float)(((double)(os_rand() & 7) + 4.0) / 60.0 + hu->bones[1].vel.y);
     }

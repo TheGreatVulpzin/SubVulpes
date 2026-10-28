@@ -7,6 +7,7 @@
 #include "collide.h"
 #include "economy.h"
 #include "sv_game_mission.h"
+#include "sv_game_shop.h"
 #include "events.h"
 #include "humans.h"
 #include "items.h"
@@ -110,10 +111,23 @@ void logic_gunstore_buy(int player, int row)
         return;
     resetorientation(rot);
     item = createitem(entry[0], &sr_humans[p->human_id].pos, NULL, rot);
+    /* No free item slot: the player pays nothing. */
+    if (item == -1)
+        return;
     put_item(item, p->human_id, 2, 6);
     p->money -= price;
     ++p->num_purchases;
     createevent_updateplayer(player);
+}
+
+/* 1 when at least one item slot is free. */
+static int item_slot_free(void)
+{
+    int i;
+    for (i = 0; i < SR_MAX_ITEM; ++i)
+        if (sr_items[i].active == 0)
+            return 1;
+    return 0;
 }
 
 void logic_cardealer_buy(int player, int row)
@@ -127,6 +141,9 @@ void logic_cardealer_buy(int player, int row)
     vec3 pos, rot[3];
     if (p->num_cars >= 3 || entry[1] > p->money)
         return;
+    /* The car and its key must both fit before the player pays or the offer leaves the list. */
+    if (!item_slot_free())
+        return;
     k = *next;
     *next = (k + 1) & 7;
     pos.x = spawn->x;
@@ -135,6 +152,8 @@ void logic_cardealer_buy(int player, int row)
     resetorientation(rot);
     rotateorientation(rot, &g_yaxis, 1.5707963705062866f);
     car = createobject(entry[0], &pos, NULL, rot, entry[2]);
+    if (car < 0)
+        return;
     p->money -= entry[1];
     key = createitem(24, &pos, NULL, rot);
     if (key != -1) {
@@ -287,11 +306,14 @@ static void item_action(int human, PlayerAction *action)
         if (selected > it->last_bill)
             selected = it->last_bill;
         it->num_bills = selected;
-    } else if (it->type == 23 && it->call_state == 1 && it->cooldown == 0 && value >= 0 && value < 10) {
+    } else if (it->type == 23 && it->call_state == 1 && it->cooldown == 0 && value >= 0 && value < 10 &&
+               it->phone_number >= 0 && it->phone_number <= 999) {
         it->phone_number = it->phone_number * 10 + value;
         createevent_sound(g_soundlist.digit[value], &it->pos, 1, 1);
         it->info = it->phone_number;
         createevent_updateiteminfo(item);
+        /* A plugin that asked for the digits learns of it at the next safe point. */
+        sv_shop_phone_digit_added(item);
     }
 }
 

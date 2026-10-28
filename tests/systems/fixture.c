@@ -10,8 +10,8 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
     static int done;
     char text[96];
     int line;
-    (void)event;
-    if (done)
+    /* The phone events only make the host wait for a decision. The shop test answers them itself. */
+    if (event->kind != SV_EVENT_TICK || done)
         return SV_OK;
     done = 1;
 #define RUN(area) \
@@ -32,7 +32,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     if (!api || api->size < sizeof *api || api->abi != SV_PLUGIN_ABI)
         return SV_INCOMPATIBLE;
     host = api;
-    return host->subscribe(owner, SV_EVENT_TICK, tick);
+    return host->subscribe(owner, SV_EVENT_TICK | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL, tick);
 }
 
 SV_EXPORT SvResult SV_CALL sv_plugin_entry(uint32_t abi, SvPlugin *plugin)

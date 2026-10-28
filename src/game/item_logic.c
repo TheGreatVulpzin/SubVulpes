@@ -10,6 +10,7 @@
 #include "bullets.h"
 #include "events.h"
 #include "plugin_game_events.h"
+#include "sv_game_shop.h"
 #include "random.h"
 #include "sr_runtime.h"
 #include "vectors.h"
@@ -270,7 +271,8 @@ static void phone_logic(Item *it, int item)
             it->info = 0;
             createevent_updateiteminfo(item);
         }
-        if (it->phone_number > 999)
+        /* A plugin that asked for the call decision gets one tick to claim the number before the game dials. */
+        if (it->phone_number > 999 && !sv_shop_phone_call_wait(item))
             phone_dial(it, item);
     } else {
         if (it->call_state == PHONE_TALK && (it->linked_item == -1 || sr_items[it->linked_item].active == 0)) {

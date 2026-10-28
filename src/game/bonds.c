@@ -15,6 +15,7 @@
 #include "solver.h"
 #include "sr_math.h"
 #include "sr_runtime.h"
+#include "plugin_collapse.h"
 #include "vectors.h"
 
 /* Game globals. */
@@ -159,7 +160,8 @@ static void setup_bodyrotbody(const Bond *b, BondOpt *o)
     for (col = 0; col < 3; col++)
       m[row * 3 + col] = (float)(bb->rot[col].z * ba->rot[row].z +
                                  (bb->rot[col].x * ba->rot[row].x + bb->rot[col].y * ba->rot[row].y));
-  if (h->health < 1) {
+  /* The engine parameter can switch the identity reset of a collapsed body off. */
+  if (human_collapsed(h->health) && sv_engine_integer(SV_ENGINE_RAGDOLL_RESET, 1)) {
     bb->target_rot[0].x = 1.0f;
     bb->target_rot[1].y = 1.0f;
     bb->target_rot[2].z = 1.0f;
@@ -174,11 +176,11 @@ static void setup_bodyrotbody(const Bond *b, BondOpt *o)
   k = b->damping;
   o->damping = k;
   /* For bones 3 to 8 of a living human, the direction of the last tick stays. */
-  if (kb < 3 || 8 < kb || h->health < 1) {
+  if (kb < 3 || 8 < kb || human_collapsed(h->health)) {
     geteulerangles2(&e, (const vec3 *)m);
     e0 = e.x;
     e1 = e.y;
-    if (h->health < 1) {
+    if (human_collapsed(h->health)) {
       lo = 0.0f;
       hi = 0.0f;
       if (kb == 9) {
@@ -420,7 +422,7 @@ static void loop_balance(void)
     vec3 a, face, t;
     float limit, len, s;
 
-    if (hu->active == 0 || hu->on_ground == 0 || hu->health < 1 || hu->vehicle_id != -1)
+    if (hu->active == 0 || hu->on_ground == 0 || human_collapsed(hu->health) || hu->vehicle_id != -1)
       continue;
     if ((hu->input_buttons & 8) == 0 && !(0.8999999761581421 < r1->y))
       continue;

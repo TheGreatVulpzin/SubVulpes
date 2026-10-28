@@ -412,6 +412,68 @@ void shop_prepare(void)
     }
 }
 
+/* A phone that a plugin asked about waits one tick for the decision. A claim sends it back to idle, and any other answer lets
+ * the game dial in the next tick. The plugin of the test subscribes to the phone events, so the host knows that it wants them. */
+static void hold_check(void)
+{
+    uint32_t before;
+    SvEntity phone_ref = sv_entity_at(SV_ENTITY_ITEM, phones[0]), human_ref = sv_entity_at(SV_ENTITY_HUMAN, world_human);
+    CHECK(sv_plugins_wants(256) && sv_plugins_wants(512));
+    /* A call: the first look waits, the poll asks once, then the game may dial once, and the next number waits again. */
+    dial();
+    expected_phone = phone_ref;
+    expected_human = human_ref;
+    expected_number = 1234;
+    expected_kind = 512;
+    decision_action = PASS;
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1 && sv_shop_phone_call_wait(phones[0]) == 1);
+    before = callback_count;
+    sv_shop_poll();
+    CHECK(callback_count == before + 1);
+    CHECK(sr_items[phones[0]].call_state == SV_PHONE_DIAL && sr_items[phones[0]].phone_number == 1234);
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 0 && sv_shop_phone_call_wait(phones[0]) == 1);
+    /* A claim: the phone goes back to idle and the game does not dial. */
+    decision_action = DENY;
+    before = callback_count;
+    sv_shop_poll();
+    CHECK(callback_count == before + 1);
+    idle_fields(phones[0], 0);
+    /* A digit: the poll asks about the digit, and a claim also ends the call wait of the same tick. */
+    dial();
+    expected_kind = 256;
+    decision_action = PASS;
+    sv_shop_phone_digit_added(phones[0]);
+    before = callback_count;
+    sv_shop_poll();
+    CHECK(callback_count == before + 1 && sr_items[phones[0]].call_state == SV_PHONE_DIAL);
+    decision_action = DENY;
+    sv_shop_phone_digit_added(phones[0]);
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
+    before = callback_count;
+    sv_shop_poll();
+    CHECK(callback_count == before + 1);
+    idle_fields(phones[0], 0);
+    /* An idle phone waits too, but the helper refuses to ask, so the game goes on. */
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
+    before = callback_count;
+    sv_shop_poll();
+    CHECK(callback_count == before && sv_shop_phone_call_wait(phones[0]) == 0);
+    /* A phone that left its hand, or an item that is gone: the poll asks nobody, and the game goes on. */
+    dial();
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
+    sr_items[phones[0]].time_to_live = 0;
+    before = callback_count;
+    sv_shop_poll();
+    CHECK(callback_count == before);
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 0);
+    sr_items[phones[0]].time_to_live = 99;
+    /* A bad item number and a phone nobody asked about change nothing. */
+    CHECK(sv_shop_phone_call_wait(-1) == 0 && sv_shop_phone_call_wait((int32_t)SR_MAX_ITEM) == 0);
+    sv_shop_phone_digit_added(-1);
+    sv_shop_phone_digit_added((int32_t)SR_MAX_ITEM);
+    dial();
+}
+
 void shop_verify(void)
 {
     uint32_t before[4] = {0}, after[4] = {0};
@@ -426,6 +488,7 @@ void shop_verify(void)
     reject(SV_PHONE_CALL_DECISION, sv_entity_at(SV_ENTITY_ITEM, phones[0]),
         sv_entity_at(SV_ENTITY_HUMAN, world_human), SV_STATE);
     CHECK(sv_shop_install(decide, write_context, 256, 512, 3));
+    hold_check();
     for (i = 0; i < SR_MAX_PLAYER; ++i) before[0] += sr_players[i].active != 0;
     for (i = 0; i < SR_MAX_HUMAN; ++i) before[1] += sr_humans[i].active != 0;
     for (i = 0; i < SR_MAX_ITEM; ++i) before[2] += sr_items[i].active != 0;

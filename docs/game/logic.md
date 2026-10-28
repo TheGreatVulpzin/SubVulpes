@@ -157,6 +157,18 @@ Undefined stack values use fixed defaults and can differ, as the entries below e
 - Reset test modes keep their item order, random call order, float stores and event order.
   Material name copies leave bytes after the terminating zero unchanged.
 
+## Changes for the plugin hooks
+
+These changes differ from the first S0 behavior. Each one has no effect while no plugin uses its hook, except the two fixes.
+
+- **Gun store.** When no item slot is free, the purchase stops and the player pays nothing. Before, the game charged the player and linked an invalid item.
+- **Car dealer.** The purchase needs a free object slot and a free item slot for the key. Without them the player pays nothing and the offer stays in the list. Before, a failed car left the player charged and the key pointed at no car.
+- **Phone digits.** A digit adds only while the number has 3 digits or fewer. A number of 4 digits waits for the dial, so a fifth digit cannot overflow the number.
+- **Phone dial.** When a plugin asked for the phone call decision, the game waits one tick before it dials a number of 4 digits. The plugin may claim the number, and then the phone goes back to idle. Without a plugin nothing waits.
+- **Collapse threshold.** The engine parameter `human.death_start` is 0 by default. A human collapses at a health at or below it: it drops its items, goes limp, and the camera and the pose follow. Final death (-5), the dead joint mode (below 0) and the weakness steps (25 and 10) keep their numbers. The packet still sends the real health. The original client may show a collapsed body with positive health in a way nobody tested.
+- **Ragdoll reset.** The engine parameter `physics.ragdoll_orientation_reset` is 1 by default. At 0 a collapsed body keeps the target orientation of its bones.
+- **Bots.** A plugin that controls a bot replaces the default AI for the ticks of its control. Without a plugin the random draws are the same as before.
+
 `instrumentation/lift/synth_logic.py` tests the edge cases and retains per-case logs under `build/`.
 Run it with both a world recording and a round recording.
 

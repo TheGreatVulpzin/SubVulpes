@@ -25,9 +25,13 @@ Each area has its own page with the design: [AI](plugin-ai.md), [economy](plugin
 | Storage | `sv_storage_open` | The host, before the enable callback. A plugin that cannot open `user/plugins/ID` does not start. |
 | Storage | `sv_storage_release_owner` | The release hook. |
 | Storage | `sv_storage_leave` | The retirement of a player (`sv_entity_deleted`), so the session values of that player go. |
-| Engine | `sv_engine_install` | `sv_systems_install`, with `SV_ENGINE_OWNER_CLEANUP` only. |
+| Engine | `sv_engine_install` | `sv_systems_install`, with `SV_ENGINE_OWNER_CLEANUP` and `SV_ENGINE_GLOBAL_CONSUMERS`. |
+| Engine | `sv_engine_integer(SV_ENGINE_DEATH_START)` | The helper `human_collapsed` (`plugin_collapse.h`) at 16 branches of a human in `humans.c`, `human_pose.c`, `human_arms.c`, `bonds.c`, `bullet_sim.c` and `netpack.c`. The default is 0, which gives the old rule `health < 1`. |
+| Engine | `sv_engine_integer(SV_ENGINE_RAGDOLL_RESET)` | The identity reset of a collapsed body in `bonds.c`. |
 | Engine | `sv_engine_release_owner` | The release hook. |
-| Shop | `sv_shop_install` | `sv_systems_install`, with the shared decision and write-context functions, the bits 256 and 512, and no safe feature flag. It also registers the rows `item.phone_state` and `item.phone_number`. |
+| Shop | `sv_shop_install` | `sv_systems_install`, with the shared decision and write-context functions, the bits 256 and 512, and both safe flags. It also registers the rows `item.phone_state` and `item.phone_number`. |
+| Shop | `sv_shop_phone_digit_added`, `sv_shop_phone_call_wait`, `sv_shop_poll` | The digit append in `logic.c`, the dial in `item_logic.c`, and the poll hook at the start of each tick. A phone that a plugin asked about waits one tick for the decision. |
+| Shop | The purchase fixes | `logic_gunstore_buy` and `logic_cardealer_buy` check their slots before they charge. |
 | Shop | `sv_shop_phone_retire` | `itemtimetolive`, for a phone (item type 23), before the game retires the reference. |
 
 The release hook (`plugin_game.c`) runs when a plugin stops for any reason, after its disable callback. It calls the five `release_owner` functions, the property restore and the cleanup of made things.
@@ -36,9 +40,7 @@ The release hook (`plugin_game.c`) runs when a plugin stops for any reason, afte
 
 | Area | Missing | Why it waits |
 | --- | --- | --- |
-| Engine | The consumers of `SV_ENGINE_DEATH_START` and `SV_ENGINE_RAGDOLL_RESET`, and the flag `SV_ENGINE_GLOBAL_CONSUMERS`. | The death threshold touches about 15 branches in `humans.c`, `human_pose.c`, `human_arms.c`, `bonds.c` and `bullet_sim.c`, and the packet camera in `netpack.c`. The area page asks for all of them together. The original client may show a positive-health collapse in a way nobody tested. Until then the global rows keep their fallbacks. |
-| Shop | The safe points for the phone digit and the phone call (`SV_SHOP_SAFE_DECISIONS`). | The native digit code runs in `logic_playeractions` and the call lookup in `itemlogic`, inside the simulation. A plugin must not run there. The core needs a deferred decision. |
-| Shop | The fix of the native purchase allocation (`SV_SHOP_SAFE_PURCHASES`). | `logic_gunstore_buy` and `logic_cardealer_buy` can charge after an allocation fails. A catalog write stays closed until they check first. |
 | Missions | The notice and decision rows in the event queue. | The area has no event payload type yet. |
 | Settings and engine | Rows in the property table. | The areas keep their own typed tables. They have an owner and a change event, and a plain row has neither. Keep the typed tables, unless a plugin needs the rows. |
+| Engine | A test with the original client. | The collapse threshold above 0 sends a positive health to a client that may animate a collapsed body from that number. |
 | Economy | None. | The area needs no hook. |

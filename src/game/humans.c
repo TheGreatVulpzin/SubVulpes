@@ -17,6 +17,7 @@
 #include "items.h"
 #include "plugin_damage.h"
 #include "plugin_game_events.h"
+#include "plugin_collapse.h"
 #include "profiler.h"
 #include "rigid.h"
 #include "sr_math.h"
@@ -61,11 +62,11 @@ static void human_bond_modes(Human *hu, int in_vehicle, int has_item)
       b->mode = 1;
       b->stiffness = (float)(hu->body_strength * 0.125 * 0.5);
     }
-    if (health < 1)
+    if (human_collapsed(health))
       b->stiffness = 0.0625f;
     if (in_vehicle && (has_item == 0 || 8 < hu->muscles[k].bone))
       b->mode = 0x100;
-    if (0 < health && 0 < hu->stun_timer && hu->muscles[k].bone == 1) {
+    if (!human_collapsed(health) && 0 < hu->stun_timer && hu->muscles[k].bone == 1) {
       c = (float)(1.0 - (float)hu->stun_timer / 180.0);
       if (c < 0.0)
         c = 0.0f;
@@ -106,7 +107,7 @@ static void human_bleed(Human *hu, int h)
   int health = hu->health;
   vec3 p;
 
-  if (health <= -5 || (hu->bleeding == 0 && 0 < health) || (char)(h * h * h) != (char)sr_game.ticks)
+  if (health <= -5 || (hu->bleeding == 0 && !human_collapsed(health)) || (char)(h * h * h) != (char)sr_game.ticks)
     return;
   health = health < 11 ? health - 1 : health - 2;
   hu->health = health;
@@ -246,7 +247,7 @@ static void human_finish(int h, int vehicle, int has_item)
     hu->has_physics = 0;
   if (hu->bones[0].pos.y < -32.0)
     hu->health = -100;
-  if (hu->health < 1)
+  if (human_collapsed(hu->health))
     human_dropitems(hu);
   else
     human_itemsimulation(h);
@@ -290,7 +291,7 @@ static void human_movebones(Human *hu, int in_vehicle)
     b->in_solver = 1.0f;
     if (in_vehicle && (k == 0 || 8 < k))
       b->in_solver = 0.0f;
-    if (hu->health < 1) {
+    if (human_collapsed(hu->health)) {
       b->vel.x = (float)(b->vel.x * 0.99609375);
       b->vel.y = (float)(b->vel.y * 0.99609375);
       b->vel.z = (float)(b->vel.z * 0.99609375);
@@ -538,9 +539,9 @@ static void human_levelcontacts(Human *hu, int h)
     r = 0.125f;
     if (k == 11 || k == 14 || k == 10 || k == 13 || k == 4 || k == 7)
       r = 0.0625f;
-    if (0 < hu->health && k == 0)
+    if (!human_collapsed(hu->health) && k == 0)
       r = 0.25f;
-    else if (0 < hu->health && (k == 11 || k == 14 || k == 10 || k == 13))
+    else if (!human_collapsed(hu->health) && (k == 11 || k == 14 || k == 10 || k == 13))
       continue;
     bk = &hu->bones[k];
     if (sphereintersectlevel(&bk->pos.x, r) == 0)
@@ -711,7 +712,7 @@ static void human_objectcontacts(Human *hu, int h)
       if (!(0.1666666716337204 < s))
         continue;
       hu->health = hu->health - sv_damage_human((int)(hu - sr_humans), -1, 0x78, SV_DAMAGE_VEHICLE);
-      if ((uint32_t)(hu->health + 0x77) < 0x78) {
+      if ((uint32_t)(hu->health - sv_engine_integer(SV_ENGINE_DEATH_START, 0) + 0x77) < 0x78) {
         createevent_sound(g_soundlist.humanhit, &hu->pos, 1.0f, 0.5f);
         if (hu->player_id != -1 && sr_players[hu->player_id].team == 7 && 0 < hu->protect_timer && ob->driver != -1)
           playerteamkilltax(ob->driver, 100);
@@ -775,7 +776,7 @@ static void human_onfoot(int h)
   vec3 floor_vel;
   int standing = 0;
 
-  if (0 < hu->health)
+  if (!human_collapsed(hu->health))
     standing = human_stand(hu, &floor_vel);
   human_levelcontacts(hu, h);
   if (standing)
@@ -961,7 +962,7 @@ static void human_invehicle(int h, int vehicle, int seat, int has_item)
     if ((int)(long long)(f * 60.0 + 1.0) + 0x1e <= t)
       human_leavevehicle(h);
   }
-  if (hu->health < 1) {
+  if (human_collapsed(hu->health)) {
     ob->drive_buttons = 4;
     hu->view_axis = hu->axis;
     hu->vehicle_id = -1;

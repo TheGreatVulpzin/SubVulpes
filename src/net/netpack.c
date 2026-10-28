@@ -12,6 +12,7 @@
 
 #include "events.h"
 #include "packet.h"
+#include "plugin_collapse.h"
 #include "server.h"
 #include "sr_math.h"
 #include "util.h"
@@ -539,7 +540,7 @@ void packobjectpacket(int conn, int player)
     ObjectPacket *op = &sr_objectpacket;
     vec3 ref;
     int own = -1, behind;
-    if (player == -1 || sr_players[player].human_id == -1 || sr_humans[sr_players[player].human_id].health < 1)
+    if (player == -1 || sr_players[player].human_id == -1 || human_collapsed(sr_humans[sr_players[player].human_id].health))
         ref = c->camera_pos;
     else
         ref = sr_humans[sr_players[player].human_id].pos;
@@ -574,7 +575,7 @@ void packobjectpacket2(int conn, int player)
     Radix *radix = &sr_radix;
     vec3 ref;
     int own = -1, own_vehicle = -1, h, o, i, n, behind;
-    if (player == -1 || sr_players[player].human_id == -1 || sr_humans[sr_players[player].human_id].health < 1)
+    if (player == -1 || sr_players[player].human_id == -1 || human_collapsed(sr_humans[sr_players[player].human_id].health))
         ref = c->camera_pos;
     else
         ref = sr_humans[sr_players[player].human_id].pos;

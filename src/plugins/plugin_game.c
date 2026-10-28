@@ -36,6 +36,13 @@ static SvResult open_storage(SvOwner owner, const char *id)
     return sv_storage_open(owner, id, "user/plugins");
 }
 
+/* The host calls this at the start of each tick, outside the simulation. */
+static void poll(void)
+{
+    sv_game_event_poll();
+    sv_shop_poll();
+}
+
 /* The system areas that need a hook in the game. The server calls this once the world is ready. */
 static int post_setting(const SvSettingEvent *event)
 {
@@ -48,10 +55,11 @@ void sv_systems_install(void)
     sv_mission_install();
     if (!sv_settings_install(SV_EVENT_SETTING, post_setting))
         sv_log("Cannot install the core settings.");
-    if (!sv_engine_install(SV_ENGINE_OWNER_CLEANUP))
+    if (!sv_engine_install(SV_ENGINE_OWNER_CLEANUP | SV_ENGINE_GLOBAL_CONSUMERS))
         sv_log("Cannot install the engine parameters.");
-    /* No safe feature flag yet: the phone rows and the phone reads work, and the catalog writes stay closed. */
-    if (!sv_shop_install(sv_plugins_decide, sv_plugins_write_context, SV_EVENT_PHONE_DIGIT, SV_EVENT_PHONE_CALL, 0))
+    /* The phone decisions wait for the next tick (sv_shop_poll), and the two purchase functions check their slots first. */
+    if (!sv_shop_install(sv_plugins_decide, sv_plugins_write_context, SV_EVENT_PHONE_DIGIT, SV_EVENT_PHONE_CALL,
+            SV_SHOP_SAFE_DECISIONS | SV_SHOP_SAFE_PURCHASES))
         sv_log("Cannot install the shop hooks.");
 }
 
@@ -61,7 +69,7 @@ int sv_game_start(void)
     sv_made_clear();
     sv_plugins_set_release(release);
     sv_plugins_set_open(open_storage);
-    sv_plugins_set_poll(sv_game_event_poll);
+    sv_plugins_set_poll(poll);
     sv_game_event_poll_reset();
     return sv_entities_start();
 }
