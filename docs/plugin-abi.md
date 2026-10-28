@@ -3,6 +3,8 @@
 ABI means the exact byte layout and the call rules that a compiled plugin and the server agree on. A change to these rules breaks every plugin that was built before it.
 This page is the freeze rule for ABI version 1 (`SV_PLUGIN_ABI`). The first editor and the second editor follow it. A change that this page forbids needs a new ABI number and a decision of the owner.
 
+Nothing was published before the change of 2026-10-28 (the branch `abi-reset`). That change fixed the layout once: the 64-bit mask of `SvHost.subscribe`, the item size in the lists that the host fills, the pointer rule and the entity scope of the storage. Version 1 is the first published version. The rules about growth at the end of a table start from the first release, and they bind from then on. No plugin built before that change is valid, so every plugin is built again.
+
 ## What the ABI contains
 
 - The entry point `sv_plugin_entry` and the record `SvPlugin`.
