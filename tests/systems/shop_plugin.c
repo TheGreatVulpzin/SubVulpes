@@ -2,12 +2,12 @@
 #include <windows.h>
 #include "systems_plugin.h"
 #include "sv_game_shop.h"
-#include "sv_game_write.h"
+#include "sv_game_props.h"
 #include "sv_game_engine.h"
 
 static const SvGameShop *shop;
 static const SvGameRead *read_api;
-static const SvGameWrite *write_api;
+static const SvGameProps *write_api;
 static const SvHost *saved_host;
 static SvEntity player, human, phone, nonphone;
 static SvEntity first_phone;
@@ -285,7 +285,7 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
         saved_host->log(owner, message);
         return SV_FAILED;
     }
-    return write_api->set_godmode(owner, player, 1);
+    return systems_godmode(write_api, owner, player, 1);
 }
 
 int shop_fixture(const SvHost *host, SvOwner owner)
@@ -298,7 +298,7 @@ int shop_fixture(const SvHost *host, SvOwner owner)
     STEP(shop && shop->size >= sizeof *shop && shop->version == SV_GAME_SHOP_VERSION);
     STEP(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_OK);
     read_api = table;
-    STEP(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
+    STEP(host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &table) == SV_OK);
     write_api = table;
     STEP(refresh(owner) == 0);
     first_phone = phone;

@@ -69,7 +69,7 @@ static SvResult SV_CALL describe(SvOwner owner, uint32_t index, SvSettingInfo *o
     memset(&value, 0, sizeof value);
     value.size = sizeof value;
     value.index = index;
-    value.type = SV_SETTING_INT;
+    value.type = SV_CORE_SETTING_INT;
     strcpy(value.name, rows[index].name);
     value.minimum = rows[index].minimum;
     value.maximum = rows[index].maximum;
@@ -89,7 +89,7 @@ static SvResult SV_CALL get(SvOwner owner, const char *name, SvSettingValue *out
     index = lookup(name);
     if (index < 0)
         return index == -2 ? SV_INVALID : SV_NOT_FOUND;
-    value = (SvSettingValue){sizeof value, SV_SETTING_INT, current((uint32_t)index)};
+    value = (SvSettingValue){sizeof value, SV_CORE_SETTING_INT, current((uint32_t)index)};
     *out = value;
     return SV_OK;
 }
@@ -100,7 +100,7 @@ static SvResult SV_CALL set(SvOwner owner, const char *name, const SvSettingValu
     SvSettingEvent event;
     if (context(owner) != SV_OK)
         return SV_STATE;
-    if (!input || input->size < sizeof *input || input->type != SV_SETTING_INT)
+    if (!input || input->size < sizeof *input || input->type != SV_CORE_SETTING_INT)
         return SV_INVALID;
     index = lookup(name);
     if (index < 0)
@@ -120,7 +120,7 @@ static SvResult SV_CALL set(SvOwner owner, const char *name, const SvSettingValu
     event.base = (SvEvent){sizeof event, change_kind, (uint32_t)sr_game.ticks};
     strcpy(event.name, rows[index].name);
     event.owner = owner;
-    event.type = SV_SETTING_INT;
+    event.type = SV_CORE_SETTING_INT;
     event.before = current((uint32_t)index);
     event.after = input->value;
     if (!post_change(&event))

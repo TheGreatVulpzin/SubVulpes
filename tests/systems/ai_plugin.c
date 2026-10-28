@@ -2,7 +2,7 @@
 #include <windows.h>
 #include "systems_plugin.h"
 #include "sv_game_ai.h"
-#include "sv_game_write.h"
+#include "sv_game_props.h"
 
 typedef struct {
     const SvGameAi *api;
@@ -11,7 +11,7 @@ typedef struct {
 } ThreadArgs;
 
 static const SvGameAi *control_api;
-static const SvGameWrite *control_write;
+static const SvGameProps *control_write;
 static SvEntity control_bot, control_human, control_policy, control_driver, control_shooter, control_player;
 static const SvAiStreetPoint street[4] = {{0, 0, 0}, {1, 0, 0}, {2, 1, 0}, {3, 1, 0}};
 
@@ -56,7 +56,7 @@ static SvResult SV_CALL control_command(SvOwner owner, uint64_t actor, const cha
 {
     SvResult result = run_command(owner, actor, arguments);
     /* Command dispatch handles errors without failing the module. Publish the result for the host check. */
-    STEP(control_write->set_godmode(owner, control_policy, result == SV_OK) == SV_OK);
+    STEP(systems_godmode(control_write, owner, control_policy, result == SV_OK) == SV_OK);
     return result;
 }
 
@@ -248,8 +248,8 @@ int ai_fixture(const SvHost *host, SvOwner owner)
     control_driver = driver;
     control_shooter = shooter;
     control_player = normal;
-    STEP(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
-    control_write = (const SvGameWrite *)table;
+    STEP(host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &table) == SV_OK);
+    control_write = (const SvGameProps *)table;
     STEP(host->command(owner, "ai.control", SV_COMMAND_LOCAL, control_command) == SV_OK);
     return 0;
 }

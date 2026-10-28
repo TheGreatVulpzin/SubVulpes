@@ -2,11 +2,11 @@
 #include <windows.h>
 #include "systems_plugin.h"
 #include "sv_game_storage.h"
-#include "sv_game_write.h"
+#include "sv_game_props.h"
 
 static const SvGameStorage *storage;
 static const SvGameRead *read_api;
-static const SvGameWrite *write_api;
+static const SvGameProps *write_api;
 static const SvHost *saved_host;
 static SvEntity player, extra_player, account, extra_account;
 
@@ -305,7 +305,7 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
         saved_host->log(owner, message);
         return SV_FAILED;
     }
-    return write_api->set_godmode(owner, player, 1);
+    return systems_godmode(write_api, owner, player, 1);
 }
 
 int storage_fixture(const SvHost *host, SvOwner owner)
@@ -319,7 +319,7 @@ int storage_fixture(const SvHost *host, SvOwner owner)
     STEP(storage && storage->size >= sizeof *storage && storage->version == SV_GAME_STORAGE_VERSION);
     STEP(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_OK);
     read_api = table;
-    STEP(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
+    STEP(host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &table) == SV_OK);
     write_api = table;
     STEP(lookup(owner, SV_ENTITY_PLAYER, "Systems test", &player) == 0);
     STEP(lookup(owner, SV_ENTITY_PLAYER, "Storage account", &extra_player) == 0);

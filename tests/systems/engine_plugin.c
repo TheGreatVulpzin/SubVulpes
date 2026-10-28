@@ -2,10 +2,10 @@
 #include <windows.h>
 #include "systems_plugin.h"
 #include "sv_game_engine.h"
-#include "sv_game_write.h"
+#include "sv_game_props.h"
 
 static const SvGameEngine *engine;
-static const SvGameWrite *write_api;
+static const SvGameProps *write_api;
 static const SvHost *saved_host;
 static SvEntity player;
 static const char *names[SV_ENGINE_PARAM_COUNT] = {
@@ -238,7 +238,7 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
         saved_host->log(owner, message);
         return SV_FAILED;
     }
-    return write_api->set_godmode(owner, player, 1);
+    return systems_godmode(write_api, owner, player, 1);
 }
 
 int engine_fixture(const SvHost *host, SvOwner owner)
@@ -254,7 +254,7 @@ int engine_fixture(const SvHost *host, SvOwner owner)
     STEP(engine && engine->size >= sizeof *engine && engine->version == SV_GAME_ENGINE_VERSION);
     STEP(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_OK);
     read_api = table;
-    STEP(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
+    STEP(host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &table) == SV_OK);
     write_api = table;
     STEP(read_api->entities(owner, SV_ENTITY_PLAYER, 0, entities, SV_ENTITY_PAGE_MAX, &count, &next) == SV_OK);
     for (i = 0; i < count; ++i) {

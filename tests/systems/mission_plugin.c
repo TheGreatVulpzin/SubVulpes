@@ -2,11 +2,11 @@
 #include <windows.h>
 #include "systems_plugin.h"
 #include "sv_game_mission.h"
-#include "sv_game_write.h"
+#include "sv_game_props.h"
 
 static const SvGameMission *mission_api;
 static const SvGameRead *reader;
-static const SvGameWrite *writer;
+static const SvGameProps *writer;
 static SvEntity reporter;
 static SvMissionRef old_reference;
 
@@ -63,7 +63,7 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *text)
 {
     SvResult result = run_command(owner, text);
     (void)actor;
-    STEP(writer->set_godmode(owner, reporter, result == SV_OK) == SV_OK);
+    STEP(systems_godmode(writer, owner, reporter, result == SV_OK) == SV_OK);
     return result;
 }
 
@@ -101,8 +101,8 @@ int mission_fixture(const SvHost *host, SvOwner owner)
     mission_api = api;
     STEP(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_OK);
     reader = (const SvGameRead *)table;
-    STEP(host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
-    writer = (const SvGameWrite *)table;
+    STEP(host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &table) == SV_OK);
+    writer = (const SvGameProps *)table;
     STEP(reader->entities(owner, SV_ENTITY_PLAYER, 0, entities, 256, &count, &next) == SV_OK);
     for (j = 0; j < count; ++j) {
         STEP(reader->player(owner, entities[j], &player) == SV_OK);

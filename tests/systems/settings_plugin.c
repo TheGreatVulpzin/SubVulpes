@@ -2,7 +2,7 @@
 #include <windows.h>
 #include "systems_plugin.h"
 #include "sv_game_settings.h"
-#include "sv_game_write.h"
+#include "sv_game_props.h"
 
 static const SvGameSettings *api;
 static const SvHost *saved_host;
@@ -12,7 +12,7 @@ static DWORD WINAPI wrong_thread(void *data)
 {
     Args *a = data;
     SvSettingInfo info = {sizeof info};
-    SvSettingValue value = {sizeof value, SV_SETTING_INT, 10};
+    SvSettingValue value = {sizeof value, SV_CORE_SETTING_INT, 10};
     STEP(api->describe(a->owner, 0, &info) == SV_STATE);
     STEP(api->get(a->owner, "player_limit", &value) == SV_STATE);
     STEP(api->set(a->owner, "player_limit", &value) == SV_STATE);
@@ -22,9 +22,9 @@ static DWORD WINAPI wrong_thread(void *data)
 static SvResult SV_CALL boundaries(SvOwner owner, uint64_t actor, const char *arguments)
 {
     const void *table;
-    const SvGameWrite *write;
+    const SvGameProps *write;
     const SvGameRead *read;
-    SvSettingValue value = {sizeof value, SV_SETTING_INT, 128};
+    SvSettingValue value = {sizeof value, SV_CORE_SETTING_INT, 128};
     SvEntity entities[256];
     SvPlayerState player = {sizeof player};
     uint32_t count, next, i;
@@ -37,13 +37,13 @@ static SvResult SV_CALL boundaries(SvOwner owner, uint64_t actor, const char *ar
     STEP(api->set(owner, "bot_count", &value) == SV_OK);
     STEP(saved_host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_OK);
     read = table;
-    STEP(saved_host->get_api(owner, SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &table) == SV_OK);
+    STEP(saved_host->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &table) == SV_OK);
     write = table;
     STEP(read->entities(owner, SV_ENTITY_PLAYER, 0, entities, 256, &count, &next) == SV_OK);
     for (i = 0; i < count; ++i) {
         STEP(read->player(owner, entities[i], &player) == SV_OK);
         if (!strcmp(player.name, "Systems test"))
-            return write->set_godmode(owner, entities[i], 1);
+            return systems_godmode(write, owner, entities[i], 1);
     }
     return SV_FAILED;
 }
@@ -53,7 +53,7 @@ int settings_fixture(const SvHost *host, SvOwner owner)
     const void *table = NULL;
     SvSettingInfo info = {sizeof info}, saved_info;
     SvSettingValue out = {sizeof out}, saved_out;
-    SvSettingValue value = {sizeof value, SV_SETTING_INT, 1};
+    SvSettingValue value = {sizeof value, SV_CORE_SETTING_INT, 1};
     const char *names[] = {"player_limit", "new_account_money", "bot_count"};
     int32_t minimum[] = {1, 0, 0}, maximum[] = {128, INT32_MAX, 256};
     uint32_t i;
@@ -76,10 +76,10 @@ int settings_fixture(const SvHost *host, SvOwner owner)
     STEP(api->set(owner + 1, "player_limit", &value) == SV_STATE);
     for (i = 0; i < SV_SETTING_COUNT; ++i) {
         STEP(api->describe(owner, i, &info) == SV_OK);
-        STEP(info.index == i && info.type == SV_SETTING_INT && !strcmp(info.name, names[i]));
+        STEP(info.index == i && info.type == SV_CORE_SETTING_INT && !strcmp(info.name, names[i]));
         STEP(info.minimum == minimum[i] && info.maximum == maximum[i]);
         STEP(api->get(owner, info.name, &out) == SV_OK);
-        STEP(out.type == SV_SETTING_INT);
+        STEP(out.type == SV_CORE_SETTING_INT);
         value.value = minimum[i] - 1;
         STEP(api->set(owner, info.name, &value) == SV_INVALID);
         if (maximum[i] != INT32_MAX) {
@@ -117,7 +117,7 @@ int settings_fixture(const SvHost *host, SvOwner owner)
     value.size = sizeof value;
     value.type = 2;
     STEP(api->set(owner, "player_limit", &value) == SV_INVALID);
-    value.type = SV_SETTING_INT;
+    value.type = SV_CORE_SETTING_INT;
     STEP(api->set(owner, NULL, &value) == SV_INVALID);
     STEP(api->set(owner, "unknown", &value) == SV_NOT_FOUND);
     STEP(api->get(owner, "player_limit", &out) == SV_OK && out.value == 128);

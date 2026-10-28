@@ -378,7 +378,7 @@ void shop_prepare(void)
     CHECK(sv_game_shop.catalog_replace(1, 0, &input) == SV_STATE);
     CHECK(sv_shop_phone_decision(1, 0, 0) == SV_STATE);
     CHECK(sv_shop_phone_retire(0) == SV_STATE);
-    CHECK(sv_shop_props_install() == SV_STATE);
+    CHECK(sv_shop_props_install() == SV_OK && sv_shop_props_install() == SV_OK);
     CHECK(!sv_shop_install(NULL, write_context, 256, 512, 3));
     CHECK(!sv_shop_install(decide, NULL, 256, 512, 3));
     CHECK(!sv_shop_install(decide, write_context, 1, 512, 3));

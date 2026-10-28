@@ -10,7 +10,7 @@ static int post(const SvSettingEvent *event)
     if (notice_count == 3)
         return 0;
     CHECK(event->base.size == sizeof *event && event->base.kind == 1024u);
-    CHECK(event->owner == 1 && event->type == SV_SETTING_INT);
+    CHECK(event->owner == 1 && event->type == SV_CORE_SETTING_INT);
     notices[notice_count++] = *event;
     return 1;
 }
@@ -18,7 +18,7 @@ static int post(const SvSettingEvent *event)
 void settings_prepare(void)
 {
     SvSettingInfo info = {sizeof info};
-    SvSettingValue value = {sizeof value, SV_SETTING_INT, 1};
+    SvSettingValue value = {sizeof value, SV_CORE_SETTING_INT, 1};
     CHECK(sv_game_settings.describe(0, 0, &info) == SV_STATE);
     CHECK(sv_game_settings.get(0, "player_limit", &value) == SV_STATE);
     CHECK(sv_game_settings.set(0, "player_limit", &value) == SV_STATE);
