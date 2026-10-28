@@ -55,6 +55,18 @@ add_custom_target(sv-official-approvals ALL
         -Output "${CMAKE_BINARY_DIR}/plugins/native-approvals.ini"
     DEPENDS sv-status VERBATIM)
 
+# The test room is a tool for developers. The server package does not carry it.
+add_library(sv-testroom MODULE plugins/testroom/testroom.c)
+target_include_directories(sv-testroom PRIVATE src/plugins)
+target_compile_definitions(sv-testroom PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_options(sv-testroom PRIVATE /W4 /WX /utf-8)
+target_link_options(sv-testroom PRIVATE /EXPORT:sv_plugin_entry)
+set_target_properties(sv-testroom PROPERTIES OUTPUT_NAME testroom PREFIX ""
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.testroom"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.testroom")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/plugins/sv.testroom")
+configure_file(plugins/testroom/plugin.ini "${CMAKE_BINARY_DIR}/plugins/sv.testroom/plugin.ini" COPYONLY)
+
 set(SV_LAUNCHER "${CMAKE_SOURCE_DIR}/build/launcher/subvulpes_launcher.exe")
 add_custom_command(OUTPUT "${SV_LAUNCHER}"
     COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat"
