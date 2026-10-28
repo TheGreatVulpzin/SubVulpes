@@ -10,20 +10,28 @@
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 #include "sv_game_events.h"
+#include "sv_game_ai.h"
+#include "sv_game_engine.h"
+#include "sv_game_shop.h"
+#include "sv_game_storage.h"
 
-#define VERSION "0.1.7"
+#define VERSION "0.1.8"
 #define LINE_MAX_CHARS 60
-#define MAX_TESTS 32
+#define MAX_TESTS 40
 
 static const SvHost *host;
 static SvOwner self;
 static const SvGameRead *game;
 static const SvGameWrite *change;
 static const SvGameProps *props;
+static const SvGameAi *ai;
+static const SvGameEngine *engine;
+static const SvGameStorage *storage;
 
 enum { TODO, PASS, FAIL, SKIP };
 /* What a test changed on the player, so the next test or /test stop can undo it. */
-enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16, T_TYPES = 32 };
+enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16, T_TYPES = 32, T_DEATH = 64, T_PHONE = 128, T_AI = 256 };
+#define EVENTS_BASE (SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM)
 
 typedef struct Test {
     const char *name;
@@ -45,7 +53,7 @@ static uint32_t sound_next;
 static SvEntity last_magazine, last_car, last_npc, last_npc_human, last_gun;
 static float saved_speed, saved_bullet_mass;
 static unsigned name_step;
-static int chat_prefix_on, notices_on;
+static int chat_prefix_on, notices_on, phone_claim_on;
 
 /* ------------------------------------------------------------ text */
 
@@ -154,11 +162,27 @@ static void forget(void)
 }
 
 /* Undo what the last test changed and remove what it made. Errors do not matter here: the thing may be gone already. */
+static SvResult set_engine_int(const char *name, int32_t value)
+{
+    SvEngineValue v = { sizeof v, SV_ENGINE_INT };
+    v.value.integer = value;
+    return engine ? engine->set(self, name, SV_ENGINE_GLOBAL, &v) : SV_INCOMPATIBLE;
+}
+
+static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event);
+
 static void cleanup(void)
 {
     SvPlayerState player = { sizeof player };
     SvHumanState human = { sizeof human };
     int i;
+    if ((touched & T_AI) && ai)
+        ai->release(self, last_npc);
+    if (touched & T_DEATH)
+        set_engine_int("human.death_start", 0);
+    if (touched & T_PHONE)
+        host->subscribe(self, EVENTS_BASE, on_event);
+    phone_claim_on = 0;
     for (i = 0; i < made_object_count; ++i)
         change->object_remove(self, made_objects[i]);
     for (i = 0; i < made_player_count; ++i)
@@ -721,6 +745,13 @@ static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event)
         else if (event->kind == SV_EVENT_OBJECT_GONE)
             sayf("[vehicle gone] type %d.", (int)record->value);
     }
+    if (event->kind == SV_EVENT_PHONE_CALL && event->size == sizeof(SvPhoneEvent) && phone_claim_on) {
+        const SvPhoneEvent *call = (const SvPhoneEvent *)event;
+        if (call->number == 1234) {
+            sayf("[phone] The plugin took your call to %d. The phone does not ring.", (int)call->number);
+            return SV_DENIED;
+        }
+    }
     if (event->kind == SV_EVENT_CHAT && event->size == sizeof(SvChatEvent) && chat_prefix_on) {
         SvChatEvent *chat = (SvChatEvent *)event;
         if (chat->player == tester) {
@@ -783,6 +814,75 @@ static SvResult t_dealt(void)
     }
 }
 
+static SvResult t_collapse(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    touched |= T_DEATH | T_HEALTH;
+    r = set_engine_int("human.death_start", 60);
+    return r == SV_OK ? set_int("human.health", player.human, 50) : r;
+}
+
+static SvResult t_ai_walk(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = ai ? t_npc() : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    touched |= T_AI;
+    return ai->destination(self, last_npc, beside(&human, 25.0f, 0.0f, 0.0f));
+}
+
+static SvResult t_ai_walk_go(void)
+{
+    SvAiInput input = { sizeof input };
+    input.yaw = 1.5f;
+    if (!ai)
+        return SV_INCOMPATIBLE;
+    say("The bot should stop and face the side for a few seconds.");
+    return ai->override_input(self, last_npc, &input, 300);
+}
+
+static SvResult t_phone(void)
+{
+    SvResult r = host->subscribe(self, EVENTS_BASE | SV_EVENT_PHONE_CALL, on_event);
+    if (r != SV_OK)
+        return r;
+    touched |= T_PHONE;
+    phone_claim_on = 1;
+    say("Pick up a phone and dial 1234. Then dial another 4 digit number.");
+    return SV_OK;
+}
+
+static SvResult t_storage(void)
+{
+    SvStorageKey key = { sizeof key, SV_STORAGE_SERVER };
+    SvStorageValue value = { sizeof value };
+    uint32_t runs = 0;
+    SvResult r;
+    if (!storage)
+        return SV_INCOMPATIBLE;
+    snprintf(key.name, sizeof key.name, "runs");
+    r = storage->get(self, &key, &value);
+    if (r == SV_OK && value.length == sizeof runs)
+        memcpy(&runs, value.bytes, sizeof runs);
+    else if (r != SV_OK && r != SV_NOT_FOUND)
+        return r;
+    ++runs;
+    value.length = sizeof runs;
+    memcpy(value.bytes, &runs, sizeof runs);
+    r = storage->put(self, &key, &value);
+    if (r == SV_OK)
+        sayf("This test ran %u times on this server. Stop the server, start it, run this test again.", runs);
+    return r;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -813,6 +913,10 @@ static const Test tests[] = {
     { "chat_prefix", "Switches on a prefix for your chat texts with /test go. A plugin rewrites each text before it goes out.", "Your next chat text appears as '[TEST] ' and then your text. After a second go it is plain again.", t_chat_prefix, t_chat_prefix_go },
     { "notice_events", "Makes a car and a loaded Magnum. Type /test go to see a chat line for every game event of yours.", "Lines appear for a seat in the car, each shot, each item that goes into or out of a slot, and a change of the round.", t_notices, t_notices_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
+    { "collapse_threshold", "Sets the death start to 60 and your health to 50.", "Your body falls limp at once, although the health bar shows half. The next test puts both back.", t_collapse, NULL },
+    { "ai_walk", "Makes a bot and sends it 25 units away. Type /test go to make it stop and turn.", "The bot walks to a point beside you. After a go it stops and faces the side for a few seconds.", t_ai_walk, t_ai_walk_go },
+    { "phone_claim", "Makes the plugin take a call to the number 1234 on any phone.", "Dial 1234: a chat line says the plugin took the call and the phone does not ring. Other numbers dial as before.", t_phone, NULL },
+    { "storage_counter", "Stores a counter on the server and says its value.", "The number grows by 1 each run. After a server restart it keeps growing.", t_storage, NULL },
 };
 
 /* ------------------------------------------------------------ flow */
@@ -1002,8 +1106,10 @@ static SvResult SV_CALL enable(const SvHost *h, SvOwner owner)
         r = h->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, (const void **)&props);
     if (r != SV_OK)
         return r;
-    r = h->subscribe(owner, SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM,
-        on_event);
+    h->get_api(owner, SV_API_AI, SV_GAME_AI_VERSION, (const void **)&ai);
+    h->get_api(owner, SV_API_ENGINE, SV_GAME_ENGINE_VERSION, (const void **)&engine);
+    h->get_api(owner, SV_API_STORAGE, SV_GAME_STORAGE_VERSION, (const void **)&storage);
+    r = h->subscribe(owner, EVENTS_BASE, on_event);
     if (r != SV_OK)
         return r;
     return h->command(owner, "test", SV_COMMAND_ADMIN, test_command);
