@@ -69,3 +69,4 @@ It carries native code only, so `runtime=lua` and `runtime=wasm` are refused unt
 
 `tests/test_manifest.py` (group `manifest-rules`) covers the valid and invalid values of each new key, the report for several problems at once, the script with a good package, a bad package and an unsafe entry, and the installer.
 `tests/test_plugins.py` covers the capability wall in the mode `wall`.
+Removal proofs on 2026-10-28: without the capability check in `get_api`, without the unsafe-name check of the script, and without the server check in the installer, a test fails each time. The restored source passes.
