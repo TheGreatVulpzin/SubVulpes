@@ -10,7 +10,7 @@
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 
-#define VERSION "0.1.0"
+#define VERSION "0.1.1"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 32
 
@@ -130,13 +130,17 @@ static SvResult set_float(const char *name, SvEntity entity, float value)
     return props->set(self, prop_id(name), entity, 0, v);
 }
 
+static SvVector offset(SvVector from, float dx, float dy, float dz)
+{
+    from.x += dx;
+    from.y += dy;
+    from.z += dz;
+    return from;
+}
+
 static SvVector beside(const SvHumanState *human, float dx, float dy, float dz)
 {
-    SvVector at = human->position;
-    at.x += dx;
-    at.y += dy;
-    at.z += dz;
-    return at;
+    return offset(human->position, dx, dy, dz);
 }
 
 static void forget(void)
@@ -154,8 +158,11 @@ static void cleanup(void)
         change->object_remove(self, made_objects[i]);
     for (i = 0; i < made_player_count; ++i)
         change->npc_remove(self, made_players[i]);
-    for (i = 0; i < made_item_count; ++i)
+    /* The game removes an item in its next lifetime pass. Detach it first, so a hand is free for the next test now. */
+    for (i = 0; i < made_item_count; ++i) {
+        change->item_detach(self, made_items[i]);
         change->item_remove(self, made_items[i]);
+    }
     forget();
     if (tester && touched && body(&player, &human) == SV_OK) {
         if (touched & T_HEALTH)
@@ -215,9 +222,43 @@ static SvResult t_sound(void)
     return t_sound_go();
 }
 
+/* Moves you next to a newspaper that lies free in the world (item type 26). The plugin cannot make one. */
+static SvResult to_newspaper(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = body(&player, &human);
+    uint32_t cursor = 0, page_number;
+    if (r != SV_OK)
+        return r;
+    for (page_number = 0; page_number < 8; ++page_number) {
+        SvEntity page[SV_ENTITY_PAGE_MAX];
+        uint32_t count = 0, next = 0, i;
+        r = game->entities(self, SV_ENTITY_ITEM, cursor, page, SV_ENTITY_PAGE_MAX, &count, &next);
+        if (r != SV_OK)
+            return r;
+        for (i = 0; i < count; ++i) {
+            SvItemState item = { sizeof item };
+            if (game->item(self, page[i], &item) == SV_OK && item.type == 26 && !item.parent_human && !item.parent_item) {
+                r = change->teleport(self, player.human, offset(item.position, 2.0f, 0.5f, 0.0f));
+                say(r == SV_OK ? "You stand next to a newspaper. Pick it up and read it." : "Could not move you next to a newspaper.");
+                return r == SV_STATE ? SV_OK : r;
+            }
+        }
+        if (next <= cursor)
+            break;
+        cursor = next;
+    }
+    say("No free newspaper lies in the world now. Skip this test, or find one.");
+    return SV_OK;
+}
+
 static SvResult t_head_replace(void)
 {
-    return change->headline(self, 0, "TEST ROOM: this is headline 0, replaced by a plugin.");
+    SvResult r = change->headline(self, 0, "TEST ROOM: this is headline 0, replaced by a plugin.");
+    if (r != SV_OK)
+        return r;
+    return to_newspaper();
 }
 
 static SvResult t_head_add(void)
@@ -436,8 +477,8 @@ static const Test tests[] = {
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
     { "chat_admin", "Sends a message of the admin kind.", "You see the line, because you are an administrator.", t_chat_admin, NULL },
     { "sound", "Plays a game sound at your place. Type /test go for the next sound.", "You hear a sound for each go. Different numbers sound different.", t_sound, t_sound_go },
-    { "headline_replace", "Replaces news line 0.", "Find a newspaper in the city and read it. Its first line is the test text.", t_head_replace, NULL },
-    { "headline_add", "Adds a new news line at the end.", "In a newspaper the last line is the test text. Say no if the client shows no new line.", t_head_add, NULL },
+    { "headline_replace", "Replaces news line 0 and moves you next to a newspaper.", "Pick up the newspaper and read it. Its first line is the test text.", t_head_replace, NULL },
+    { "headline_add", "Adds a new news line at the end.", "In the newspaper the last line is the test text. Say no if the client shows no new line.", t_head_add, NULL },
     { "teleport", "Moves your body 25 units to the side.", "You jump sideways about 25 units and keep standing.", t_teleport, NULL },
     { "health", "Sets your health to 50.", "Your health bar drops to half. The next test sets it back to 100.", t_health, NULL },
     { "bleeding", "Makes your body bleed.", "You bleed (blood) until the next test.", t_bleed, NULL },

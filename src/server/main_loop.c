@@ -152,7 +152,9 @@ static void tick(void)
 void __cdecl sr_dedicatedserverloop(void)
 {
     uint32_t next, now, status_ms;
-    int i, hours, catchup, status_ticks;
+    /* The game resets its own tick counter at each round, so the status line counts the ticks that this loop runs. */
+    uint32_t ran = 0, status_ran = 0;
+    int i, hours, catchup;
 
     g_printf(getmasterserverip() ? "connection successful\n" : "connection failed\n");
 
@@ -197,7 +199,6 @@ void __cdecl sr_dedicatedserverloop(void)
      * third tick in a row, the schedule restarts from now instead of catching up. */
     next = systemtimer();
     status_ms = next;
-    status_ticks = sr_game.ticks;
     sv_log("Server started on port %u.", (unsigned)(uint16_t)sr_bsdsocket.port);
     for (;;) {
 #ifdef SR_STANDALONE
@@ -215,10 +216,10 @@ void __cdecl sr_dedicatedserverloop(void)
                     sr_players[p].is_bot ? bots++ : players++;
             }
             sv_log("Server status: %.1f ticks/s, %d players, %d bots",
-                   (sr_game.ticks - status_ticks) * 1000.0 / ms, players, bots);
+                   (ran - status_ran) * 1000.0 / ms, players, bots);
             sv_profile_report();
             status_ms += ms;
-            status_ticks = sr_game.ticks;
+            status_ran = ran;
         }
         catchup = 0;
         for (;;) {
@@ -230,6 +231,7 @@ void __cdecl sr_dedicatedserverloop(void)
             else
                 next = systemtimer();
             tick();
+            ++ran;
             now = systemtimer();
         }
     }
