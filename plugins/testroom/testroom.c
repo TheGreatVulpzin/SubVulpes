@@ -10,7 +10,7 @@
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 
-#define VERSION "0.1.1"
+#define VERSION "0.1.2"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 32
 
@@ -187,14 +187,26 @@ static void remember(SvEntity *list, int *count, int limit, SvEntity entity)
 
 /* ------------------------------------------------------------ the tests */
 
+/* One person cannot tell who else sees a line. Say how many players are here, so the answer is honest. */
+static void players_note(void)
+{
+    SvStatus status = { sizeof status };
+    if (host->status(self, &status) == SV_OK && status.players < 2)
+        say("You are the only player here, so this test cannot show who else sees the line. Join a second client to check.");
+}
+
 static SvResult t_chat_all(void)
 {
-    return change->message(self, SV_MESSAGE_SERVER, "TEST: every player sees this line.");
+    SvResult r = change->message(self, SV_MESSAGE_SERVER, "TEST: every player sees this line.");
+    players_note();
+    return r;
 }
 
 static SvResult t_chat_private(void)
 {
-    return change->message_to(self, SV_MESSAGE_SERVER, tester, "TEST: only you see this line.");
+    SvResult r = change->message_to(self, SV_MESSAGE_SERVER, tester, "TEST: only you see this line.");
+    players_note();
+    return r;
 }
 
 static SvResult t_chat_admin(void)
@@ -437,20 +449,45 @@ static SvResult t_aim_go(void)
 
 static SvResult t_aim(void)
 {
+    SvResult r = t_npc();
+    if (r != SV_OK)
+        return r;
+    say("A bot stands 4 units beside you. Aim at it, at the ground and at the sky, and type /test go each time.");
     return t_aim_go();
+}
+
+/* The five look settings and their highest values, as the game makes them. */
+static const int32_t look_max[SV_LOOK_COUNT] = { 2, 7, 3, 1, 1 };
+static int32_t look_now[SV_LOOK_COUNT];
+static unsigned look_step;
+
+static SvResult t_looks_go(void)
+{
+    unsigned which = look_step++ % SV_LOOK_COUNT;
+    SvResult r;
+    look_now[which] = (look_now[which] + 1) % (look_max[which] + 1);
+    r = change->set_looks(self, tester, look_now);
+    sayf("Look %c is now %d (0 to %d). Type /test go for the next look.", (char)('a' + which), (int)look_now[which],
+        (int)look_max[which]);
+    return r;
 }
 
 static SvResult t_looks(void)
 {
     SvPlayerState player = { sizeof player };
     SvHumanState human = { sizeof human };
-    static const int32_t other[SV_LOOK_COUNT] = { 2, 7, 3, 1, 1 };
     SvResult r = body(&player, &human);
     if (r != SV_OK)
         return r;
     memcpy(saved_looks, player.looks, sizeof saved_looks);
     touched |= T_LOOKS;
-    return change->set_looks(self, tester, other);
+    memset(look_now, 0, sizeof look_now);
+    look_step = 0;
+    r = change->set_looks(self, tester, look_now);
+    sayf("Your five looks were %d %d %d %d %d. Now all are 0.", (int)saved_looks[0], (int)saved_looks[1],
+        (int)saved_looks[2], (int)saved_looks[3], (int)saved_looks[4]);
+    say("Type /test go to raise look a, then b, c, d and e, one at a time. Watch what changes.");
+    return r;
 }
 
 static SvResult t_dealt(void)
@@ -490,7 +527,7 @@ static const Test tests[] = {
     { "npc", "Makes a bot named NPC 4 units beside you.", "A bot stands beside you. It does not walk.", t_npc, NULL },
     { "vehicle_exit", "Makes a car. You get in. Then /test go throws you out of it.", "You leave the car at once, without flying away.", t_exit, t_exit_go },
     { "aim", "Reads what your aim hits. Type /test go after you look somewhere else.", "The answer matches what you look at: ground, a car or a human.", t_aim, t_aim_go },
-    { "looks", "Changes your five look settings.", "Your clothes and face change. The next test puts them back.", t_looks, NULL },
+    { "looks", "Sets your five look settings to 0, then raises one for each /test go.", "Each go changes one part of your look. Say yes if every part changes something. The next test puts your looks back.", t_looks, t_looks_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
 };
 
