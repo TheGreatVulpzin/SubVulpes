@@ -521,6 +521,8 @@ static int within_checks(SvOwner owner, SvEntity car, SvEntity thing)
     return 0;
 }
 
+static int world_checks(SvOwner owner);
+
 /* The rows for the item types and the bullet types. The test program reads the tables after the tick, and again after the
  * plugin stops, when the host puts the first values back. Returns 0 when all checks pass, or the line of the check that failed. */
 static int type_checks(SvOwner owner)
@@ -563,6 +565,43 @@ static int type_checks(SvOwner owner)
     STEP(props->set(owner, delay, 0, 4, v) == SV_OK);
     v.i = 7;
     STEP(props->set(owner, price, 0, 12, v) == SV_OK);
+    return world_checks(owner);
+}
+
+/* The rows of the round: the state, the timer and the three durations. The test program reads the game after the tick. */
+static int world_checks(SvOwner owner)
+{
+    uint32_t state = 0, timer = 0, round_time = 0, wait_time = 0, end_time = 0;
+    SvWorldState world = { sizeof world };
+    SvValue v;
+    STEP(props->find(owner, "world.state", &state) == SV_OK && props->find(owner, "world.timer", &timer) == SV_OK);
+    STEP(props->find(owner, "world.round_time", &round_time) == SV_OK && props->find(owner, "world.wait_time", &wait_time) == SV_OK);
+    STEP(props->find(owner, "world.end_time", &end_time) == SV_OK);
+    v.i = 4;
+    STEP(props->set(owner, state, 0, 0, v) == SV_INVALID);
+    v.i = 0;
+    STEP(props->set(owner, state, 0, 0, v) == SV_INVALID);
+    v.i = 2;
+    STEP(props->set(owner, state, 0, 0, v) == SV_OK && props->get(owner, state, 0, 0, &v) == SV_OK && v.i == 2);
+    STEP(props->add(owner, state, 0, 0, v) == SV_DENIED);
+    STEP(props->set(owner, state, human, 0, v) == SV_INVALID);
+    v.i = 1234;
+    STEP(props->set(owner, timer, 0, 0, v) == SV_OK && game->world(owner, &world) == SV_OK && world.timer_ticks == 1234);
+    v.i = -1;
+    STEP(props->set(owner, timer, 0, 0, v) == SV_INVALID);
+    v.i = 100;
+    STEP(props->add(owner, timer, 0, 0, v) == SV_OK && props->get(owner, timer, 0, 0, &v) == SV_OK && v.i == 1334);
+    v.i = 599;
+    STEP(props->set(owner, round_time, 0, 0, v) == SV_INVALID);
+    v.i = 7200;
+    STEP(props->set(owner, round_time, 0, 0, v) == SV_OK && game->world(owner, &world) == SV_OK && world.round_ticks == 7200);
+    v.i = 59;
+    STEP(props->set(owner, wait_time, 0, 0, v) == SV_INVALID && props->set(owner, end_time, 0, 0, v) == SV_INVALID);
+    v.i = 216001;
+    STEP(props->set(owner, wait_time, 0, 0, v) == SV_INVALID);
+    v.i = 120;
+    STEP(props->set(owner, wait_time, 0, 0, v) == SV_OK && props->set(owner, end_time, 0, 0, v) == SV_OK);
+    STEP(game->world(owner, &world) == SV_OK && world.wait_ticks == 120 && world.end_ticks == 120);
     return 0;
 }
 
@@ -762,7 +801,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 28);
+    STEP(count == 33);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);

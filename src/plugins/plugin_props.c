@@ -55,6 +55,14 @@ TYPE_FIELD(item_type_recoil, sr_itemtypes[s].recoil)
 TYPE_FIELD(item_type_ammo, sr_itemtypes[s].ammo)
 TYPE_FIELD(bullet_type_mass, sr_data_bullettypes[s].mass)
 TYPE_FIELD(bullet_type_drag, sr_data_bullettypes[s].drag)
+/* A row with one value for the whole world. */
+#define WORLD_FIELD(function, expression)     static void *function(int32_t i, uint32_t s) { (void)i; (void)s; return &(expression); }
+
+WORLD_FIELD(world_state, sr_game.state)
+WORLD_FIELD(world_timer, sr_game.timer)
+WORLD_FIELD(world_round_time, sr_game.round_time)
+WORLD_FIELD(world_wait_time, sr_game.wait_time)
+WORLD_FIELD(world_end_time, sr_game.end_time)
 
 /* A bot cannot be an admin. */
 static SvResult admin_check(int32_t index, SvValue value)
@@ -146,6 +154,11 @@ static const Prop props[] = {
     { "item_type.ammo", SV_ENTITY_WORLD, SV_PROP_INT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000, item_type_ammo, NULL, NULL, NULL, 1 },
     { "bullet_type.mass", SV_ENTITY_WORLD, SV_PROP_FLOAT, 4, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1, bullet_type_mass, NULL, NULL, NULL, 1 },
     { "bullet_type.drag", SV_ENTITY_WORLD, SV_PROP_FLOAT, 4, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1, bullet_type_drag, NULL, NULL, NULL, 1 },
+    { "world.state", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 1, 3, world_state, NULL, NULL, NULL },
+    { "world.timer", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000000, world_timer, NULL, NULL, NULL },
+    { "world.round_time", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 600, 216000, world_round_time, NULL, NULL, NULL },
+    { "world.wait_time", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 60, 216000, world_wait_time, NULL, NULL, NULL },
+    { "world.end_time", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 60, 216000, world_end_time, NULL, NULL, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };

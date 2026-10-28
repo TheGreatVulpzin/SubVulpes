@@ -315,6 +315,11 @@ Rows of the first version. The range is the range that a `set` or an `add` may l
 | `item_type.ammo` | world | int, 27 slots | get, set, add | 0 to 1000 | The rounds of a new magazine, or the uses of a new bandage |
 | `bullet_type.mass` | world | float, 4 slots | get, set, add | 0 to 1 | The slot is the bullet type. The damage of a bullet to a human and to an object follows the mass |
 | `bullet_type.drag` | world | float, 4 slots | get, set, add | 0 to 1 | How fast a bullet slows down |
+| `world.state` | world | int | get, set | 1 to 3 | The state of the round: 1 waiting, 2 playing, 3 ended. A set skips the code that the game runs when it changes the state itself (the traffic of a new round, the doors of the bases). The round event follows one tick later. The owner of the plugin takes the risk |
+| `world.timer` | world | int | get, set, add | 0 to 1000000 | Ticks left in the state. At 0 the game goes to the next state |
+| `world.round_time` | world | int | get, set | 600 to 216000 | The ticks of the playing state of the next round (the option `roundtime` is in minutes times 3600) |
+| `world.wait_time` | world | int | get, set | 60 to 216000 | The ticks of the waiting state of the next round |
+| `world.end_time` | world | int | get, set | 60 to 216000 | The ticks of the end state, before the game resets the round |
 | `account.ban_time` | account | int | get, set, add | 0 to 1000000 | Above 0 the game drops the player of the account at the join and during play. The count falls by 1 for each 36,000 ticks. The value is not saved on disk (see [bans](legacy-modules.md#bans)) |
 
 ### Type rows
