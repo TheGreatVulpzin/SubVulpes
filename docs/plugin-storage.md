@@ -19,12 +19,16 @@ A successful read clears every unused output byte.
 | `SV_STORAGE_SESSION` | Active player reference | Memory only. Clear on player leave and plugin stop. |
 | `SV_STORAGE_ACCOUNT` | Account reference | Disk. The host maps the opaque reference to both native identity words. |
 | `SV_STORAGE_SERVER` | Zero | Disk. Private to the stable plugin id. |
+| `SV_STORAGE_ENTITY` | A human, an item or a vehicle | Memory only. Clear when the thing dies and when the world clears things of that kind. A player or an account reference gives `SV_NOT_FOUND`. |
 
 Each plugin can store at most 128 keys and 65536 value bytes across all scopes.
 Replacing a value releases its old byte count before the new quota check.
 Removing a key releases its entry and bytes.
 The entry bound also applies to empty values. A full table cannot create another key.
 A plugin keeps counters and policy state here, without borrowing game record fields.
+
+An entity value (`SV_STORAGE_ENTITY`) lives in memory only. The host checks the subject at each call: a human, an item or a vehicle that is alive. A player, an account, zero or a stale reference gives `SV_NOT_FOUND`. The value goes when the thing dies (`sv_storage_leave`) and when the world clears things of that kind (`sv_storage_clear`). A new thing in an old slot never reads the old value, because the key is the full handle and not the slot.
+The tests `entity` and `entity_gone` cover these rules. Removal proofs on 2026-10-28: without the subject check, without the clear at death, without the clear at the world reset, and with entity rows saved to disk, the test fails each time.
 
 The private namespace uses the validated module id, not its version or numeric owner.
 Profile order can change the numeric owner after a restart.

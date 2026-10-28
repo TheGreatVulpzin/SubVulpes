@@ -10,20 +10,41 @@
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 #include "sv_game_events.h"
+#include "sv_game_ai.h"
+#include "sv_game_engine.h"
+#include "sv_game_shop.h"
+#include "sv_game_storage.h"
+#include "sv_game_economy.h"
+#include "sv_game_mission.h"
+#include "sv_game_settings.h"
+#include "sv_config.h"
+#include "sv_plugins_api.h"
 
-#define VERSION "0.1.7"
+#define VERSION "0.2.3"
 #define LINE_MAX_CHARS 60
-#define MAX_TESTS 32
+#define MAX_TESTS 64
 
 static const SvHost *host;
 static SvOwner self;
 static const SvGameRead *game;
 static const SvGameWrite *change;
 static const SvGameProps *props;
+static const SvGameAi *ai;
+static const SvGameEngine *engine;
+static const SvGameStorage *storage;
+static const SvGameEconomy *economy;
+static const SvGameMission *mission;
+static const SvGameSettings *settings;
+static const SvGameShop *shop;
+static const SvConfig *config;
+static const SvPlugins *plugins_api;
 
 enum { TODO, PASS, FAIL, SKIP };
 /* What a test changed on the player, so the next test or /test stop can undo it. */
-enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16, T_TYPES = 32 };
+enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16, T_TYPES = 32, T_DEATH = 64, T_PHONE = 128, T_AI = 256, T_MONEY = 512, T_ECON = 1024, T_MISSION = 2048, T_SHOP = 4096,
+    T_SETTING = 8192 };
+#define EVENTS_BASE (SV_EVENT_TICK | SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM |\
+    SV_EVENT_SETTING | SV_EVENT_CONFIG)
 
 typedef struct Test {
     const char *name;
@@ -39,13 +60,28 @@ static int current;
 static unsigned char result[MAX_TESTS + 1];
 static unsigned touched;
 static int32_t saved_looks[SV_LOOK_COUNT];
-static SvEntity made_objects[6], made_players[4], made_items[8];
+static SvEntity made_objects[6], made_players[4], made_items[24];
 static int made_object_count, made_player_count, made_item_count;
 static uint32_t sound_next;
 static SvEntity last_magazine, last_car, last_npc, last_npc_human, last_gun;
 static float saved_speed, saved_bullet_mass;
 static unsigned name_step;
-static int chat_prefix_on, notices_on;
+static int chat_prefix_on, notices_on, phone_claim_on, setting_notice_on;
+static SvEntity money_account, stock_player, phone_item;
+static int32_t money_added, saved_shares, stocks_added, saved_bots;
+static float saved_price;
+static SvMissionRef mission_ref;
+static int mission_live;
+static struct { uint32_t building; SvShopCatalog old; } saved_shop[32];
+static int saved_shop_count, duel_stage;
+static SvEntity duel_a, duel_b;
+/* A timed show, driven by the tick event: a scale of sounds, a grid of moving items or a newspaper that changes. */
+enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES };
+#define GRID_ITEMS 16
+static int anim_kind, grid_count;
+static uint32_t anim_next, anim_step, anim_every, anim_limit;
+static SvEntity grid_items[GRID_ITEMS];
+static SvVector grid_origin;
 
 /* ------------------------------------------------------------ text */
 
@@ -154,11 +190,60 @@ static void forget(void)
 }
 
 /* Undo what the last test changed and remove what it made. Errors do not matter here: the thing may be gone already. */
+static SvResult set_engine_int(const char *name, int32_t value)
+{
+    SvEngineValue v = { sizeof v, SV_ENGINE_INT };
+    v.value.integer = value;
+    return engine ? engine->set(self, name, SV_ENGINE_GLOBAL, &v) : SV_INCOMPATIBLE;
+}
+
+static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event);
+static void animate(uint32_t tick);
+
+/* Put back what the economy, mission, shop, setting and money tests changed. */
+static void undo_services(void)
+{
+    int i;
+    if ((touched & T_MONEY) && money_added)
+        change->add_money(self, money_account, -money_added);
+    if ((touched & T_ECON) && economy) {
+        if (stocks_added)
+            economy->add_stocks(self, stock_player, -stocks_added);
+        economy->set_shares(self, 0, saved_shares);
+        economy->set_price(self, 0, saved_price);
+    }
+    if ((touched & T_MISSION) && mission_live && mission)
+        mission->cancel(self, &mission_ref);
+    if ((touched & T_SHOP) && shop)
+        for (i = 0; i < saved_shop_count; ++i) {
+            SvShopCatalogWrite write = { sizeof write };
+            write.count = saved_shop[i].old.count;
+            memcpy(write.rows, saved_shop[i].old.rows, sizeof write.rows);
+            shop->catalog_replace(self, saved_shop[i].building, &write);
+        }
+    if ((touched & T_SETTING) && settings) {
+        SvSettingValue value = { sizeof value, SV_CORE_SETTING_INT };
+        value.value = saved_bots;
+        settings->set(self, "bot_count", &value);
+    }
+    money_added = stocks_added = saved_shop_count = mission_live = setting_notice_on = 0;
+}
+
 static void cleanup(void)
 {
     SvPlayerState player = { sizeof player };
     SvHumanState human = { sizeof human };
     int i;
+    if ((touched & T_AI) && ai)
+        ai->release(self, last_npc);
+    if (touched & T_DEATH)
+        set_engine_int("human.death_start", 0);
+    if (touched & T_PHONE)
+        host->subscribe(self, EVENTS_BASE, on_event);
+    phone_claim_on = 0;
+    anim_kind = ANIM_NONE;
+    grid_count = 0;
+    undo_services();
     for (i = 0; i < made_object_count; ++i)
         change->object_remove(self, made_objects[i]);
     for (i = 0; i < made_player_count; ++i)
@@ -721,6 +806,23 @@ static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event)
         else if (event->kind == SV_EVENT_OBJECT_GONE)
             sayf("[vehicle gone] type %d.", (int)record->value);
     }
+    if (anim_kind && event->kind == SV_EVENT_TICK)
+        animate(event->tick);
+    if (tester && event->kind == SV_EVENT_SETTING && event->size == sizeof(SvSettingEvent) && setting_notice_on) {
+        const SvSettingEvent *changed = (const SvSettingEvent *)event;
+        sayf("[setting] %s went from %d to %d.", changed->name, (int)changed->before, (int)changed->after);
+    }
+    if (tester && event->kind == SV_EVENT_CONFIG && event->size == sizeof(SvConfigEvent)) {
+        const SvConfigEvent *changed = (const SvConfigEvent *)event;
+        sayf("[config] %s: '%.20s' to '%.20s'.", changed->key, changed->old_value, changed->new_value);
+    }
+    if (event->kind == SV_EVENT_PHONE_CALL && event->size == sizeof(SvPhoneEvent) && phone_claim_on) {
+        const SvPhoneEvent *call = (const SvPhoneEvent *)event;
+        if (call->number == 1234) {
+            sayf("[phone] The plugin took your call to %d. The phone does not ring.", (int)call->number);
+            return SV_DENIED;
+        }
+    }
     if (event->kind == SV_EVENT_CHAT && event->size == sizeof(SvChatEvent) && chat_prefix_on) {
         SvChatEvent *chat = (SvChatEvent *)event;
         if (chat->player == tester) {
@@ -783,6 +885,796 @@ static SvResult t_dealt(void)
     }
 }
 
+static SvResult t_collapse(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    touched |= T_DEATH | T_HEALTH;
+    r = set_engine_int("human.death_start", 60);
+    return r == SV_OK ? set_int("human.health", player.human, 50) : r;
+}
+
+static SvResult t_ai_walk(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = ai ? t_npc() : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    touched |= T_AI;
+    return ai->destination(self, last_npc, beside(&human, 25.0f, 0.0f, 0.0f));
+}
+
+static SvResult t_ai_walk_go(void)
+{
+    SvAiInput input = { sizeof input };
+    input.yaw = 1.5f;
+    if (!ai)
+        return SV_INCOMPATIBLE;
+    say("The bot should stop and face the side for a few seconds.");
+    return ai->override_input(self, last_npc, &input, 300);
+}
+
+static SvResult t_phone(void)
+{
+    SvResult r = host->subscribe(self, EVENTS_BASE | SV_EVENT_PHONE_CALL, on_event);
+    if (r != SV_OK)
+        return r;
+    touched |= T_PHONE;
+    phone_claim_on = 1;
+    say("Pick up a phone and dial 1234. Then dial another 4 digit number.");
+    return SV_OK;
+}
+
+static SvResult t_storage(void)
+{
+    SvStorageKey key = { sizeof key, SV_STORAGE_SERVER };
+    SvStorageValue value = { sizeof value };
+    uint32_t runs = 0;
+    SvResult r;
+    if (!storage)
+        return SV_INCOMPATIBLE;
+    snprintf(key.name, sizeof key.name, "runs");
+    r = storage->get(self, &key, &value);
+    if (r == SV_OK && value.length == sizeof runs)
+        memcpy(&runs, value.bytes, sizeof runs);
+    else if (r != SV_OK && r != SV_NOT_FOUND)
+        return r;
+    ++runs;
+    value.length = sizeof runs;
+    memcpy(value.bytes, &runs, sizeof runs);
+    r = storage->put(self, &key, &value);
+    if (r == SV_OK)
+        sayf("This test ran %u times on this server. Stop the server, start it, run this test again.", runs);
+    return r;
+}
+
+static SvResult t_storage_erase(void)
+{
+    SvStorageKey key = { sizeof key, SV_STORAGE_SERVER };
+    SvResult r;
+    if (!storage)
+        return SV_INCOMPATIBLE;
+    snprintf(key.name, sizeof key.name, "runs");
+    r = storage->erase(self, &key);
+    say(r == SV_OK ? "Erased. Run this test again: the count starts at 1." : "Nothing to erase. Run this test first.");
+    return r == SV_NOT_FOUND ? SV_OK : r;
+}
+
+/* ------------------------------------------------------------ reads */
+
+static SvResult t_read_account(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvAccountState account = { sizeof account };
+    SvResult r = game->player(self, tester, &player);
+    if (r == SV_OK)
+        r = game->account(self, player.account, &account);
+    if (r == SV_OK)
+        sayf("Account %.20s: money %d, play time %d.", account.name, (int)account.money, (int)account.playtime_raw);
+    return r;
+}
+
+static SvResult t_read_inventory(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    char line[LINE_MAX_CHARS];
+    uint32_t slot, used = 0;
+    SvResult r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    for (slot = 0; slot < 7 && used + 12 < sizeof line; ++slot) {
+        SvInventoryState inventory = { sizeof inventory };
+        r = game->inventory(self, player.human, slot, &inventory);
+        if (r != SV_OK)
+            return r;
+        used += (uint32_t)snprintf(line + used, sizeof line - used, "s%u:%u ", slot, inventory.count);
+    }
+    say("Items in each slot (0 and 1 are the hands):");
+    say(line);
+    return SV_OK;
+}
+
+static SvResult t_read_line(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvLineHit hit = { sizeof hit };
+    SvResult r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    r = game->line(self, offset(human.position, 0.0f, 6.0f, 0.0f), offset(human.position, 0.0f, -6.0f, 0.0f), SV_LINE_ALL,
+        player.human, &hit);
+    if (r == SV_OK)
+        sayf("Line down through you: kind %u, hit height %.2f, you stand at %.2f.", hit.kind, hit.position.y, human.position.y);
+    return r;
+}
+
+static SvResult t_read_headline(void)
+{
+    SvWorldState world = { sizeof world };
+    char text[SV_HEADLINE_BUFFER];
+    SvResult r = game->world(self, &world);
+    if (r == SV_OK)
+        r = game->headline(self, 0, text, sizeof text);
+    if (r == SV_OK) {
+        sayf("The world has %u news lines. Line 0:", world.headline_count);
+        say(text);
+    }
+    return r;
+}
+
+static SvResult t_props_list(void)
+{
+    SvPropInfo info = { sizeof info };
+    uint32_t id = 1;
+    char last[SV_PROP_NAME_MAX] = "";
+    while (id < 512 && props->info(self, id, &info) == SV_OK) {
+        snprintf(last, sizeof last, "%s", info.name);
+        ++id;
+        info.size = sizeof info;
+    }
+    sayf("%u properties are listed. The last one is %s.", id - 1, last);
+    return id > 1 ? SV_OK : SV_NOT_FOUND;
+}
+
+/* ------------------------------------------------------------ writes */
+
+static SvResult t_add_money(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvResult r = game->player(self, tester, &player);
+    if (r != SV_OK)
+        return r;
+    r = change->add_money(self, player.account, 100);
+    if (r == SV_OK) {
+        touched |= T_MONEY;
+        money_account = player.account;
+        money_added += 100;
+        sayf("Your money was %d. It should be 100 more now. The next test takes it back.", (int)player.money);
+    }
+    return r;
+}
+
+static SvResult t_disown(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvEntity item = 0;
+    SvResult r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    r = change->item_create(self, 12, beside(&human, 3.0f, 0.5f, 0.0f), &item);
+    if (r == SV_OK)
+        r = change->disown(self, item);
+    return r;
+}
+
+/* ------------------------------------------------------------ bots */
+
+static SvResult make_bot(SvVector at, const char *name, SvEntity *bot, SvEntity *bot_human)
+{
+    SvResult r = change->npc_create(self, at, 0.0f, name, bot, bot_human);
+    if (r == SV_OK)
+        remember(made_players, &made_player_count, 4, *bot);
+    return r;
+}
+
+static SvResult arm(SvEntity human, SvVector at)
+{
+    SvEntity gun = 0, magazine = 0;
+    SvResult r = change->item_create(self, 4, at, &gun);
+    if (r != SV_OK)
+        return r;
+    remember(made_items, &made_item_count, 8, gun);
+    r = change->item_create(self, 5, at, &magazine);
+    if (r != SV_OK)
+        return r;
+    remember(made_items, &made_item_count, 8, magazine);
+    r = change->item_attach(self, gun, magazine);
+    return r == SV_OK ? change->item_equip(self, gun, human, 0) : r;
+}
+
+static SvResult t_threats_go(void)
+{
+    SvAiThreats threats = { sizeof threats };
+    uint32_t i;
+    SvResult r = ai ? ai->threats(self, last_npc, &threats) : SV_INCOMPATIBLE;
+    if (r != SV_OK)
+        return r;
+    sayf("The bot knows %u threats.", threats.count);
+    for (i = 0; i < threats.count && i < 3; ++i)
+        sayf("Threat %u: level %.1f, timer %d.", i, threats.threats[i].level, (int)threats.threats[i].timer);
+    return SV_OK;
+}
+
+static SvResult t_threats(void)
+{
+    SvResult r = ai ? t_npc() : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        say("Walk in front of the bot and wave. Then type /test go to read what it sees.");
+    return r;
+}
+
+static SvResult t_waypoints(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvVector points[3];
+    SvResult r = ai ? t_npc() : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    points[0] = beside(&human, 15.0f, 0.0f, 0.0f);
+    points[1] = beside(&human, 15.0f, 0.0f, 15.0f);
+    points[2] = beside(&human, 0.0f, 0.0f, 15.0f);
+    touched |= T_AI;
+    return ai->waypoints(self, last_npc, points, 3);
+}
+
+static SvResult t_waypoints_go(void)
+{
+    return ai ? ai->waypoints(self, last_npc, NULL, 0) : SV_INCOMPATIBLE;
+}
+
+static SvResult t_target(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = ai ? t_npc() : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    touched |= T_AI;
+    return ai->target(self, last_npc, player.human);
+}
+
+static SvResult duel_apply(void)
+{
+    static const uint32_t chance[3] = { 100, 0, 100 };
+    static const uint32_t part[3] = { 2, 2, 1 };
+    static const char *const text[3] = { "Stage 0: the first bot shoots the second bot, aiming at the head.",
+        "Stage 1: the shot chance is 0. The first bot stops shooting.",
+        "Stage 2: the chance is 100 again and the bot aims at the torso, without the aim bit." };
+    SvResult r = ai->shot_chance(self, duel_a, chance[duel_stage]);
+    if (r == SV_OK)
+        r = ai->perception(self, duel_a, part[duel_stage]);
+    if (r == SV_OK)
+        r = ai->aim_mode(self, duel_a, duel_stage < 2);
+    if (r == SV_OK)
+        say(text[duel_stage]);
+    return r;
+}
+
+static SvResult t_duel_go(void)
+{
+    duel_stage = (duel_stage + 1) % 3;
+    return ai ? duel_apply() : SV_INCOMPATIBLE;
+}
+
+static SvResult t_duel(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvEntity a_human = 0, b_human = 0;
+    SvResult r = ai ? body(&player, &human) : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = make_bot(beside(&human, 6.0f, 0.5f, 0.0f), "Shooter", &duel_a, &a_human);
+    if (r == SV_OK)
+        r = make_bot(beside(&human, 6.0f, 0.5f, 14.0f), "Target", &duel_b, &b_human);
+    if (r == SV_OK)
+        r = arm(a_human, human.position);
+    if (r != SV_OK)
+        return r;
+    last_npc = duel_a;
+    touched |= T_AI;
+    duel_stage = 0;
+    r = ai->target(self, duel_a, b_human);
+    return r == SV_OK ? duel_apply() : r;
+}
+
+static SvResult t_seated(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvEntity car = 0, a_human = 0, b_human = 0, a_bot = 0, b_bot = 0;
+    SvResult r = ai ? body(&player, &human) : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = change->object_create(self, 0, beside(&human, 8.0f, 1.0f, 0.0f), 0.0f, 1, &car);
+    if (r == SV_OK) {
+        remember(made_objects, &made_object_count, 6, car);
+        r = make_bot(beside(&human, 8.0f, 1.0f, 3.0f), "Passenger", &a_bot, &a_human);
+    }
+    if (r == SV_OK)
+        r = change->vehicle_enter(self, a_human, car, 1);
+    if (r == SV_OK)
+        r = arm(a_human, human.position);
+    if (r == SV_OK)
+        r = make_bot(beside(&human, -14.0f, 0.5f, 0.0f), "Target", &b_bot, &b_human);
+    if (r != SV_OK)
+        return r;
+    last_npc = a_bot;
+    touched |= T_AI;
+    return ai->seated_target(self, a_bot, b_bot);
+}
+
+/* ------------------------------------------------------------ economy, missions, shops */
+
+static SvResult t_economy_read(void)
+{
+    uint32_t company;
+    if (!economy)
+        return SV_INCOMPATIBLE;
+    for (company = 0; company < SV_COMPANY_COUNT; ++company) {
+        SvCompany info = { sizeof info };
+        SvResult r = economy->company(self, company, &info);
+        if (r != SV_OK)
+            return r;
+        sayf("Company %u: price %.2f, shares %d, your stake %d.", company, info.price, (int)info.shares, (int)info.stake);
+    }
+    return SV_OK;
+}
+
+static SvResult t_economy_change(void)
+{
+    SvCompany info = { sizeof info };
+    SvResult r = economy ? economy->company(self, 0, &info) : SV_INCOMPATIBLE;
+    if (r != SV_OK)
+        return r;
+    saved_price = info.price;
+    saved_shares = info.shares;
+    touched |= T_ECON;
+    r = economy->set_price(self, 0, 123.0f);
+    if (r == SV_OK)
+        say("The price of company 0 is now 123. Look at the stock list. Then type /test go.");
+    return r;
+}
+
+static SvResult t_economy_change_go(void)
+{
+    SvCompany info = { sizeof info };
+    SvResult r = economy->set_shares(self, 0, saved_shares + 1000);
+    if (r == SV_OK) {
+        stock_player = tester;
+        r = economy->add_stocks(self, tester, 10);
+    }
+    if (r == SV_OK) {
+        stocks_added += 10;
+        r = economy->company(self, 0, &info);
+    }
+    if (r == SV_OK)
+        sayf("Company 0 now has %d shares and you have %d of them.", (int)info.shares, (int)info.stake);
+    return r;
+}
+
+static SvResult t_mission_read(void)
+{
+    uint32_t team;
+    if (!mission)
+        return SV_INCOMPATIBLE;
+    for (team = 0; team < SV_MISSION_TEAMS; ++team) {
+        SvMissionSlots slots = { sizeof slots };
+        uint32_t i, active = 0;
+        SvResult r = mission->slots(self, team, &slots);
+        if (r != SV_OK)
+            return r;
+        for (i = 0; i < SV_MISSION_SLOTS; ++i)
+            active += slots.slots[i].active != 0;
+        sayf("Team %u has %u active missions.", team, active);
+    }
+    return SV_OK;
+}
+
+static SvResult t_mission_start(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvWorldState world = { sizeof world };
+    SvMissionStart start = { sizeof start };
+    SvEntity objective = 0;
+    uint32_t team;
+    SvResult r = mission ? body(&player, &human) : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = game->world(self, &world);
+    if (r == SV_OK)
+        r = change->item_create(self, 17, beside(&human, 3.0f, 0.5f, 0.0f), &objective);
+    if (r != SV_OK)
+        return r;
+    remember(made_items, &made_item_count, 8, objective);
+    start.kind = 2;
+    start.reward = 500;
+    start.expire = world.world_clock_raw + 36000;
+    if (start.expire > SV_MISSION_EXPIRE_MAX)
+        start.expire = SV_MISSION_EXPIRE_MAX;
+    start.item = objective;
+    team = player.team < 0 || player.team >= (int32_t)SV_MISSION_TEAMS ? 0u : (uint32_t)player.team;
+    r = mission->start(self, team, &start, &mission_ref);
+    if (r == SV_OK) {
+        mission_live = 1;
+        touched |= T_MISSION;
+        say("A mission of kind 2 with reward 500 was added for your team. Look at the mission list. Then type /test go.");
+    }
+    return r;
+}
+
+static SvResult t_mission_cancel(void)
+{
+    SvResult r = mission_live ? mission->cancel(self, &mission_ref) : SV_STATE;
+    if (r == SV_OK) {
+        mission_live = 0;
+        say("The mission was cancelled. It should leave the list.");
+    }
+    return r;
+}
+
+static SvResult t_shop_catalog(void)
+{
+    uint32_t building;
+    if (!shop)
+        return SV_INCOMPATIBLE;
+    saved_shop_count = 0;
+    touched |= T_SHOP;
+    for (building = 0; building < SV_SHOP_BUILDINGS && saved_shop_count < 32; ++building) {
+        SvShopCatalog now = { sizeof now };
+        SvShopCatalogWrite write = { sizeof write };
+        if (shop->catalog(self, building, &now) != SV_OK || !now.count)
+            continue;
+        write.count = now.count;
+        memcpy(write.rows, now.rows, sizeof write.rows);
+        write.rows[0].price = 1;
+        saved_shop[saved_shop_count].building = building;
+        saved_shop[saved_shop_count].old = now;
+        if (shop->catalog_replace(self, building, &write) == SV_OK)
+            ++saved_shop_count;
+    }
+    sayf("%d shops now sell their first row for 1.", saved_shop_count);
+    return saved_shop_count ? SV_OK : SV_NOT_FOUND;
+}
+
+static SvResult find_phone(SvEntity *found, const SvHumanState *human)
+{
+    float best = 0.0f;
+    uint32_t cursor = 0, round;
+    *found = 0;
+    for (round = 0; round < 16; ++round) {
+        SvEntity page[SV_ENTITY_PAGE_MAX];
+        uint32_t count = 0, next = 0, i;
+        SvResult r = game->entities(self, SV_ENTITY_ITEM, cursor, page, SV_ENTITY_PAGE_MAX, &count, &next);
+        if (r != SV_OK)
+            return r;
+        for (i = 0; i < count; ++i) {
+            SvItemState item = { sizeof item };
+            if (game->item(self, page[i], &item) == SV_OK && item.phone_id > 0 && !item.parent_human) {
+                float dx = item.position.x - human->position.x, dz = item.position.z - human->position.z;
+                float distance = dx * dx + dz * dz;
+                if (!*found || distance < best) {
+                    *found = page[i];
+                    best = distance;
+                }
+            }
+        }
+        if (next <= cursor)
+            break;
+        cursor = next;
+    }
+    return *found ? SV_OK : SV_NOT_FOUND;
+}
+
+static SvResult t_phone_state(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvItemState item = { sizeof item };
+    SvResult r = shop ? body(&player, &human) : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = find_phone(&phone_item, &human);
+    if (r == SV_OK)
+        r = game->item(self, phone_item, &item);
+    if (r == SV_OK)
+        r = change->teleport(self, player.human, offset(item.position, 2.0f, 0.5f, 0.0f));
+    if (r == SV_OK)
+        say("You stand next to a phone. Dial a number, then type /test go to read the phone and end the call.");
+    return r;
+}
+
+static SvResult t_phone_state_go(void)
+{
+    SvPhoneState state = { sizeof state };
+    SvResult r = shop->phone(self, phone_item, &state);
+    if (r != SV_OK)
+        return r;
+    sayf("Phone state %d (0 idle, 1 dial, 2 ringing, 3 talk), number %d.", (int)state.state, (int)state.number);
+    r = shop->phone_idle(self, phone_item);
+    say(r == SV_OK ? "The call ended. The phone is idle." : "The phone could not go idle.");
+    return r;
+}
+
+/* ------------------------------------------------------------ settings, engine, config, plugins */
+
+static SvResult t_setting_list(void)
+{
+    uint32_t i;
+    if (!settings)
+        return SV_INCOMPATIBLE;
+    for (i = 0; i < SV_SETTING_COUNT; ++i) {
+        SvSettingInfo info = { sizeof info };
+        SvSettingValue value = { sizeof value };
+        SvResult r = settings->describe(self, i, &info);
+        if (r == SV_OK)
+            r = settings->get(self, info.name, &value);
+        if (r != SV_OK)
+            return r;
+        sayf("%s = %d (range %d to %d, default %d).", info.name, (int)value.value, (int)info.minimum, (int)info.maximum,
+            (int)info.default_value);
+    }
+    return SV_OK;
+}
+
+static SvResult t_setting_bots(void)
+{
+    SvSettingValue value = { sizeof value };
+    SvResult r = settings ? settings->get(self, "bot_count", &value) : SV_INCOMPATIBLE;
+    if (r != SV_OK)
+        return r;
+    saved_bots = value.value;
+    touched |= T_SETTING;
+    setting_notice_on = 1;
+    value.type = SV_CORE_SETTING_INT;
+    value.value = 2;
+    r = settings->set(self, "bot_count", &value);
+    if (r == SV_OK)
+        sayf("The bot count was %d. It is 2 now. Watch the bots in the city for a minute.", (int)saved_bots);
+    return r;
+}
+
+static SvResult t_engine_list(void)
+{
+    uint32_t i;
+    if (!engine)
+        return SV_INCOMPATIBLE;
+    for (i = 0; i < SV_ENGINE_PARAM_COUNT; ++i) {
+        SvEngineInfo info = { sizeof info };
+        SvEngineValue value = { sizeof value };
+        SvResult r = engine->describe(self, i, 0, &info);
+        if (r == SV_OK)
+            r = engine->get(self, info.name, info.scope == SV_ENGINE_GLOBAL_SCOPE ? SV_ENGINE_GLOBAL : 0, &value);
+        if (r != SV_OK)
+            return r;
+        if (value.type == SV_ENGINE_FLOAT)
+            sayf("%s = %.3f.", info.name, value.value.real);
+        else
+            sayf("%s = %d.", info.name, (int)value.value.integer);
+    }
+    return SV_OK;
+}
+
+static SvResult t_config_read(void)
+{
+    int32_t count = 0;
+    float scale = 0.0f;
+    char greeting[SV_CONFIG_TEXT_MAX + 1] = "";
+    SvResult r = config ? config->get_int(self, "count", &count) : SV_INCOMPATIBLE;
+    if (r == SV_OK)
+        r = config->get_float(self, "scale", &scale);
+    if (r == SV_OK)
+        r = config->get_text(self, "greeting", greeting, sizeof greeting);
+    if (r == SV_OK) {
+        sayf("greeting '%s', count %d, scale %.2f.", greeting, (int)count, scale);
+        say("Change one with the plugins config command. A chat line shows the change.");
+    }
+    return r;
+}
+
+static SvResult t_plugins_calls(void)
+{
+    const void *table = NULL;
+    SvResult subscribe, refuse, find;
+    if (!plugins_api)
+        return SV_INCOMPATIBLE;
+    subscribe = host->subscribe(self, EVENTS_BASE | SV_EVENT_EXT_BIT(0), on_event);
+    host->subscribe(self, EVENTS_BASE, on_event);
+    refuse = plugins_api->refuse(self, "test");
+    find = plugins_api->find(self, "sv.testroom", 1, &table);
+    sayf("subscribe gave %d (want %d), refuse %d (want %d), find %d (want %d).", (int)subscribe, (int)SV_OK, (int)refuse,
+        (int)SV_STATE, (int)find, (int)SV_DEPENDENCY);
+    return subscribe == SV_OK && refuse == SV_STATE && find == SV_DEPENDENCY ? SV_OK : SV_FAILED;
+}
+
+/* The kick test. The player gives a name: /test kick NAME. The kick puts the address of the player in the kick list of the
+ * server, which blocks that address until the server restarts or an administrator types /clearkick. */
+static SvResult t_kick_run(void)
+{
+    say("This test removes another player. Type /test kick NAME with the name of a friend who agreed.");
+    say("The list of the server blocks the address of that player. Type /clearkick in the chat when you are done.");
+    return SV_OK;
+}
+
+/* ------------------------------------------------------------ timed shows (for a music and picture plugin) */
+
+static void animate(uint32_t tick)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = SV_OK;
+    if (tick < anim_next)
+        return;
+    anim_next = tick + anim_every;
+    if (body(&player, &human) != SV_OK) {
+        anim_kind = ANIM_NONE;
+        return;
+    }
+    if (anim_kind == ANIM_SCALE) {
+        float pitch = 0.5f * powf(2.0f, (float)anim_step / 12.0f);
+        r = change->sound(self, 21, human.position, 1.0f, pitch);
+        if (anim_step % 4 == 0)
+            sayf("Note %u, pitch %.2f.", anim_step, pitch);
+    } else if (anim_kind == ANIM_GRID) {
+        int i;
+        for (i = 0; i < grid_count && r == SV_OK; ++i) {
+            float wave = sinf((float)anim_step * 0.2f + (float)(i / 4 + i % 4)) * 2.0f;
+            r = change->teleport(self, grid_items[i], offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f + wave, (float)(i % 4) * 2.0f));
+        }
+    } else if (anim_kind == ANIM_FRAMES) {
+        char text[SV_HEADLINE_TEXT_MAX + 1];
+        uint32_t x;
+        for (x = 0; x < SV_HEADLINE_TEXT_MAX; ++x)
+            text[x] = ((x % 62) + anim_step) % 16 < 8 ? '#' : '.';
+        text[SV_HEADLINE_TEXT_MAX] = 0;
+        r = change->headline(self, 0, text);
+    }
+    ++anim_step;
+    if (r != SV_OK) {
+        sayf("The show stopped with error %d after %u steps.", (int)r, anim_step);
+        anim_kind = ANIM_NONE;
+    } else if (anim_step >= anim_limit) {
+        sayf("The show ended after %u steps, one every %u ticks. No error.", anim_step, anim_every);
+        anim_kind = ANIM_NONE;
+    }
+}
+
+static void anim_start(int kind, uint32_t every, uint32_t limit)
+{
+    anim_kind = kind;
+    anim_every = every;
+    anim_limit = limit;
+    anim_step = 0;
+    anim_next = 0;
+}
+
+static SvResult t_scale(void)
+{
+    say("Type /test go. A scale of 25 sounds plays, one every 15 ticks.");
+    return SV_OK;
+}
+
+static SvResult t_scale_go(void)
+{
+    anim_start(ANIM_SCALE, 15, 25);
+    return SV_OK;
+}
+
+static SvResult t_grid_go(void)
+{
+    anim_every = anim_every == 1 ? 4 : anim_every == 4 ? 12 : 1;
+    sayf("The grid moves every %u ticks now.", anim_every);
+    anim_start(ANIM_GRID, anim_every, 300);
+    return SV_OK;
+}
+
+static SvResult t_grid(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvResult r = body(&player, &human);
+    int i;
+    if (r != SV_OK)
+        return r;
+    grid_count = 0;
+    grid_origin = beside(&human, 6.0f, 0.0f, -3.0f);
+    for (i = 0; i < GRID_ITEMS; ++i) {
+        SvEntity item = 0;
+        r = change->item_create(self, 12, offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f, (float)(i % 4) * 2.0f), &item);
+        if (r != SV_OK)
+            break;
+        remember(made_items, &made_item_count, 24, item);
+        grid_items[grid_count++] = item;
+    }
+    sayf("%d items made. They move in a wave. Type /test go to change the speed.", grid_count);
+    if (!grid_count)
+        return r;
+    anim_start(ANIM_GRID, 1, 300);
+    return SV_OK;
+}
+
+static SvResult t_frames_go(void)
+{
+    anim_every = anim_every == 60 ? 20 : anim_every == 20 ? 6 : 60;
+    sayf("The newspaper changes every %u ticks now.", anim_every);
+    anim_start(ANIM_FRAMES, anim_every, 60);
+    return SV_OK;
+}
+
+static SvResult t_frames(void)
+{
+    SvResult r = to_newspaper();
+    if (r != SV_OK)
+        return r;
+    say("Pick up the newspaper and read the first line. Type /test go to start the show.");
+    anim_every = 60;
+    return SV_OK;
+}
+
+/* A tag on a car (SV_STORAGE_ENTITY): it reads back, and after the car goes the same reference finds nothing. */
+static int tag_step;
+
+static SvResult t_tag_go(void)
+{
+    SvStorageKey key = { sizeof key, SV_STORAGE_ENTITY, last_car, "tag" };
+    SvStorageValue value = { sizeof value };
+    SvResult r;
+    if (!storage)
+        return SV_INCOMPATIBLE;
+    if (tag_step == 0) {
+        r = change->object_remove(self, last_car);
+        if (r == SV_OK) {
+            tag_step = 1;
+            say("The car is gone. Wait 2 seconds, then type /test go to read the tag again.");
+        }
+        return r;
+    }
+    r = storage->get(self, &key, &value);
+    sayf("The tag of the removed car gave %d (want %d).", (int)r, (int)SV_NOT_FOUND);
+    return r == SV_NOT_FOUND ? SV_OK : SV_FAILED;
+}
+
+static SvResult t_tag(void)
+{
+    SvStorageKey key = { sizeof key, SV_STORAGE_ENTITY, 0, "tag" };
+    SvStorageValue value = { sizeof value, 5, "hello" };
+    SvStorageValue back = { sizeof back };
+    SvResult r = storage ? t_car() : SV_INCOMPATIBLE;
+    if (r != SV_OK)
+        return r;
+    tag_step = 0;
+    key.subject = last_car;
+    r = storage->put(self, &key, &value);
+    if (r == SV_OK)
+        r = storage->get(self, &key, &back);
+    if (r == SV_OK && (back.length != 5 || memcmp(back.bytes, "hello", 5)))
+        r = SV_FAILED;
+    if (r == SV_OK)
+        say("The car carries the tag 'hello'. Type /test go to remove the car, and again to read the tag.");
+    return r;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -813,6 +1705,38 @@ static const Test tests[] = {
     { "chat_prefix", "Switches on a prefix for your chat texts with /test go. A plugin rewrites each text before it goes out.", "Your next chat text appears as '[TEST] ' and then your text. After a second go it is plain again.", t_chat_prefix, t_chat_prefix_go },
     { "notice_events", "Makes a car and a loaded Magnum. Type /test go to see a chat line for every game event of yours.", "Lines appear for a seat in the car, each shot, each item that goes into or out of a slot, and a change of the round.", t_notices, t_notices_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
+    { "collapse_threshold", "Sets the death start to 60 and your health to 50.", "Your body falls limp at once, although the health bar shows half. The next test puts both back.", t_collapse, NULL },
+    { "ai_walk", "Makes a bot and sends it 25 units away. Type /test go to make it stop and turn.", "The bot walks to a point beside you. After a go it stops and faces the side for a few seconds.", t_ai_walk, t_ai_walk_go },
+    { "phone_claim", "Makes the plugin take a call to the number 1234 on any phone.", "Dial 1234: a chat line says the plugin took the call and the phone does not ring. Other numbers dial as before.", t_phone, NULL },
+    { "storage_counter", "Stores a counter on the server and says its value.", "The number grows by 1 each run. After a server restart it keeps growing. Type /test go to erase the counter.", t_storage, t_storage_erase },
+    { "read_account", "Reads your account.", "The name is yours and the money matches your game.", t_read_account, NULL },
+    { "read_inventory", "Reads the seven slots of your body.", "A slot with an item shows 1 or more. Hold an item in a hand first, then run this test again.", t_read_inventory, NULL },
+    { "read_line", "Casts a line from 6 units above you to 6 units below.", "The kind is 1 (level) and the hit height is near your feet.", t_read_line, NULL },
+    { "read_headline", "Reads news line 0 and the number of lines.", "The text is the first news line of the newspaper.", t_read_headline, NULL },
+    { "props_list", "Counts the rows of the property table.", "The count is 34 or more.", t_props_list, NULL },
+    { "add_money", "Adds 100 dollars to your account.", "Your money rises by 100 at once. The next test takes it back.", t_add_money, NULL },
+    { "disown", "Makes an item beside you and gives it up, so it stays after the plugin stops.", "An item lies beside you. Type /test stop: the item stays on the ground.", t_disown, NULL },
+    { "ai_threats", "Makes a bot. Type /test go to read what the bot sees.", "After you wave in front of the bot, the count is 1 or more.", t_threats, t_threats_go },
+    { "ai_waypoints", "Makes a bot and gives it a route of three points. Type /test go to clear the route.", "The bot walks around a triangle. After a go it stops.", t_waypoints, t_waypoints_go },
+    { "ai_target", "Makes a bot and makes it select you as its target.", "Say what the bot does. It should turn to you.", t_target, NULL },
+    { "ai_duel", "Makes an armed bot and a target bot. Type /test go for the next stage.", "Stage 0: shots at the head. Stage 1: no shots. Stage 2: shots at the torso.", t_duel, t_duel_go },
+    { "ai_seated", "Makes a car with an armed bot in seat 1, and a target bot 22 units away.", "The bot in the car shoots at the bot outside.", t_seated, NULL },
+    { "economy_read", "Reads the five companies.", "The prices and shares look like the stock list of the game.", t_economy_read, NULL },
+    { "economy_change", "Sets the price of company 0 to 123. Type /test go to add shares and stocks.", "The stock list shows 123 for company 0. After a go it shows 10 more of your stocks. The next test puts all back.", t_economy_change, t_economy_change_go },
+    { "mission_read", "Counts the active missions of each team.", "The counts match the mission lists that you saw.", t_mission_read, NULL },
+    { "mission_start", "Adds a mission with an objective item. Type /test go to cancel it.", "The mission shows in the list of your team. After a go it leaves.", t_mission_start, t_mission_cancel },
+    { "shop_catalog", "Sets the price of the first row of every shop to 1.", "Open a shop that sells guns, cars or clothes. The first row costs 1 dollar. The next test puts the prices back.", t_shop_catalog, NULL },
+    { "shop_phone", "Moves you next to the nearest phone. Type /test go to read it and end its call.", "Dial a number, then type go: the state shows dial or ringing, and then the call ends.", t_phone_state, t_phone_state_go },
+    { "setting_list", "Lists the core settings of the game.", "Three settings show a value, a range and a default.", t_setting_list, NULL },
+    { "setting_bots", "Sets the bot count to 2 and shows the setting event.", "A chat line shows the change. The bots in the city fall to 2. The next test puts the value back.", t_setting_bots, NULL },
+    { "engine_list", "Lists the engine parameters.", "Three parameters show a value.", t_engine_list, NULL },
+    { "config_read", "Reads the three settings of this plugin from plugin.ini.", "The values are hello, 3 and 1.50. Change one with the plugins config command, and a chat line shows it.", t_config_read, NULL },
+    { "plugins_calls", "Calls subscribe with an extended bit, refuse and find outside their normal use.", "All three answers match the wanted values.", t_plugins_calls, NULL },
+    { "kick", "Removes the player whose name you type with /test kick NAME. It refuses you, bots and administrators.", "The player leaves the game and cannot join again until you type /clearkick in the chat.", t_kick_run, NULL },
+    { "pitch_scale", "Plays a game sound in 25 steps, from half pitch to double pitch. Type /test go to start it.", "The sound rises like a musical scale, in even steps. Say no if it jumps or stays flat.", t_scale, t_scale_go },
+    { "item_grid", "Makes 16 items in a grid and moves all of them every tick in a wave. Type /test go to change the speed.", "The items move smoothly as one picture. Say no if they stutter, fall or vanish.", t_grid, t_grid_go },
+    { "headline_frames", "Moves you to a newspaper. Type /test go to rewrite its first line again and again.", "Hold the newspaper open. The pattern of # and . moves. Say no if it never changes.", t_frames, t_frames_go },
+    { "entity_tag", "Makes a car and stores a tag on it. Type /test go to remove the car, and again to read the tag.", "The tag reads back as hello. After the car goes, the same reference finds nothing (error 6).", t_tag, t_tag_go },
 };
 
 /* ------------------------------------------------------------ flow */
@@ -916,6 +1840,61 @@ static void list(void)
     say("(- not run, + pass, x fail, s skipped)");
 }
 
+static int same_name(const char *a, const char *b)
+{
+    while (*a && *b) {
+        char x = *a >= 'A' && *a <= 'Z' ? (char)(*a + 32) : *a;
+        char y = *b >= 'A' && *b <= 'Z' ? (char)(*b + 32) : *b;
+        if (x != y)
+            return 0;
+        ++a;
+        ++b;
+    }
+    return !*a && !*b;
+}
+
+static void kick_by_name(const char *name)
+{
+    uint32_t cursor = 0, round;
+    if (!*name) {
+        say("Type /test kick NAME.");
+        return;
+    }
+    for (round = 0; round < 8; ++round) {
+        SvEntity page[SV_ENTITY_PAGE_MAX];
+        uint32_t count = 0, next = 0, i;
+        SvResult r = game->entities(self, SV_ENTITY_PLAYER, cursor, page, SV_ENTITY_PAGE_MAX, &count, &next);
+        if (r != SV_OK) {
+            sayf("The player list gave error %d.", (int)r);
+            return;
+        }
+        for (i = 0; i < count; ++i) {
+            SvPlayerState other = { sizeof other };
+            if (game->player(self, page[i], &other) != SV_OK || !same_name(other.name, name))
+                continue;
+            if (page[i] == tester || other.is_bot || other.is_admin) {
+                say("Not done. The test refuses you, bots and administrators.");
+                return;
+            }
+            r = change->kick(self, page[i]);
+            if (r == SV_OK)
+                sayf("Kicked %.20s. Type /clearkick in the chat now.", other.name);
+            else
+                sayf("The kick gave error %d.", (int)r);
+            logf_("TESTROOM kick %s code=%d", other.name, (int)r);
+            if (current && !strcmp(tests[current - 1].name, "kick")) {
+                mark(r == SV_OK ? PASS : FAIL, r);
+                next_test();
+            }
+            return;
+        }
+        if (next <= cursor)
+            break;
+        cursor = next;
+    }
+    say("No player has that name.");
+}
+
 static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *arguments)
 {
     char word[32];
@@ -970,6 +1949,11 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
             sayf("Test numbers go from 1 to %d.", test_count);
         else
             start_test(number);
+    } else if (!strcmp(word, "kick")) {
+        const char *name = arguments + length;
+        while (*name == ' ')
+            ++name;
+        kick_by_name(name);
     } else if (!strcmp(word, "list")) {
         list();
     } else if (!strcmp(word, "report")) {
@@ -980,7 +1964,7 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         say("Test room stopped.");
         report();
     } else {
-        say("Commands: /test start, yes, no, skip, go, <number>, list, report, stop.");
+        say("Commands: /test start, yes, no, skip, go, kick NAME, <number>, list, report, stop.");
     }
     return SV_OK;
 }
@@ -1002,8 +1986,16 @@ static SvResult SV_CALL enable(const SvHost *h, SvOwner owner)
         r = h->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, (const void **)&props);
     if (r != SV_OK)
         return r;
-    r = h->subscribe(owner, SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM,
-        on_event);
+    h->get_api(owner, SV_API_AI, SV_GAME_AI_VERSION, (const void **)&ai);
+    h->get_api(owner, SV_API_ENGINE, SV_GAME_ENGINE_VERSION, (const void **)&engine);
+    h->get_api(owner, SV_API_STORAGE, SV_GAME_STORAGE_VERSION, (const void **)&storage);
+    h->get_api(owner, SV_API_ECONOMY, SV_GAME_ECONOMY_VERSION, (const void **)&economy);
+    h->get_api(owner, SV_API_MISSION, SV_GAME_MISSION_VERSION, (const void **)&mission);
+    h->get_api(owner, SV_API_SETTINGS, SV_GAME_SETTINGS_VERSION, (const void **)&settings);
+    h->get_api(owner, SV_API_SHOP, SV_GAME_SHOP_VERSION, (const void **)&shop);
+    h->get_api(owner, SV_API_CONFIG, SV_CONFIG_VERSION, (const void **)&config);
+    h->get_api(owner, SV_API_PLUGINS, SV_PLUGINS_VERSION, (const void **)&plugins_api);
+    r = h->subscribe(owner, EVENTS_BASE, on_event);
     if (r != SV_OK)
         return r;
     return h->command(owner, "test", SV_COMMAND_ADMIN, test_command);

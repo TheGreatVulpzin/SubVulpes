@@ -30,8 +30,9 @@ typedef struct {
 } SvPhoneState;
 
 typedef struct { int32_t type, price, color; } SvShopRow;
+/* The host sets row_size to the size of one SvShopRow. A caller steps through the rows with it. */
 typedef struct {
-    uint32_t size, kind, capacity, count;
+    uint32_t size, kind, capacity, count, row_size;
     SvShopRow rows[SV_SHOP_ROWS];
 } SvShopCatalog;
 typedef struct {

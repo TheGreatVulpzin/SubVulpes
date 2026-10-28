@@ -83,7 +83,7 @@ int main(void)
     TABLE(SvHost, log, get_api, 5);
     TABLE(SvPlugin, enable, disable, 2);
     TABLE(SvConfig, get_int, get_text, 3);
-    TABLE(SvPlugins, refuse, subscribe64, 4);
+    TABLE(SvPlugins, refuse, find, 3);
     TABLE(SvGameRead, entities, within, 13);
     TABLE(SvGameWrite, message, disown, 24);
     TABLE(SvGameProps, find, add, 5);

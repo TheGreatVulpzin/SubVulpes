@@ -26,6 +26,18 @@ typedef struct {
 static Store stores[SV_PLUGIN_MAX];
 enum { STORAGE_MAGIC = 0x31535653u };
 
+/* A session value and an entity value live in memory only, and they go when their subject goes. */
+static int transient(uint32_t scope)
+{
+    return scope == SV_STORAGE_SESSION || scope == SV_STORAGE_ENTITY;
+}
+
+static int thing_exists(SvEntity subject)
+{
+    return sv_entity_resolve(SV_ENTITY_HUMAN, subject) >= 0 || sv_entity_resolve(SV_ENTITY_ITEM, subject) >= 0 ||
+        sv_entity_resolve(SV_ENTITY_OBJECT, subject) >= 0;
+}
+
 static int name_valid(const char *name)
 {
     size_t i, length = strnlen(name, SV_STORAGE_KEY_SIZE);
@@ -90,7 +102,7 @@ static SvResult context(SvOwner owner, Store **store)
 static SvResult key_copy(const SvStorageKey *key, Entry *out)
 {
     int32_t index;
-    if (!key || key->size < sizeof *key || key->scope < SV_STORAGE_SESSION || key->scope > SV_STORAGE_SERVER ||
+    if (!key || key->size < sizeof *key || key->scope < SV_STORAGE_SESSION || key->scope > SV_STORAGE_ENTITY ||
         !name_valid(key->name))
         return SV_INVALID;
     memset(out, 0, sizeof *out);
@@ -98,6 +110,12 @@ static SvResult key_copy(const SvStorageKey *key, Entry *out)
     strcpy(out->disk.name, key->name);
     if (key->scope == SV_STORAGE_SERVER)
         return key->subject ? SV_INVALID : SV_OK;
+    if (key->scope == SV_STORAGE_ENTITY) {
+        if (!thing_exists(key->subject))
+            return SV_NOT_FOUND;
+        out->session = key->subject;
+        return SV_OK;
+    }
     index = sv_entity_resolve(key->scope == SV_STORAGE_SESSION ? SV_ENTITY_PLAYER : SV_ENTITY_ACCOUNT, key->subject);
     if (index < 0)
         return SV_NOT_FOUND;
@@ -113,7 +131,7 @@ static SvResult key_copy(const SvStorageKey *key, Entry *out)
 static int same(const Entry *a, const Entry *b)
 {
     return a->disk.scope == b->disk.scope && !strcmp(a->disk.name, b->disk.name) &&
-        (a->disk.scope != SV_STORAGE_SESSION || a->session == b->session) &&
+        (!transient(a->disk.scope) || a->session == b->session) &&
         (a->disk.scope != SV_STORAGE_ACCOUNT ||
          (a->disk.account[0] == b->disk.account[0] && a->disk.account[1] == b->disk.account[1]));
 }
@@ -183,7 +201,7 @@ static SvResult save(const Store *store, uint32_t index, const Entry *replacemen
     strcpy(header.id, store->id);
     for (i = 0; i < SV_STORAGE_ENTRY_MAX; ++i) {
         const Entry *entry = i == index ? replacement : &store->entries[i];
-        if (entry->disk.scope && entry->disk.scope != SV_STORAGE_SESSION)
+        if (entry->disk.scope && !transient(entry->disk.scope))
             ++header.count;
     }
     file = CreateFileA(store->temporary, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS,
@@ -199,7 +217,7 @@ static SvResult save(const Store *store, uint32_t index, const Entry *replacemen
         WriteFile(file, &header, sizeof header, &wrote, NULL) && wrote == sizeof header;
     for (i = 0; okay && i < SV_STORAGE_ENTRY_MAX; ++i) {
         const Entry *entry = i == index ? replacement : &store->entries[i];
-        if (entry->disk.scope && entry->disk.scope != SV_STORAGE_SESSION)
+        if (entry->disk.scope && !transient(entry->disk.scope))
             okay = WriteFile(file, &entry->disk, sizeof(DiskRow), &wrote, NULL) && wrote == sizeof(DiskRow);
     }
     if (okay)
@@ -289,7 +307,18 @@ void sv_storage_leave(SvEntity player)
     for (i = 0; i < SV_PLUGIN_MAX; ++i)
         if (stores[i].owner)
             for (j = 0; j < SV_STORAGE_ENTRY_MAX; ++j)
-                if (stores[i].entries[j].disk.scope == SV_STORAGE_SESSION && stores[i].entries[j].session == player)
+                if (transient(stores[i].entries[j].disk.scope) && stores[i].entries[j].session == player)
+                    memset(&stores[i].entries[j], 0, sizeof(Entry));
+}
+
+void sv_storage_clear(uint32_t kind)
+{
+    uint32_t i, j;
+    for (i = 0; i < SV_PLUGIN_MAX; ++i)
+        if (stores[i].owner)
+            for (j = 0; j < SV_STORAGE_ENTRY_MAX; ++j)
+                if (transient(stores[i].entries[j].disk.scope) &&
+                    sv_entity_resolve(kind, stores[i].entries[j].session) >= 0)
                     memset(&stores[i].entries[j], 0, sizeof(Entry));
 }
 
@@ -359,7 +388,7 @@ static SvResult change(Store *store, const Entry *row, int erase)
     replacement = *row;
     if (erase)
         memset(&replacement, 0, sizeof replacement);
-    result = row->disk.scope == SV_STORAGE_SESSION ? SV_OK : save(store, (uint32_t)index, &replacement);
+    result = transient(row->disk.scope) ? SV_OK : save(store, (uint32_t)index, &replacement);
     if (result == SV_OK)
         store->entries[index] = replacement;
     return result;

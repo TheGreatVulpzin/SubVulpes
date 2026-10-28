@@ -10,7 +10,8 @@
 #define SV_STORAGE_ENTRY_MAX 128u
 #define SV_STORAGE_BYTES_MAX 65536u
 
-enum { SV_STORAGE_SESSION = 1u, SV_STORAGE_ACCOUNT, SV_STORAGE_SERVER };
+/* SV_STORAGE_ENTITY tags an item, a vehicle or a human. It lives in memory and goes with the thing. */
+enum { SV_STORAGE_SESSION = 1u, SV_STORAGE_ACCOUNT, SV_STORAGE_SERVER, SV_STORAGE_ENTITY };
 
 #pragma pack(push, 8)
 typedef struct {
@@ -34,7 +35,10 @@ typedef struct {
 
 /* The core supplies the validated module id and preserved private root before enable. */
 SvResult sv_storage_open(SvOwner owner, const char *id, const char *private_root);
+/* The thing is gone (a player, a human, an item or a vehicle). Its session and entity values go with it. */
 void sv_storage_leave(SvEntity player);
+/* The world clears all things of one kind (SV_ENTITY_PLAYER and the others). Their values go too. */
+void sv_storage_clear(uint32_t kind);
 void sv_storage_release_owner(SvOwner owner);
 
 #endif

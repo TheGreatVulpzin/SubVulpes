@@ -6,6 +6,7 @@
 #include "logic.h"
 #include "economy.h"
 #include "sr_server.h"
+#include "plugin_lists.h"
 #include <string.h>
 
 typedef struct { SvOwner owner; SvMissionRef reference; } Binding;
@@ -28,13 +29,16 @@ static SvMissionRef reference(uint32_t team, uint32_t slot)
     return r;
 }
 
+SV_LIST_ITEM_CHECK(slot, SvMissionState, 72);
+
 static SvResult SV_CALL read_slots(SvOwner owner, uint32_t team, SvMissionSlots *out)
 {
     SvMissionSlots copy = {sizeof copy};
-    uint32_t j;
+    uint32_t j, stride;
     if (context(owner) != SV_OK)
         return SV_STATE;
-    if (team >= SV_MISSION_TEAMS || !out || out->size < sizeof *out)
+    stride = out ? sv_list_stride(out->size, (uint32_t)offsetof(SvMissionSlots, slots), SV_MISSION_SLOTS, 72, sizeof(SvMissionState)) : 0;
+    if (team >= SV_MISSION_TEAMS || !stride)
         return SV_INVALID;
     copy.team = team;
     for (j = 0; j < SV_MISSION_SLOTS; ++j) {
@@ -52,7 +56,11 @@ static SvResult SV_CALL read_slots(SvOwner owner, uint32_t team, SvMissionSlots 
             s->item = s->reference.item;
         }
     }
-    *out = copy;
+    out->size = (uint32_t)offsetof(SvMissionSlots, slots) + SV_MISSION_SLOTS * stride;
+    out->team = copy.team;
+    out->item_size = stride;
+    out->reserved = 0;
+    sv_list_put(out->slots, copy.slots, SV_MISSION_SLOTS, SV_MISSION_SLOTS, sizeof(SvMissionState), stride);
     return SV_OK;
 }
 

@@ -25,7 +25,7 @@ No field, method, result code or capability number changes in this audit.
 | `sv_game_storage.h` | All records have size fields. The table has a version. |
 
 The snapshot covers these 53 records, including `SvVector` and `SvShopRow`, plus 14 callback tables.
-The five records without size fields cannot gain a prefix under ABI version 1.
+The five records without size fields cannot gain a prefix. The lists that the host fills now carry the size of one item in their container (rule 6a of the ABI page).
 Arrays of these records also cannot change their stride under the current contract.
 `SvMissionState.reference.size` describes the reference only. It is zero for an inactive slot.
 Adding an independent size prefix would change offsets. Such changes need an owner decision and a new ABI.

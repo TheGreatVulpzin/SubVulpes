@@ -26,8 +26,9 @@ typedef struct {
     SvEntity item;
 } SvMissionState;
 
+/* The host sets item_size to the size of one SvMissionState. A caller steps through the list with it. */
 typedef struct {
-    uint32_t size, team;
+    uint32_t size, team, item_size, reserved;
     SvMissionState slots[SV_MISSION_SLOTS];
 } SvMissionSlots;
 

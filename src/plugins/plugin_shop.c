@@ -8,6 +8,7 @@
 #include "items.h"
 #include "events.h"
 #include "sr_runtime.h"
+#include "plugin_lists.h"
 #include <string.h>
 
 /* The shared property registry owns the phone scalar rows. */
@@ -265,15 +266,18 @@ static int row_valid(uint32_t kind, uint32_t index, const SvShopRow *row)
     return row->type == (int32_t)index && row->color == 0;
 }
 
+SV_LIST_ITEM_CHECK(row, SvShopRow, 12);
+
 static SvResult SV_CALL catalog(SvOwner owner, uint32_t building, SvShopCatalog *out)
 {
     SvShopCatalog value;
     int32_t count;
-    uint32_t i;
+    uint32_t i, stride;
     SvResult result = context(owner, 0);
     if (result != SV_OK)
         return result;
-    if (!out || out->size < sizeof *out)
+    stride = out ? sv_list_stride(out->size, (uint32_t)offsetof(SvShopCatalog, rows), SV_SHOP_ROWS, 12, sizeof(SvShopRow)) : 0;
+    if (!stride)
         return SV_INVALID;
     memset(&value, 0, sizeof value);
     result = catalog_location(building, &value.kind, &value.capacity);
@@ -282,7 +286,6 @@ static SvResult SV_CALL catalog(SvOwner owner, uint32_t building, SvShopCatalog 
     memcpy(&count, building_field(offsetof(City, shop_count), building), sizeof count);
     if (count < 0 || (uint32_t)count > value.capacity)
         return SV_STATE;
-    value.size = sizeof value;
     value.count = (uint32_t)count;
     for (i = 0; i < value.count; ++i) {
         memcpy(&value.rows[i], (const uint8_t *)building_field(offsetof(City, shop_rows), building) + i * sizeof(SvShopRow),
@@ -290,7 +293,12 @@ static SvResult SV_CALL catalog(SvOwner owner, uint32_t building, SvShopCatalog 
         if (!row_valid(value.kind, i, &value.rows[i]))
             return SV_STATE;
     }
-    *out = value;
+    out->size = (uint32_t)offsetof(SvShopCatalog, rows) + SV_SHOP_ROWS * stride;
+    out->kind = value.kind;
+    out->capacity = value.capacity;
+    out->count = value.count;
+    out->row_size = stride;
+    sv_list_put(out->rows, value.rows, value.count, SV_SHOP_ROWS, sizeof(SvShopRow), stride);
     return SV_OK;
 }
 

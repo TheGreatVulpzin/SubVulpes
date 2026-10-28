@@ -42,7 +42,7 @@ enum { SV_PLUGIN_LIVE = 1u };
 #define SV_VERSION_ACCEPTED(requested, minimum, current) ((requested) >= (minimum) && (requested) <= (current))
 
 /* The events after the first 32 are numbered, not written as bit values. Event number i (0 to 31) arrives with the kind
- * SV_EVENT_EXT(i), and a plugin asks for it with the bit SV_EVENT_EXT_BIT(i) in SvPlugins.subscribe64. */
+ * SV_EVENT_EXT(i), and a plugin asks for it with the bit SV_EVENT_EXT_BIT(i) in the mask of SvHost.subscribe. */
 #define SV_EVENT_EXT_BASE 0x80000000u
 #define SV_EVENT_EXT(index) (SV_EVENT_EXT_BASE + (uint32_t)(index))
 #define SV_EVENT_EXT_BIT(index) ((uint64_t)1 << (32 + (index)))
@@ -72,7 +72,9 @@ typedef struct SvHost {
     SvResult (SV_CALL *log)(SvOwner owner, const char *text);
     SvResult (SV_CALL *status)(SvOwner owner, SvStatus *status);
     SvResult (SV_CALL *command)(SvOwner owner, const char *name, uint32_t permission, SvCommandFn callback);
-    SvResult (SV_CALL *subscribe)(SvOwner owner, uint32_t events, SvEventFn callback);
+    /* Replaces the subscription of the plugin. The mask has 64 bits. The bits 0 to 31 are the named events (SV_EVENT_TICK and
+     * the others). The bits 32 to 63 are the numbered events (SV_EVENT_EXT_BIT). SV_INVALID for a bit that no event uses. */
+    SvResult (SV_CALL *subscribe)(SvOwner owner, uint64_t events, SvEventFn callback);
     SvResult (SV_CALL *get_api)(SvOwner owner, uint32_t capability, uint32_t version, const void **api);
 } SvHost;
 

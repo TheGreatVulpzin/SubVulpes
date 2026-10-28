@@ -6,7 +6,7 @@ Read [the ABI rules](plugin-abi.md) first. Then read [the SDK plan](sdk-plan.md)
 ## Done by the first editor
 
 - A request for a table version accepts a range (`SV_VERSION_ACCEPTED`). Today the range is 1 to 1 for every table.
-- A 64-bit event mask: `SvPlugins.subscribe64`, the macros `SV_EVENT_EXT(i)` and `SV_EVENT_EXT_BIT(i)`. Test: the mode `ext` in `tests/plugin_fixture.c`.
+- A 64-bit event mask in `SvHost.subscribe`, the macros `SV_EVENT_EXT(i)` and `SV_EVENT_EXT_BIT(i)`. Test: the mode `ext` in `tests/plugin_fixture.c`.
 - The ABI rules in [plugin-abi.md](plugin-abi.md).
 - The file ownership table in the SDK plan. With the first editor away, the second editor may change any file. Keep each change small and tested.
 
@@ -44,7 +44,9 @@ No number exists for the cost of the plugin hooks. Write a timing run (for examp
 10,000 calls of `sv_shop_poll`, `sv_mission_before_tick`, `sv_game_event_poll`, `sv_actions_poll`, and `sv_ai_before_player` for 256 players; one `sv_plugins_tick` with one idle plugin; one `within` query of radius 4096 with 512 humans and 1,024 items.
 Write the numbers in `docs/plugin-abi.md` under "Cost". A target: all hooks together under 100 microseconds for each tick with 256 bots and no plugin that subscribes. If a loop is slower, fix it (for example keep a count of waiting phones so the poll can skip the scan).
 
-## API work that is left (after the SDK milestone M1, or before if the owner says so)
+## API work that is left (the first editor does it, after the ABI reset)
+
+The owner decided on 2026-10-28: the first editor builds R1 to R9, and not the second editor. They start after the planned ABI change on the branch `codex/abi-reset` is merged. Each item still follows the rules below.
 
 | Id | Work | Design notes |
 | --- | --- | --- |
@@ -57,6 +59,7 @@ Write the numbers in `docs/plugin-abi.md` under "Cost". A target: all hooks toge
 | R7 | Delete the body of a real player (N8) | A write method that kills and removes the body at a safe point, with the links of the player kept whole. |
 | R8 | Block reads and edits (N39, N40) | Material at a hit and a block cell (read). Block set and clear (write). Mark "client effect unknown". |
 | R9 | Timers and plugin random (N41) | `after(owner, ticks, id)` and `every`, delivered as a numbered event, and a random state for each plugin. It lives in `plugin_host.c`. |
+| R10 | Launch an item and spin it | Rows `item.velocity` and `item.angular_velocity` (vector, 1 slot, GET and ADD, same bound as `object.velocity`). An item at rest gets an exact launch speed from one add. Test: the test room launches an item at an angle and a plugin reads the speed back. |
 
 Every item follows the rules of `plugin-abi.md`: it goes at the end, it has `size`, it has a focused test, it has a removal proof if it is a security check, and it adds a line to `docs/plugin-game-api.md` and to `docs/plugin-coverage.md`. Each new method needs the ABI snapshot to change in the same commit.
 

@@ -4,7 +4,7 @@ SvHost size=28
 SvPlugin size=92
 SvConfig size=20
 SvConfigEvent size=176
-SvPlugins size=24
+SvPlugins size=20
 SvVector size=12
 SvPlayerState size=208
 SvHumanState size=224
@@ -24,7 +24,7 @@ SvGameEvent size=80
 SvChatEvent size=152
 SvDamageEvent size=56
 SvAiThreat size=32
-SvAiThreats size=520
+SvAiThreats size=528
 SvAiInput size=32
 SvAiStreetPoint size=12
 SvGameAi size=52
@@ -35,7 +35,7 @@ SvEngineInfo size=96
 SvGameEngine size=20
 SvMissionRef size=32
 SvMissionState size=72
-SvMissionSlots size=1160
+SvMissionSlots size=1168
 SvMissionStart size=32
 SvGameMission size=20
 SvSettingValue size=12
@@ -45,7 +45,7 @@ SvGameSettings size=20
 SvPhoneEvent size=40
 SvPhoneState size=56
 SvShopRow size=12
-SvShopCatalog size=136
+SvShopCatalog size=140
 SvShopCatalogWrite size=128
 SvGameShop size=24
 SvStorageKey size=48
@@ -54,7 +54,7 @@ SvGameStorage size=20
 SvHost functions=5 prefix=0 first=log:8 last=get_api:24
 SvPlugin functions=2 prefix=0 first=enable:84 last=disable:88
 SvConfig functions=3 prefix=0 first=get_int:8 last=get_text:16
-SvPlugins functions=4 prefix=0 first=refuse:8 last=subscribe64:20
+SvPlugins functions=3 prefix=0 first=refuse:8 last=find:16
 SvGameRead functions=13 prefix=0 first=entities:8 last=within:56
 SvGameWrite functions=24 prefix=0 first=message:8 last=disown:100
 SvGameProps functions=5 prefix=0 first=find:8 last=add:24

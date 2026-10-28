@@ -11,7 +11,7 @@ Errors leave game records and output buffers unchanged.
 
 | Method | Contract |
 | --- | --- |
-| `threats` | Copy at most 16 threats. Set the output size first. Null or short output returns `SV_INVALID`. A malformed count returns `SV_FAILED`. An absent human produces reference zero. |
+| `threats` | Copy at most 16 threats. The host sets `item_size` to the size of one threat. Set the output size first. Null or short output returns `SV_INVALID`. A malformed count returns `SV_FAILED`. An absent human produces reference zero. |
 | `destination` | Replace the foot route with one position. |
 | `waypoints` | Replace the foot route with zero to 64 positions. Zero clears the route and permits a null array. |
 | `target` | Select a live human through a reference. The bot cannot select its own body. The host seam restores this target after each perception scan. |

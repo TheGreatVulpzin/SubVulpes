@@ -21,6 +21,7 @@
 #include "plugin_made.h"
 #include "plugin_actions.h"
 #include "plugin_damage.h"
+#include "plugin_lists.h"
 
 _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
 _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
@@ -1213,6 +1214,31 @@ static void actions_sweep_check(void)
     puts("ACTION_SWEEP_PASS");
 }
 
+/* Rule 6a: a caller with a smaller or a larger item than the host gets the items it can read, and never more bytes than it gave. */
+static void list_strides(void)
+{
+    unsigned char caller[16 + 8 * 40], host[16 + 8 * 40];
+    unsigned i;
+    /* The host item has 36 bytes. The first layout had 32. */
+    CHECK(sv_list_stride(16 + 8 * 32, 16, 8, 32, 36) == 32);
+    CHECK(sv_list_stride(16 + 8 * 36, 16, 8, 32, 36) == 36);
+    CHECK(sv_list_stride(16 + 8 * 40, 16, 8, 32, 36) == 36);
+    CHECK(sv_list_stride(16 + 8 * 32 - 1, 16, 8, 32, 36) == 0);
+    CHECK(sv_list_stride(15, 16, 8, 32, 36) == 0);
+    CHECK(sv_list_stride(100, 16, 0, 32, 36) == 0);
+    memset(caller, 0xee, sizeof caller);
+    for (i = 0; i < sizeof host; ++i)
+        host[i] = (unsigned char)(i + 1);
+    /* An old caller: two items of 36 bytes become two items of 32 bytes, and the room after them stays clear. */
+    sv_list_put(caller, host, 2, 8, 36, 32);
+    CHECK(!memcmp(caller, host, 32) && !memcmp(caller + 32, host + 36, 32));
+    CHECK(caller[64] == 0 && caller[8 * 32 - 1] == 0 && caller[8 * 32] == 0xee);
+    /* A count above the capacity never writes past the room. */
+    memset(caller, 0xee, sizeof caller);
+    sv_list_put(caller, host, 9, 8, 36, 32);
+    CHECK(caller[8 * 32 - 1] == host[7 * 36 + 31] && caller[8 * 32] == 0xee);
+}
+
 int main(int argc, char **argv)
 {
     SvEntity old;
@@ -1224,6 +1250,7 @@ int main(int argc, char **argv)
     CHECK(sv_entity_capacity(UINT32_MAX) == 0);
     CHECK(sv_entity_at(0, 0) == 0);
     CHECK(sv_plugins_start());
+    list_strides();
     player_lifetime();
     body_lifetime();
     item_lifetime();
