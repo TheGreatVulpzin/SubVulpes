@@ -60,13 +60,13 @@ SvResult sv_shop_phone_retire(SvEntity phone);
 /* Register the phone scalar rows with the shared property mechanism when available. */
 SvResult sv_shop_props_install(void);
 /* The phone decisions cannot run a plugin inside the simulation, so the core only notes a phone, and the host asks the plugins
- * at the start of the next tick (sv_shop_poll). When no plugin subscribed to the event, nothing waits.
+ * at the start of the next tick (sv_shop_poll, then sv_actions_poll). With no subscriber, nothing waits.
  *
  * sv_shop_phone_digit_added: the core calls it right after it appended a digit to the number of a phone.
  * sv_shop_phone_call_wait: the core calls it where it would dial a number of 4 digits. A result of 1 means that the phone
  * waits for the decision, and the core must not dial in this tick. The core asks again in the next tick, and then the
  * result is 0 unless a plugin claimed the number. A claimed phone goes back to idle.
- * sv_shop_poll: the host calls it at the start of each tick, outside the simulation. */
+ * sv_shop_poll: the host delivers pending digits here, before sv_actions_poll delivers calls. */
 void sv_shop_phone_digit_added(int32_t item);
 int sv_shop_phone_call_wait(int32_t item);
 void sv_shop_poll(void);

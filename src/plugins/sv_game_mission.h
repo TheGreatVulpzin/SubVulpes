@@ -45,7 +45,7 @@ typedef struct {
 } SvGameMission;
 #pragma pack(pop)
 
-/* Install only after the core owns completion checks, lifecycle and N16 event rows. */
+/* Install after the core owns completion checks and mission lifecycle. */
 void sv_mission_install(void);
 void sv_mission_before_tick(void);
 int sv_mission_before_complete(int32_t team, int32_t slot);

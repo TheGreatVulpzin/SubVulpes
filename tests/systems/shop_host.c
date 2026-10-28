@@ -1,4 +1,5 @@
 #include "systems_host.h"
+#include "plugin_actions.h"
 #include "sv_game_shop.h"
 
 enum { PASS, DENY, BAD_REPLY, IDLE, NUMBER, STATE, HAND, HEALTH, TTL, COOLDOWN,
@@ -429,6 +430,7 @@ static void hold_check(void)
     CHECK(sv_shop_phone_call_wait(phones[0]) == 1 && sv_shop_phone_call_wait(phones[0]) == 1);
     before = callback_count;
     sv_shop_poll();
+    sv_actions_poll();
     CHECK(callback_count == before + 1);
     CHECK(sr_items[phones[0]].call_state == SV_PHONE_DIAL && sr_items[phones[0]].phone_number == 1234);
     CHECK(sv_shop_phone_call_wait(phones[0]) == 0 && sv_shop_phone_call_wait(phones[0]) == 1);
@@ -436,6 +438,7 @@ static void hold_check(void)
     decision_action = DENY;
     before = callback_count;
     sv_shop_poll();
+    sv_actions_poll();
     CHECK(callback_count == before + 1);
     idle_fields(phones[0], 0);
     /* A digit: the poll asks about the digit, and a claim also ends the call wait of the same tick. */
@@ -445,18 +448,21 @@ static void hold_check(void)
     sv_shop_phone_digit_added(phones[0]);
     before = callback_count;
     sv_shop_poll();
+    sv_actions_poll();
     CHECK(callback_count == before + 1 && sr_items[phones[0]].call_state == SV_PHONE_DIAL);
     decision_action = DENY;
     sv_shop_phone_digit_added(phones[0]);
     CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
     before = callback_count;
     sv_shop_poll();
+    sv_actions_poll();
     CHECK(callback_count == before + 1);
     idle_fields(phones[0], 0);
     /* An idle phone waits too, but the helper refuses to ask, so the game goes on. */
     CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
     before = callback_count;
     sv_shop_poll();
+    sv_actions_poll();
     CHECK(callback_count == before && sv_shop_phone_call_wait(phones[0]) == 0);
     /* A phone that left its hand, or an item that is gone: the poll asks nobody, and the game goes on. */
     dial();
@@ -464,6 +470,7 @@ static void hold_check(void)
     sr_items[phones[0]].time_to_live = 0;
     before = callback_count;
     sv_shop_poll();
+    sv_actions_poll();
     CHECK(callback_count == before);
     CHECK(sv_shop_phone_call_wait(phones[0]) == 0);
     sr_items[phones[0]].time_to_live = 99;
@@ -471,6 +478,36 @@ static void hold_check(void)
     CHECK(sv_shop_phone_call_wait(-1) == 0 && sv_shop_phone_call_wait((int32_t)SR_MAX_ITEM) == 0);
     sv_shop_phone_digit_added(-1);
     sv_shop_phone_digit_added((int32_t)SR_MAX_ITEM);
+    /* A changed number or a replacement phone must not receive an older decision. */
+    dial();
+    expected_kind = 512;
+    decision_action = PASS;
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
+    sr_items[phones[0]].phone_number = 1235;
+    before = callback_count;
+    sv_shop_poll();
+    sv_actions_poll();
+    CHECK(callback_count == before);
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
+    expected_number = 1235;
+    sv_shop_poll();
+    sv_actions_poll();
+    CHECK(callback_count == before + 1 && sv_shop_phone_call_wait(phones[0]) == 0);
+    dial();
+    expected_number = 1234;
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
+    sv_entity_deleted(SV_ENTITY_ITEM, (uint32_t)phones[0]);
+    sv_entity_created(SV_ENTITY_ITEM, (uint32_t)phones[0]);
+    before = callback_count;
+    sv_shop_poll();
+    sv_actions_poll();
+    CHECK(callback_count == before);
+    expected_phone = sv_entity_at(SV_ENTITY_ITEM, phones[0]);
+    CHECK(expected_phone != phone_ref);
+    CHECK(sv_shop_phone_call_wait(phones[0]) == 1);
+    sv_shop_poll();
+    sv_actions_poll();
+    CHECK(callback_count == before + 1 && sv_shop_phone_call_wait(phones[0]) == 0);
     dial();
 }
 

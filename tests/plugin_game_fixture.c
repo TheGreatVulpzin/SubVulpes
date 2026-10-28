@@ -7,6 +7,7 @@
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 #include "sv_game_events.h"
+#include "sv_plugins_api.h"
 
 static const SvHost *host;
 static const SvGameRead *game;
@@ -1268,6 +1269,11 @@ static SvResult SV_CALL tick_forward(SvOwner owner, const SvEvent *event)
 
 static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
 {
+    if (event->kind == SV_EVENT_EXT(31)) {
+        const SvGameEvent *action = (const SvGameEvent *)event;
+        CHECK(event->size == sizeof *action);
+        return action->value == 7 ? SV_DENIED : SV_OK;
+    }
     if (event->kind != SV_EVENT_TICK)
         return game_event(owner, event);
     ++stage;
@@ -1371,7 +1377,9 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
     CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x1000000u, tick) == SV_INVALID);
-    return host->subscribe(owner, SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
+    CHECK(host->get_api(owner, SV_API_PLUGINS, SV_PLUGINS_VERSION, &table) == SV_OK);
+    return ((const SvPlugins *)table)->subscribe64(owner, SV_EVENT_EXT_BIT(31) |
+        SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
         SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
         SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM, tick);
 }

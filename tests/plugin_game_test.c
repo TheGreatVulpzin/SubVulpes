@@ -19,6 +19,7 @@
 #include "plugin_props.h"
 #include "plugin_game_events.h"
 #include "plugin_made.h"
+#include "plugin_actions.h"
 #include "plugin_damage.h"
 
 _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
@@ -1081,6 +1082,77 @@ static void line_mark(void)
     sr_data_intersect = before;
 }
 
+static uint32_t action_deliveries;
+
+static SvResult action_deliver(int32_t key)
+{
+    SvGameEvent event = {0};
+    ++action_deliveries;
+    if (key == -1)
+        return SV_NOT_FOUND;
+    if (key == 10) {
+        CHECK(sv_action_gate(SV_EVENT_EXT(31), 11, action_deliver) == SV_ACTION_HOLD);
+        sv_actions_poll();
+    }
+    event.base = (SvEvent){sizeof event, SV_EVENT_EXT(31), 0};
+    event.value = key;
+    return sv_plugins_decide(&event.base);
+}
+
+static void actions_check(void)
+{
+    const uint32_t kind = SV_EVENT_EXT(31);
+    int32_t i;
+    CHECK(!sv_plugins_wants(SV_EVENT_EXT(30)) && sv_plugins_wants(kind));
+    CHECK(sv_action_gate(SV_EVENT_EXT(30), 6, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 6, NULL) == SV_ACTION_PROCEED);
+    sv_actions_poll();
+    CHECK(action_deliveries == 0);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_HOLD);
+    CHECK(action_deliveries == 0);
+    sv_actions_poll();
+    CHECK(action_deliveries == 1);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 6, action_deliver) == SV_ACTION_HOLD);
+    sv_action_cancel(kind, 6);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    CHECK(action_deliveries == 2);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_DENIED);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    sv_action_cancel(kind, 7);
+    CHECK(sv_action_gate(kind, -1, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    CHECK(action_deliveries == 3);
+    CHECK(sv_action_gate(kind, -1, action_deliver) == SV_ACTION_PROCEED);
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 1000 + i, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 2000, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(action_deliveries == 3);
+    sv_actions_poll();
+    CHECK(action_deliveries == 259);
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 1000 + i, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 9, action_deliver) == SV_ACTION_HOLD);
+    sv_action_cancel(kind, 9);
+    sv_actions_poll();
+    CHECK(action_deliveries == 259);
+    CHECK(sv_action_gate(kind, 9, action_deliver) == SV_ACTION_HOLD);
+    sv_game_reset();
+    sv_actions_poll();
+    CHECK(action_deliveries == 259);
+    CHECK(sv_action_gate(kind, 10, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    CHECK(action_deliveries == 260);
+    sv_actions_poll();
+    CHECK(action_deliveries == 261);
+    CHECK(sv_action_gate(kind, 10, action_deliver) == SV_ACTION_PROCEED);
+    CHECK(sv_action_gate(kind, 11, action_deliver) == SV_ACTION_PROCEED);
+    sv_actions_clear();
+    puts("ACTION_GATE_PASS");
+}
+
 int main(void)
 {
     SvEntity old;
@@ -1120,6 +1192,7 @@ int main(void)
     strcpy(sr_data_newspaper.lines[2], "third");
     CHECK(!sv_game_is_ready());
     sv_game_ready();
+    actions_check();
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
     sr_humans[0].inventory[0].count = 9;

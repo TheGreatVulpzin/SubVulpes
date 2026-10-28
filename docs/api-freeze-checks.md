@@ -16,3 +16,34 @@ The proof restores the header copy. The source headers and expected snapshot sta
 The normal build and all 9 CTest groups pass.
 The storage generator, native dependency check and repository check pass.
 No client or launcher Start/Stop test ran for this test-only change.
+
+## F3: deferred action gate checks
+
+The internal action gate holds at most 256 pairs of event kind and key.
+It returns at once with no subscriber. It never calls a plugin inside the simulation.
+The next poll delivers each decision. The next gate call consumes the answer once.
+A full table permits the action. A stale key permits the action without a plugin call.
+
+The core poll delivers phone digits before queued calls.
+A claimed digit cancels the pending call. A claimed call returns the phone to idle.
+The phone adapter keeps the original reference and number while the call waits.
+A changed number or a replacement phone cannot receive the older decision.
+A count lets the digit poll skip its scan when no digit waits.
+
+The gate clears at start, stop and world reset. A delivery can cancel its own entry.
+A recursive poll does nothing. Work added during delivery waits for the next poll.
+An action from a button edge must run inside its delivery when allowed.
+Its delivery must then cancel the entry. The gate header states this rule.
+
+Focused game, system and ABI tests pass.
+The tests cover no subscriber, allow, deny, repeated gates, stale keys, table exhaustion, cancellation and reset.
+They also cover recursive polling, work added during delivery, phone replacement and a changed number.
+The existing phone hold assertions pass with the same digit-before-call poll order.
+
+Removal proofs cover table capacity, denial, pending holds, no-subscriber behavior, phone generation, phone number and reset cleanup.
+Each removal fails its focused test. Each source restoration passes that test.
+The scripts and logs stay under build/. No removal remains in the source.
+
+The full normal build, all 9 CTest groups, storage, native and repository checks pass.
+Public record sizes and table offsets stay unchanged.
+No client playtest or launcher Start/Stop test ran.
