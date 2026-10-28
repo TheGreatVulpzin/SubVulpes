@@ -1,13 +1,13 @@
 # Native plugin SDK v1
 
-The current SDK targets Windows x86 native DLLs.
-It supports status, console logs, commands, tick/stop events and capability lookup. It has no game mutation API.
-The first [game read contract](plugin-game-api.md) adds copied snapshots and opaque entity references.
-Its normal build, focused fixture, six-group CTest run and two isolated real server cycles passed.
-The linked evidence records exact binaries and limits. The runtime setup is not a new release package.
-Most mapped read, mutation and hook APIs remain unimplemented. The full API and S3 remain open.
-The user ordered framework tests, then the full mapped API, then production plugins. Lua and WASM hosts remain future work.
-See [platform scope](plugins.md), [system coverage](plugin-api-map.md) and [S3 evidence](s3.md).
+The native contract targets Windows x86 DLLs.
+It supplies logs, commands, events and 12 capability tables, including game reads and writes.
+The public headers live in `src/plugins/`. A separate SDK package and script hosts remain planned work.
+See [the SDK plan](sdk-plan.md) for their order and acceptance checks.
+
+The [game API](plugin-game-api.md) describes copied snapshots, opaque entity references, mutations and property rows.
+The coverage page lists open operations and client limits. S3 remains open.
+See [platform scope](plugins.md), [API coverage](plugin-coverage.md) and [S3 evidence](s3.md).
 
 ## Build and ABI
 
