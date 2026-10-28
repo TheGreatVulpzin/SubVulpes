@@ -69,7 +69,7 @@ Ranked by how much a plugin author loses without it.
 2. **An SDK package.** The server package carries no public header, no sample project and no build file for a plugin. A third party must read the source tree. Ship `sv_*.h`, a template with a build script, and the pages of the API.
 3. **A command layer.** A command gets one raw string and one of three levels. A plugin needs help text, an argument parser, a player finder by name or number, aliases and named ranks. Each plugin now writes its own.
 4. **Decisions for more actions.** Vehicle enter and exit, item pick up, drop and use, spawn and respawn, team change and a menu purchase are notices or nothing. A decision lets a plugin lock a car, protect a base or set the spawn point. The kind-2 mechanism already exists.
-5. **Data tags on an entity.** Storage keys by player, account or server. A plugin that owns a car, a locked door or a marked item has no place for that value, and the value must go when the entity goes.
+5. **Data tags on an entity.** Done: the storage scope `SV_STORAGE_ENTITY` keeps a value for a human, an item or a vehicle in memory, and the value goes when the thing goes. A tag that must survive a round has no place yet, because references do not survive a round.
 6. **A declared permission list in the manifest.** A native plugin has the full process. The launcher cannot say "this plugin writes money" before approval. A list of the capabilities that the plugin uses would let the approval screen show it, and the host could refuse the rest.
 7. **Hot replacement of a live plugin.** A change of a DLL needs a restart now.
 8. **A publish and subscribe channel between plugins.** The plugin API gives calls, not events. A moderation plugin cannot tell a chat plugin that it muted a player.
