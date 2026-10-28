@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.1.7, built on 2026-10-27. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.0, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -19,7 +19,7 @@ The plugin sends each line to you only. It says the number and the name of the t
 | `/test yes` | The test worked. Go to the next test |
 | `/test no` | The test did not work. Go to the next test |
 | `/test skip` | Skip the test |
-| `/test go` | Repeat the action of the test, for the tests that have one (sound, vehicle exit, aim) |
+| `/test go` | Repeat the action of the test, or take its next step, for the tests that have one (sound, vehicle exit, aim, bots, missions) |
 | `/test <number>` | Go to a test |
 | `/test list` | One line for each test, with its result |
 | `/test report` | The count of results and the names of the failed tests |
@@ -62,6 +62,37 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 27 | `chat_prefix` | The chat decision with `replacement` | Your chat text appears with the prefix `[TEST]` while it is on |
 | 28 | `notice_events` | The events round, vehicle, shot, item and vehicle gone | A chat line for each event of yours |
 | 29 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
+| 30 | `collapse_threshold` | `SvGameEngine.set` of `human.death_start` 60, `human.health` 50 | Your body falls limp at half health |
+| 31 | `ai_walk` | `SvGameAi.destination`, then `override_input` for each `go` | The bot walks 25 units. After a go it stops and faces the side |
+| 32 | `phone_claim` | The phone call decision (`SV_DENIED` for the number 1234) | A chat line, and the phone does not ring |
+| 33 | `storage_counter` | `SvGameStorage.get`, `put`, then `erase` for each `go` | A counter that grows, also after a restart |
+| 34 | `read_account` | `account` | Your name and money |
+| 35 | `read_inventory` | `inventory` for 7 slots | The count of items in each slot |
+| 36 | `read_line` | `line` down through you | Kind 1 (level) at your feet |
+| 37 | `read_headline` | `headline` read and `world` | The first news line |
+| 38 | `props_list` | `SvGameProps.info` for all ids | At least 34 properties |
+| 39 | `add_money` | `add_money` 100, then minus 100 at the undo | Your money rises by 100 |
+| 40 | `disown` | `item_create`, `disown` | The item stays after `/test stop` |
+| 41 | `ai_threats` | `threats` for each `go` | The count rises after you wave in front of the bot |
+| 42 | `ai_waypoints` | `waypoints` with 3 points, then 0 points for each `go` | The bot walks a triangle, then stops |
+| 43 | `ai_target` | `target` with your body | The bot turns to you |
+| 44 | `ai_duel` | `target`, `shot_chance`, `perception`, `aim_mode` | Shots at the head, then no shots, then shots at the torso |
+| 45 | `ai_seated` | `vehicle_enter` of a bot, `seated_target` | A bot in seat 1 shoots a bot outside the car |
+| 46 | `economy_read` | `SvGameEconomy.company` for 5 companies | Prices and shares like the stock list |
+| 47 | `economy_change` | `set_price`, then `set_shares` and `add_stocks` for each `go` | Price 123 and 10 more of your stocks |
+| 48 | `mission_read` | `SvGameMission.slots` for 5 teams | The counts of active missions |
+| 49 | `mission_start` | `item_create` of an objective, `start`, then `cancel` for each `go` | A mission in the list, then it leaves |
+| 50 | `shop_catalog` | `SvGameShop.catalog`, `catalog_replace` | The first row of each shop costs 1 |
+| 51 | `shop_phone` | `phone`, `phone_idle` for each `go` | The state of the call, then the call ends |
+| 52 | `setting_list` | `SvGameSettings.describe`, `get` | Three settings with ranges |
+| 53 | `setting_bots` | `SvGameSettings.set` of `bot_count`, the setting event | A chat line, and 2 bots in the city |
+| 54 | `engine_list` | `SvGameEngine.describe`, `get` | Three parameters with values |
+| 55 | `config_read` | `SvConfig.get_int`, `get_float`, `get_text`, the config event | The values hello, 3 and 1.50, and a chat line after a change |
+| 56 | `plugins_calls` | `SvPlugins.subscribe64`, `refuse`, `find` | All three answers match the wanted codes |
+
+Tests 30 to 56 have not run against the original client yet.
+Each test that changes money, stocks, a company price, a mission, a shop catalog or the bot count puts the old value back in the next test or in `/test stop`.
+Test 55 reads the three settings that the plugin declares in its `plugin.ini` (`greeting`, `count` and `scale`).
 
 ## First play test
 
@@ -71,5 +102,11 @@ The first run found that a Magnum could not go in a hand that still held the ban
 
 ## Not covered yet
 
-The damage decision, the chat and join decisions, the notice events, the plugin settings, the object and item velocity rows and the line query on a car need a second step.
+The damage decision, the chat and join decisions, the object and item velocity rows and the line query on a car need a later step.
 The name of an item (N43) needs a table row that does not exist yet.
+These methods have no test here:
+
+- `SvGameWrite.kick`. A test would remove the administrator from the server.
+- `SvGameAi.street_route`. A plugin cannot read the road graph yet (work item R3), so it cannot build a valid route.
+- `SvPlugins.provide` and `find` with a real provider. They need a second plugin. The host test covers them.
+- `SvGameProps.add` and the vector rows that no test above uses.
