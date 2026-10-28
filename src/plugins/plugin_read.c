@@ -370,8 +370,55 @@ static SvResult SV_CALL read_headline(SvOwner owner, uint32_t index, char *text,
     return SV_OK;
 }
 
+static SvResult SV_CALL read_within(SvOwner owner, uint32_t kind, SvVector center, float radius, SvEntity *entities,
+    float *distances, uint32_t capacity, uint32_t *count)
+{
+    uint32_t used = 0, limit;
+    int32_t i;
+    int more = 0;
+    if (context(owner) != SV_OK)
+        return SV_STATE;
+    if ((kind != SV_ENTITY_HUMAN && kind != SV_ENTITY_ITEM && kind != SV_ENTITY_OBJECT) || !entities || !count || !capacity ||
+        capacity > SV_ENTITY_PAGE_MAX || !point_ok(center) || !(radius > 0.0f) || radius > SV_WITHIN_RADIUS_MAX)
+        return SV_INVALID;
+    limit = sv_entity_capacity(kind);
+    for (i = 0; i < (int32_t)limit; ++i) {
+        vec3 at;
+        float dx, dy, dz, distance;
+        if (kind == SV_ENTITY_HUMAN) {
+            if (!sr_humans[i].active)
+                continue;
+            at = sr_humans[i].pos;
+        } else if (kind == SV_ENTITY_ITEM) {
+            if (!sr_items[i].active)
+                continue;
+            at = sr_items[i].pos;
+        } else {
+            if (!sr_objects[i].active)
+                continue;
+            at = sr_objects[i].pos;
+        }
+        dx = at.x - center.x;
+        dy = at.y - center.y;
+        dz = at.z - center.z;
+        distance = (float)sqrt((double)(dx * dx + dy * dy + dz * dz));
+        if (!(distance <= radius))
+            continue;
+        if (used == capacity) {
+            more = 1;
+            break;
+        }
+        entities[used] = sv_entity_at(kind, i);
+        if (distances)
+            distances[used] = distance;
+        ++used;
+    }
+    *count = used;
+    return more ? SV_LIMIT : SV_OK;
+}
+
 const SvGameRead sv_game_read = {
     sizeof(SvGameRead), SV_GAME_READ_VERSION, read_entities,
     read_player, read_human, read_item, read_object, read_account,
-    read_bone, read_inventory, read_world, read_line, read_aim, read_headline
+    read_bone, read_inventory, read_world, read_line, read_aim, read_headline, read_within
 };

@@ -457,6 +457,111 @@ static int vehicle_checks(SvOwner owner)
     return 0;
 }
 
+/* The within query and the two visual events. The car stands at (720, 6, 740), the item at (20, 6, 30) and the human at
+ * (100, 50, 200). Returns 0 when all checks pass, or the line of the check that failed. */
+static int within_checks(SvOwner owner, SvEntity car, SvEntity thing)
+{
+    SvEntity found[4];
+    float distance[4];
+    uint32_t count = 99, nan_bits = 0x7fc00000u, i, hit = 0;
+    SvVector bad = { 0.0f, 0.0f, 0.0f };
+    float nan_value;
+    memcpy(&nan_value, &nan_bits, sizeof nan_value);
+    bad.x = nan_value;
+    STEP(game->within(owner + 1, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, 5.0f, found, distance, 4, &count) == SV_STATE);
+    STEP(game->within(owner, SV_ENTITY_PLAYER, (SvVector){ 100.0f, 50.0f, 200.0f }, 5.0f, found, distance, 4, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, bad, 5.0f, found, distance, 4, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, 0.0f, found, distance, 4, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, -1.0f, found, distance, 4, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, nan_value, found, distance, 4, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, SV_WITHIN_RADIUS_MAX + 1.0f, found, distance, 4, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, 5.0f, NULL, distance, 4, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, 5.0f, found, distance, 4, NULL) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, 5.0f, found, distance, 0, &count) == SV_INVALID);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, 5.0f, found, distance, SV_ENTITY_PAGE_MAX + 1, &count) == SV_INVALID);
+    /* The human is at the center, and a far center finds nobody. */
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 100.0f, 50.0f, 200.0f }, 1.0f, found, distance, 4, &count) == SV_OK);
+    for (i = 0; i < count; ++i)
+        if (found[i] == human && distance[i] < 0.5f)
+            hit = 1;
+    STEP(hit);
+    STEP(game->within(owner, SV_ENTITY_HUMAN, (SvVector){ 3000.0f, 50.0f, 3000.0f }, 1.0f, found, NULL, 4, &count) == SV_OK && count == 0);
+    /* The car and the item. */
+    STEP(game->within(owner, SV_ENTITY_OBJECT, (SvVector){ 720.0f, 6.0f, 741.0f }, 2.0f, found, distance, 4, &count) == SV_OK);
+    for (hit = 0, i = 0; i < count; ++i)
+        if (found[i] == car && distance[i] > 0.5f && distance[i] < 1.5f)
+            hit = 1;
+    STEP(hit);
+    STEP(game->within(owner, SV_ENTITY_OBJECT, (SvVector){ 720.0f, 6.0f, 745.0f }, 2.0f, found, distance, 4, &count) == SV_OK && count == 0);
+    STEP(game->within(owner, SV_ENTITY_ITEM, (SvVector){ 20.0f, 6.0f, 30.0f }, 1.0f, found, distance, 4, &count) == SV_OK);
+    for (hit = 0, i = 0; i < count; ++i)
+        if (found[i] == thing)
+            hit = 1;
+    STEP(hit);
+    /* More matches than room: the first one is given and the answer is SV_LIMIT. */
+    STEP(game->within(owner, SV_ENTITY_ITEM, (SvVector){ 0.0f, 0.0f, 0.0f }, SV_WITHIN_RADIUS_MAX, found, NULL, 1, &count) == SV_LIMIT && count == 1);
+    /* The visual events. */
+    STEP(change->bullet(owner + 1, 3, (SvVector){ 1.0f, 2.0f, 3.0f }, (SvVector){ 0.0f, 0.0f, 10.0f }, thing) == SV_STATE);
+    STEP(change->bullet(owner, 3, (SvVector){ 1.0f, 2.0f, 3.0f }, (SvVector){ 0.0f, 0.0f, 10.0f }, player) == SV_NOT_FOUND);
+    STEP(change->bullet(owner, 4, (SvVector){ 1.0f, 2.0f, 3.0f }, (SvVector){ 0.0f, 0.0f, 10.0f }, thing) == SV_INVALID);
+    STEP(change->bullet(owner, 3, bad, (SvVector){ 0.0f, 0.0f, 10.0f }, thing) == SV_INVALID);
+    STEP(change->bullet(owner, 3, (SvVector){ 1.0f, 2.0f, 3.0f }, bad, thing) == SV_INVALID);
+    STEP(change->bullet(owner, 3, (SvVector){ 1.0f, 2.0f, 3.0f }, (SvVector){ 0.0f, 0.0f, 65.0f }, thing) == SV_INVALID);
+    STEP(change->bullet(owner, 3, (SvVector){ 1.0f, 2.0f, 3.0f }, (SvVector){ 0.0f, 0.0f, 10.0f }, thing) == SV_OK);
+    STEP(change->bullet_hit(owner + 1, 2, (SvVector){ 4.0f, 5.0f, 6.0f }, (SvVector){ 0.0f, 1.0f, 0.0f }) == SV_STATE);
+    STEP(change->bullet_hit(owner, 4, (SvVector){ 4.0f, 5.0f, 6.0f }, (SvVector){ 0.0f, 1.0f, 0.0f }) == SV_INVALID);
+    STEP(change->bullet_hit(owner, 2, bad, (SvVector){ 0.0f, 1.0f, 0.0f }) == SV_INVALID);
+    STEP(change->bullet_hit(owner, 2, (SvVector){ 4.0f, 5.0f, 6.0f }, bad) == SV_INVALID);
+    STEP(change->bullet_hit(owner, 2, (SvVector){ 4.0f, 5.0f, 6.0f }, (SvVector){ 0.0f, 9.0f, 0.0f }) == SV_INVALID);
+    STEP(change->bullet_hit(owner, 2, (SvVector){ 4.0f, 5.0f, 6.0f }, (SvVector){ 0.0f, 1.0f, 0.0f }) == SV_OK);
+    return 0;
+}
+
+/* The rows for the item types and the bullet types. The test program reads the tables after the tick, and again after the
+ * plugin stops, when the host puts the first values back. Returns 0 when all checks pass, or the line of the check that failed. */
+static int type_checks(SvOwner owner)
+{
+    uint32_t delay = 0, speed = 0, bmass = 0, bullet = 0, price = 0;
+    SvPropInfo info = { sizeof info };
+    SvValue v;
+    STEP(props->find(owner, "item_type.fire_delay", &delay) == SV_OK && props->find(owner, "item_type.bullet_speed", &speed) == SV_OK);
+    STEP(props->find(owner, "bullet_type.mass", &bmass) == SV_OK && props->find(owner, "item_type.bullet_type", &bullet) == SV_OK);
+    STEP(props->find(owner, "item_type.price", &price) == SV_OK);
+    STEP(props->info(owner, delay, &info) == SV_OK && info.entity_kind == 0 && info.count == 27 && info.type == SV_PROP_INT &&
+         info.min == 1.0 && info.max == 3600.0);
+    STEP(props->info(owner, bmass, &info) == SV_OK && info.count == 4 && info.type == SV_PROP_FLOAT);
+    /* A world row takes entity 0 and a slot below the count. */
+    v.i = 99;
+    STEP(props->set(owner, delay, 0, 4, v) == SV_OK && props->get(owner, delay, 0, 4, &v) == SV_OK && v.i == 99);
+    STEP(props->set(owner, delay, human, 4, v) == SV_INVALID);
+    STEP(props->set(owner, delay, 0, 27, v) == SV_INVALID && props->get(owner, delay, 0, 27, &v) == SV_INVALID);
+    v.i = 0;
+    STEP(props->set(owner, delay, 0, 4, v) == SV_INVALID);
+    v.i = 3601;
+    STEP(props->set(owner, delay, 0, 4, v) == SV_INVALID);
+    v.i = -100;
+    STEP(props->add(owner, delay, 0, 4, v) == SV_INVALID);
+    v.i = 4;
+    STEP(props->set(owner, bullet, 0, 4, v) == SV_INVALID);
+    v.i = 2;
+    STEP(props->set(owner, bullet, 0, 4, v) == SV_OK);
+    STEP(props->add(owner, bullet, 0, 4, v) == SV_DENIED);
+    v.f = 21.5f;
+    STEP(props->set(owner, speed, 0, 4, v) == SV_OK);
+    v.f = 65.0f;
+    STEP(props->set(owner, speed, 0, 4, v) == SV_INVALID);
+    v.f = 0.02f;
+    STEP(props->set(owner, bmass, 0, 3, v) == SV_OK && props->get(owner, bmass, 0, 3, &v) == SV_OK && v.f == 0.02f);
+    v.f = 0.03f;
+    STEP(props->set(owner, bmass, 0, 4, v) == SV_INVALID);
+    /* A second change of the same slot keeps the first value for the restore. */
+    v.i = 150;
+    STEP(props->set(owner, delay, 0, 4, v) == SV_OK);
+    v.i = 7;
+    STEP(props->set(owner, price, 0, 12, v) == SV_OK);
+    return 0;
+}
+
 /* Teleport of a vehicle and of an item, and the rows for items, vehicles and accounts. The test program checks the
  * particles of the moved car afterwards. Returns 0 when all checks pass, or the line of the check that failed. */
 static int move_checks(SvOwner owner)
@@ -541,7 +646,12 @@ static int move_checks(SvOwner owner)
     v.i = 0;
     STEP(props->set(owner, ban, account, 0, v) == SV_OK);
     STEP(game->account(owner, account, &as) == SV_OK);
-    return 0;
+    {
+        int within_line = within_checks(owner, car, thing);
+        if (within_line)
+            return within_line;
+    }
+    return type_checks(owner);
 }
 
 /* Sound, pushes and spawn protection. The test program reads the events and the records after the tick.
@@ -648,7 +758,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 18);
+    STEP(count == 28);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);

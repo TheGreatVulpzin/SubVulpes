@@ -41,6 +41,21 @@ FIELD(object_ttl, sr_objects[i].time_to_live)
 FIELD(object_health, sr_objects[i].health)
 FIELD(account_ban, sr_data_accounts.records[i].ban_time)
 
+/* A row of a table with one value for each type: the record is 0 and the slot is the type. */
+#define TYPE_FIELD(function, expression) \
+    static void *function(int32_t i, uint32_t s) { (void)i; return &(expression); }
+
+TYPE_FIELD(item_type_price, sr_itemtypes[s].price)
+TYPE_FIELD(item_type_mass, sr_itemtypes[s].mass)
+TYPE_FIELD(item_type_fire_delay, sr_itemtypes[s].fire_delay)
+TYPE_FIELD(item_type_bullet, sr_itemtypes[s].bullet_type)
+TYPE_FIELD(item_type_speed, sr_itemtypes[s].bullet_speed)
+TYPE_FIELD(item_type_spread, sr_itemtypes[s].spread)
+TYPE_FIELD(item_type_recoil, sr_itemtypes[s].recoil)
+TYPE_FIELD(item_type_ammo, sr_itemtypes[s].ammo)
+TYPE_FIELD(bullet_type_mass, sr_data_bullettypes[s].mass)
+TYPE_FIELD(bullet_type_drag, sr_data_bullettypes[s].drag)
+
 /* A bot cannot be an admin. */
 static SvResult admin_check(int32_t index, SvValue value)
 {
@@ -121,6 +136,16 @@ static const Prop props[] = {
     { "object.time_to_live", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 65535, object_ttl, train_check, NULL, NULL },
     { "object.health", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000000, object_health, NULL, NULL, NULL },
     { "account.ban_time", SV_ENTITY_ACCOUNT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000000, account_ban, NULL, NULL, NULL },
+    { "item_type.price", SV_ENTITY_WORLD, SV_PROP_INT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000000, item_type_price, NULL, NULL, NULL, 1 },
+    { "item_type.mass", SV_ENTITY_WORLD, SV_PROP_FLOAT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.01, 1000, item_type_mass, NULL, NULL, NULL, 1 },
+    { "item_type.fire_delay", SV_ENTITY_WORLD, SV_PROP_INT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 1, 3600, item_type_fire_delay, NULL, NULL, NULL, 1 },
+    { "item_type.bullet_type", SV_ENTITY_WORLD, SV_PROP_INT, 27, SV_PROP_GET | SV_PROP_SET, 0, 3, item_type_bullet, NULL, NULL, NULL, 1 },
+    { "item_type.bullet_speed", SV_ENTITY_WORLD, SV_PROP_FLOAT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 64, item_type_speed, NULL, NULL, NULL, 1 },
+    { "item_type.spread", SV_ENTITY_WORLD, SV_PROP_FLOAT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1, item_type_spread, NULL, NULL, NULL, 1 },
+    { "item_type.recoil", SV_ENTITY_WORLD, SV_PROP_FLOAT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, item_type_recoil, NULL, NULL, NULL, 1 },
+    { "item_type.ammo", SV_ENTITY_WORLD, SV_PROP_INT, 27, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1000, item_type_ammo, NULL, NULL, NULL, 1 },
+    { "bullet_type.mass", SV_ENTITY_WORLD, SV_PROP_FLOAT, 4, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1, bullet_type_mass, NULL, NULL, NULL, 1 },
+    { "bullet_type.drag", SV_ENTITY_WORLD, SV_PROP_FLOAT, 4, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 1, bullet_type_drag, NULL, NULL, NULL, 1 },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };
@@ -153,6 +178,28 @@ static const Prop *row_at(uint32_t id)
     return NULL;
 }
 
+/* The first value of each slot of a restore row that a plugin changed, and the plugin that changed it last. A slot with
+ * owner 0 holds the value of the game. */
+enum { RESTORE_SLOTS = 32 };
+static struct {
+    SvValue first;
+    SvOwner owner;
+} restore_slot[ROW_MAX + 1][RESTORE_SLOTS];
+
+static void restore_note(const Prop *p, uint32_t id, uint32_t slot, SvOwner owner, const void *field)
+{
+    if (!p->restore || slot >= RESTORE_SLOTS || id > ROW_MAX)
+        return;
+    if (!restore_slot[id][slot].owner) {
+        restore_slot[id][slot].first.i = 0;
+        if (p->type == SV_PROP_INT)
+            restore_slot[id][slot].first.i = *(const int32_t *)field;
+        else
+            restore_slot[id][slot].first.f = *(const float *)field;
+    }
+    restore_slot[id][slot].owner = owner;
+}
+
 static int name_used(const char *name)
 {
     size_t i, k;
@@ -175,6 +222,8 @@ SvResult sv_props_add_group(const Prop *rows, size_t count)
         return SV_LIMIT;
     for (i = 0; i < count; ++i) {
         const Prop *p = &rows[i];
+        if (p->restore && (p->count > RESTORE_SLOTS || p->type == SV_PROP_VECTOR))
+            return SV_INVALID;
         if (!p->name || !p->name[0] || strlen(p->name) >= SV_PROP_NAME_MAX || !p->field || !p->count ||
             (p->type != SV_PROP_INT && p->type != SV_PROP_FLOAT && p->type != SV_PROP_VECTOR) ||
             !(p->ops & (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD)) || (p->type == SV_PROP_VECTOR && (p->ops & SV_PROP_SET)) ||
@@ -313,6 +362,7 @@ static SvResult SV_CALL props_set(SvOwner owner, uint32_t id, SvEntity entity, u
     if (p->check && (result = p->check(record, value)) != SV_OK)
         return result;
     field = p->field(record, slot);
+    restore_note(p, id, slot, owner, field);
     if (p->type == SV_PROP_INT)
         *(int32_t *)field = value.i;
     else
@@ -355,6 +405,7 @@ static SvResult SV_CALL props_add(SvOwner owner, uint32_t id, SvEntity entity, u
     }
     if (p->check && (result = p->check(record, sum)) != SV_OK)
         return result;
+    restore_note(p, id, slot, owner, field);
     if (p->type == SV_PROP_INT)
         *(int32_t *)field = sum.i;
     else
@@ -362,6 +413,27 @@ static SvResult SV_CALL props_add(SvOwner owner, uint32_t id, SvEntity entity, u
     if (p->after)
         p->after(record);
     return SV_OK;
+}
+
+void sv_props_release(SvOwner owner)
+{
+    uint32_t id, slot;
+    for (id = 1; id <= ROW_MAX; ++id) {
+        const Prop *p = row_at(id);
+        if (!p || !p->restore)
+            continue;
+        for (slot = 0; slot < p->count && slot < RESTORE_SLOTS; ++slot) {
+            void *field;
+            if (restore_slot[id][slot].owner != owner)
+                continue;
+            field = p->field(0, slot);
+            if (p->type == SV_PROP_INT)
+                *(int32_t *)field = restore_slot[id][slot].first.i;
+            else
+                *(float *)field = restore_slot[id][slot].first.f;
+            restore_slot[id][slot].owner = 0;
+        }
+    }
 }
 
 const SvGameProps sv_game_props = {

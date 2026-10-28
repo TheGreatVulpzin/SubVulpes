@@ -208,6 +208,14 @@ static int needs(const SvModule *module, const char *id)
     return 0;
 }
 
+/* The game layer sets this hook, so the host test links without the game. It runs when a plugin stops. */
+static void (*release_hook)(SvOwner owner);
+
+void sv_plugins_set_release(void (*hook)(SvOwner owner))
+{
+    release_hook = hook;
+}
+
 static void clear_resources(uint32_t index)
 {
     uint32_t i;
@@ -216,6 +224,8 @@ static void clear_resources(uint32_t index)
             memset(&commands[i], 0, sizeof commands[i]);
     modules[index].events = 0;
     modules[index].event_callback = NULL;
+    if (release_hook)
+        release_hook(index + 1);
 }
 
 static unsigned enter(uint32_t index)

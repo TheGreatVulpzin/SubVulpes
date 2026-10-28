@@ -33,6 +33,8 @@ void sv_game_ready(void);
 void sv_game_reset(void);
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
+/* Sets a function that the host calls with the owner of a plugin when that plugin stops, to give back what it changed. */
+void sv_plugins_set_release(void (*hook)(SvOwner owner));
 /* Like sv_plugins_context, and 0 while a plugin runs a decision inside the simulation. Every call that changes the game or
  * the host needs this one. */
 int sv_plugins_write_context(SvOwner owner);

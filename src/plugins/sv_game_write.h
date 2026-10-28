@@ -17,6 +17,8 @@ enum { SV_LOOK_COUNT = 5, SV_ITEM_TYPE_COUNT = 27, SV_ITEM_SLOT_COUNT = 7, SV_OB
 #define SV_SOUND_PITCH_MAX 4.0f
 /* A teleport accepts finite coordinates inside this limit. */
 #define SV_POSITION_LIMIT 32768.0f
+/* The longest velocity of a bullet event: the fastest bullet of the game flies 15 units for each tick. */
+#define SV_BULLET_SPEED_MAX 64.0f
 
 #pragma pack(push, 8)
 typedef struct {
@@ -87,6 +89,14 @@ typedef struct {
     /* Makes a human say a text of 1 to 63 printable ASCII bytes, as the chat of a player does: the clients near the human
      * see it above the head. The range is 0 (short), 1 (normal) or 2 (long). SV_STATE for a human that is dead. */
     SvResult (SV_CALL *speak)(SvOwner owner, SvEntity human, const char *text, int32_t range);
+    /* Tells the clients about a shot that the server does not simulate: a bullet of type 0 to 3 that starts at the position
+     * with the velocity (units for each tick, at most SV_BULLET_SPEED_MAX long) and belongs to the weapon item. The clients
+     * draw the tracer. No bullet exists in the server, so nothing is hit and no damage is made. The plugin makes the damage
+     * itself (a line query and a health change), or it fires a real weapon. */
+    SvResult (SV_CALL *bullet)(SvOwner owner, uint32_t type, SvVector position, SvVector velocity, SvEntity weapon);
+    /* Tells the clients about the effect of a hit at the position: kind 0 a block of the level, 1 a human, 2 a vehicle and
+     * 3 a drip of blood. The normal points out of the surface. It makes no damage. */
+    SvResult (SV_CALL *bullet_hit)(SvOwner owner, uint32_t kind, SvVector position, SvVector normal);
 } SvGameWrite;
 #pragma pack(pop)
 

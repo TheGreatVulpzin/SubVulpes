@@ -335,6 +335,42 @@ static void names_check(uint32_t events)
     CHECK(speech == 1 && loud == 1 && dead_speech == 0);
 }
 
+/* The two visual events reached the event list with the values of the fixture, and made no bullet. */
+static void bullet_events_check(uint32_t events)
+{
+    uint32_t i;
+    int shots = 0, hits = 0;
+    for (i = events; i != sr_numofevents; i = (i + 1) & 0xffff) {
+        const Event *ev = &sr_events[i];
+        if (ev->type == 0 && ev->param == 3 && ev->pos.x == 1.0f && ev->vec.z == 10.0f && ev->attach_type >= 0 &&
+            sr_items[ev->attach_type].type == 12)
+            ++shots;
+        if (ev->type == 1 && ev->param == 0 && ev->attach_type == 2 && ev->pos.x == 4.0f && ev->vec.y == 1.0f)
+            ++hits;
+    }
+    CHECK(shots == 1 && hits == 1);
+    CHECK(sr_numofbullets == 0);
+}
+
+static int saved_delay, saved_price;
+static float saved_bullet_mass;
+static int saved_bullet_type;
+static float saved_speed;
+
+/* The type tables hold the values that the fixture wrote. The first values come back when the plugin stops. */
+static void types_check(void)
+{
+    CHECK(sr_itemtypes[4].fire_delay == 150 && sr_itemtypes[4].bullet_type == 2 && sr_itemtypes[4].bullet_speed == 21.5f);
+    CHECK(sr_data_bullettypes[3].mass == 0.02f && sr_itemtypes[12].price == 7);
+}
+
+static void types_restored_check(void)
+{
+    CHECK(sr_itemtypes[4].fire_delay == saved_delay && sr_itemtypes[4].bullet_type == saved_bullet_type &&
+          sr_itemtypes[4].bullet_speed == saved_speed);
+    CHECK(sr_data_bullettypes[3].mass == saved_bullet_mass && sr_itemtypes[12].price == saved_price);
+}
+
 /* The car that the fixture moved with teleport stands at the target, and its previous place moved with it. */
 static void move_check(void)
 {
@@ -640,6 +676,11 @@ static void write_api_tick(void)
     CHECK(train_piece > 0);
     sr_data_soundlist.num_sounds = 47;
     bone_before = hu->bones[3].vel;
+    saved_delay = sr_itemtypes[4].fire_delay;
+    saved_price = sr_itemtypes[12].price;
+    saved_bullet_type = sr_itemtypes[4].bullet_type;
+    saved_speed = sr_itemtypes[4].bullet_speed;
+    saved_bullet_mass = sr_data_bullettypes[3].mass;
     post_events();
     make_target();
     seat_riders();
@@ -664,6 +705,8 @@ static void write_api_tick(void)
     effects_check(events, bone_before);
     headline_check(events);
     move_check();
+    types_check();
+    bullet_events_check(events);
     names_check(events);
     damage_check();
     decision_check();
@@ -858,6 +901,8 @@ static void props_groups(void)
     static const Prop vector_set[] = { { "test.vecset", SV_ENTITY_WORLD, SV_PROP_VECTOR, 1, SV_PROP_SET, 0, 1, test_world_field, NULL, NULL, NULL } };
     static const Prop vector_add[] = { { "test.vecadd", SV_ENTITY_WORLD, SV_PROP_VECTOR, 1, SV_PROP_ADD, 0, 1, test_world_field, NULL, NULL, NULL } };
     static const Prop long_name[] = { { "0123456789012345678901234567890123456789", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL } };
+    static const Prop big_restore[] = { { "test.bigrestore", SV_ENTITY_WORLD, SV_PROP_INT, 33, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL, 1 } };
+    static const Prop vector_restore[] = { { "test.vecrestore", SV_ENTITY_WORLD, SV_PROP_VECTOR, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL, 1 } };
     static const Prop twice[] = { { "test.twice", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL },
                                   { "test.twice", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET, 0, 1, test_world_field, NULL, NULL, NULL } };
     CHECK(sv_props_add_group(NULL, 1) == SV_INVALID && sv_props_add_group(test_world, 0) == SV_INVALID);
@@ -865,6 +910,7 @@ static void props_groups(void)
     CHECK(sv_props_add_group(no_ops, 1) == SV_INVALID && sv_props_add_group(vector_set, 1) == SV_INVALID);
     CHECK(sv_props_add_group(vector_add, 1) == SV_INVALID && sv_props_add_group(long_name, 1) == SV_INVALID);
     CHECK(sv_props_add_group(twice, 2) == SV_INVALID);
+    CHECK(sv_props_add_group(big_restore, 1) == SV_INVALID && sv_props_add_group(vector_restore, 1) == SV_INVALID);
     CHECK(sv_props_add_group(test_world, 1) == SV_OK && sv_props_add_group(test_world, 1) == SV_OK);
 }
 
@@ -953,6 +999,7 @@ int main(void)
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);
+    types_restored_check();
     /* After the stop no plugin wants a record, and the queue is empty. */
     sv_events_post(SV_EVENT_DEATH, 1, 0, 0, 0);
     CHECK(sv_events_pending() == 0 && !sv_plugins_wants(SV_EVENT_DEATH));

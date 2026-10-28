@@ -16,6 +16,7 @@
 #include "sr_runtime.h"
 #include "sr_server.h"
 #include "vectors.h"
+#include <math.h>
 #include <string.h>
 
 enum { MESSAGE_MAX = 63, NAME_MAX_CHARS = 31, KICK_IDLE_TICKS = 0x4b0 };
@@ -501,6 +502,47 @@ static SvResult SV_CALL write_speak(SvOwner owner, SvEntity human, const char *t
     return SV_OK;
 }
 
+static SvResult SV_CALL write_bullet(SvOwner owner, uint32_t type, SvVector position, SvVector velocity, SvEntity weapon)
+{
+    int32_t item;
+    vec3 at, v;
+    double length2;
+    SvResult result = resolve(owner, SV_ENTITY_ITEM, weapon, &item);
+    if (result != SV_OK)
+        return result;
+    if (type >= 4 || !position_ok(position) || !finite(velocity.x) || !finite(velocity.y) || !finite(velocity.z))
+        return SV_INVALID;
+    length2 = (double)velocity.x * velocity.x + (double)velocity.y * velocity.y + (double)velocity.z * velocity.z;
+    if (length2 > (double)SV_BULLET_SPEED_MAX * SV_BULLET_SPEED_MAX)
+        return SV_INVALID;
+    at.x = position.x;
+    at.y = position.y;
+    at.z = position.z;
+    v.x = velocity.x;
+    v.y = velocity.y;
+    v.z = velocity.z;
+    createevent_bullet((int)type, &at, &v, item);
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_bullet_hit(SvOwner owner, uint32_t kind, SvVector position, SvVector normal)
+{
+    vec3 at, n;
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (kind >= 4 || !position_ok(position) || !finite(normal.x) || !finite(normal.y) || !finite(normal.z) ||
+        fabsf(normal.x) > 4.0f || fabsf(normal.y) > 4.0f || fabsf(normal.z) > 4.0f)
+        return SV_INVALID;
+    at.x = position.x;
+    at.y = position.y;
+    at.z = position.z;
+    n.x = normal.x;
+    n.y = normal.y;
+    n.z = normal.z;
+    createevent_bullethit(0, (int)kind, &at, &n);
+    return SV_OK;
+}
+
 static SvResult SV_CALL write_headline(SvOwner owner, uint32_t index, const char *text)
 {
     size_t i, length;
@@ -527,5 +569,5 @@ const SvGameWrite sv_game_write = {
     write_teleport, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
     write_object_create, write_object_remove, write_npc_create, write_npc_remove,
-    write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak
+    write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak, write_bullet, write_bullet_hit
 };

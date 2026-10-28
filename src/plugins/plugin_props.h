@@ -19,6 +19,10 @@ typedef struct {
     SvResult (*check)(int32_t index, SvValue value);
     void (*after)(int32_t index);
     SvResult (*add_vector)(int32_t index, uint32_t slot, SvVector change);
+    /* 1 for a row of a table that the game fills once at the start (for example the item types): the host keeps the first
+     * value of each slot that a plugin changes, and puts it back when that plugin stops. Needs at most 32 slots and no
+     * vector. A group that omits this member gets 0. */
+    int restore;
 } Prop;
 
 /* Adds a group of rows to the table. The rows must stay valid until the process ends, and the names must not repeat a
@@ -26,5 +30,8 @@ typedef struct {
  * a repeated name, and SV_LIMIT when the table is full (at most 8 groups and 256 rows). A plugin area calls this from
  * its install function, before the first plugin tick. */
 SvResult sv_props_add_group(const Prop *rows, size_t count);
+
+/* Puts back the first value of every slot of a restore row that this owner changed last. Called when a plugin stops. */
+void sv_props_release(SvOwner owner);
 
 #endif

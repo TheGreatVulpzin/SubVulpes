@@ -10,7 +10,7 @@
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 
-#define VERSION "0.1.4"
+#define VERSION "0.1.5"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 32
 
@@ -22,7 +22,7 @@ static const SvGameProps *props;
 
 enum { TODO, PASS, FAIL, SKIP };
 /* What a test changed on the player, so the next test or /test stop can undo it. */
-enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16 };
+enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16, T_TYPES = 32 };
 
 typedef struct Test {
     const char *name;
@@ -41,7 +41,8 @@ static int32_t saved_looks[SV_LOOK_COUNT];
 static SvEntity made_objects[6], made_players[4], made_items[8];
 static int made_object_count, made_player_count, made_item_count;
 static uint32_t sound_next;
-static SvEntity last_magazine, last_car, last_npc, last_npc_human;
+static SvEntity last_magazine, last_car, last_npc, last_npc_human, last_gun;
+static float saved_speed, saved_bullet_mass;
 static unsigned name_step;
 
 /* ------------------------------------------------------------ text */
@@ -166,6 +167,13 @@ static void cleanup(void)
         change->item_remove(self, made_items[i]);
     }
     forget();
+    if (touched & T_TYPES) {
+        SvValue v;
+        v.f = saved_speed;
+        props->set(self, prop_id("item_type.bullet_speed"), 0, 4, v);
+        v.f = saved_bullet_mass;
+        props->set(self, prop_id("bullet_type.mass"), 0, 3, v);
+    }
     if (tester && touched && body(&player, &human) == SV_OK) {
         if (touched & T_HEALTH)
             set_int("human.health", player.human, 100);
@@ -380,6 +388,7 @@ static SvResult t_magnum(void)
         return r;
     remember(made_items, &made_item_count, 8, magazine);
     last_magazine = magazine;
+    last_gun = gun;
     r = change->item_attach(self, gun, magazine);
     if (r != SV_OK)
         return r;
@@ -586,6 +595,111 @@ static SvResult t_speak(void)
     return r;
 }
 
+/* A tracer and a spark. The shot is only a picture: no bullet flies and nothing takes damage. */
+static SvResult t_tracer_go(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvBoneState head = { sizeof head };
+    SvLineHit hit = { sizeof hit };
+    SvVector from, speed;
+    SvResult r = body(&player, &human);
+    if (r != SV_OK)
+        return r;
+    r = game->bone(self, player.human, 2, &head);
+    if (r != SV_OK)
+        return r;
+    /* The head faces the negative third row of its rotation. */
+    speed.x = -head.rotation[2].x * 14.0f;
+    speed.y = -head.rotation[2].y * 14.0f;
+    speed.z = -head.rotation[2].z * 14.0f;
+    from = offset(head.position, speed.x * 0.05f, speed.y * 0.05f, speed.z * 0.05f);
+    r = change->bullet(self, 3, from, speed, last_gun);
+    if (r != SV_OK)
+        return r;
+    if (game->aim(self, player.human, 300.0f, SV_LINE_ALL, &hit) == SV_OK && hit.kind != SV_HIT_NONE) {
+        static const uint32_t effect[] = { 0, 0, 2, 1 };
+        r = change->bullet_hit(self, effect[hit.kind], hit.position, hit.normal);
+    }
+    say("A tracer flew where you look. Type /test go to fire another.");
+    return r;
+}
+
+static SvResult t_tracer(void)
+{
+    SvResult r = t_magnum();
+    if (r == SV_OK)
+        say("Type /test go to fire a tracer along your aim. It does no damage.");
+    return r;
+}
+
+/* The Magnum shoots twice as fast and its bullets weigh three times as much, until the next test. */
+static SvResult t_strong(void)
+{
+    SvValue speed = { 0 }, mass = { 0 };
+    SvResult r = t_npc();
+    if (r != SV_OK)
+        return r;
+    r = t_magnum();
+    if (r != SV_OK)
+        return r;
+    r = props->get(self, prop_id("item_type.bullet_speed"), 0, 4, &speed);
+    if (r == SV_OK)
+        r = props->get(self, prop_id("bullet_type.mass"), 0, 3, &mass);
+    if (r != SV_OK)
+        return r;
+    saved_speed = speed.f;
+    saved_bullet_mass = mass.f;
+    touched |= T_TYPES;
+    speed.f *= 2.0f;
+    mass.f *= 3.0f;
+    r = props->set(self, prop_id("item_type.bullet_speed"), 0, 4, speed);
+    if (r == SV_OK)
+        r = props->set(self, prop_id("bullet_type.mass"), 0, 3, mass);
+    sayf("Magnum speed %.2f -> %.2f, bullet mass %.4f -> %.4f.", (double)saved_speed, (double)speed.f,
+        (double)saved_bullet_mass, (double)mass.f);
+    return r;
+}
+
+/* A bomb at the bot: humans within 12 units lose 30 health and fly up. */
+static SvResult t_bomb_go(void)
+{
+    SvHumanState bot = { sizeof bot };
+    SvEntity found[32];
+    float distance[32];
+    SvValue hurt, push;
+    uint32_t count = 0, i, bone, hurt_count = 0;
+    SvResult r = game->human(self, last_npc_human, &bot);
+    if (r != SV_OK)
+        return r;
+    r = game->within(self, SV_ENTITY_HUMAN, bot.position, 12.0f, found, distance, 32, &count);
+    if (r != SV_OK && r != SV_LIMIT)
+        return r;
+    hurt.i = -30;
+    push.v.x = 0.0f;
+    push.v.y = 0.4f;
+    push.v.z = 0.0f;
+    for (i = 0; i < count; ++i) {
+        if (props->add(self, prop_id("human.health"), found[i], 0, hurt) != SV_OK)
+            continue;
+        ++hurt_count;
+        for (bone = 0; bone < 15; ++bone)
+            props->add(self, prop_id("human.bone_velocity"), found[i], bone, push);
+    }
+    change->sound(self, 21, bot.position, 2.0f, 0.5f);
+    change->bullet_hit(self, 0, bot.position, (SvVector){ 0.0f, 1.0f, 0.0f });
+    sayf("Boom. %u of %u humans near the bot were hurt. Type /test go for another one.", hurt_count, count);
+    return SV_OK;
+}
+
+static SvResult t_bomb(void)
+{
+    SvResult r = t_npc();
+    if (r == SV_OK)
+        say("Type /test go to blow up the bot, and anyone within 12 units.");
+    return r;
+}
+
 static SvResult t_dealt(void)
 {
     SvResult r = t_npc();
@@ -629,6 +743,9 @@ static const Test tests[] = {
     { "one_round", "Makes a Magnum with one round in the magazine and puts it in your hand.", "You fire one shot, and the next trigger pull does nothing.", t_ammo, NULL },
     { "npc_name", "Makes a bot named Guard. Type /test go to give it a new name.", "The name above the bot changes at once for each go. The last name is empty.", t_rename, t_rename_go },
     { "npc_speak", "Makes a bot. Type /test go to make it talk.", "A speech bubble with the text shows above the bot.", t_speak, t_speak_go },
+    { "tracer", "Makes a loaded Magnum. Type /test go to fire a picture of a bullet along your aim.", "A tracer flies where you look, with a spark where it lands. Nothing takes damage.", t_tracer, t_tracer_go },
+    { "strong_magnum", "Makes a bot and a Magnum, and makes the Magnum bullets fast and heavy.", "A few shots kill the bot. The next test puts the Magnum back.", t_strong, NULL },
+    { "bomb", "Makes a bot. Type /test go to blow up everything within 12 units of it.", "The bot, and you if you stand near, lose 30 health and fly up. A sound and a spark play.", t_bomb, t_bomb_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
 };
 

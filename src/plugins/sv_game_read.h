@@ -6,6 +6,8 @@
 #define SV_API_GAME_READ 1u
 #define SV_GAME_READ_VERSION 1u
 #define SV_ENTITY_PAGE_MAX 256u
+/* The longest radius of a within query, in game units. */
+#define SV_WITHIN_RADIUS_MAX 4096.0f
 #pragma pack(push, 8)
 typedef struct {
     uint32_t size;
@@ -123,6 +125,12 @@ typedef struct {
     /* Copies news line "index" (below SvWorldState.headline_count) to the buffer. The buffer must hold SV_HEADLINE_BUFFER
      * bytes. SV_NOT_FOUND when the line does not exist. */
     SvResult (SV_CALL *headline)(SvOwner owner, uint32_t index, char *text, uint32_t capacity);
+    /* Finds the records of one kind (SV_ENTITY_HUMAN, SV_ENTITY_ITEM or SV_ENTITY_OBJECT) whose place is within "radius" of
+     * "center". The place is the position of the snapshot. The references go in the order of the game slots, and the
+     * distances (optional, may be NULL) go beside them. The radius is above 0 and at most SV_WITHIN_RADIUS_MAX. The capacity
+     * is 1 to SV_ENTITY_PAGE_MAX. SV_LIMIT means that more records matched than fit, and the first "capacity" are given. */
+    SvResult (SV_CALL *within)(SvOwner owner, uint32_t kind, SvVector center, float radius, SvEntity *entities,
+        float *distances, uint32_t capacity, uint32_t *count);
 } SvGameRead;
 #pragma pack(pop)
 

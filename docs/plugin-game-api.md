@@ -90,6 +90,7 @@ Separate pages do not form an atomic world snapshot.
 | `bone` | One human bone's motion, rotation, mass and radius |
 | `inventory` | One human slot's count and item references |
 | `world` | Tick/reset sequence, mode/round/state, timers, raw clock, server name, limits, spawn position/sizes, type counts and the number of news lines |
+| `within(kind, center, radius, entities, distances, capacity, count)` | Finds the humans, items or vehicles whose position is within the radius of the center. The references go in the order of the game slots, with the distances in a second array (optional). The radius is above 0 and at most 4096. The capacity is 1 to 256. `SV_LIMIT` when more records matched than fit (the first ones are given). `SV_INVALID` for another kind, a null array or count, a bad capacity or radius, or a center that is not finite or is beyond 32768. One pass over the slots, so it costs the same as a read of every record |
 | `headline(index, text, capacity)` | Copies one news line. The index is below `headline_count` of the world snapshot. The buffer needs `SV_HEADLINE_BUFFER` (125) bytes. `SV_NOT_FOUND` for a line that does not exist, `SV_INVALID` for a null or small buffer |
 
 Bone indices are `0..14`: 15 bones. Inventory slot indices are `0..7`: eight slots.
@@ -229,6 +230,8 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `vehicle_exit(human, stop)` | Takes the human out of its vehicle the way the exit button does: the view angles become free, the vehicle gets the idle drive state and a bone that the exit would put in a wall moves to the near side of it. With `stop` 1 the speed of each bone becomes 0, so the body does not fly at the speed of the vehicle. | `SV_NOT_FOUND`, `SV_INVALID` for a `stop` other than 0 or 1, `SV_STATE` for a human who sits in no vehicle |
 | `sound(index, position, volume, pitch)` | Plays a sound of the game at the position for the clients. The index must be below the size of the sound list (47 in this server, so 0 to 46). The volume is 0 to 2 and the pitch 0.1 to 4. These two limits are a choice of this API. The game uses volumes 0.5 to 1 and pitches 0.5 to 1. | `SV_INVALID` for an index, a volume, a pitch or a position out of range, or a value that is not finite |
 | `headline(index, text)` | Replaces news line `index`, or adds a line when the index equals `headline_count`, and sends it to the clients. The text has 0 to 124 printable ASCII characters. The game splits it at character 63 into the two parts of the line. See [News lines](#news-lines). | `SV_INVALID` for a null text, a text that is too long or has a control or non-ASCII byte, or an index that leaves a gap. `SV_LIMIT` when 1,024 lines exist |
+| `bullet(type, position, velocity, weapon)` | Tells the clients about a shot that the server does not simulate (the event of kind 0 that a real shot makes). Type 0 to 3 is one of the four bullet types. The velocity is in units for each tick, at most 64 long. The weapon is an item. The clients draw a tracer. No bullet exists in the server, so nothing is hit and no damage is made | `SV_NOT_FOUND` for a weapon that is not an item, `SV_INVALID` for a bad type, a position or velocity that is not finite, or a velocity above 64 |
+| `bullet_hit(kind, position, normal)` | Tells the clients about the effect of a hit (the event of kind 1): kind 0 a block, 1 a human, 2 a vehicle, 3 a drip of blood. It makes no damage | `SV_INVALID` for a kind of 4 or more, a position that is not finite or a normal with a part above 4 |
 | `teleport(entity, position)` | Moves a human, a vehicle or a free item so that its place reaches the position, and gives every part the same offset. A human: the 15 bones, so bone 0 reaches the position. A vehicle: the center of the object (`position` of the object snapshot), with every particle, wheel, wheel body, rotor point and the box. An item: its position. The previous places move too, so the move adds no speed, and the speeds do not change. | `SV_NOT_FOUND` for any other kind, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle or an item that a human or another item holds, `SV_DENIED` for a piece of the train, `SV_FAILED` for a vehicle with a list out of range |
 | `vehicle_enter(human, vehicle, seat)` | Seats a human on foot in a free seat of a vehicle. Seat 0 is the driver. The game does the same when the use button finds a free seat within 1.5 units. The human then sits where the seat is, and the next tick places it. | `SV_NOT_FOUND`, `SV_DENIED` for a piece of the train, `SV_INVALID` for a seat below 0 or from the seat count of the vehicle up, `SV_STATE` for a human that is dead or already sits in a vehicle, `SV_CONFLICT` when another human sits in that seat, `SV_FAILED` for a seat count out of range |
 
@@ -244,6 +247,7 @@ Removing one check at a time made `game-api` fail each time (`build/logs/mutatio
 
 The tests call every method from a real plugin callback against records that real constructors made.
 For the move of a vehicle and of an item, the seat, the name and the speech, removing one check at a time made `game-api` fail each time: the train piece, the particle, wheel and wheel body bounds, the free slot, the held item, the position limit, the seat range, the seat taken, the human on foot, the name length and characters, the range and the dead human of a speech (`build/logs/mutation23.log`, `mutation23b.log` and `mutation24.log`). The seat count guard (a count above 7 gives `SV_FAILED`) has no test, because the fixture cannot break a seat count.
+For the restore of the type rows, the radius query and the two visual events, removing one check at a time made `game-api` fail each time: the host call at the stop, the first value, the owner match, the bounds of a restore row, the kind, capacity, radius, center and room guard of `within`, and the type, speed, weapon, kind and normal of the events (`build/logs/mutation25.log`, `mutation25b.log`, `mutation26.log` and `mutation26b.log`). One bound of the restore code is redundant with the slot check of the table, and the test cannot reach it.
 They check each error code and a wrong-thread call. The test program then reads the game records.
 It checks the two message events, the balances, the flag, the health, the bone offsets, the kick list and the idle counter.
 Removing one check at a time (message bytes, money range, flag range, health range, finite position, position limit, vehicle) made `game-api` fail each time.
@@ -299,7 +303,24 @@ Rows of the first version. The range is the range that a `set` or an `add` may l
 | `item.time_to_live` | item | int | get, set | 0 to 65535 | Ticks. The game counts it down and removes the item at 0, as `item_remove` does. 65535 is the unlimited value |
 | `object.time_to_live` | object | int | get, set | 0 to 65535 | The same for a vehicle. A piece of the train gives `SV_DENIED`, because the track system ends its life |
 | `object.health` | object | int | get, set, add | 0 to 1000000 | The health of a vehicle. The upper bound is a choice of this API. The game makes a vehicle with 100 |
+| `item_type.price` | world | int, 27 slots | get, set, add | 0 to 1000000 | The slot is the item type. The price in the shop. Rows of the type tables restore (see "Type rows") |
+| `item_type.mass` | world | float, 27 slots | get, set, add | 0.01 to 1000 | The mass of new items of the type. Items that exist keep their mass |
+| `item_type.fire_delay` | world | int, 27 slots | get, set, add | 1 to 3600 | Ticks between two shots |
+| `item_type.bullet_type` | world | int, 27 slots | get, set | 0 to 3 | Which of the four bullet types a gun fires |
+| `item_type.bullet_speed` | world | float, 27 slots | get, set, add | 0 to 64 | Units for each tick. The damage of a bullet is its speed times its mass |
+| `item_type.spread` | world | float, 27 slots | get, set, add | 0 to 1 | The random spread of a shot |
+| `item_type.recoil` | world | float, 27 slots | get, set, add | 0 to 100 | The random kick that a shot gives the aim |
+| `item_type.ammo` | world | int, 27 slots | get, set, add | 0 to 1000 | The rounds of a new magazine, or the uses of a new bandage |
+| `bullet_type.mass` | world | float, 4 slots | get, set, add | 0 to 1 | The slot is the bullet type. The damage of a bullet to a human and to an object follows the mass |
+| `bullet_type.drag` | world | float, 4 slots | get, set, add | 0 to 1 | How fast a bullet slows down |
 | `account.ban_time` | account | int | get, set, add | 0 to 1000000 | Above 0 the game drops the player of the account at the join and during play. The count falls by 1 for each 36,000 ticks. The value is not saved on disk (see [bans](legacy-modules.md#bans)) |
+
+### Type rows
+
+The rows `item_type.*` and `bullet_type.*` change the tables that the game fills when the server starts. A change reaches every item of the type that fires after it, so one row changes a weapon for all players. A new item takes the new price, mass and ammunition. The game does not set them again at each round.
+The host keeps the first value of each slot that a plugin changes. When that plugin stops, or fails, the host puts the first value back. If two plugins change the same slot, the last one owns it, and the first value stays the one of the game.
+The original client was not tested with these rows. The server decides damage and hits, but the client may use the speed, the delay and the spread for its own prediction and its sounds. Mark each of them "client effect unknown". The name of an item type is not a row, because no packet carries it.
+A plugin area that adds rows can set the `restore` member of a row for a table of its own, with at most 32 slots and no vector.
 
 ### Damage scales
 
