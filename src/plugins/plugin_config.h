@@ -28,6 +28,11 @@ typedef struct {
 /* Reads the sections [setting.KEY] of a manifest. Returns 0 when a declaration is wrong. Every setting starts at its
  * default. */
 int sv_config_declare(SvSettingSet *set, const char *manifest);
+/* Reports each invalid declaration. The reason buffer gets the first fixed message, with no setting values.
+ * The output retains valid declarations within the existing limits. The callback key is setting.KEY or settings. */
+typedef void (*SvConfigReport)(void *context, const char *key, const char *message);
+int sv_config_declare_report(const char *manifest, SvSettingSet *set, char *reason, size_t capacity,
+    SvConfigReport report, void *context);
 /* Reads the saved values of a plugin from the private folder. A saved value that fails the check of the declaration, or that
  * was saved under another type, gives way to the default. */
 void sv_config_load(SvSettingSet *set, const char *id);

@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory(prefix="plugin-cost-", dir=build / "tests") as 
     binary = build / "tests" / "cost-fixture.dll"
     shutil.copyfile(binary, module / "cost.dll")
     (module / "plugin.ini").write_text(
-        "[plugin]\nid=test.cost\nversion=0.1.0\nlibrary=cost.dll\napi=1\nlive=0\n", encoding="ascii")
+        "[plugin]\nid=test.cost\nversion=0.1.0\nlibrary=cost.dll\napi=1\ncapabilities=read\nlive=0\n", encoding="ascii")
     (root / "plugins" / "plugins.ini").write_text("[plugins]\ntest.cost=required\n", encoding="ascii")
     (root / "plugins" / "native-approvals.ini").write_text(
         "[native]\ntest.cost=" + hashlib.sha256(binary.read_bytes()).hexdigest() + "\n", encoding="ascii")

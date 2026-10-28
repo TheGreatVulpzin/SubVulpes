@@ -165,98 +165,166 @@ static int parse_choices(SvSetting *setting, char *list)
     return setting->choice_count >= 2;
 }
 
+/* Each message names a rule and omits the value, which can contain a secret. */
+static int declaration_invalid(const char **reason, const char *message)
+{
+    *reason = message;
+    return 0;
+}
+
 /* The declaration of one setting. section is [setting.KEY]. */
-static int declare_one(SvSetting *setting, const char *section, const char *manifest)
+static int declare_one(SvSetting *setting, const char *section, const char *manifest, const char **reason)
 {
     char text[256], low[64], high[64], first[64];
     int32_t number = 0;
     float real = 0.0f;
     memset(setting, 0, sizeof *setting);
     if (strlen(section) < 9 || !key_ok(section + 8))
-        return 0;
+        return declaration_invalid(reason, "The setting key is invalid.");
     strcpy(setting->key, section + 8);
     if (!read_value(section, "type", manifest, text, sizeof text))
-        return 0;
+        return declaration_invalid(reason, "The setting type exceeds its size limit.");
     for (setting->type = SV_SETTING_FLAG; setting->type <= SV_SETTING_SECRET; ++setting->type)
         if (!strcmp(text, type_names[setting->type]))
             break;
     if (setting->type > SV_SETTING_SECRET)
-        return 0;
+        return declaration_invalid(reason, "The setting type is missing or invalid.");
     if (!read_value(section, "live", manifest, text, sizeof text) || (text[0] && strcmp(text, "0") && strcmp(text, "1")))
-        return 0;
+        return declaration_invalid(reason, "The setting live flag must be 0 or 1.");
     setting->live = text[0] == '1';
     if (!read_value(section, "admin", manifest, text, sizeof text) || (text[0] && strcmp(text, "0") && strcmp(text, "1")))
-        return 0;
+        return declaration_invalid(reason, "The setting admin flag must be 0 or 1.");
     setting->admin = text[0] == '1';
     if (!read_value(section, "label", manifest, setting->label, sizeof setting->label) || !setting->label[0] ||
         !text_ok(setting->label, 63))
-        return 0;
+        return declaration_invalid(reason, "The setting label is missing or invalid.");
     if (!read_value(section, "help", manifest, setting->help, sizeof setting->help) || !text_ok(setting->help, 127))
-        return 0;
+        return declaration_invalid(reason, "The setting help text is invalid.");
     if (!read_value(section, "default", manifest, first, sizeof first) || !read_value(section, "min", manifest, low, sizeof low) ||
         !read_value(section, "max", manifest, high, sizeof high))
-        return 0;
+        return declaration_invalid(reason, "The setting default or range exceeds its size limit.");
     switch (setting->type) {
     case SV_SETTING_FLAG:
         if (strcmp(first, "0") && strcmp(first, "1"))
-            return 0;
+            return declaration_invalid(reason, "The setting default flag must be 0 or 1.");
         break;
     case SV_SETTING_INT:
         if (!parse_int(low, &setting->imin) || !parse_int(high, &setting->imax) || setting->imin > setting->imax ||
             !parse_int(first, &number))
-            return 0;
+            return declaration_invalid(reason, "The setting integer default or range is invalid.");
         break;
     case SV_SETTING_FLOAT:
         if (!parse_float(low, &setting->fmin) || !parse_float(high, &setting->fmax) || setting->fmin > setting->fmax ||
             !parse_float(first, &real))
-            return 0;
+            return declaration_invalid(reason, "The setting decimal default or range is invalid.");
         break;
     case SV_SETTING_TEXT:
     case SV_SETTING_SECRET:
         if (!read_value(section, "maxlen", manifest, text, sizeof text))
-            return 0;
+            return declaration_invalid(reason, "The setting text limit exceeds its size limit.");
         setting->text_max = SV_CONFIG_TEXT_MAX;
         if (text[0] && (!parse_int(text, &number) || number < 1 || number > SV_CONFIG_TEXT_MAX))
-            return 0;
+            return declaration_invalid(reason, "The setting text limit is invalid.");
         if (text[0])
             setting->text_max = (uint32_t)number;
         /* A secret has no default, so the file of the plugin never holds one. */
         if (setting->type == SV_SETTING_SECRET && first[0])
-            return 0;
+            return declaration_invalid(reason, "A secret setting cannot declare a default value.");
         break;
     case SV_SETTING_CHOICE:
         if (!read_value(section, "choices", manifest, text, sizeof text) || !parse_choices(setting, text))
-            return 0;
+            return declaration_invalid(reason, "The setting choice list is missing or invalid.");
         break;
     }
     if (sv_config_check(setting, first, setting->def) != SV_OK)
-        return 0;
+        return declaration_invalid(reason, "The setting default does not match its type or range.");
     strcpy(setting->stored, setting->def);
     strcpy(setting->effective, setting->def);
     return 1;
 }
 
-int sv_config_declare(SvSettingSet *set, const char *manifest)
+static void declaration_problem(char *reason, size_t capacity, SvConfigReport report, void *context,
+    const char *section, const char *message)
+{
+    char key[8 + SV_CONFIG_KEY_MAX + 1];
+    const char *name = "settings";
+    if (section && strlen(section) >= 9 && key_ok(section + 8)) {
+        snprintf(key, sizeof key, "setting.%s", section + 8);
+        name = key;
+    }
+    if (reason && capacity && !reason[0])
+        snprintf(reason, capacity, "%s", message);
+    if (report)
+        report(context, name, message);
+}
+
+static int declare_settings(const char *manifest, SvSettingSet *set, char *reason, size_t capacity,
+    SvConfigReport report, void *context, int collect)
 {
     static char names[16384];
     char *name;
     DWORD n;
-    uint32_t i;
+    uint32_t i, declarations = 0;
+    int valid = 1;
+    if (reason && capacity)
+        reason[0] = 0;
+    if (!set || !manifest) {
+        declaration_problem(reason, capacity, report, context, NULL, "The manifest path and settings output are required.");
+        return 0;
+    }
     memset(set, 0, sizeof *set);
     n = GetPrivateProfileSectionNamesA(names, sizeof names, manifest);
-    if (n >= sizeof names - 2)
+    if (n >= sizeof names - 2) {
+        declaration_problem(reason, capacity, report, context, NULL, "The manifest section list exceeds its size limit.");
         return 0;
-    for (name = names; *name; name += strlen(name) + 1) {
-        if (strncmp(name, "setting.", 8))
-            continue;
-        if (set->count >= SV_SETTING_MAX || !declare_one(&set->item[set->count], name, manifest))
-            return 0;
-        for (i = 0; i < set->count; ++i)
-            if (!strcmp(set->item[i].key, set->item[set->count].key))
-                return 0;
-        ++set->count;
     }
-    return 1;
+    for (name = names; *name; name += strlen(name) + 1) {
+        SvSetting setting;
+        const char *message = NULL;
+        int declared;
+        if (_strnicmp(name, "setting.", 8))
+            continue;
+        ++declarations;
+        if (declarations > SV_SETTING_MAX) {
+            declaration_problem(reason, capacity, report, context, NULL, "The manifest declares more than 32 settings.");
+            valid = 0;
+            if (!collect)
+                return 0;
+        }
+        declared = declare_one(&setting, name, manifest, &message);
+        if (!declared) {
+            declaration_problem(reason, capacity, report, context, name, message);
+            valid = 0;
+            if (!collect)
+                return 0;
+            continue;
+        }
+        for (i = 0; i < set->count; ++i)
+            if (!strcmp(set->item[i].key, setting.key)) {
+                declaration_problem(reason, capacity, report, context, name, "The manifest repeats a setting key.");
+                valid = 0;
+                break;
+            }
+        if (i < set->count) {
+            if (!collect)
+                return 0;
+            continue;
+        }
+        if (declarations <= SV_SETTING_MAX)
+            set->item[set->count++] = setting;
+    }
+    return valid;
+}
+
+int sv_config_declare_report(const char *manifest, SvSettingSet *set, char *reason, size_t capacity,
+    SvConfigReport report, void *context)
+{
+    return declare_settings(manifest, set, reason, capacity, report, context, 1);
+}
+
+int sv_config_declare(SvSettingSet *set, const char *manifest)
+{
+    return declare_settings(manifest, set, NULL, 0, NULL, NULL, 0);
 }
 
 const SvSetting *sv_config_find(const SvSettingSet *set, const char *key)

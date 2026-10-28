@@ -94,115 +94,80 @@ static int absolute(const char *relative, char path[MAX_PATH])
     return n && n < MAX_PATH;
 }
 
-static int value(const char *path, const char *key, char *out, DWORD size)
+typedef struct {
+    SvModule *module;
+    int print;
+} ManifestReport;
+
+static void manifest_problem(void *context, const char *key, const char *message)
 {
-    char pending[512];
-    DWORD n = GetPrivateProfileStringA("plugin", key, "", pending, sizeof pending, path);
-    if (!n || n >= sizeof pending - 1 || n >= size)
-        return 0;
-    memcpy(out, pending, n + 1);
-    return 1;
+    ManifestReport *report = context;
+    if (!report->module->reason[0])
+        snprintf(report->module->reason, sizeof report->module->reason, "%s: %s", key, message);
+    if (report->print)
+        sv_log("INVALID\t%s\t%s", key, message);
 }
 
-/* Reads a list of plugin IDs, separated by commas, from the key of the manifest. With "versions" an ID may carry a lowest
- * version after an at sign, such as "sv.lib@1.2". The list has at most SV_PLUGIN_DEP_MAX items and no repeat, and it never
- * names the plugin itself. */
-static int id_list(const char *path, const char *key, const char *self, char ids[][SV_PLUGIN_ID_SIZE],
-    char versions[][SV_PLUGIN_VERSION_SIZE], uint32_t *count)
+static int metadata_folder(const char *folder, const char *id, SvModule *module, int print)
 {
-    char text[512], *next, *part, *at;
-    DWORD n = GetPrivateProfileStringA("plugin", key, "", text, sizeof text, path);
-    uint32_t i;
-    *count = 0;
-    if (n >= sizeof text - 1)
+    char manifest[MAX_PATH], binary[MAX_PATH];
+    SvManifest parsed;
+    ManifestReport report = { module, print };
+    int length;
+    memset(module, 0, sizeof *module);
+    module->lock = INVALID_HANDLE_VALUE;
+    if (id)
+        snprintf(module->id, sizeof module->id, "%s", id);
+    length = snprintf(manifest, sizeof manifest, "%s/plugin.ini", folder);
+    if (length < 0 || (size_t)length >= sizeof manifest || !plain_path(folder, 1) ||
+        !plain_path(manifest, 0) || !absolute(manifest, module->path)) {
+        manifest_problem(&report, "ini", "Cannot read a plain plugin folder and manifest.");
         return 0;
-    if (!n)
-        return 1;
-    part = text;
-    for (;;) {
-        next = strchr(part, ',');
-        if (next)
-            *next = 0;
-        at = strchr(part, '@');
-        if (at) {
-            *at++ = 0;
-            if (!versions || !sv_plugin_version_min(at))
-                return 0;
-        }
-        if (!sv_plugin_id(part) || !strcmp(part, self) || *count == SV_PLUGIN_DEP_MAX)
-            return 0;
-        for (i = 0; i < *count; ++i)
-            if (!strcmp(ids[i], part))
-                return 0;
-        strcpy(ids[*count], part);
-        if (versions)
-            strcpy(versions[*count], at ? at : "");
-        ++*count;
-        if (!next)
-            return 1;
-        part = next + 1;
     }
+    if (!sv_manifest_read(module->path, &parsed, manifest_problem, &report))
+        return 0;
+    if (id && strcmp(parsed.id, id)) {
+        manifest_problem(&report, "id", "The manifest ID differs from its installed folder.");
+        return 0;
+    }
+    strcpy(module->id, parsed.id);
+    strcpy(module->version, parsed.version);
+    strcpy(module->name, parsed.name);
+    strcpy(module->description, parsed.description);
+    strcpy(module->author, parsed.author);
+    strcpy(module->homepage, parsed.homepage);
+    module->runtime = parsed.runtime;
+    module->cap_mask = parsed.cap_mask;
+    module->live = parsed.live;
+    module->unsafe = parsed.unsafe;
+    module->library_role = parsed.library_role;
+    module->dependency_count = parsed.dependency_count;
+    module->conflict_count = parsed.conflict_count;
+    memcpy(module->dependencies, parsed.dependencies, sizeof module->dependencies);
+    memcpy(module->dependency_min, parsed.dependency_min, sizeof module->dependency_min);
+    memcpy(module->conflicts, parsed.conflicts, sizeof module->conflicts);
+    module->config = parsed.config;
+    if (id)
+        sv_config_load(&module->config, id);
+    length = snprintf(binary, sizeof binary, "%s/%s", folder, parsed.library);
+    if (length < 0 || (size_t)length >= sizeof binary || !plain_path(binary, 0) || !absolute(binary, module->path)) {
+        manifest_problem(&report, "library", "Cannot read a plain plugin payload.");
+        return 0;
+    }
+    module->metadata_valid = 1;
+    return 1;
 }
 
 static int metadata(const char *id, SvModule *module)
 {
-    char folder[MAX_PATH], manifest[MAX_PATH], library[SV_PLUGIN_ID_SIZE];
-    char number[16], role[16];
-    DWORD n;
-    size_t i, j;
-    if (!sv_plugin_id(id))
+    char folder[MAX_PATH];
+    if (!sv_plugin_id(id) || !plain_path("plugins", 1)) {
+        memset(module, 0, sizeof *module);
+        module->lock = INVALID_HANDLE_VALUE;
         return 0;
-    memset(module, 0, sizeof *module);
-    strcpy(module->id, id);
-    module->lock = INVALID_HANDLE_VALUE;
-    if (!plain_path("plugins", 1))
-        return 0;
+    }
     snprintf(folder, sizeof folder, "plugins/%s", id);
-    snprintf(manifest, sizeof manifest, "%s/plugin.ini", folder);
-    if (!plain_path(folder, 1) || !plain_path(manifest, 0) || !absolute(manifest, module->path))
-        return 0;
-    if (!value(module->path, "id", library, sizeof library) || strcmp(library, id) ||
-        !value(module->path, "version", module->version, sizeof module->version))
-        return 0;
-    for (i = 0; module->version[i]; ++i)
-        if (!isalnum((unsigned char)module->version[i]) && module->version[i] != '.' &&
-            module->version[i] != '-' && module->version[i] != '+')
-            return 0;
-    if (!value(module->path, "api", number, sizeof number) || strcmp(number, "1"))
-        return 0;
-    if (!value(module->path, "live", number, sizeof number) || (strcmp(number, "0") && strcmp(number, "1")))
-        return 0;
-    module->live = number[0] == '1';
-    /* Optional: the plugin asks for decisions inside the simulation (SV_EVENT_DAMAGE). See docs/plugin-events.md. */
-    n = GetPrivateProfileStringA("plugin", "unsafe_events", "0", number, sizeof number, module->path);
-    if (n != 1 || (number[0] != '0' && number[0] != '1'))
-        return 0;
-    module->unsafe = number[0] == '1';
-    if (!value(module->path, "library", library, sizeof library) || !sv_plugin_id(library) ||
-        strlen(library) < 5 || strcmp(library + strlen(library) - 4, ".dll"))
-        return 0;
-    if (!id_list(module->path, "dependencies", id, module->dependencies, module->dependency_min, &module->dependency_count) ||
-        !id_list(module->path, "conflicts", id, module->conflicts, NULL, &module->conflict_count))
-        return 0;
-    /* A plugin that depends on another one cannot conflict with it. */
-    for (i = 0; i < module->dependency_count; ++i)
-        for (j = 0; j < module->conflict_count; ++j)
-            if (!strcmp(module->dependencies[i], module->conflicts[j]))
-                return 0;
-    /* Optional: "library" marks a plugin that only offers an API to other plugins. See docs/plugin-libraries.md. */
-    n = GetPrivateProfileStringA("plugin", "role", "plugin", role, sizeof role, module->path);
-    if (n >= sizeof role - 1 || (strcmp(role, "plugin") && strcmp(role, "library")))
-        return 0;
-    module->library_role = !strcmp(role, "library");
-    /* The settings: the sections [setting.KEY] of the manifest, and the saved values. module->path is still the manifest. */
-    if (!sv_config_declare(&module->config, module->path))
-        return 0;
-    sv_config_load(&module->config, id);
-    snprintf(manifest, sizeof manifest, "%s/%s", folder, library);
-    if (!plain_path(manifest, 0) || !absolute(manifest, module->path))
-        return 0;
-    module->metadata_valid = 1;
-    return 1;
+    return metadata_folder(folder, id, module, 0);
 }
 
 int sv_plugin_profile(SvModule *modules, uint32_t *count)
@@ -323,6 +288,34 @@ fail:
     return 0;
 }
 
+int sv_plugin_validate_folder(const char *folder)
+{
+    SvModule module;
+    ManifestReport report = { &module, 1 };
+    char caps[256];
+    const char *library;
+    if (!metadata_folder(folder, NULL, &module, 1))
+        return 1;
+    if (module.runtime != SV_RUNTIME_NATIVE) {
+        manifest_problem(&report, "runtime", "This runtime adapter is not available in this server.");
+        return 1;
+    }
+    if (!open_binary(&module)) {
+        manifest_problem(&report, "library", "Cannot read a plain x86 DLL of at most 64 MiB.");
+        return 1;
+    }
+    sv_plugin_unload(&module);
+    library = strrchr(module.path, '\\');
+    if (!library)
+        library = strrchr(module.path, '/');
+    library = library ? library + 1 : module.path;
+    if (!sv_manifest_caps_text(module.cap_mask, module.unsafe, caps, sizeof caps))
+        return 1;
+    sv_log("MANIFEST\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s", module.id, module.version, library,
+        sv_manifest_runtime_name(module.runtime), caps, module.name, module.description, module.author, module.homepage);
+    return 0;
+}
+
 int sv_plugin_approved(const SvModule *module)
 {
     static const char *files[] = { "plugins/native-approvals.ini", "user/plugins/native-approvals.ini" };
@@ -345,6 +338,10 @@ SvResult sv_plugin_load(SvModule *module)
     SvResult result;
     if (!module->metadata_valid)
         return SV_INCOMPATIBLE;
+    if (module->runtime != SV_RUNTIME_NATIVE) {
+        strcpy(module->reason, "This runtime adapter is not available in this server.");
+        return SV_INCOMPATIBLE;
+    }
     if (module->library)
         return module->validated ? SV_OK : SV_INCOMPATIBLE;
     if (!open_binary(module)) {
@@ -406,7 +403,7 @@ int sv_plugin_declared(const char *id, SvModule *module)
 
 int sv_plugin_inspect(const char *id, SvModule *module)
 {
-    if (!metadata(id, module) || !open_binary(module))
+    if (!metadata(id, module) || module->runtime != SV_RUNTIME_NATIVE || !open_binary(module))
         return 0;
     sv_plugin_unload(module);
     return 1;

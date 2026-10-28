@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix="systems-api-", dir=build / "tests") as 
     binary = build / "tests" / "systems-fixture.dll"
     shutil.copyfile(binary, module / "systems.dll")
     (module / "plugin.ini").write_text(
-        "[plugin]\nid=test.systems\nversion=0.1.0\nlibrary=systems.dll\napi=1\nlive=1\n", encoding="ascii"
+        "[plugin]\nid=test.systems\nversion=0.1.0\nlibrary=systems.dll\napi=1\ncapabilities=read,write,ai,economy,mission,settings,storage,engine,shop,props,config,plugins\nlive=1\n", encoding="ascii"
     )
     (root / "plugins" / "plugins.ini").write_text("[plugins]\ntest.systems=required\n", encoding="ascii")
     (root / "plugins" / "native-approvals.ini").write_text(

@@ -205,6 +205,9 @@ static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_
     if (!api)
         return SV_INVALID;
     *api = NULL;
+    if (capability >= 1u && capability <= SV_API_PLUGINS &&
+        !(modules[owner - 1].cap_mask & (1u << (capability - 1u))))
+        return SV_DENIED;
     if (capability == SV_API_CONFIG) {
         if (!SV_VERSION_ACCEPTED(version, 1u, SV_CONFIG_VERSION))
             return SV_INCOMPATIBLE;
@@ -566,15 +569,22 @@ SvResult sv_plugins_disable(const char *id)
     return SV_OK;
 }
 
+static void list_module(const SvModule *module, const char *state)
+{
+    char caps[256];
+    sv_manifest_caps_text(module->cap_mask, module->unsafe, caps, sizeof caps);
+    sv_log("PLUGIN\t%s\t%s\t%s\t%u\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s", module->id, module->version,
+        state, module->required, module->hash, module->reason, sv_manifest_runtime_name(module->runtime), caps,
+        module->name, module->description, module->author, module->homepage);
+}
+
 void sv_plugins_list(void)
 {
     static const char *states[] = { "disabled", "active", "failed", "restart" };
     uint32_t i;
     for (i = 0; i < module_count; ++i) {
         SvModule *module = &modules[i];
-        sv_log("PLUGIN\t%s\t%s\t%s\t%u\t%s\t%s", module->id, module->version,
-            module->state == SV_MODULE_ACTIVE && !module->wanted ? "restart" : states[module->state],
-            module->required, module->hash, module->reason);
+        list_module(module, module->state == SV_MODULE_ACTIVE && !module->wanted ? "restart" : states[module->state]);
         if (module->unsafe && (module->events & SV_EVENT_DAMAGE))
             sv_log("Plugin %s takes damage decisions inside the simulation (unsafe_events). Its owner takes the risk.", module->id);
         if (module->calls)
@@ -1016,6 +1026,8 @@ int sv_plugins_command(uint64_t actor, const char *text)
 int sv_plugins_cli(int argc, char **argv)
 {
     SvModule module;
+    if (argc == 3 && !strcmp(argv[1], "--plugin-validate-folder"))
+        return sv_plugin_validate_folder(argv[2]);
     if (argc == 2 && !strcmp(argv[1], "--plugins-list")) {
         uint32_t i;
         int other;
@@ -1038,8 +1050,7 @@ int sv_plugins_cli(int argc, char **argv)
                         modules[other].id);
                 }
             }
-            sv_log("PLUGIN\t%s\t%s\t%s\t%u\t%s\t%s", item->id, item->version, state,
-                item->required, item->hash, item->reason);
+            list_module(item, state);
         }
         return 0;
     }
