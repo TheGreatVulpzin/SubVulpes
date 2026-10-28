@@ -97,7 +97,7 @@ The action ring advances with `(tail + 1) & 63`.
 | 11 | 1 to 6 withdraw bills from the team stake. Value 7 deposits money or completes a mission. Value 16 returns. |
 | 12 | 1 to 6 withdraw bills from player money. Value 7 deposits money. Value 16 returns. |
 
-Change from the base (2026-10-27): the base code had no return for menus 7 and 8. A player who opened the equipment menu stayed in it until he left the base, because leaving sets the menu to 0. The user saw this in a play test. The public OpenSubRosa24 source has the same gap in `logic_playeractions` (read on GitHub on 2026-10-27). Both menus now return to menu 3 with value 16, as menus 4, 5 and 6 do. The value 16 is what those menus use, but the original client was not checked for what its Back button sends for menus 7 and 8. A test in the game-api program runs the action pass and checks the return.
+Change from the base (2026-10-27): the base code had no return for menus 7 and 8. A player who opened the equipment menu stayed in it until he left the base, because leaving sets the menu to 0. The user saw this in a play test. The public OpenSubRosa24 source has the same gap in `logic_playeractions` (read on GitHub on 2026-10-27). Both menus now return to menu 3 with value 16, as menus 4, 5 and 6 do. The value 16 is what those menus use. The user tried the fix with the original client on 2026-10-27, and the Back button of the equipment menu worked. A test in the game-api program runs the action pass and checks the return.
 
 Weapon purchases stop at ten per player. Small bill withdrawals stop at forty.
 Car purchases stop at three per player. The periodic reset reduces this count by one when it is positive.
