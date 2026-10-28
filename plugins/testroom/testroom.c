@@ -20,7 +20,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.0"
+#define VERSION "0.2.1"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -1496,6 +1496,15 @@ static SvResult t_plugins_calls(void)
     return subscribe == SV_OK && refuse == SV_STATE && find == SV_DEPENDENCY ? SV_OK : SV_FAILED;
 }
 
+/* The kick test. The player gives a name: /test kick NAME. The kick puts the address of the player in the kick list of the
+ * server, which blocks that address until the server restarts or an administrator types /clearkick. */
+static SvResult t_kick_run(void)
+{
+    say("This test removes another player. Type /test kick NAME with the name of a friend who agreed.");
+    say("The list of the server blocks the address of that player. Type /clearkick in the chat when you are done.");
+    return SV_OK;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1553,6 +1562,7 @@ static const Test tests[] = {
     { "engine_list", "Lists the engine parameters.", "Three parameters show a value.", t_engine_list, NULL },
     { "config_read", "Reads the three settings of this plugin from plugin.ini.", "The values are hello, 3 and 1.50. Change one with the plugins config command, and a chat line shows it.", t_config_read, NULL },
     { "plugins_calls", "Calls subscribe64, refuse and find outside their normal use.", "All three answers match the wanted values.", t_plugins_calls, NULL },
+    { "kick", "Removes the player whose name you type with /test kick NAME. It refuses you, bots and administrators.", "The player leaves the game and cannot join again until you type /clearkick in the chat.", t_kick_run, NULL },
 };
 
 /* ------------------------------------------------------------ flow */
@@ -1656,6 +1666,61 @@ static void list(void)
     say("(- not run, + pass, x fail, s skipped)");
 }
 
+static int same_name(const char *a, const char *b)
+{
+    while (*a && *b) {
+        char x = *a >= 'A' && *a <= 'Z' ? (char)(*a + 32) : *a;
+        char y = *b >= 'A' && *b <= 'Z' ? (char)(*b + 32) : *b;
+        if (x != y)
+            return 0;
+        ++a;
+        ++b;
+    }
+    return !*a && !*b;
+}
+
+static void kick_by_name(const char *name)
+{
+    uint32_t cursor = 0, round;
+    if (!*name) {
+        say("Type /test kick NAME.");
+        return;
+    }
+    for (round = 0; round < 8; ++round) {
+        SvEntity page[SV_ENTITY_PAGE_MAX];
+        uint32_t count = 0, next = 0, i;
+        SvResult r = game->entities(self, SV_ENTITY_PLAYER, cursor, page, SV_ENTITY_PAGE_MAX, &count, &next);
+        if (r != SV_OK) {
+            sayf("The player list gave error %d.", (int)r);
+            return;
+        }
+        for (i = 0; i < count; ++i) {
+            SvPlayerState other = { sizeof other };
+            if (game->player(self, page[i], &other) != SV_OK || !same_name(other.name, name))
+                continue;
+            if (page[i] == tester || other.is_bot || other.is_admin) {
+                say("Not done. The test refuses you, bots and administrators.");
+                return;
+            }
+            r = change->kick(self, page[i]);
+            if (r == SV_OK)
+                sayf("Kicked %.20s. Type /clearkick in the chat now.", other.name);
+            else
+                sayf("The kick gave error %d.", (int)r);
+            logf_("TESTROOM kick %s code=%d", other.name, (int)r);
+            if (current && !strcmp(tests[current - 1].name, "kick")) {
+                mark(r == SV_OK ? PASS : FAIL, r);
+                next_test();
+            }
+            return;
+        }
+        if (next <= cursor)
+            break;
+        cursor = next;
+    }
+    say("No player has that name.");
+}
+
 static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *arguments)
 {
     char word[32];
@@ -1710,6 +1775,11 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
             sayf("Test numbers go from 1 to %d.", test_count);
         else
             start_test(number);
+    } else if (!strcmp(word, "kick")) {
+        const char *name = arguments + length;
+        while (*name == ' ')
+            ++name;
+        kick_by_name(name);
     } else if (!strcmp(word, "list")) {
         list();
     } else if (!strcmp(word, "report")) {
@@ -1720,7 +1790,7 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         say("Test room stopped.");
         report();
     } else {
-        say("Commands: /test start, yes, no, skip, go, <number>, list, report, stop.");
+        say("Commands: /test start, yes, no, skip, go, kick NAME, <number>, list, report, stop.");
     }
     return SV_OK;
 }

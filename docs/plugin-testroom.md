@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.0, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.1, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -20,6 +20,7 @@ The plugin sends each line to you only. It says the number and the name of the t
 | `/test no` | The test did not work. Go to the next test |
 | `/test skip` | Skip the test |
 | `/test go` | Repeat the action of the test, or take its next step, for the tests that have one (sound, vehicle exit, aim, bots, missions) |
+| `/test kick NAME` | Test 57. Removes the player with that name. See the note below |
 | `/test <number>` | Go to a test |
 | `/test list` | One line for each test, with its result |
 | `/test report` | The count of results and the names of the failed tests |
@@ -89,8 +90,10 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 54 | `engine_list` | `SvGameEngine.describe`, `get` | Three parameters with values |
 | 55 | `config_read` | `SvConfig.get_int`, `get_float`, `get_text`, the config event | The values hello, 3 and 1.50, and a chat line after a change |
 | 56 | `plugins_calls` | `SvPlugins.subscribe64`, `refuse`, `find` | All three answers match the wanted codes |
+| 57 | `kick` | `kick` for the player that `/test kick NAME` names | The player leaves and cannot join again |
 
-Tests 30 to 56 have not run against the original client yet.
+Tests 30 to 57 have not run against the original client yet.
+Test 57 refuses the tester, bots and administrators. The kick puts the IP address of the player in the kick list of the server. The list lives in memory only. It blocks that address until the server restarts or an administrator types `/clearkick`. A friend on your own network shares your address, so you stay blocked too until you type `/clearkick`.
 Each test that changes money, stocks, a company price, a mission, a shop catalog or the bot count puts the old value back in the next test or in `/test stop`.
 Test 55 reads the three settings that the plugin declares in its `plugin.ini` (`greeting`, `count` and `scale`).
 
@@ -106,7 +109,6 @@ The damage decision, the chat and join decisions, the object and item velocity r
 The name of an item (N43) needs a table row that does not exist yet.
 These methods have no test here:
 
-- `SvGameWrite.kick`. A test would remove the administrator from the server.
 - `SvGameAi.street_route`. A plugin cannot read the road graph yet (work item R3), so it cannot build a valid route.
 - `SvPlugins.provide` and `find` with a real provider. They need a second plugin. The host test covers them.
 - `SvGameProps.add` and the vector rows that no test above uses.
