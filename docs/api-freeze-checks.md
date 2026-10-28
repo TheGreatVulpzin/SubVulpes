@@ -47,3 +47,19 @@ The scripts and logs stay under build/. No removal remains in the source.
 The full normal build, all 9 CTest groups, storage, native and repository checks pass.
 Public record sizes and table offsets stay unchanged.
 No client playtest or launcher Start/Stop test ran.
+
+
+## F4: hook cost
+
+The timing run uses QueryPerformanceCounter and the same game sources as the server.
+The combined hooks take a mean of 1.910 microseconds for 256 bots on the recorded host.
+The [Cost section](plugin-abi.md#cost) records each hook, one cold idle tick and dense and sparse spatial queries.
+The digit poll already skips its scan when no digit waits. No further performance change is needed.
+
+The normal build and all 10 CTest groups pass.
+Storage, native, repository and prose checks pass.
+The timing test checks complete output and valid query results. It does not enforce a time threshold.
+No client playtest, launcher Start/Stop test or soak test ran.
+
+F1 through F4 are complete. The native ABI layout stays unchanged.
+The SDK work starts with WP0. No SDK package ships yet.

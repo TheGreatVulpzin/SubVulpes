@@ -27,6 +27,7 @@ _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
 _Static_assert(sizeof(SvEvent) == 12, "Preserve event ABI v1");
 _Static_assert(sizeof(SvPlugin) == 92, "Preserve plugin ABI v1");
 void test_physics_bounds(void);
+int plugin_cost_run(void);
 
 #define CHECK(test) do { if (!(test)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #test); exit(1); \
@@ -1153,11 +1154,13 @@ static void actions_check(void)
     puts("ACTION_GATE_PASS");
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     SvEntity old;
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     x87_init();
+    if (argc == 2 && !strcmp(argv[1], "--cost"))
+        return plugin_cost_run();
     CHECK(sv_entity_capacity(0) == 0);
     CHECK(sv_entity_capacity(UINT32_MAX) == 0);
     CHECK(sv_entity_at(0, 0) == 0);
