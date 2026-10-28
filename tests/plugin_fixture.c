@@ -7,6 +7,7 @@
 #include "sv_plugin.h"
 #include "sv_game_events.h"
 #include "sv_config.h"
+#include "sv_plugins_api.h"
 
 static const SvHost *api;
 static const char *mode;
@@ -102,6 +103,8 @@ static SvResult config_checks(const SvHost *host, SvOwner owner)
     float real = 0.0f;
     char text[64], small[10];
     if (host->get_api(owner, SV_API_CONFIG, SV_CONFIG_VERSION + 1, &table) != SV_INCOMPATIBLE || table != NULL ||
+        host->get_api(owner, SV_API_CONFIG, 0, &table) != SV_INCOMPATIBLE || table != NULL ||
+        host->get_api(owner, SV_API_PLUGINS, SV_PLUGINS_VERSION + 1, &table) != SV_INCOMPATIBLE || table != NULL ||
         host->get_api(owner, SV_API_CONFIG, SV_CONFIG_VERSION, &table) != SV_OK)
         return SV_FAILED;
     config = (const SvConfig *)table;
@@ -153,6 +156,8 @@ static SvResult SV_CALL event(SvOwner owner, const SvEvent *notification)
             return SV_FAILED;
         return SV_OK;
     }
+    if (notification->kind == SV_EVENT_EXT(3))
+        return api->log(owner, "ext event 3");
     if (notification->size != sizeof *notification)
         return SV_INVALID;
     if (notification->kind == SV_EVENT_STOP)
@@ -216,6 +221,19 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
     }
     if (!strcmp(mode, "resubscribe") && api->subscribe(owner, 0, NULL) != SV_OK)
         return SV_FAILED;
+    /* The 64-bit mask: the numbered event 3 arrives, the others do not, and a bad low bit changes nothing. */
+    if (!strcmp(mode, "ext")) {
+        const void *table = NULL;
+        const SvPlugins *plugins;
+        if (api->get_api(owner, SV_API_PLUGINS, SV_PLUGINS_VERSION, &table) != SV_OK)
+            return SV_FAILED;
+        plugins = (const SvPlugins *)table;
+        if (plugins->size < sizeof *plugins ||
+            plugins->subscribe64(owner, SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_EXT_BIT(3), event) != SV_OK ||
+            plugins->subscribe64(owner, 0x1000000u, event) != SV_INVALID ||
+            plugins->subscribe64(owner, SV_EVENT_TICK | SV_EVENT_EXT_BIT(3), NULL) != SV_INVALID)
+            return SV_FAILED;
+    }
     if (!strcmp(mode, "permissions") &&
         (api->command(owner, "perm_public", SV_COMMAND_PUBLIC, public_command) != SV_OK ||
          api->command(owner, "perm_admin", SV_COMMAND_ADMIN, admin_command) != SV_OK ||

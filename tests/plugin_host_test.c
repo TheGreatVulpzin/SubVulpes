@@ -101,6 +101,14 @@ int main(int argc, char **argv)
         CHECK(sv_plugins_disable("test.fixture") == SV_DEPENDENCY);
         CHECK(sv_plugins_disable("sv.status") == SV_OK);
         CHECK(sv_plugins_disable("test.fixture") == SV_OK);
+    } else if (!strcmp(argv[1], "ext")) {
+        /* A numbered event reaches only the plugin that asked for it. */
+        SvEvent numbered = { sizeof numbered, SV_EVENT_EXT(3), 42 };
+        CHECK(ok && sv_plugins_wants(SV_EVENT_EXT(3)) && sv_plugins_wants(SV_EVENT_TICK));
+        CHECK(!sv_plugins_wants(SV_EVENT_EXT(4)) && !sv_plugins_wants(SV_EVENT_EXT_BASE + 99) && !sv_plugins_wants(SV_EVENT_EXT_BASE + 32));
+        CHECK(sv_plugins_decide(&numbered) == SV_OK);
+        numbered.kind = SV_EVENT_EXT(4);
+        CHECK(sv_plugins_decide(&numbered) == SV_OK);
     } else if (!strcmp(argv[1], "library")) {
         /* The consumer finds the API of the library, and the library function logs as the consumer. */
         CHECK(ok && sv_plugins_command(0, "consumer"));

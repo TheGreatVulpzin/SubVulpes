@@ -80,6 +80,9 @@ run(RUNNER, ['required-fail'], profile({'sv.status': 'required', 'test.fixture':
     dependencies={'sv.status': 'test.fixture', 'test.fixture': 'sv.status'}), contains=['PASS'])
 run(RUNNER, ['optional-fail'], profile(both), mode='enable-fail', contains=['Registrations removed', 'PASS'])
 run(RUNNER, ['optional-fail'], profile(both), mode='conflict', contains=['PASS'])
+# The 64-bit event mask: a numbered event reaches only the plugin that asked, and a version outside the range is refused.
+output = run(RUNNER, ['ext'], profile(fixture), mode='ext', contains=['ext event 3', 'PASS'])
+assert output.count('ext event 3') == 1, 'The numbered event did not arrive exactly once.'
 # Libraries (N35, N38): the API between plugins, the dependency rule, the version rule and the stop order.
 ROLE = 'role=library\n'
 pair = {'test.library': 'enabled', 'test.consumer': 'enabled'}

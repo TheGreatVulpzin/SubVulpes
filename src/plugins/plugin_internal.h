@@ -33,7 +33,7 @@ typedef struct {
     HANDLE lock;
     SvPlugin plugin;
     SvEventFn event_callback;
-    uint32_t events;
+    uint64_t events;
     uint32_t enabling;
     uint32_t unsafe;
     uint32_t slow_count;

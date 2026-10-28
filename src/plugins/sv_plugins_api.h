@@ -33,6 +33,9 @@ typedef struct {
      * A function of the table runs with the owner of the caller. Give the owner of the caller as the first argument of every
      * function that needs the host, and use only that owner for host calls. */
     SvResult (SV_CALL *find)(SvOwner owner, const char *name, uint32_t version, const void **table);
+    /* Like SvHost.subscribe, with a 64-bit mask. The bits 0 to 31 are the events of SvHost.subscribe. The bits 32 to 63 are
+     * the numbered events (SV_EVENT_EXT_BIT). It replaces the subscription of the plugin, whatever call set it before. */
+    SvResult (SV_CALL *subscribe64)(SvOwner owner, uint64_t events, SvEventFn callback);
 } SvPlugins;
 #pragma pack(pop)
 

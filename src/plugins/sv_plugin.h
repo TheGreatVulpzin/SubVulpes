@@ -35,6 +35,18 @@ enum { SV_EVENT_TICK = 1u, SV_EVENT_STOP = 2u, SV_EVENT_LOST = 4u, SV_EVENT_SPAW
     SV_EVENT_SETTING = 131072u };
 enum { SV_PLUGIN_LIVE = 1u };
 
+/* The version of a table counts breaking changes only. A new method goes at the end of a table, and a plugin finds out that
+ * it exists from the size field of the table. The host accepts a request for any version from the lowest one that it still
+ * supports up to its current one, and it gives the current table, which is a superset of the older ones. A request for a
+ * newer version than the host knows fails with SV_INCOMPATIBLE. */
+#define SV_VERSION_ACCEPTED(requested, minimum, current) ((requested) >= (minimum) && (requested) <= (current))
+
+/* The events after the first 32 are numbered, not written as bit values. Event number i (0 to 31) arrives with the kind
+ * SV_EVENT_EXT(i), and a plugin asks for it with the bit SV_EVENT_EXT_BIT(i) in SvPlugins.subscribe64. */
+#define SV_EVENT_EXT_BASE 0x80000000u
+#define SV_EVENT_EXT(index) (SV_EVENT_EXT_BASE + (uint32_t)(index))
+#define SV_EVENT_EXT_BIT(index) ((uint64_t)1 << (32 + (index)))
+
 #pragma pack(push, 8)
 typedef struct {
     uint32_t size;

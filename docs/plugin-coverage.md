@@ -92,6 +92,10 @@ Ranked by how much a plugin author loses without it.
 5. Hide an entity from some players. It can also fight wall hacks. Test it with the original client first.
 6. A kill feed and a score line that differ by player. The clients read the usual events, so this needs no client change.
 
+## Freeze of the contract
+
+The rules of the ABI are in [plugin ABI rules](plugin-abi.md). A request for a table version takes a range, and the event mask has 64 bits. The rest of the freeze work (a snapshot test of the sizes, a header audit, one gate for actions that wait for a plugin, and a measure of the cost of a tick) is in [the freeze brief](api-freeze-brief.md).
+
 ## Quality gaps
 
 - No test ran the new seams with a client. The server started and ran 30 seconds. The groups A, E and F, the chat replace, the notice events and tests 19 to 29 of the test room were not played.

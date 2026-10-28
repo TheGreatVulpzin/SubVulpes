@@ -88,21 +88,21 @@ uint64_t sv_game_reset_sequence(void) { return reset_sequence; }
 /* Every capability has an id, one version and a table. The tables of the system areas are stubs
  * until their owners add methods. See docs/parallel-work.md. */
 typedef struct {
-    uint32_t capability, version;
+    uint32_t capability, version, minimum;
     const void *table;
 } Capability;
 
 static const Capability capabilities[] = {
-    { SV_API_GAME_READ, SV_GAME_READ_VERSION, &sv_game_read },
-    { SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, &sv_game_write },
-    { SV_API_AI, SV_GAME_AI_VERSION, &sv_game_ai },
-    { SV_API_ECONOMY, SV_GAME_ECONOMY_VERSION, &sv_game_economy },
-    { SV_API_MISSION, SV_GAME_MISSION_VERSION, &sv_game_mission },
-    { SV_API_SETTINGS, SV_GAME_SETTINGS_VERSION, &sv_game_settings },
-    { SV_API_STORAGE, SV_GAME_STORAGE_VERSION, &sv_game_storage },
-    { SV_API_ENGINE, SV_GAME_ENGINE_VERSION, &sv_game_engine },
-    { SV_API_SHOP, SV_GAME_SHOP_VERSION, &sv_game_shop },
-    { SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, &sv_game_props },
+    { SV_API_GAME_READ, SV_GAME_READ_VERSION, 1u, &sv_game_read },
+    { SV_API_GAME_WRITE, SV_GAME_WRITE_VERSION, 1u, &sv_game_write },
+    { SV_API_AI, SV_GAME_AI_VERSION, 1u, &sv_game_ai },
+    { SV_API_ECONOMY, SV_GAME_ECONOMY_VERSION, 1u, &sv_game_economy },
+    { SV_API_MISSION, SV_GAME_MISSION_VERSION, 1u, &sv_game_mission },
+    { SV_API_SETTINGS, SV_GAME_SETTINGS_VERSION, 1u, &sv_game_settings },
+    { SV_API_STORAGE, SV_GAME_STORAGE_VERSION, 1u, &sv_game_storage },
+    { SV_API_ENGINE, SV_GAME_ENGINE_VERSION, 1u, &sv_game_engine },
+    { SV_API_SHOP, SV_GAME_SHOP_VERSION, 1u, &sv_game_shop },
+    { SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, 1u, &sv_game_props },
 };
 
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api)
@@ -111,7 +111,7 @@ SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api)
     for (i = 0; i < sizeof capabilities / sizeof capabilities[0]; ++i) {
         if (capabilities[i].capability != capability)
             continue;
-        if (capabilities[i].version != version)
+        if (!SV_VERSION_ACCEPTED(version, capabilities[i].minimum, capabilities[i].version))
             return SV_INCOMPATIBLE;
         *api = capabilities[i].table;
         return SV_OK;

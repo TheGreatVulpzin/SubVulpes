@@ -192,7 +192,11 @@ static SvResult SV_CALL plugins_find(SvOwner owner, const char *name, uint32_t v
     return SV_NOT_FOUND;
 }
 
-static const SvPlugins plugins_api = { sizeof(SvPlugins), SV_PLUGINS_VERSION, plugins_refuse, plugins_provide, plugins_find };
+static SvResult SV_CALL plugins_subscribe64(SvOwner owner, uint64_t events, SvEventFn callback);
+
+static const SvPlugins plugins_api = {
+    sizeof(SvPlugins), SV_PLUGINS_VERSION, plugins_refuse, plugins_provide, plugins_find, plugins_subscribe64
+};
 
 static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_t version, const void **api)
 {
@@ -202,13 +206,13 @@ static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_
         return SV_INVALID;
     *api = NULL;
     if (capability == SV_API_CONFIG) {
-        if (version != SV_CONFIG_VERSION)
+        if (!SV_VERSION_ACCEPTED(version, 1u, SV_CONFIG_VERSION))
             return SV_INCOMPATIBLE;
         *api = &config_api;
         return SV_OK;
     }
     if (capability == SV_API_PLUGINS) {
-        if (version != SV_PLUGINS_VERSION)
+        if (!SV_VERSION_ACCEPTED(version, 1u, SV_PLUGINS_VERSION))
             return SV_INCOMPATIBLE;
         *api = &plugins_api;
         return SV_OK;
@@ -268,7 +272,20 @@ static SvResult SV_CALL host_command(SvOwner owner, const char *name, uint32_t p
     return SV_OK;
 }
 
-static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn callback)
+/* The bit of an event kind in the 64-bit mask. A kind of the first 32 events is its own bit. The numbered event i has the bit
+ * 32 + i. A kind with no bit gives 0. */
+static uint64_t kind_bit(uint32_t kind)
+{
+    uint32_t index = kind & ~SV_EVENT_EXT_BASE;
+    if (kind & SV_EVENT_EXT_BASE)
+        return index < 32 ? (uint64_t)1 << (32 + index) : 0;
+    return kind;
+}
+
+/* The events of the first 32 that exist. */
+#define SV_EVENT_KNOWN_MASK (SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH |     SV_EVENT_LEAVE | SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE |     SV_EVENT_CONFIG | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM |     SV_EVENT_SETTING)
+
+static SvResult subscribe_mask(SvOwner owner, uint64_t events, SvEventFn callback)
 {
     SvModule *module = owner_module(owner);
     if (!module || stopping || in_simulation)
@@ -277,14 +294,21 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
         return SV_DENIED;
     if (events && module->library_role)
         return SV_DENIED;
-    if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
-                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE | SV_EVENT_CONFIG | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
-                   SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM | SV_EVENT_SETTING) ||
-        (events && !callback))
+    if ((events & 0xffffffffu) & ~(uint64_t)SV_EVENT_KNOWN_MASK || (events && !callback))
         return SV_INVALID;
     module->events = events;
     module->event_callback = callback;
     return SV_OK;
+}
+
+static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn callback)
+{
+    return subscribe_mask(owner, events, callback);
+}
+
+static SvResult SV_CALL plugins_subscribe64(SvOwner owner, uint64_t events, SvEventFn callback)
+{
+    return subscribe_mask(owner, events, callback);
 }
 
 static const SvHost host = {
@@ -607,7 +631,7 @@ static void deliver_to(uint32_t i, const SvEvent *event)
     SvResult result;
     LARGE_INTEGER before, after, frequency;
     unsigned control;
-    if (module->state != SV_MODULE_ACTIVE || !(module->events & event->kind))
+    if (module->state != SV_MODULE_ACTIVE || !(module->events & kind_bit(event->kind)))
         return;
     QueryPerformanceCounter(&before);
     control = enter(i);
@@ -648,7 +672,7 @@ SvResult sv_plugins_decide(const SvEvent *event)
         SvResult result;
         LARGE_INTEGER before, after, frequency;
         unsigned control;
-        if (module->state != SV_MODULE_ACTIVE || !(module->events & event->kind))
+        if (module->state != SV_MODULE_ACTIVE || !(module->events & kind_bit(event->kind)))
             continue;
         QueryPerformanceCounter(&before);
         control = enter(i);
@@ -758,7 +782,7 @@ int sv_plugins_wants(uint32_t kind)
     if (!started || stopping || GetCurrentThreadId() != server_thread)
         return 0;
     for (i = 0; i < module_count; ++i)
-        if (modules[i].state == SV_MODULE_ACTIVE && (modules[i].events & kind))
+        if (modules[i].state == SV_MODULE_ACTIVE && (modules[i].events & kind_bit(kind)))
             return 1;
     return 0;
 }
