@@ -45,6 +45,16 @@ static int lookup(const char *text, const char *const *names, size_t count)
     return -1;
 }
 
+/* The values of the runtime and of the capability list are lower case, as the installer checks them. */
+static int lookup_exact(const char *text, const char *const *names, size_t count)
+{
+    size_t i;
+    for (i = 0; i < count; ++i)
+        if (!strcmp(text, names[i]))
+            return (int)i;
+    return -1;
+}
+
 static char *trim(char *text)
 {
     char *end;
@@ -303,7 +313,7 @@ static void capabilities(Reader *reader, SvManifest *manifest)
         if (next)
             *next = 0;
         part = trim(part);
-        index = lookup(part, cap_names, sizeof cap_names / sizeof cap_names[0]);
+        index = lookup_exact(part, cap_names, sizeof cap_names / sizeof cap_names[0]);
         if (index < 0)
             problem(reader, "capabilities", "The list contains an unknown or empty capability.");
         else if (manifest->cap_mask & (1u << (unsigned)index))
@@ -383,7 +393,7 @@ static void validate(Reader *reader, SvManifest *out)
     else
         out->library_role = !strcmp(text, "library");
     text = reader->value[FIELD_RUNTIME] ? field(reader, FIELD_RUNTIME) : "native";
-    index = lookup(text, runtimes, sizeof runtimes / sizeof runtimes[0]);
+    index = lookup_exact(text, runtimes, sizeof runtimes / sizeof runtimes[0]);
     if (index < 0)
         problem(reader, "runtime", "The runtime must be native, lua, or wasm.");
     else

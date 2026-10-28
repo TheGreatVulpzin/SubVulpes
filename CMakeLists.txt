@@ -136,6 +136,8 @@ if(BUILD_TESTING)
         "${CMAKE_SOURCE_DIR}/tests/sdk/test_runtime_download.py")
     add_test(NAME plugin-lifecycle COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_plugins.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME manifest-rules COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/test_manifest.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c
         src/platform/x87_math.c src/platform/plat_imports.c ${SV_GAME_SOURCES})
     target_include_directories(sv-codec-test PRIVATE src/include src/platform src/common src/net src/game src/plugins)

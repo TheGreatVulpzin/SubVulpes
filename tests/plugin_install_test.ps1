@@ -64,7 +64,8 @@ $sentinel = Join-Path $server 'user/custom/sentinel.bin'
 $profile = Join-Path $server 'plugins/plugins.ini'
 $state = Join-Path $server 'user/plugins/state.ini'
 $approval = Join-Path $server 'user/plugins/native-approvals.ini'
-[IO.File]::WriteAllText($core, 'unchanged core fixture')
+# The installer asks the real server program about the manifest, so the fixture is a copy of it. The test checks that the installer leaves it as it was.
+Copy-Item -LiteralPath (Join-Path $buildRoot 'subvulpes_server.exe') -Destination $core
 [IO.File]::WriteAllText($config, 'unchanged private configuration')
 [IO.File]::WriteAllText($sentinel, 'unchanged module data')
 [IO.File]::WriteAllText($state, "[plugins]`nthird.party=disabled`n")

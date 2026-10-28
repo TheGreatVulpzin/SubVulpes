@@ -110,7 +110,8 @@ function Read-Manifest([byte[]]$Bytes) {
             $current[$key] = $value
             continue
         }
-        if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies', 'unsafe_events', 'conflicts', 'role') -or $values.ContainsKey($key)) {
+        if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies', 'unsafe_events', 'conflicts', 'role',
+                'runtime', 'capabilities', 'name', 'description', 'author', 'homepage') -or $values.ContainsKey($key)) {
             throw 'Invalid or duplicate manifest field.'
         }
         $values[$key] = $value
@@ -128,6 +129,8 @@ function Read-Manifest([byte[]]$Bytes) {
         throw 'Invalid unsafe_events setting.'
     }
     if ($values.ContainsKey('role') -and $values.role -cnotmatch '^(plugin|library)$') { throw 'Invalid module role.' }
+    # The server checks the values of the display keys and the capability list. This installer carries a DLL, so it takes native code only.
+    if ($values.ContainsKey('runtime') -and $values.runtime -cne 'native') { throw 'This installer carries native plugins only.' }
     $dependencyList = Read-IdList $(if ($values.ContainsKey('dependencies')) { $values.dependencies } else { '' }) $values.id $true
     $conflictList = Read-IdList $(if ($values.ContainsKey('conflicts')) { $values.conflicts } else { '' }) $values.id $false
     foreach ($id in $conflictList.Ids) {
@@ -299,6 +302,13 @@ try {
     New-Directory $stage
     [IO.File]::WriteAllBytes((Join-Path $stage 'plugin.ini'), $manifestBytes)
     [IO.File]::WriteAllBytes((Join-Path $stage $manifest.Library), $dllBytes)
+    # The server holds the one set of manifest rules. Ask it, when the server program is in the folder.
+    $validator = Join-Path $serverRoot 'subvulpes_server.exe'
+    if (Test-Path -LiteralPath $validator -PathType Leaf) {
+        Assert-FileTarget $validator
+        $report = @(& $validator --plugin-validate-folder $stage)
+        if ($LASTEXITCODE -ne 0) { throw ('The server refused the manifest: ' + (($report | Select-Object -First 3) -join ' | ')) }
+    }
     if ($hadManifest) {
         $backupDir = Join-Path $serverRoot 'backup/plugins'
         New-Directory $backupDir

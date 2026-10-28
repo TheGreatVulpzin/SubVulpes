@@ -86,6 +86,8 @@ run(RUNNER, ['optional-fail'], profile(both), mode='conflict', contains=['PASS']
 # The 64-bit event mask: a numbered event reaches only the plugin that asked, and a version outside the range is refused.
 output = run(RUNNER, ['ext'], profile(fixture), mode='ext', contains=['ext event 3', 'PASS'])
 assert output.count('ext event 3') == 1, 'The numbered event did not arrive exactly once.'
+# The capability wall: a plugin that declares only "config" cannot open any other table.
+run(RUNNER, ['lifecycle'], profile(fixture, caps='config'), mode='wall', contains=['PASS'])
 # Libraries (N35, N38): the API between plugins, the dependency rule, the version rule and the stop order.
 ROLE = 'role=library\n'
 pair = {'test.library': 'enabled', 'test.consumer': 'enabled'}

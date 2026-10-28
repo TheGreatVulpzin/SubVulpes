@@ -52,6 +52,7 @@ dependencies=
 
 Dependencies are comma-separated module IDs, without spaces. The limit is eight per module.
 An ID can end with `@VERSION`, the lowest package version that the module accepts. The optional key `conflicts` lists IDs that cannot be active together with the module. The optional key `role` is `plugin` or `library`. A library offers an API to other plugins and has no game behavior. See [plugin libraries](plugin-libraries.md).
+The keys `runtime`, `capabilities`, `name`, `description`, `author` and `homepage` are in [the manifest page](plugin-manifest.md). A plugin must list the tables it opens in `capabilities`, or `get_api` gives `SV_DENIED`.
 The manifest may also declare settings in sections `[setting.KEY]`. The administrator sets them in the launcher or with a command. See [plugin settings](plugin-config.md).
 The optional key `unsafe_events` is `0` (the default) or `1`. A plugin needs `1` to subscribe to `SV_EVENT_DAMAGE`, a decision inside the simulation. Without it the `subscribe` call returns `SV_DENIED`. Read the danger in [plugin events](plugin-events.md#danger-of-kind-3) first. The plugin list and the approval command print a notice for such a plugin.
 IDs use lowercase letters, digits, dots, underscores and hyphens. They start with a letter or digit and cannot contain `..`.
