@@ -142,6 +142,7 @@ Lua, WASM and the external SDK remain later work in S4.
 
 After the common API proof in S3, add Lua, then WASM hosts and an SDK.
 Both hosts use the tested common API. Their implementation and acceptance remain S4 work.
+The owner pulled the SDK work forward on 2026-10-28: packaging, a test runner, easy approval and the Lua and WASM bridge. See [the SDK plan](sdk-plan.md).
 Keep one public C API as the contract for official and third-party modules.
 Document compatibility, examples and author tools against that tested contract.
 Optional modes, integrations and other custom features use the same extension system.
