@@ -1154,6 +1154,65 @@ static void actions_check(void)
     puts("ACTION_GATE_PASS");
 }
 
+static void actions_sweep_check(void)
+{
+    const uint32_t kind = SV_EVENT_EXT(31);
+    const int32_t saved_tick = sr_game.ticks;
+    uint32_t before;
+    int32_t i;
+    sr_game.ticks = 100;
+    CHECK(sv_action_gate(kind, 40, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 41, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    sr_game.ticks = 200;
+    sv_actions_poll();
+    sr_game.ticks = 799;
+    CHECK(sv_action_gate(kind, 50, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    sr_game.ticks = 800;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 40, action_deliver) == SV_ACTION_PROCEED);
+    before = action_deliveries;
+    sr_game.ticks = 801;
+    sv_actions_poll();
+    CHECK(action_deliveries == before);
+    CHECK(sv_action_gate(kind, 41, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 7, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 50, action_deliver) == SV_ACTION_PROCEED);
+    sv_actions_clear();
+
+    /* The unsigned age also works across the tick counter wrap. */
+    sr_game.ticks = -101;
+    CHECK(sv_action_gate(kind, 60, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 61, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_poll();
+    sr_game.ticks = 499;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 60, action_deliver) == SV_ACTION_PROCEED);
+    sr_game.ticks = 500;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 61, action_deliver) == SV_ACTION_HOLD);
+    sv_actions_clear();
+
+    /* A full answered table becomes available without another call for its old keys. */
+    sr_game.ticks = 1000;
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 1000 + i, action_deliver) == SV_ACTION_HOLD);
+    sr_game.ticks = 1001;
+    sv_actions_poll();
+    sr_game.ticks = 1601;
+    sv_actions_poll();
+    CHECK(sv_action_gate(kind, 2000, action_deliver) == SV_ACTION_PROCEED);
+    sr_game.ticks = 1602;
+    sv_actions_poll();
+    for (i = 0; i < 256; ++i)
+        CHECK(sv_action_gate(kind, 2000 + i, action_deliver) == SV_ACTION_HOLD);
+    CHECK(sv_action_gate(kind, 5000, action_deliver) == SV_ACTION_PROCEED);
+    sv_actions_clear();
+    sr_game.ticks = saved_tick;
+    puts("ACTION_SWEEP_PASS");
+}
+
 int main(int argc, char **argv)
 {
     SvEntity old;
@@ -1196,6 +1255,7 @@ int main(int argc, char **argv)
     CHECK(!sv_game_is_ready());
     sv_game_ready();
     actions_check();
+    actions_sweep_check();
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
     sr_humans[0].inventory[0].count = 9;

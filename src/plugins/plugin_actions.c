@@ -1,5 +1,6 @@
 #include "plugin_actions.h"
 #include "plugin_host.h"
+#include "sr_runtime.h"
 #include <string.h>
 
 enum { ACTION_MAX = 256, ACTION_PENDING = 1, ACTION_RUNNING, ACTION_ALLOWED, ACTION_DENIED };
@@ -8,6 +9,7 @@ typedef struct {
     int32_t key;
     SvActionDeliver deliver;
     int state;
+    uint32_t answered_tick;
 } Action;
 static Action actions[ACTION_MAX];
 static uint32_t used;
@@ -60,7 +62,7 @@ int sv_action_gate(uint32_t kind, int32_t key, SvActionDeliver deliver)
     }
     if (!slot)
         return SV_ACTION_PROCEED;
-    *slot = (Action){kind, key, deliver, ACTION_PENDING};
+    *slot = (Action){kind, key, deliver, ACTION_PENDING, 0};
     ++used;
     return SV_ACTION_HOLD;
 }
@@ -72,9 +74,14 @@ void sv_actions_poll(void)
         return;
     polling = 1;
     /* New actions from a delivery wait for the next poll. */
-    for (i = 0; i < ACTION_MAX; ++i)
-        if (actions[i].state == ACTION_PENDING)
-            actions[i].state = ACTION_RUNNING;
+    for (i = 0; i < ACTION_MAX; ++i) {
+        Action *action = &actions[i];
+        if ((action->state == ACTION_ALLOWED || action->state == ACTION_DENIED) &&
+            (uint32_t)((uint32_t)sr_game.ticks - action->answered_tick) > 600u)
+            erase(action);
+        if (action->state == ACTION_PENDING)
+            action->state = ACTION_RUNNING;
+    }
     for (i = 0; i < ACTION_MAX; ++i) {
         Action *action = &actions[i];
         SvResult result;
@@ -82,8 +89,10 @@ void sv_actions_poll(void)
             continue;
         result = action->deliver(action->key);
         /* A delivery can cancel its own action when its resource ends. */
-        if (action->state == ACTION_RUNNING)
+        if (action->state == ACTION_RUNNING) {
             action->state = result == SV_DENIED ? ACTION_DENIED : ACTION_ALLOWED;
+            action->answered_tick = (uint32_t)sr_game.ticks;
+        }
     }
     polling = 0;
 }

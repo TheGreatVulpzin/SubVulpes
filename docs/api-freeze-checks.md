@@ -63,3 +63,20 @@ No client playtest, launcher Start/Stop test or soak test ran.
 
 F1 through F4 are complete. The native ABI layout stays unchanged.
 The SDK work starts with WP0. No SDK package ships yet.
+
+
+## Follow-up: expired action answers
+
+The gate stamps each answer with its delivery tick.
+The poll erases an allowed or denied answer when its unsigned age exceeds 600 ticks.
+An answer that is exactly 600 ticks old stays available.
+Pending actions keep the existing delivery rule.
+
+The game API test covers both answer states, a fresh answer, the 600-tick boundary and tick-counter wrap.
+It also fills all 256 slots and proves that the sweep makes them available without consuming their answers.
+Removing the sweep fails the focused game API test. Restoring it passes.
+The normal build, all 10 CTest groups, storage, native and repository checks pass.
+The ABI snapshot stays unchanged. No SDK file enters this follow-up commit.
+No client playtest, launcher Start/Stop test or soak test ran.
+
+Build state after these checks: idle. The marker file is `build/state.txt`.

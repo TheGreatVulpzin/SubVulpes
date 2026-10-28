@@ -10,6 +10,10 @@
  * The delivery function checks key lifetime. A stale key returns any result except SV_DENIED.
  * A full table permits the action. The gate never calls a plugin.
  *
+ * Answers carry their delivery tick.
+ * The poll drops an answer when it is more than 600 ticks old.
+ * The gate keeps a fresh answer until the next call for that key.
+ *
  * An action from a button edge must run inside its delivery when allowed.
  * The delivery must then cancel its entry. The button is gone next tick. */
 typedef SvResult (*SvActionDeliver)(int32_t key);

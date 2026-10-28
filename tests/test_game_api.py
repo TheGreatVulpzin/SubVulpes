@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix="game-api-", dir=build / "tests") as fol
     print(run.stdout, end="")
     print(run.stderr, end="", file=sys.stderr)
     required = ("PUBLIC_READ_API_PASS", "STOP_READ_DENIED", "PUBLIC_WRITE_API_PASS", "STOP_WRITE_DENIED",
-                "COMMAND echo hi there", "COMMAND secret two", "NPC_LIMIT_PASS", "LINE_MARK_PASS", "ACTION_GATE_PASS")
+                "COMMAND echo hi there", "COMMAND secret two", "NPC_LIMIT_PASS", "LINE_MARK_PASS", "ACTION_GATE_PASS", "ACTION_SWEEP_PASS")
     # A player runs the PUBLIC command. The ADMIN command waits for the flag. The LOCAL command never runs.
     # A player with no reference must not become the local operator (actor zero).
     absent = ("COMMAND secret one", "COMMAND localonly", "COMMAND echo nope", "Plugin command result: echo")
