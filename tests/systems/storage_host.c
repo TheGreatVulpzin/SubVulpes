@@ -208,6 +208,8 @@ void storage_prepare(void)
     CHECK(sv_game_storage.get(1, &entry, &input) == SV_STATE);
     CHECK(sv_game_storage.put(1, &entry, &input) == SV_STATE);
     CHECK(sv_game_storage.erase(1, &entry) == SV_STATE);
+    /* The host opened the storage of the test plugin when it started the plugin. Close it, so the cases start clean. */
+    sv_storage_release_owner(1);
     CHECK(sv_storage_open(0, "test.systems", private_root) == SV_INVALID);
     CHECK(sv_storage_open(SV_PLUGIN_MAX + 1, "test.systems", private_root) == SV_INVALID);
     CHECK(sv_storage_open(1, NULL, private_root) == SV_INVALID);

@@ -20,6 +20,7 @@
 #include "sr_os.h"
 #include "sr_runtime.h"
 #include "vectors.h"
+#include "sv_game_ai.h"
 
 /* Game globals. */
 #define sr_city sr_data_city
@@ -51,7 +52,17 @@ static int crossing_side(const CityIntersection *c, int road)
 
 /* Add the next road point after the current one. The car comes to the crossing at the end of
  * the current road and takes one of its other roads. */
+static void nextwaypoint_default(int player);
+
 void ai_car_nextwaypoint(int player)
+{
+  /* A plugin that gave the bot a route chooses the next road. */
+  if (sv_ai_route_next(player))
+    return;
+  nextwaypoint_default(player);
+}
+
+static void nextwaypoint_default(int player)
 {
   Player *p = &sr_players[player];
   AiWaypoint *wp = &p->waypoints[p->ai_waypoint];

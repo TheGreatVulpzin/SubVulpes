@@ -279,7 +279,7 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
         return SV_DENIED;
     if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
                    SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE | SV_EVENT_CONFIG | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
-                   SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM) ||
+                   SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM | SV_EVENT_SETTING) ||
         (events && !callback))
         return SV_INVALID;
     module->events = events;
@@ -337,6 +337,13 @@ static int conflicting(uint32_t index, int wanted)
 
 /* The game layer sets this hook, so the host test links without the game. It runs when a plugin stops. */
 static void (*release_hook)(SvOwner owner);
+/* The hook that runs before the enable callback. */
+static SvResult (*open_hook)(SvOwner owner, const char *id);
+
+void sv_plugins_set_open(SvResult (*hook)(SvOwner owner, const char *id))
+{
+    open_hook = hook;
+}
 
 void sv_plugins_set_release(void (*hook)(SvOwner owner))
 {
@@ -458,6 +465,10 @@ static SvResult activate(uint32_t index, int initial)
         if (module->required)
             failed = 1;
         return result;
+    }
+    if (open_hook && open_hook(index + 1, module->id) != SV_OK) {
+        deactivate(index, SV_MODULE_FAILED, "Cannot open the private storage of the plugin.");
+        return SV_IO;
     }
     module->enabling = 1;
     module->refusal[0] = 0;

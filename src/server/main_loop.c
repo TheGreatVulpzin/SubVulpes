@@ -35,6 +35,7 @@
 #include "sr_server.h"
 #include "plugin_host.h"
 #include "plugin_entities.h"
+#include "sv_game_ai.h"
 
 #ifndef SR_STANDALONE
 #include "loop_calls.h"
@@ -98,8 +99,12 @@ static void tick(void)
 
     if (sr_game.state == 2) {
         for (i = 0; i < 256; i++) {
-            if (sr_players[i].active != 0 && sr_players[i].is_bot != 0)
-                playerai(i);
+            if (sr_players[i].active != 0 && sr_players[i].is_bot != 0) {
+                /* A plugin that controls this bot can replace the default AI for one tick. */
+                if (!sv_ai_before_player(i))
+                    playerai(i);
+                sv_ai_after_player(i);
+            }
         }
     }
     servercycle();
@@ -193,6 +198,7 @@ void __cdecl sr_dedicatedserverloop(void)
         sr_game.gametype = 3;
     resetgame();
     sv_game_ready();
+    sv_systems_install();
     g_dedicated = 1;
 
     /* 16 ms ticks. Behind by 16 ms or more: run up to 5 ticks, then wait again. After the

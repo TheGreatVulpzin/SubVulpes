@@ -3,6 +3,11 @@
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
 #include "plugin_made.h"
+#include "sv_game_ai.h"
+#include "sv_game_engine.h"
+#include "sv_game_mission.h"
+#include "sv_game_settings.h"
+#include "sv_game_storage.h"
 #include "plugin_game_events.h"
 #include "events.h"
 #include "sr_runtime.h"
@@ -18,6 +23,32 @@ static void release(SvOwner owner)
 {
     sv_props_release(owner);
     sv_made_release(owner);
+    sv_ai_release_owner(owner);
+    sv_engine_release_owner(owner);
+    sv_mission_release_owner(owner);
+    sv_storage_release_owner(owner);
+}
+
+/* The private storage of a plugin lives in user/plugins/ID. A plugin that cannot open it does not start. */
+static SvResult open_storage(SvOwner owner, const char *id)
+{
+    return sv_storage_open(owner, id, "user/plugins");
+}
+
+/* The system areas that need a hook in the game. The server calls this once the world is ready. */
+static int post_setting(const SvSettingEvent *event)
+{
+    return sv_events_post_record(&event->base);
+}
+
+void sv_systems_install(void)
+{
+    sv_ai_install();
+    sv_mission_install();
+    if (!sv_settings_install(SV_EVENT_SETTING, post_setting))
+        sv_log("Cannot install the core settings.");
+    if (!sv_engine_install(SV_ENGINE_OWNER_CLEANUP))
+        sv_log("Cannot install the engine parameters.");
 }
 
 int sv_game_start(void)
@@ -25,6 +56,7 @@ int sv_game_start(void)
     ready = 0;
     sv_made_clear();
     sv_plugins_set_release(release);
+    sv_plugins_set_open(open_storage);
     sv_plugins_set_poll(sv_game_event_poll);
     sv_game_event_poll_reset();
     return sv_entities_start();

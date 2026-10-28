@@ -49,6 +49,25 @@ void sv_events_post_ex(uint32_t kind, uint32_t tick, SvEntity player, SvEntity h
     ++used;
 }
 
+int sv_events_post_record(const SvEvent *record)
+{
+    SvGameEvent *slot;
+    if (!record || record->size < sizeof *record || record->size > sizeof *slot || record->kind != SV_EVENT_SETTING)
+        return 0;
+    if (!sv_plugins_wants(record->kind))
+        return 1;
+    if (used >= QUEUE_MAX) {
+        ++lost;
+        lost_tick = record->tick;
+        return 0;
+    }
+    slot = &queue[(first + used) % QUEUE_MAX];
+    memset(slot, 0, sizeof *slot);
+    memcpy(slot, record, record->size);
+    ++used;
+    return 1;
+}
+
 uint32_t sv_events_pending(void)
 {
     return used + (lost ? 1u : 0u);

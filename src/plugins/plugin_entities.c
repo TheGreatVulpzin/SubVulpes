@@ -1,5 +1,6 @@
 #include "plugin_entities.h"
 #include "plugin_handles.h"
+#include "sv_game_storage.h"
 #include "sr_runtime.h"
 
 static SvHandlePool pools[SV_ENTITY_ACCOUNT + 1];
@@ -71,8 +72,12 @@ void sv_entity_created(uint32_t kind, uint32_t index)
 
 void sv_entity_deleted(uint32_t kind, uint32_t index)
 {
-    if (initialized && sv_entity_capacity(kind))
+    if (initialized && sv_entity_capacity(kind)) {
+        /* A player who leaves takes the session values of the plugin storage with it. */
+        if (kind == SV_ENTITY_PLAYER)
+            sv_storage_leave(sv_handle_pool_at(&pools[kind], index));
         sv_handle_pool_erase(&pools[kind], index);
+    }
 }
 
 SvEntity sv_entity_at(uint32_t kind, int32_t index)

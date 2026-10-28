@@ -10,6 +10,7 @@
 #include "sr_math.h"
 #include "sr_os.h"
 #include "vectors.h"
+#include "sv_game_ai.h"
 
 #define g_yaxis sr_data_yaxis
 #define g_intersect sr_data_intersect
@@ -37,7 +38,7 @@ void ai_assessthreats(int player, int human)
     me = &sr_humans[human];
     for (k = 0; k < 512; ++k) {
         Human *enemy = &sr_humans[k];
-        int index = -1, bone;
+        int index = -1, bone, part;
         vec3 *target;
         vec3 d;
         float len, sum, dot;
@@ -51,6 +52,10 @@ void ai_assessthreats(int player, int human)
         bone = sr_game.ticks & 15;
         if (bone > 14)
             bone = 2;
+        /* A plugin can fix the body part that the bot looks at: 1 the chest, 2 the head. */
+        part = sv_ai_perception_part(player);
+        if (part == 1 || part == 2)
+            bone = part;
         target = &enemy->bones[bone].pos;
         d.x = (float)((double)target->x - me->bones[2].pos.x);
         d.y = (float)((double)target->y - me->bones[2].pos.y);
@@ -173,6 +178,7 @@ void playerai(int player)
     if (h->vehicle_id == -1) {
         vec3 rot[3];
         ai_assessthreats(player, human);
+        sv_ai_after_threats(player);
         p->input_mode = 1;
         resetorientation(rot);
         rotateorientation(rot, &g_yaxis, h->axis);
@@ -217,7 +223,7 @@ void playerai(int player)
                 fabs((double)angulardistance(pitch_aim, p->input_pitch)) < 0.125) {
                 vec3 end;
                 scaleaddvectors(&end, &h->bones[8].pos, &h->bones[8].rot[1], -64.0f);
-                if (!friend_in_line(player, human, &h->bones[8].pos, &end, 128.0f) && (os_rand() & 3) == 0)
+                if (!friend_in_line(player, human, &h->bones[8].pos, &end, 128.0f) && sv_ai_shot(player, 0))
                     p->input_buttons |= 1;
             }
         }
@@ -238,6 +244,7 @@ void playerai(int player)
             return;
         }
         ai_assessthreats(player, human);
+        sv_ai_after_threats(player);
         aim = 0;
         if (h->vehicle_seat == 1)
             aim = 0.7853981852531433f;
@@ -264,7 +271,7 @@ void playerai(int player)
                 fabs((double)angulardistance(pitch_aim, p->input_pitch)) < 0.125) {
                 vec3 end;
                 scaleaddvectors(&end, &sr_items[mag].pos, &sr_items[mag].rot[2], -64.0f);
-                if (!friend_in_line(player, human, &sr_items[mag].pos, &end, 64.0f) &&
+                if (!friend_in_line(player, human, &sr_items[mag].pos, &end, 64.0f) && sv_ai_shot(player, 1) &&
                     (!lineintersectobject(car, &sr_items[mag].pos.x, &end.x, 0) ||
                      object->faces[g_intersect.face].is_window == 1))
                     p->input_buttons |= 1;

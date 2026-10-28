@@ -36,6 +36,8 @@ SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
 /* Sets a function that the host calls with the owner of a plugin when that plugin stops, to give back what it changed. */
 void sv_plugins_set_release(void (*hook)(SvOwner owner));
+/* Sets a function that the host calls before the enable callback of a plugin. A result other than SV_OK refuses the start. */
+void sv_plugins_set_open(SvResult (*hook)(SvOwner owner, const char *id));
 /* Sets a function that the host calls at the start of each tick, before it delivers the queued events. */
 void sv_plugins_set_poll(void (*hook)(void));
 /* Like sv_plugins_context, and 0 while a plugin runs a decision inside the simulation. Every call that changes the game or
@@ -55,6 +57,11 @@ void sv_events_post_ex(uint32_t kind, uint32_t tick, SvEntity player, SvEntity h
 uint32_t sv_events_pending(void);
 int sv_events_next(SvGameEvent *out);
 void sv_events_clear(void);
+/* Posts a copy of a whole event record of another type, such as the settings notice. The record must fit in an SvGameEvent.
+ * The result is 0 when the queue is full. It is 1 when the record is queued, and also when no plugin wants the kind. */
+int sv_events_post_record(const SvEvent *record);
+/* Installs the hooks of the system areas (AI, missions, settings, engine). The server calls it once the world is ready. */
+void sv_systems_install(void);
 /* Gives a decision event to the active plugins that asked for its kind, in load order, with the full API. The first
  * plugin that answers SV_DENIED ends the call and the result is SV_DENIED. Any other answer than SV_OK or SV_DENIED is a
  * failure, and the plugin is disabled. The result is SV_OK when no plugin answers SV_DENIED, and also when the call is not

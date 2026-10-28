@@ -1,6 +1,7 @@
 /* Account names and account files. */
 #include "player.h"
 #include "plugin_entities.h"
+#include "sv_game_settings.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -65,7 +66,7 @@ int createaccount(int player)
         p->name[31] = 0;
     }
     memcpy(a->name, p->name, 32);
-    a->money = 1000;
+    a->money = sv_settings_native(SV_SETTING_NEW_ACCOUNT_MONEY, 1000);
     a->look_a = os_rand() % 3;
     a->look_b = os_rand() & 7;
     a->look_c = os_rand() & 3;

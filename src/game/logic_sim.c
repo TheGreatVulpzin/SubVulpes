@@ -1,6 +1,7 @@
 /* Round timers, world time and team membership. */
 #include "logic.h"
 #include "plugin_entities.h"
+#include "sv_game_settings.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -99,7 +100,7 @@ void logicsimulation_world(void)
         sr_game.state = 2;
         sr_game.timer = sr_game.round_time;
         g_game_world.clock = 0x1a5e00;
-        scenario_createtraffic2(32);
+        scenario_createtraffic2(sv_settings_native(SV_SETTING_BOT_COUNT, 32));
         if (sr_debugit)
             world_test_items();
     }
@@ -308,7 +309,7 @@ void logicsimulation_round(void)
         if (sr_game.timer == 0x708) {
             createscenario_world();
             if (sr_game.timer == 0x708) {
-                scenario_createtraffic2(24);
+                scenario_createtraffic2(sv_settings_native(SV_SETTING_BOT_COUNT, 24));
                 for (team = 0; team < 3; ++team) {
                     int slot;
                     logic_createcar(0, team, 0);
