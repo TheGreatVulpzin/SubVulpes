@@ -63,7 +63,7 @@ Do not promise rollback of effects that already completed.
 
 The host owns command registrations, subscriptions and scheduled resources on behalf of each plugin.
 Disable stops future callbacks and removes these registrations at a safe point.
-Already-created game entities need an explicit retention or cleanup policy.
+The host ends the items, vehicles and bots that a plugin made when it stops, unless the plugin gives them up. See [plugin libraries](plugin-libraries.md).
 Plugin data remains on disk unless the administrator requests its removal.
 
 ## Native loading and updates

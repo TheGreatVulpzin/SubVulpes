@@ -97,6 +97,10 @@ typedef struct {
     /* Tells the clients about the effect of a hit at the position: kind 0 a block of the level, 1 a human, 2 a vehicle and
      * 3 a drip of blood. The normal points out of the surface. It makes no damage. */
     SvResult (SV_CALL *bullet_hit)(SvOwner owner, uint32_t kind, SvVector position, SvVector normal);
+    /* The host ends the items, vehicles and bots that a plugin made (item_create, object_create and npc_create) when that
+     * plugin stops. This call gives one of them up, so it stays in the game after the stop. For a bot give the reference of
+     * the player. SV_NOT_FOUND when this plugin did not make the thing, or when it is gone. */
+    SvResult (SV_CALL *disown)(SvOwner owner, SvEntity entity);
 } SvGameWrite;
 #pragma pack(pop)
 

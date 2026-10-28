@@ -2,6 +2,7 @@
 #include "plugin_entities.h"
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
+#include "plugin_made.h"
 #include "plugin_game_events.h"
 #include "events.h"
 #include "sr_runtime.h"
@@ -12,10 +13,18 @@
 static int ready;
 static uint64_t reset_sequence;
 
+/* Gives back what a plugin changed, and ends what it made, when that plugin stops. */
+static void release(SvOwner owner)
+{
+    sv_props_release(owner);
+    sv_made_release(owner);
+}
+
 int sv_game_start(void)
 {
     ready = 0;
-    sv_plugins_set_release(sv_props_release);
+    sv_made_clear();
+    sv_plugins_set_release(release);
     sv_plugins_set_poll(sv_game_event_poll);
     sv_game_event_poll_reset();
     return sv_entities_start();

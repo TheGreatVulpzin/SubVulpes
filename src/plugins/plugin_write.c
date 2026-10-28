@@ -7,6 +7,7 @@
 #include "sv_game_write.h"
 #include "plugin_game_internal.h"
 #include "plugin_game_events.h"
+#include "plugin_made.h"
 #include "events.h"
 #include "buildings.h"
 #include "items.h"
@@ -237,6 +238,8 @@ static SvResult SV_CALL write_item_create(SvOwner owner, uint32_t type, SvVector
         return SV_STATE;
     if (type >= SV_ITEM_TYPE_COUNT || type == ITEM_NEWSPAPER || !item || !position_ok(position))
         return SV_INVALID;
+    if (!sv_made_room())
+        return SV_LIMIT;
     at.x = position.x;
     at.y = position.y;
     at.z = position.z;
@@ -244,6 +247,7 @@ static SvResult SV_CALL write_item_create(SvOwner owner, uint32_t type, SvVector
     if (index >= SR_MAX_ITEM)
         return SV_LIMIT;
     *item = sv_entity_at(SV_ENTITY_ITEM, (int32_t)index);
+    sv_made_add(owner, SV_ENTITY_ITEM, *item);
     return SV_OK;
 }
 
@@ -319,6 +323,8 @@ static SvResult SV_CALL write_object_create(SvOwner owner, uint32_t type, SvVect
     if (type >= SV_OBJECT_TYPE_COUNT || color < 0 || color > SV_OBJECT_COLOR_MAX || !object || !position_ok(position) ||
         !finite(yaw))
         return SV_INVALID;
+    if (!sv_made_room())
+        return SV_LIMIT;
     at.x = position.x;
     at.y = position.y;
     at.z = position.z;
@@ -328,6 +334,7 @@ static SvResult SV_CALL write_object_create(SvOwner owner, uint32_t type, SvVect
     if (index < 0)
         return SV_LIMIT;
     *object = sv_entity_at(SV_ENTITY_OBJECT, index);
+    sv_made_add(owner, SV_ENTITY_OBJECT, *object);
     return SV_OK;
 }
 
@@ -367,6 +374,8 @@ static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float
         return SV_STATE;
     if (!player || !human || !position_ok(position) || !finite(yaw) || (name && name_check(name) != SV_OK))
         return SV_INVALID;
+    if (!sv_made_room())
+        return SV_LIMIT;
     at.x = position.x;
     at.y = position.y;
     at.z = position.z;
@@ -391,6 +400,7 @@ static SvResult SV_CALL write_npc_create(SvOwner owner, SvVector position, float
     createevent_updateplayer(p);
     *player = sv_entity_at(SV_ENTITY_PLAYER, p);
     *human = sv_entity_at(SV_ENTITY_HUMAN, h);
+    sv_made_add(owner, SV_ENTITY_PLAYER, *player);
     return SV_OK;
 }
 
@@ -566,10 +576,18 @@ static SvResult SV_CALL write_headline(SvOwner owner, uint32_t index, const char
     }
 }
 
+static SvResult SV_CALL write_disown(SvOwner owner, SvEntity entity)
+{
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    return sv_made_disown(owner, entity);
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
     write_teleport, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
     write_object_create, write_object_remove, write_npc_create, write_npc_remove,
-    write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak, write_bullet, write_bullet_hit
+    write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak, write_bullet, write_bullet_hit,
+    write_disown
 };

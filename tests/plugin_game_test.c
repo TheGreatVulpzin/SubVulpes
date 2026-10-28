@@ -18,6 +18,7 @@
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
 #include "plugin_game_events.h"
+#include "plugin_made.h"
 #include "plugin_damage.h"
 
 _Static_assert(SV_HOST_V1_SIZE == 24, "Preserve the original host prefix");
@@ -916,6 +917,123 @@ static void npc_limit(void)
     sr_numofbonds = bonds;
 }
 
+static int made_late_item;
+
+static int find_object(float x)
+{
+    int o;
+    for (o = 0; o < SR_MAX_OBJECT; ++o)
+        if (sr_objects[o].active && sr_objects[o].pos.x > x - 30.0f && sr_objects[o].pos.x < x + 30.0f)
+            return o;
+    return -1;
+}
+
+static int find_item_at(float x)
+{
+    int i;
+    for (i = 0; i < SR_MAX_ITEM; ++i)
+        if (sr_items[i].active && sr_items[i].type == 12 && sr_items[i].pos.x > x - 0.5f && sr_items[i].pos.x < x + 0.5f)
+            return i;
+    return -1;
+}
+
+/* The fixture makes two items, two cars and a bot, and gives up one item and one car. Nothing ends while the plugin runs. */
+static void made_check(void)
+{
+    int p, bot = -1, item, kept_item, car, kept_car;
+    CHECK(sv_plugins_command(0, "madecheck"));
+    item = find_item_at(3333.0f);
+    kept_item = find_item_at(3335.0f);
+    car = find_object(3400.0f);
+    kept_car = find_object(3500.0f);
+    for (p = 0; p < SR_MAX_PLAYER; ++p)
+        if (sr_players[p].active && !strcmp(sr_players[p].name, "Mado"))
+            bot = p;
+    CHECK(item >= 0 && kept_item >= 0 && car >= 0 && kept_car >= 0 && bot >= 0);
+    CHECK(sr_items[item].time_to_live > 0 && sr_items[kept_item].time_to_live > 0);
+    CHECK(sr_objects[car].time_to_live > 0 && sr_objects[kept_car].time_to_live > 0);
+    CHECK(sr_players[bot].despawn_time != -1);
+}
+
+/* A thing made after the reset of the pools. The stop of the plugin ends it. */
+static void made_late_check(void)
+{
+    CHECK(sv_plugins_command(0, "madelate"));
+    made_late_item = find_item_at(3700.0f);
+    CHECK(made_late_item >= 0 && sr_items[made_late_item].time_to_live > 0);
+}
+
+static void made_stopped_check(void)
+{
+    CHECK(sr_items[made_late_item].time_to_live == 0);
+}
+
+/* The table of made things: a full table makes room from the things that are gone, and a full table of live things refuses. */
+static void made_table_check(void)
+{
+    static const vec3 at = { 3600.0f, 5.0f, 3600.0f };
+    uint32_t i, index = createitem(12, &at, NULL, rotation);
+    SvEntity live, gone = sv_entity_at(SV_ENTITY_ITEM, (int32_t)index);
+    CHECK(index < SR_MAX_ITEM);
+    live = gone;
+    sv_made_clear();
+    for (i = 0; i < SV_MADE_MAX; ++i)
+        sv_made_add(77, SV_ENTITY_ITEM, live);
+    CHECK(!sv_made_room());
+    sv_made_add(77, SV_ENTITY_ITEM, live);
+    sv_made_clear();
+    for (i = 0; i < SV_MADE_MAX; ++i)
+        sv_made_add(77, SV_ENTITY_ITEM, (SvEntity)i + 1);
+    CHECK(sv_made_room());
+    sv_made_add(77, SV_ENTITY_ITEM, live);
+    CHECK(sv_made_disown(78, live) == SV_NOT_FOUND && sv_made_disown(77, live) == SV_OK && sv_made_disown(77, live) == SV_NOT_FOUND);
+    sv_made_add(77, SV_ENTITY_ITEM, live);
+    sv_made_add(78, SV_ENTITY_ITEM, live);
+    sv_made_release(78);
+    CHECK(sr_items[index].time_to_live == 0);
+    sr_items[index].time_to_live = 5;
+    sv_made_release(78);
+    CHECK(sr_items[index].time_to_live == 5);
+    sv_made_release(77);
+    CHECK(sr_items[index].time_to_live == 0);
+    sv_made_clear();
+    sr_items[index].time_to_live = 0;
+    /* A vehicle and a bot end too. A player who is not a bot stays. */
+    {
+        int o = createobject(0, &at, NULL, rotation, 1), bot = createplayer(), human = createplayer();
+        CHECK(o > 0 && bot >= 0 && human >= 0);
+        sr_players[bot].is_bot = 1;
+        sr_players[human].is_bot = 0;
+        sv_made_add(79, SV_ENTITY_OBJECT, sv_entity_at(SV_ENTITY_OBJECT, o));
+        sv_made_add(79, SV_ENTITY_PLAYER, sv_entity_at(SV_ENTITY_PLAYER, bot));
+        sv_made_add(79, SV_ENTITY_PLAYER, sv_entity_at(SV_ENTITY_PLAYER, human));
+        sv_made_release(79);
+        CHECK(sr_objects[o].time_to_live == 0 && sr_players[bot].despawn_time == -1 && sr_players[human].despawn_time != -1);
+        deleteplayer(bot);
+        deleteplayer(human);
+    }
+    /* A piece of the train is not ours to end, and a full table of live things drops an entry that does not fit. */
+    {
+        int train = createobject(12, &at, NULL, rotation, 1);
+        CHECK(train > 0);
+        sv_made_add(80, SV_ENTITY_OBJECT, sv_entity_at(SV_ENTITY_OBJECT, train));
+        sv_made_release(80);
+        CHECK(sr_objects[train].time_to_live > 0);
+        sr_objects[train].time_to_live = 0;
+        sr_items[index].time_to_live = 5;
+        for (i = 0; i < SV_MADE_MAX; ++i)
+            sv_made_add(81, SV_ENTITY_ITEM, live);
+        CHECK(sv_made_count() == SV_MADE_MAX);
+        sv_made_add(82, SV_ENTITY_ITEM, live);
+        CHECK(sv_made_count() == SV_MADE_MAX);
+        sv_made_release(82);
+        CHECK(sr_items[index].time_to_live == 5);
+        sv_made_release(81);
+        CHECK(sr_items[index].time_to_live == 0);
+    }
+    sv_made_clear();
+}
+
 static void *test_world_field(int32_t index, uint32_t slot)
 {
     (void)index;
@@ -1036,6 +1154,8 @@ int main(void)
     join_decision();
     npc_limit();
     line_mark();
+    made_table_check();
+    made_check();
     sv_game_reset();
     sv_entities_clear(SV_ENTITY_HUMAN);
     sv_entities_clear(SV_ENTITY_ITEM);
@@ -1043,6 +1163,7 @@ int main(void)
     sv_entities_clear(SV_ENTITY_ACCOUNT);
     sv_entity_deleted(SV_ENTITY_PLAYER, 0);
     sv_entity_created(SV_ENTITY_PLAYER, 0);
+    made_late_check();
     post_flood();
     CHECK(sv_game_read.world(1, &(SvWorldState){ sizeof(SvWorldState) }) == SV_STATE);
     sv_plugins_tick();
@@ -1051,6 +1172,7 @@ int main(void)
     sv_plugins_stop();
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);
     types_restored_check();
+    made_stopped_check();
     /* After the stop no plugin wants a record, and the queue is empty. */
     sv_events_post(SV_EVENT_DEATH, 1, 0, 0, 0);
     CHECK(sv_events_pending() == 0 && !sv_plugins_wants(SV_EVENT_DEATH));

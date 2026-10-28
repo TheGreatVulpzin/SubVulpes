@@ -89,6 +89,37 @@ static SvResult SV_CALL npclimit_command(SvOwner owner, uint64_t actor, const ch
     return host->log(owner, "NPC_LIMIT_PASS");
 }
 
+/* The test program checks after the stop what the host did with the things that this command made. */
+static SvResult SV_CALL made_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    const SvVector item_at = { 3333.0f, 5.0f, 3333.0f }, kept_at = { 3335.0f, 5.0f, 3333.0f };
+    const SvVector car_at = { 3400.0f, 5.0f, 3400.0f }, kept_car_at = { 3500.0f, 5.0f, 3500.0f }, npc_at = { 3450.0f, 5.0f, 3450.0f };
+    SvEntity made_item = 0, kept_item = 0, car = 0, kept_car = 0, bot = 0, bot_human = 0;
+    (void)actor;
+    (void)arguments;
+    if (change->item_create(owner, 12, item_at, &made_item) != SV_OK || change->item_create(owner, 12, kept_at, &kept_item) != SV_OK ||
+        change->object_create(owner, 0, car_at, 0.0f, 4, &car) != SV_OK ||
+        change->object_create(owner, 0, kept_car_at, 0.0f, 3, &kept_car) != SV_OK ||
+        change->npc_create(owner, npc_at, 0.0f, "Mado", &bot, &bot_human) != SV_OK)
+        return host->log(owner, "MADE_FAILURE create");
+    /* A thing that the plugin did not make, an empty reference, a human of a bot, then a thing of the plugin twice. */
+    if (change->disown(owner, human) != SV_NOT_FOUND || change->disown(owner, 0) != SV_NOT_FOUND ||
+        change->disown(owner, bot_human) != SV_NOT_FOUND || change->disown(owner, kept_item) != SV_OK ||
+        change->disown(owner, kept_item) != SV_NOT_FOUND || change->disown(owner, kept_car) != SV_OK)
+        return host->log(owner, "MADE_FAILURE disown");
+    return host->log(owner, "MADE_PASS");
+}
+
+/* A thing made after the pools of the game reset. The host must still end it when the plugin stops. */
+static SvResult SV_CALL madelate_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    const SvVector at = { 3700.0f, 5.0f, 3700.0f };
+    SvEntity late = 0;
+    (void)actor;
+    (void)arguments;
+    return host->log(owner, change->item_create(owner, 12, at, &late) == SV_OK ? "MADE_LATE_PASS" : "MADE_LATE_FAILURE");
+}
+
 /* The test program sets a mark in the shared hit record of the game, then runs this command. The queries must put it back. */
 static SvResult SV_CALL linemark_command(SvOwner owner, uint64_t actor, const char *arguments)
 {
@@ -1334,6 +1365,8 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);
     CHECK(host->command(owner, "npclimit", SV_COMMAND_LOCAL, npclimit_command) == SV_OK);
     CHECK(host->command(owner, "linemark", SV_COMMAND_LOCAL, linemark_command) == SV_OK);
+    CHECK(host->command(owner, "madecheck", SV_COMMAND_LOCAL, made_command) == SV_OK);
+    CHECK(host->command(owner, "madelate", SV_COMMAND_LOCAL, madelate_command) == SV_OK);
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
