@@ -19,14 +19,16 @@ The author needs no source tree of the server, no hash typed by hand, and no gam
 | Approval | The administrator copies a SHA-256 by hand, or uses a bypass flag. The dialog says nothing about what the plugin does. |
 | Scripts | No Lua host, no WASM host, no limits for them. |
 
-## Decisions for the owner
+## Decisions of the owner
 
-| Id | Question | Recommendation |
-| --- | --- | --- |
-| D1 | Where do the Lua and WASM sources live? `CLAUDE.md` bars `third_party/` from the repository. | A script downloads a pinned version and checks its SHA-256 into `build/runtimes/`, as the game data download works. The licenses (MIT) fit the GPL. |
-| D2 | Which WASM runtime? | Decide after work package 0. The test is a 32-bit MSVC build, a memory cap, a way to stop a loop, and size. |
-| D3 | Trust model. | First: hash plus a declared capability list. Later and only if wanted: publisher signatures, so an update of the same publisher needs no new review. |
-| D4 | File name of a plugin package. | `SubVulpes-plugin-<id>-<version>.zip`, like `SubVulpes-server-<version>.zip`. |
+The owner decided on 2026-10-28. The second editor does not ask about them again.
+
+| Id | Decision |
+| --- | --- |
+| D1 | The Lua and WASM sources are not in the repository. A script downloads a pinned version, checks its SHA-256 and keeps it in `build/runtimes/`. The licenses (MIT) fit the GPL. |
+| D2 | WASM runtime: WAMR, if the spike of WP0 shows that it builds as 32-bit MSVC code, caps its memory and stops an endless loop. If it fails one of these, use wasm3 and write the reason in `docs/sdk-runtimes.md`. |
+| D3 | Trust model: the hash plus a declared list of capabilities, for every runtime. Native code has the full process, so its list is a warning and it needs an extra confirmation. For Lua and WASM the list is a wall that the host enforces, and these plugins need no DLL approval. A capability of high risk (kick, money, storage, `unsafe_events`) is marked in the review for every runtime. Publisher signatures wait. |
+| D4 | The file of a plugin is `<id>-<version>-<runtime>.svplugin`, for example `sv.health-0.1.0-lua.svplugin`. It is a ZIP inside. The runtime part is `native`, `lua` or `wasm`. The id stays short and safe for paths. A longer display name goes in the manifest (see WP1). |
 
 ## Work packages
 
@@ -40,6 +42,7 @@ Write `docs/sdk-runtimes.md` with the numbers and one recommendation for D2. Do 
 ### WP1 Manifest with capabilities (0.5 day)
 
 Add the keys `runtime` (`native`, `lua` or `wasm`; `native` by default) and `capabilities` (a list such as `read,write,props,storage`) to `plugin.ini`.
+Add the optional display keys `name` (1 to 48 printable ASCII characters, such as `Health Commands`), `description` (up to 160), `author` (up to 48) and `homepage` (a web address, up to 96). The host checks the length and the characters and uses them for display only. The id stays the only key for paths, dependencies and conflicts. The launcher list and the review dialog show the name first and the id in small text.
 The host refuses `get_api` for a capability that the manifest did not declare. Native code can still bypass this, so the list is for the approval screen and for honest plugins. For scripts it is a hard wall.
 Add `subvulpes_server.exe --plugin-validate PATH`. It prints every problem of a folder or ZIP with the same rules as the loader, so the tools never copy the rules.
 Update `tools/plugins/install_plugin.ps1` and the launcher parser for the new keys.
@@ -47,7 +50,7 @@ Update `tools/plugins/install_plugin.ps1` and the launcher parser for the new ke
 ### WP2 Packaging (1 day)
 
 - A CMake function `sv_add_plugin(NAME ID VERSION SOURCES ...)` makes the target, stages the files, writes the approval entry and builds the ZIP.
-- `tools/sdk/pack.ps1` makes `SubVulpes-plugin-<id>-<version>.zip` from a folder. It calls `--plugin-validate` and fails on a problem.
+- `tools/sdk/pack.ps1` makes `<id>-<version>-<runtime>.svplugin` from a folder (D4). The installer, the launcher file dialog and the tests accept this extension. The old `.zip` name still installs. It calls `--plugin-validate` and fails on a problem.
 - `plugins/official.ini` lists the official plugins and their default state. `make_package.ps1`, the approval file and `tests/package_test.ps1` read it.
 - Official plugins get their own version and their own ZIP in the release notes. Tags `plugin-<id>-v<version>` exist only when the owner asks.
 - Move `sv.testroom` to the same path as an example, still out of the server package.
@@ -78,7 +81,7 @@ Write scenarios for `sv.status` and for the template. Keep `tests/systems` as th
 ### WP5 Easy approval (1.5 days)
 
 - `subvulpes_server.exe --plugin-inspect ZIP|ID` prints identity, version, runtime, capabilities, hashes and the danger text, in a form that the launcher parses.
-- The launcher has one dialog for install and update. It shows the review with the danger color by capability (storage and read low, write and kick high, native code highest) and one button, "Install and approve". Native code needs one extra checkbox.
+- The launcher has one dialog for install and update. It shows the display name, the author and the description from the manifest. It shows the review with the danger color by capability (storage and read low, write and kick high, native code highest) and one button, "Install and approve". Native code needs one extra checkbox.
 - The trust store `user/plugins/approvals.ini` keeps the hash, the capability set and the time. An update with the same ID, runtime and capability set asks one question and shows the version change. A new capability needs the full review.
 - Scripts need no DLL approval. They need the approval of the capability set and the bundle hash. `unsafe_events` always needs its own line in the review.
 - A development switch `--dev-plugins FOLDER` approves the plugins of that folder for one run, prints a warning each minute, and does not save anything. It is for test servers.
