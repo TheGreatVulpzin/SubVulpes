@@ -13,6 +13,7 @@
 
 #include "events.h"
 #include "plugin_entities.h"
+#include "plugin_game_events.h"
 #include "sr_runtime.h"
 
 #define NO_LIMIT 0xffff /* time_to_live of an item that stays */
@@ -111,6 +112,7 @@ int item_addhumanlink(int item, int human, int slot)
     if (s->count >= 8)
         return 0;
     s->items[s->count++] = item;
+    sv_game_event_item(item, human, slot, 1);
     return 1;
 }
 
@@ -129,6 +131,7 @@ void item_removehumanlink(uint32_t item, int human, int slot)
         }
         s->items[i] = s->items[--s->count];
         it->parent_human = -1;
+        sv_game_event_item((int)item, human, slot, 0);
         if (sr_server && item < SR_MAX_ITEM) {
             uint32_t *count = &sr_data_numofevents;
             uint32_t index = *count;

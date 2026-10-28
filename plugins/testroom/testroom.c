@@ -11,7 +11,7 @@
 #include "sv_game_props.h"
 #include "sv_game_events.h"
 
-#define VERSION "0.1.6"
+#define VERSION "0.1.7"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 32
 
@@ -45,7 +45,7 @@ static uint32_t sound_next;
 static SvEntity last_magazine, last_car, last_npc, last_npc_human, last_gun;
 static float saved_speed, saved_bullet_mass;
 static unsigned name_step;
-static int chat_prefix_on;
+static int chat_prefix_on, notices_on;
 
 /* ------------------------------------------------------------ text */
 
@@ -170,6 +170,7 @@ static void cleanup(void)
     }
     forget();
     chat_prefix_on = 0;
+    notices_on = 0;
     if (touched & T_TYPES) {
         SvValue v;
         v.f = saved_speed;
@@ -707,6 +708,19 @@ static SvResult t_bomb(void)
 static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event)
 {
     (void)owner;
+    if (notices_on && event->size == sizeof(SvGameEvent)) {
+        const SvGameEvent *record = (const SvGameEvent *)event;
+        if (event->kind == SV_EVENT_ROUND)
+            sayf("[round] state %d, round number %d.", (int)record->value, (int)record->extra);
+        else if (record->player == tester && event->kind == SV_EVENT_VEHICLE)
+            sayf("[vehicle] you %s, seat %d.", record->extra ? "got in" : "got out", (int)record->value);
+        else if (record->player == tester && event->kind == SV_EVENT_SHOT)
+            sayf("[shot] item type %d, %d rounds left.", (int)record->value, (int)record->extra);
+        else if (record->player == tester && event->kind == SV_EVENT_ITEM)
+            sayf("[item] %s slot %d.", record->extra ? "into" : "out of", (int)record->value);
+        else if (event->kind == SV_EVENT_OBJECT_GONE)
+            sayf("[vehicle gone] type %d.", (int)record->value);
+    }
     if (event->kind == SV_EVENT_CHAT && event->size == sizeof(SvChatEvent) && chat_prefix_on) {
         SvChatEvent *chat = (SvChatEvent *)event;
         if (chat->player == tester) {
@@ -730,6 +744,24 @@ static SvResult t_chat_prefix(void)
     chat_prefix_on = 0;
     say("Type /test go to switch on a prefix for your chat texts.");
     return SV_OK;
+}
+
+static SvResult t_notices_go(void)
+{
+    notices_on = !notices_on;
+    sayf("Event lines are now %s. Type /test go to switch them.", notices_on ? "on" : "off");
+    return SV_OK;
+}
+
+static SvResult t_notices(void)
+{
+    SvResult r = t_car();
+    if (r == SV_OK)
+        r = t_magnum();
+    notices_on = 0;
+    if (r == SV_OK)
+        say("Type /test go. Then get in the car and out, fire the Magnum, and drop and pick up items.");
+    return r;
 }
 
 static SvResult t_dealt(void)
@@ -779,6 +811,7 @@ static const Test tests[] = {
     { "strong_magnum", "Makes a bot and a Magnum, and makes the Magnum bullets fast and heavy.", "A few shots kill the bot. The next test puts the Magnum back.", t_strong, NULL },
     { "bomb", "Makes a bot. Type /test go to blow up everything within 12 units of it.", "The bot, and you if you stand near, lose 30 health and fly up. A sound and a spark play.", t_bomb, t_bomb_go },
     { "chat_prefix", "Switches on a prefix for your chat texts with /test go. A plugin rewrites each text before it goes out.", "Your next chat text appears as '[TEST] ' and then your text. After a second go it is plain again.", t_chat_prefix, t_chat_prefix_go },
+    { "notice_events", "Makes a car and a loaded Magnum. Type /test go to see a chat line for every game event of yours.", "Lines appear for a seat in the car, each shot, each item that goes into or out of a slot, and a change of the round.", t_notices, t_notices_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
 };
 
@@ -969,7 +1002,8 @@ static SvResult SV_CALL enable(const SvHost *h, SvOwner owner)
         r = h->get_api(owner, SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, (const void **)&props);
     if (r != SV_OK)
         return r;
-    r = h->subscribe(owner, SV_EVENT_CHAT, on_event);
+    r = h->subscribe(owner, SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM,
+        on_event);
     if (r != SV_OK)
         return r;
     return h->command(owner, "test", SV_COMMAND_ADMIN, test_command);

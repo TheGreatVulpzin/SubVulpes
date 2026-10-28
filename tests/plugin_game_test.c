@@ -533,11 +533,29 @@ static void post_events(void)
     SvEntity player_ref = sv_entity_at(SV_ENTITY_PLAYER, 0), human_ref = sv_entity_at(SV_ENTITY_HUMAN, 0), stale;
     float pos[3] = { 500.0f, 30.0f, 500.0f }, rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
     int temp;
+    /* The set-up of the test made real notice events (items and bodies). The count below starts from nothing. */
+    sv_events_clear();
     CHECK(sv_plugins_wants(SV_EVENT_SPAWN) && sv_plugins_wants(SV_EVENT_DEATH) && sv_plugins_wants(SV_EVENT_LEAVE));
-    CHECK(sv_plugins_wants(SV_EVENT_TICK) && !sv_plugins_wants(SV_EVENT_STOP) && !sv_plugins_wants(0x4000u));
+    CHECK(sv_plugins_wants(SV_EVENT_TICK) && !sv_plugins_wants(SV_EVENT_STOP) && !sv_plugins_wants(0x1000000u));
+    /* The posts of the world events refuse an index out of range, and post nothing. */
+    sv_game_event_vehicle(-1, 0, 0, 1);
+    sv_game_event_vehicle(SR_MAX_HUMAN, 0, 0, 1);
+    sv_game_event_vehicle(0, -1, 0, 1);
+    sv_game_event_vehicle(0, SR_MAX_OBJECT, 0, 1);
+    sv_game_event_shot(-1, 0);
+    sv_game_event_shot(SR_MAX_ITEM, 0);
+    sv_game_event_shot(0, -1);
+    sv_game_event_shot(0, SR_MAX_HUMAN);
+    sv_game_event_object_gone(-1);
+    sv_game_event_object_gone(SR_MAX_OBJECT);
+    sv_game_event_item(-1, 0, 0, 1);
+    sv_game_event_item(SR_MAX_ITEM, 0, 0, 1);
+    sv_game_event_item(0, -1, 0, 1);
+    sv_game_event_item(0, SR_MAX_HUMAN, 0, 1);
+    CHECK(sv_events_pending() == 0);
     sv_events_post(SV_EVENT_TICK, 1, player_ref, human_ref, 0);
     sv_events_post(SV_EVENT_STOP, 1, player_ref, human_ref, 0);
-    sv_events_post(0x4000u, 1, player_ref, human_ref, 0);
+    sv_events_post(0x1000000u, 1, player_ref, human_ref, 0);
     sv_events_post(0, 1, player_ref, human_ref, 0);
     sv_events_post(SV_EVENT_SPAWN | SV_EVENT_DEATH, 1, player_ref, human_ref, 0);
     CHECK(sv_events_pending() == 0);
@@ -990,12 +1008,28 @@ int main(void)
     sr_humans[0].vehicle_id = -1;
     sr_items[0].num_children = -1;
     sr_data_object[0].num_wheels = 33;
+    /* The round changes between two ticks: the host looks at the start of the tick and posts an event for each change. */
+    sr_game.state = 2;
+    sr_game.round_number = 7;
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
     sr_humans[0].inventory[0].count = 0;
     sr_items[0].num_children = 0;
     sr_data_object[0].num_wheels = 0;
+    sr_game.round_number = 8;
     write_api_tick();
+    /* A shot and a removed vehicle, after the write checks, which clear the queue when they start. */
+    sv_game_event_shot(0, 0);
+    {
+        static const vec3 gone_at = { 5.0f, 5.0f, 5.0f };
+        int gone = createobject(0, &gone_at, NULL, rotation, 9);
+        CHECK(gone > 0);
+        sr_objects[gone].time_to_live = 0;
+        objecttimetolive();
+        CHECK(!sr_objects[gone].active);
+    }
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed());
     chat_commands();
     menu_return_check();
     translate_check();

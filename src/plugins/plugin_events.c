@@ -14,10 +14,17 @@ static uint32_t first, used, lost, lost_tick;
 /* One kind at a time: the kinds that the core posts. */
 static int postable(uint32_t kind)
 {
-    return kind == SV_EVENT_SPAWN || kind == SV_EVENT_DEATH || kind == SV_EVENT_LEAVE;
+    return kind == SV_EVENT_SPAWN || kind == SV_EVENT_DEATH || kind == SV_EVENT_LEAVE || kind == SV_EVENT_ROUND ||
+        kind == SV_EVENT_VEHICLE || kind == SV_EVENT_SHOT || kind == SV_EVENT_OBJECT_GONE || kind == SV_EVENT_ITEM;
 }
 
 void sv_events_post(uint32_t kind, uint32_t tick, SvEntity player, SvEntity human, SvEntity actor)
+{
+    sv_events_post_ex(kind, tick, player, human, actor, 0, 0, 0, 0);
+}
+
+void sv_events_post_ex(uint32_t kind, uint32_t tick, SvEntity player, SvEntity human, SvEntity actor, SvEntity item,
+    SvEntity object, int32_t value, int32_t extra)
 {
     SvGameEvent *record;
     if (!postable(kind) || !sv_plugins_wants(kind))
@@ -35,6 +42,10 @@ void sv_events_post(uint32_t kind, uint32_t tick, SvEntity player, SvEntity huma
     record->player = player;
     record->human = human;
     record->actor = actor;
+    record->item = item;
+    record->object = object;
+    record->value = value;
+    record->extra = extra;
     ++used;
 }
 

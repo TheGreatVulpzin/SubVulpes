@@ -3,6 +3,7 @@
 #include "plugin_host.h"
 #include "plugin_entities.h"
 #include "plugin_damage.h"
+#include "plugin_game_internal.h"
 #include "sr_runtime.h"
 #include <string.h>
 
@@ -54,6 +55,69 @@ void sv_game_event_hit(int human, int owner)
     if (human < 0 || human >= SR_MAX_HUMAN)
         return;
     last_hit[human] = owner;
+}
+
+static SvEntity player_of(int human)
+{
+    return human >= 0 && human < SR_MAX_HUMAN ? sv_entity_at(SV_ENTITY_PLAYER, sr_humans[human].player_id) : 0;
+}
+
+void sv_game_event_vehicle(int human, int object, int seat, int entered)
+{
+    if (!sv_plugins_wants(SV_EVENT_VEHICLE) || human < 0 || human >= SR_MAX_HUMAN || object < 0 || object >= SR_MAX_OBJECT)
+        return;
+    sv_events_post_ex(SV_EVENT_VEHICLE, now(), player_of(human), sv_entity_at(SV_ENTITY_HUMAN, human), 0, 0,
+        sv_entity_at(SV_ENTITY_OBJECT, object), seat, entered);
+}
+
+void sv_game_event_shot(int item, int human)
+{
+    if (!sv_plugins_wants(SV_EVENT_SHOT) || item < 0 || item >= SR_MAX_ITEM || human < 0 || human >= SR_MAX_HUMAN)
+        return;
+    sv_events_post_ex(SV_EVENT_SHOT, now(), player_of(human), sv_entity_at(SV_ENTITY_HUMAN, human), 0,
+        sv_entity_at(SV_ENTITY_ITEM, item), 0, sr_items[item].type, sr_items[item].ammo);
+}
+
+void sv_game_event_object_gone(int object)
+{
+    if (!sv_plugins_wants(SV_EVENT_OBJECT_GONE) || object < 0 || object >= SR_MAX_OBJECT)
+        return;
+    sv_events_post_ex(SV_EVENT_OBJECT_GONE, now(), 0, 0, 0, 0, sv_entity_at(SV_ENTITY_OBJECT, object),
+        sr_objects[object].type, sr_objects[object].color);
+}
+
+void sv_game_event_item(int item, int human, int slot, int in)
+{
+    if (!sv_plugins_wants(SV_EVENT_ITEM) || item < 0 || item >= SR_MAX_ITEM || human < 0 || human >= SR_MAX_HUMAN)
+        return;
+    sv_events_post_ex(SV_EVENT_ITEM, now(), player_of(human), sv_entity_at(SV_ENTITY_HUMAN, human), 0,
+        sv_entity_at(SV_ENTITY_ITEM, item), 0, slot, in);
+}
+
+/* The state and the number of the round at the last look. The first look only records them. */
+static int round_known, round_state, round_number;
+
+void sv_game_event_poll(void)
+{
+    if (!sv_game_is_ready())
+        return;
+    if (round_known && (round_state != sr_game.state || round_number != sr_game.round_number)) {
+        round_state = sr_game.state;
+        round_number = sr_game.round_number;
+        if (sv_plugins_wants(SV_EVENT_ROUND))
+            sv_events_post_ex(SV_EVENT_ROUND, now(), 0, 0, 0, 0, 0, round_state, round_number);
+    }
+    if (!round_known) {
+        round_known = 1;
+        round_state = sr_game.state;
+        round_number = sr_game.round_number;
+    }
+}
+
+/* Forgets the last look, for a game that starts again. */
+void sv_game_event_poll_reset(void)
+{
+    round_known = 0;
 }
 
 /* A replacement of the chat text: 1 to 63 printable ASCII bytes. */

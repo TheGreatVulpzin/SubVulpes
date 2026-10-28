@@ -25,6 +25,10 @@ static int ref_ok[8];
 static uint32_t seen_chat, seen_chat_denied, seen_join;
 static char last_chat[64];
 static int chat_player_ok;
+/* What the fixture saw of the notice events of the world. */
+static uint32_t seen_round, last_round_state, last_round_number, seen_vehicle_in, seen_vehicle_out, seen_shot, seen_gone,
+    seen_item_in, seen_item_out;
+static int vehicle_refs_ok = 1, shot_ok, gone_color_ok, gone_stale = 1;
 /* What the fixture saw of the damage decisions: the amounts that the test program sends, in order, and the checks that run
  * inside the callback. */
 static uint32_t damage_log_n, damage_log_source[8], damage_log_amount[8];
@@ -1114,6 +1118,49 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
             return SV_FAILED;
         return strcmp(ps.name, "BANNED") ? SV_OK : SV_DENIED;
     }
+    if (event->kind == SV_EVENT_ROUND || event->kind == SV_EVENT_VEHICLE || event->kind == SV_EVENT_SHOT ||
+        event->kind == SV_EVENT_OBJECT_GONE || event->kind == SV_EVENT_ITEM) {
+        SvObjectState os = { sizeof os };
+        SvItemState is = { sizeof is };
+        SvHumanState hs = { sizeof hs };
+        if (event->size != sizeof *record || record->reserved)
+            return SV_FAILED;
+        switch (event->kind) {
+        case SV_EVENT_ROUND:
+            ++seen_round;
+            last_round_state = (uint32_t)record->value;
+            last_round_number = (uint32_t)record->extra;
+            break;
+        case SV_EVENT_VEHICLE:
+            if (record->extra)
+                ++seen_vehicle_in;
+            else
+                ++seen_vehicle_out;
+            if (game->human(owner, record->human, &hs) != SV_OK || game->object(owner, record->object, &os) != SV_OK ||
+                record->value < 0 || record->value > 1)
+                vehicle_refs_ok = 0;
+            break;
+        case SV_EVENT_SHOT:
+            ++seen_shot;
+            shot_ok = game->item(owner, record->item, &is) == SV_OK && is.type == record->value &&
+                game->human(owner, record->human, &hs) == SV_OK;
+            break;
+        case SV_EVENT_OBJECT_GONE:
+            ++seen_gone;
+            if (record->extra == 9 && record->value == 0)
+                gone_color_ok = 1;
+            if (game->object(owner, record->object, &os) == SV_OK)
+                gone_stale = 0;
+            break;
+        default:
+            if (record->extra)
+                ++seen_item_in;
+            else
+                ++seen_item_out;
+            break;
+        }
+        return SV_OK;
+    }
     if (event->size != sizeof *record || record->reserved)
         return SV_FAILED;
     switch (event->kind) {
@@ -1174,6 +1221,8 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
         CHECK(event_checks());
         return write_checks(owner);
     } else if (stage == 4) {
+        /* A tick that only delivers the notice events that the write checks of stage 3 queued. */
+    } else if (stage == 5) {
         SvPlayerState p = { sizeof p };
         SvHumanState h = { sizeof h };
         SvItemState it = { sizeof it };
@@ -1182,10 +1231,19 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
         SvWorldState world = { sizeof world };
         SvEntity page[1] = {0};
         uint32_t count = 777, next = 888;
-        CHECK(seen_spawn == 1025 && seen_lost == 76 && spawn_before_lost == 1 && seen_other == 0);
+        /* One spawn from the test program, two from the bots that the write checks made, then the flood of 1024 that fits and 76
+         * that does not. */
+        CHECK(seen_spawn == 1027 && seen_lost == 76 && spawn_before_lost == 3 && seen_other == 0);
         /* The chat texts that reached the plugin: hello, deny me (dropped), 63 letters and 99 letters cut to 63. */
         CHECK(seen_chat == 10 && seen_chat_denied == 1 && strlen(last_chat) == 63 && last_chat[0] == 'b' && chat_player_ok);
         CHECK(seen_join == 2);
+        /* The notice events: three round changes (the last one is the state 3 of the bot check), two seats and four exits, one
+         * shot, a vehicle that went, and items. */
+        CHECK(seen_round == 3 && last_round_state == 3 && last_round_number == 8);
+        CHECK(seen_vehicle_in == 2 && seen_vehicle_out >= 4 && vehicle_refs_ok);
+        CHECK(seen_shot == 1 && shot_ok);
+        CHECK(seen_gone >= 1 && gone_color_ok && gone_stale);
+        CHECK(seen_item_in >= 1 && seen_item_out >= 1);
         /* The decisions of the test program, in order: deny, change, two bad answers, an object change and deny, a vehicle
          * hit with a shooter, and the write guard. */
         CHECK(damage_log_n == 8 && damage_refs_ok && damage_guard_ok);
@@ -1240,9 +1298,10 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, UINT32_MAX, 1, &table) == SV_NOT_FOUND && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
-    CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x4000u, tick) == SV_INVALID);
+    CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x1000000u, tick) == SV_INVALID);
     return host->subscribe(owner, SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
-        SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE, tick);
+        SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
+        SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM, tick);
 }
 
 static void SV_CALL disable(SvOwner owner)

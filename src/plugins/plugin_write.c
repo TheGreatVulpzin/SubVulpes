@@ -6,6 +6,7 @@
 #include "plugin_entities.h"
 #include "sv_game_write.h"
 #include "plugin_game_internal.h"
+#include "plugin_game_events.h"
 #include "events.h"
 #include "buildings.h"
 #include "items.h"
@@ -468,6 +469,7 @@ static SvResult SV_CALL write_vehicle_enter(SvOwner owner, SvEntity human, SvEnt
             return SV_CONFLICT;
     hu->vehicle_id = oi;
     hu->vehicle_seat = seat;
+    sv_game_event_vehicle(hi, oi, seat, 1);
     return SV_OK;
 }
 

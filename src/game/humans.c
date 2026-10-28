@@ -727,6 +727,7 @@ static void human_entervehicle(Human *hu)
   vec3 p, d;
   float best = 1.5f, dist, sx, sy, sz;
   int o, s, other, taken;
+  int before = hu->vehicle_id;
 
   if ((hu->input_buttons & 0x800) == 0 || (hu->input_buttons_prev & 0x800) != 0)
     return;
@@ -763,6 +764,8 @@ static void human_entervehicle(Human *hu)
       best = (float)x87_sqrt((double)(float)(d.z * d.z + (d.y * d.y + d.x * d.x)));
     }
   }
+  if (before == -1 && hu->vehicle_id != -1)
+    sv_game_event_vehicle((int)(hu - sr_humans), hu->vehicle_id, hu->vehicle_seat, 1);
 }
 
 /* The tick of a human on foot. */
@@ -805,6 +808,7 @@ void human_leavevehicle(int h)
   hu->view_axis = hu->axis;
   ob->drive_buttons = 4;
   hu->view_pitch = hu->pitch;
+  sv_game_event_vehicle(h, hu->vehicle_id, hu->vehicle_seat, 0);
   hu->vehicle_id = -1;
   hu->exit_timer = 0;
   for (k = 0; k < 15; k++) {

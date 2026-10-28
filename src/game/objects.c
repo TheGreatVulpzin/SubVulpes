@@ -17,6 +17,7 @@
 #include "objects.h"
 #include "plugin_damage.h"
 #include "plugin_entities.h"
+#include "plugin_game_events.h"
 #include "profiler.h"
 #include "sr_math.h"
 #include "sr_os.h"
@@ -84,6 +85,7 @@ void objecttimetolive(void)
       if (sr_humans[h].active && sr_humans[h].vehicle_id == i)
         sr_humans[h].vehicle_id = -1;
     }
+    sv_game_event_object_gone(i);
     o->active = 0;
     sv_entity_deleted(SV_ENTITY_OBJECT, (uint32_t)i);
     createevent_updateobject(i, 3, 0, &o->pos, NULL);

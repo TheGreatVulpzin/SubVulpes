@@ -16,6 +16,14 @@
  *   SV_EVENT_LEAVE  player that left
  *   SV_EVENT_JOIN   decision. player is the new player and account its account. SV_DENIED drops the player, as a ban does
  *   SV_EVENT_LOST   lost is the number of records that the full queue dropped since the last delivery
+ *   SV_EVENT_ROUND  value is the new state of the round (1 waiting, 2 playing, 3 ended) and extra the number of the round.
+ *                   The host looks for a change at the start of each tick, so the event comes one tick after the change
+ *   SV_EVENT_VEHICLE  human, player (0 for a body with no player), object (the vehicle), value the seat, extra 1 for
+ *                   a human that got in and 0 for one that got out. Posted for the use button, the exit and the plugin API
+ *   SV_EVENT_SHOT   human and player of the shooter, item the gun, value the item type, extra the rounds left in the chamber
+ *   SV_EVENT_OBJECT_GONE  object (a reference that no longer resolves), value the type and extra the color. Posted when the
+ *                   game removes a vehicle at the end of its life
+ *   SV_EVENT_ITEM   human and player, item, value the slot, extra 1 when the item went into the slot and 0 when it left
  *
  * The host gives these records at a safe point, before the tick event, in the order in which they happened. The full
  * API is available in the callback. See docs/plugin-events.md. */
@@ -24,6 +32,8 @@ typedef struct {
     SvEvent base;
     SvEntity player, human, actor, account;
     uint32_t lost, reserved;
+    SvEntity item, object;
+    int32_t value, extra;
 } SvGameEvent;
 
 /* A chat text: the player that typed it and the text, at most 63 bytes. It is a decision at a safe point. The plugin

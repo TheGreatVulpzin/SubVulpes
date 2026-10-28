@@ -176,7 +176,8 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint32_t events, SvEventFn
     if ((events & SV_EVENT_DAMAGE) && !module->unsafe)
         return SV_DENIED;
     if (events & ~(SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
-                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE | SV_EVENT_CONFIG) ||
+                   SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_PHONE_DIGIT | SV_EVENT_PHONE_CALL | SV_EVENT_DAMAGE | SV_EVENT_CONFIG | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
+                   SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM) ||
         (events && !callback))
         return SV_INVALID;
     module->events = events;
@@ -214,6 +215,15 @@ static void (*release_hook)(SvOwner owner);
 void sv_plugins_set_release(void (*hook)(SvOwner owner))
 {
     release_hook = hook;
+}
+
+/* The game layer sets this one too. It runs at the start of each tick, before the queue is delivered, and it looks for
+ * changes that the core does not post by itself (the round). */
+static void (*poll_hook)(void);
+
+void sv_plugins_set_poll(void (*hook)(void))
+{
+    poll_hook = hook;
 }
 
 static void clear_resources(uint32_t index)
@@ -589,6 +599,8 @@ void sv_plugins_tick(void)
 {
     if (started && !stopping && !current && !failed) {
         reap();
+        if (poll_hook)
+            poll_hook();
         deliver_queue();
         dispatch(SV_EVENT_TICK);
     }

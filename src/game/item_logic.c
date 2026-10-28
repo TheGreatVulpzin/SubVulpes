@@ -9,6 +9,7 @@
 
 #include "bullets.h"
 #include "events.h"
+#include "plugin_game_events.h"
 #include "random.h"
 #include "sr_runtime.h"
 #include "vectors.h"
@@ -80,6 +81,7 @@ static void gun_shot(Item *it, int item, const ItemType *type, Human *hu)
     muzzle.z = (float)(it->rot[2].z * 0.0 + it->pos.z);
     createbullet(type->bullet_type, &muzzle, &v, owner);
     createevent_bullet(type->bullet_type, &it->pos, &v, item);
+    sv_game_event_shot(item, (int)(hu - sr_humans));
 
     getrandomvector2d(rnd2, type->recoil, 0.0f);
     rnd2[0] = (float)(type->recoil + rnd2[0]);

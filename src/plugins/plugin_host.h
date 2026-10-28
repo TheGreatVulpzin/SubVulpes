@@ -35,6 +35,8 @@ SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
 /* Sets a function that the host calls with the owner of a plugin when that plugin stops, to give back what it changed. */
 void sv_plugins_set_release(void (*hook)(SvOwner owner));
+/* Sets a function that the host calls at the start of each tick, before it delivers the queued events. */
+void sv_plugins_set_poll(void (*hook)(void));
 /* Like sv_plugins_context, and 0 while a plugin runs a decision inside the simulation. Every call that changes the game or
  * the host needs this one. */
 int sv_plugins_write_context(SvOwner owner);
@@ -46,6 +48,9 @@ int sv_plugins_decide_damage(SvDamageEvent *event);
 int sv_plugins_wants(uint32_t kind);
 /* The event queue (plugin_events.c). The core posts, and the host takes the records out at a safe point. */
 void sv_events_post(uint32_t kind, uint32_t tick, SvEntity player, SvEntity human, SvEntity actor);
+/* The same, with the fields of the events of the world: an item, an object and two numbers. */
+void sv_events_post_ex(uint32_t kind, uint32_t tick, SvEntity player, SvEntity human, SvEntity actor, SvEntity item,
+    SvEntity object, int32_t value, int32_t extra);
 uint32_t sv_events_pending(void);
 int sv_events_next(SvGameEvent *out);
 void sv_events_clear(void);
