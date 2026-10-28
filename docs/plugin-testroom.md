@@ -53,6 +53,12 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 18 | `looks` | `set_looks`, one look setting for each `go` | Each go changes one part of your look |
 | 19 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
 
+## First play test
+
+The user ran tests 1 to 19 with the original client on 2026-10-27. Tests 4 to 19 worked, including a replaced and a new news line and the aim query.
+Two things stay open: whether the chat line of test 1 reaches other players and the private line of test 2 stays private (one player cannot show this), and what look settings a, b and c change.
+The first run found that a Magnum could not go in a hand that still held the bandage of the test before. The plugin now detaches its items before it removes them.
+
 ## Not covered yet
 
 The damage decision, the chat and join decisions, the notice events, the plugin settings, the object and item velocity rows and the line query on a car need a second step.
