@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.3, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.9, built on 2026-10-29. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -21,6 +21,7 @@ The plugin sends each line to you only. It says the number and the name of the t
 | `/test skip` | Skip the test |
 | `/test go` | Repeat the action of the test, or take its next step, for the tests that have one (sound, vehicle exit, aim, bots, missions) |
 | `/test kick NAME` | Test 57. Removes the player with that name. See the note below |
+| `/test again` | Say the name, the action and the expected result of the current test again |
 | `/test <number>` | Go to a test |
 | `/test list` | One line for each test, with its result |
 | `/test report` | The count of results and the names of the failed tests |
@@ -28,6 +29,7 @@ The plugin sends each line to you only. It says the number and the name of the t
 
 When a test makes things (a car, a bot, items) or changes your body (health, bleeding, looks), the next test, `/test stop` or the end of the list undoes it.
 An API call that returns an error fails the test at once, with the error number in the chat.
+Every line that the room says to you also goes to the server log, with the prefix `SAY`. A line that leaves the chat too fast stays in the log.
 Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP code=<error>`.
 
 ## The tests
@@ -64,7 +66,7 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 28 | `notice_events` | The events round, vehicle, shot, item and vehicle gone | A chat line for each event of yours |
 | 29 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
 | 30 | `collapse_threshold` | `SvGameEngine.set` of `human.death_start` 60, `human.health` 50 | Your body falls limp at half health |
-| 31 | `ai_walk` | `SvGameAi.destination`, then `override_input` for each `go` | The bot walks 25 units. After a go it stops and faces the side |
+| 31 | `ai_walk` | `SvGameAi.destination`, then `override_input` with a yaw of 3.0 for each `go` | The bot walks 25 units. After a go it stops and turns about 90 degrees from its path |
 | 32 | `phone_claim` | The phone call decision (`SV_DENIED` for the number 1234) | A chat line, and the phone does not ring |
 | 33 | `storage_counter` | `SvGameStorage.get`, `put`, then `erase` for each `go` | A counter that grows, also after a restart |
 | 34 | `read_account` | `account` | Your name and money |
@@ -84,7 +86,7 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 48 | `mission_read` | `SvGameMission.slots` for 5 teams | The counts of active missions |
 | 49 | `mission_start` | `item_create` of an objective, `start`, then `cancel` for each `go` | A mission in the list, then it leaves |
 | 50 | `shop_catalog` | `SvGameShop.catalog`, `catalog_replace` | The first row of each shop costs 1 |
-| 51 | `shop_phone` | `phone`, `phone_idle` for each `go` | The state of the call, then the call ends |
+| 51 | `shop_phone` | `item_create` of a cell phone (item type 23), `phone`, `phone_idle` for each `go` | You hold a cell phone. After you dial, the state of the call shows, then the call ends |
 | 52 | `setting_list` | `SvGameSettings.describe`, `get` | Three settings with ranges |
 | 53 | `setting_bots` | `SvGameSettings.set` of `bot_count`, the setting event | A chat line, and 2 bots in the city |
 | 54 | `engine_list` | `SvGameEngine.describe`, `get` | Three parameters with values |
@@ -95,8 +97,10 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 59 | `item_grid` | `item_create` 16 times, then `teleport` of every item each tick | The items move as one smooth picture |
 | 60 | `headline_frames` | `headline` on line 0, one new text every 60, 20 or 6 ticks | A moving pattern in the open newspaper |
 | 61 | `entity_tag` | `SvGameStorage` with the scope `SV_STORAGE_ENTITY` on a car, then `object_remove` | The tag reads back, and after the car goes the same reference finds nothing |
+| 62 | `sound_tour` | `sound` for the ids 0 to 46 at pitch 1, one every 1.5 seconds, with a `TOURSOUND` line in the log | 47 sounds. See [the audio page](audio-analysis.md) |
+| 63 | `pitch_octaves` | `sound` of id 27 at the pitches 0.125 to 4, twice | Six octaves. Two steps that sound the same show a limit of the client |
 
-Tests 30 to 61 have not run against the original client yet.
+Tests 30 to 63 have not run against the original client yet.
 Tests 58 to 60 measure what a music and picture plugin needs: the sound pitch, many moving items and a newspaper that changes while it is open. They use the tick event. Each one stops by itself and reports the number of steps or the first error. Test 60 leaves line 0 of the news changed until the next round.
 Test 57 refuses the tester, bots and administrators. The kick puts the IP address of the player in the kick list of the server. The list lives in memory only. It blocks that address until the server restarts or an administrator types `/clearkick`. A friend on your own network shares your address, so you stay blocked too until you type `/clearkick`.
 Each test that changes money, stocks, a company price, a mission, a shop catalog or the bot count puts the old value back in the next test or in `/test stop`.

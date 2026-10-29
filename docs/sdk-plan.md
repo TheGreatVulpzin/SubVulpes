@@ -5,7 +5,7 @@ It follows [the plugin platform](plugins.md), [the SDK page](plugin-sdk.md) and 
 
 ## Goal
 
-A plugin author goes from an empty folder to an approved, tested plugin on a test server in minutes. The plugin can be C, Lua or WASM.
+A plugin author goes from an empty folder to an approved, tested plugin on a test server in minutes. The plugin can be C or Lua. WASM waits for a request (see WP9).
 The author needs no source tree of the server, no hash typed by hand, and no game client to run the first tests.
 
 ## What blocks authors today
@@ -109,6 +109,8 @@ Errors inside a callback are caught, logged with the plugin ID, and counted. Too
 
 ### WP9 WASM adapter (2 days)
 
+**Deferred on 2026-10-29.** The owner decided that Lua is enough for now. Native C stays for code that needs speed. Start WP9 only when an author asks for a sandboxed compiled language (C, Rust or Zig), or when the approval of native code becomes a real problem for server hosts. The public C API is the contract, so WASM can come later without a change to it. Do not build WP9, and do not add a WASM path to WP10 and WP11, until then.
+
 The runtime of D2. Imports under the module name `sv`. Exports `sv_enable`, `sv_disable`, `sv_event` and `sv_command`. A memory cap in pages, fuel or a stop for loops, no WASI except a log call.
 `sdk/wasm/` gets the C header, a template in C and a note on `clang --target=wasm32`. No compiler ships with the SDK.
 
@@ -128,14 +130,14 @@ Limit tests: an endless loop, a memory bomb, a call to a capability that the man
 | M1 | WP0, WP1, WP2, WP3, WP4 | A native author builds, tests and packs a plugin from the SDK. | about 4 |
 | M2 | WP5 | One dialog to install and approve. | about 1.5 |
 | M3 | WP6, WP7, WP8 | Lua plugins, with limits. | about 3.5 |
-| M4 | WP9, WP10, WP11 | WASM plugins, parity and documents. | about 3.5 |
+| M4 | WP10, WP11 | Parity examples (C and Lua), limit tests and documents. WP9 (WASM) is deferred. | about 1.5 |
 
-Total: about 12 days. Stop after each milestone, run the full checks and let the owner merge.
+Total: about 10 days, without WP9. Stop after each milestone, run the full checks and let the owner merge.
 
 ## Acceptance
 
 1. On a clean folder, unzip the SDK, build the template, pack it, install it on a test server with the launcher in one dialog, and run its scenario. All steps pass.
-2. The same "health commands" scenario passes for the C, Lua and WASM versions.
+2. The same "health commands" scenario passes for the C and Lua versions. The WASM version joins when WP9 starts.
 3. The limit tests of WP10 pass.
 4. `ctest`, `gen_storage --check`, `check_native` and `check_repo` pass. No third-party source is in the repository.
 5. A removal proof exists for each security check: the capability wall, the script sandbox, the budgets and the bounds of the bindings.

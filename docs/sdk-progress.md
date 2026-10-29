@@ -1,4 +1,4 @@
-﻿# SDK progress
+# SDK progress
 
 ## M1: native SDK
 
@@ -30,3 +30,17 @@ WP4 is complete (2026-10-28). `subvulpes_plugin_test.exe` links the game sources
 Milestone M1 is complete: an author builds, tests and packs a native plugin from the SDK. All 14 groups of `ctest` pass. M2 (the one-dialog approval in the launcher) and M3 (Lua) are next. No SDK package is published, and nothing was pushed.
 
 Build state after the checks: idle. The marker file is `build/state.txt`.
+
+## SDK polish (2026-10-29)
+
+| Task | State | Evidence |
+| --- | --- | --- |
+| 1. Merge `main` into `codex/sdk` | Done | Merged `main` at `19ae8b8` without conflicts. The normal build, all 14 CTest groups and the storage, native and repo checks pass. |
+| 2. Native approval commands | Open | Add the four commands to the SDK README. |
+| 3. MSVC discovery | Open | Use `vswhere` and keep the `VCVARS` override. |
+| 4. First steps | Open | Add one page and ship it in the SDK ZIP. |
+| 5. Clean-machine check | Open | Add an external test folder with no source paths. |
+| 6. Release flow | Open | Document the local ZIP checks. |
+
+The merge imports the 64-bit subscription mask, the list item sizes and `SV_STORAGE_ENTITY` from `main`.
+No SDK change alters a public API header. The launcher dialog, Lua and WASM remain outside this task.

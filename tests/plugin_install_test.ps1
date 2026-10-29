@@ -127,9 +127,10 @@ $bad = @(
 # The manifest of a plugin may declare settings and ask for unsafe events. The installer checks the shape of the sections and
 # the fields, and copies the manifest as it is. The host checks each value when it starts.
 $setting = "[setting.price]`ntype=int`ndefault=1`nmin=0`nmax=5`nlabel=Price`nlive=1`nadmin=1`n"
-$settingsOk = Package 'settings-ok' @((Entry 'plugin.ini' (ManifestBody 'test.settings' ("unsafe_events=1`n" + $setting + "[setting.mode]`ntype=choice`nchoices=a,b`ndefault=a`nlabel=Mode`n"))), (Entry 'status.dll' $currentBytes))
+$settingsOk = Package 'settings-ok' @((Entry 'plugin.ini' (ManifestBody 'test.settings' ("unsafe_events=1`n" + $setting + "[setting.mode]`ntype=choice`nchoices=a,b`ndefault=a`nlabel=Mode`n" + "[setting.count]`ntype=int`ndefault=1`nmin=0`nmax=5`nlabel=Count`n"))), (Entry 'status.dll' $currentBytes))
 Install $server $settingsOk
 Assert-Test ([IO.File]::ReadAllText((Join-Path $server 'plugins/test.settings/plugin.ini')).Contains('[setting.mode]')) 'The installer changed the manifest.'
+Assert-Test ([IO.File]::ReadAllText((Join-Path $server 'plugins/test.settings/plugin.ini')).Contains('[setting.count]')) 'A setting named count was lost.'
 $badSettings = @(
     (Package 'unsafe-value' @((Entry 'plugin.ini' (ManifestBody 'test.bad1' "unsafe_events=2`n")), (Entry 'status.dll' $currentBytes))),
     (Package 'setting-field' @((Entry 'plugin.ini' (ManifestBody 'test.bad2' ($setting + "color=red`n"))), (Entry 'status.dll' $currentBytes))),

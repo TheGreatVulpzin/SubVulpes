@@ -1,6 +1,8 @@
 /* The test room. An administrator types /test start in the chat. The plugin runs one test after another. It says what it
  * does and what the administrator should see, then waits for /test yes or /test no. It uses only the public plugin API, so
  * a failed test points at the API or at the game, and not at a private shortcut. The results go to the server log. */
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -20,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.3"
+#define VERSION "0.2.9"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -76,11 +78,12 @@ static struct { uint32_t building; SvShopCatalog old; } saved_shop[32];
 static int saved_shop_count, duel_stage;
 static SvEntity duel_a, duel_b;
 /* A timed show, driven by the tick event: a scale of sounds, a grid of moving items or a newspaper that changes. */
-enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES };
+enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES, ANIM_TOUR, ANIM_OCTAVES };
 #define GRID_ITEMS 16
 static int anim_kind, grid_count;
 static uint32_t anim_next, anim_step, anim_every, anim_limit;
 static SvEntity grid_items[GRID_ITEMS];
+static uint32_t grid_skipped;
 static SvVector grid_origin;
 
 /* ------------------------------------------------------------ text */
@@ -99,6 +102,11 @@ static void say(const char *text)
                 }
         memcpy(line, text, take);
         line[take] = 0;
+        {
+            char logged[LINE_MAX_CHARS + 8];
+            snprintf(logged, sizeof logged, "SAY %s", line);
+            host->log(self, logged);
+        }
         change->message_to(self, SV_MESSAGE_SERVER, tester, line);
         text += take;
         length -= take;
@@ -139,6 +147,13 @@ static SvResult body(SvPlayerState *player, SvHumanState *human)
     if (!player->human)
         return SV_STATE;
     return game->human(self, player->human, human);
+}
+
+/* Puts an item in a hand of a human: the right hand first, then the left one. */
+static SvResult equip_hand(SvEntity item, SvEntity human)
+{
+    SvResult r = change->item_equip(self, item, human, 0);
+    return r == SV_CONFLICT ? change->item_equip(self, item, human, 1) : r;
 }
 
 static uint32_t prop_id(const char *name)
@@ -457,7 +472,7 @@ static SvResult t_item_hand(void)
     if (r != SV_OK)
         return r;
     remember(made_items, &made_item_count, 8, item);
-    return change->item_equip(self, item, player.human, 0);
+    return equip_hand(item, player.human);
 }
 
 static SvResult t_magnum(void)
@@ -481,7 +496,7 @@ static SvResult t_magnum(void)
     r = change->item_attach(self, gun, magazine);
     if (r != SV_OK)
         return r;
-    return change->item_equip(self, gun, player.human, 0);
+    return equip_hand(gun, player.human);
 }
 
 static SvResult t_car(void)
@@ -913,10 +928,10 @@ static SvResult t_ai_walk(void)
 static SvResult t_ai_walk_go(void)
 {
     SvAiInput input = { sizeof input };
-    input.yaw = 1.5f;
+    input.yaw = 3.0f;
     if (!ai)
         return SV_INCOMPATIBLE;
-    say("The bot should stop and face the side for a few seconds.");
+    say("The bot should stop and turn about 90 degrees from its path for a few seconds.");
     return ai->override_input(self, last_npc, &input, 300);
 }
 
@@ -1089,16 +1104,16 @@ static SvResult make_bot(SvVector at, const char *name, SvEntity *bot, SvEntity 
 static SvResult arm(SvEntity human, SvVector at)
 {
     SvEntity gun = 0, magazine = 0;
-    SvResult r = change->item_create(self, 4, at, &gun);
+    SvResult r = change->item_create(self, 2, at, &gun);
     if (r != SV_OK)
         return r;
     remember(made_items, &made_item_count, 8, gun);
-    r = change->item_create(self, 5, at, &magazine);
+    r = change->item_create(self, 3, at, &magazine);
     if (r != SV_OK)
         return r;
     remember(made_items, &made_item_count, 8, magazine);
     r = change->item_attach(self, gun, magazine);
-    return r == SV_OK ? change->item_equip(self, gun, human, 0) : r;
+    return r == SV_OK ? equip_hand(gun, human) : r;
 }
 
 static SvResult t_threats_go(void)
@@ -1359,49 +1374,21 @@ static SvResult t_shop_catalog(void)
     return saved_shop_count ? SV_OK : SV_NOT_FOUND;
 }
 
-static SvResult find_phone(SvEntity *found, const SvHumanState *human)
-{
-    float best = 0.0f;
-    uint32_t cursor = 0, round;
-    *found = 0;
-    for (round = 0; round < 16; ++round) {
-        SvEntity page[SV_ENTITY_PAGE_MAX];
-        uint32_t count = 0, next = 0, i;
-        SvResult r = game->entities(self, SV_ENTITY_ITEM, cursor, page, SV_ENTITY_PAGE_MAX, &count, &next);
-        if (r != SV_OK)
-            return r;
-        for (i = 0; i < count; ++i) {
-            SvItemState item = { sizeof item };
-            if (game->item(self, page[i], &item) == SV_OK && item.phone_id > 0 && !item.parent_human) {
-                float dx = item.position.x - human->position.x, dz = item.position.z - human->position.z;
-                float distance = dx * dx + dz * dz;
-                if (!*found || distance < best) {
-                    *found = page[i];
-                    best = distance;
-                }
-            }
-        }
-        if (next <= cursor)
-            break;
-        cursor = next;
-    }
-    return *found ? SV_OK : SV_NOT_FOUND;
-}
-
 static SvResult t_phone_state(void)
 {
     SvPlayerState player = { sizeof player };
     SvHumanState human = { sizeof human };
-    SvItemState item = { sizeof item };
+    SvEntity phone = 0;
     SvResult r = shop ? body(&player, &human) : SV_INCOMPATIBLE;
     if (r == SV_OK)
-        r = find_phone(&phone_item, &human);
+        r = change->item_create(self, 23, human.position, &phone);
+    if (r == SV_OK) {
+        remember(made_items, &made_item_count, 24, phone);
+        phone_item = phone;
+        r = equip_hand(phone, player.human);
+    }
     if (r == SV_OK)
-        r = game->item(self, phone_item, &item);
-    if (r == SV_OK)
-        r = change->teleport(self, player.human, offset(item.position, 2.0f, 0.5f, 0.0f));
-    if (r == SV_OK)
-        say("You stand next to a phone. Dial a number, then type /test go to read the phone and end the call.");
+        say("You hold a cell phone. Dial a number, then type /test go to read the phone and end the call.");
     return r;
 }
 
@@ -1464,6 +1451,8 @@ static SvResult t_engine_list(void)
         SvEngineInfo info = { sizeof info };
         SvEngineValue value = { sizeof value };
         SvResult r = engine->describe(self, i, 0, &info);
+        if (r == SV_INVALID)
+            r = engine->describe(self, i, SV_ENGINE_GLOBAL, &info);
         if (r == SV_OK)
             r = engine->get(self, info.name, info.scope == SV_ENGINE_GLOBAL_SCOPE ? SV_ENGINE_GLOBAL : 0, &value);
         if (r != SV_OK)
@@ -1504,8 +1493,8 @@ static SvResult t_plugins_calls(void)
     refuse = plugins_api->refuse(self, "test");
     find = plugins_api->find(self, "sv.testroom", 1, &table);
     sayf("subscribe gave %d (want %d), refuse %d (want %d), find %d (want %d).", (int)subscribe, (int)SV_OK, (int)refuse,
-        (int)SV_STATE, (int)find, (int)SV_DEPENDENCY);
-    return subscribe == SV_OK && refuse == SV_STATE && find == SV_DEPENDENCY ? SV_OK : SV_FAILED;
+        (int)SV_STATE, (int)find, (int)SV_NOT_FOUND);
+    return subscribe == SV_OK && refuse == SV_STATE && find == SV_NOT_FOUND ? SV_OK : SV_FAILED;
 }
 
 /* The kick test. The player gives a name: /test kick NAME. The kick puts the address of the player in the kick list of the
@@ -1518,6 +1507,18 @@ static SvResult t_kick_run(void)
 }
 
 /* ------------------------------------------------------------ timed shows (for a music and picture plugin) */
+
+/* One log line for each sound of the sound tests, with the local time to the millisecond. The client probe writes the same
+ * time for each sound that it plays, so tools/audio/match_probe.py can match the two logs. */
+static void log_sound(uint32_t index, float pitch)
+{
+    SYSTEMTIME now;
+    char text[96];
+    GetLocalTime(&now);
+    snprintf(text, sizeof text, "TOURSOUND %02u:%02u:%02u.%03u index=%u pitch=%.4f", now.wHour, now.wMinute, now.wSecond,
+        now.wMilliseconds, index, pitch);
+    host->log(self, text);
+}
 
 static void animate(uint32_t tick)
 {
@@ -1536,11 +1537,26 @@ static void animate(uint32_t tick)
         r = change->sound(self, 21, human.position, 1.0f, pitch);
         if (anim_step % 4 == 0)
             sayf("Note %u, pitch %.2f.", anim_step, pitch);
+    } else if (anim_kind == ANIM_TOUR) {
+        r = change->sound(self, anim_step, human.position, 1.0f, 1.0f);
+        sayf("Sound %u.", anim_step);
+        log_sound(anim_step, 1.0f);
+    } else if (anim_kind == ANIM_OCTAVES) {
+        float pitch = 0.125f * (float)(1u << (anim_step % 6));
+        r = change->sound(self, 27, human.position, 1.0f, pitch);
+        sayf("Pitch %.3f.", pitch);
+        log_sound(27, pitch);
     } else if (anim_kind == ANIM_GRID) {
         int i;
         for (i = 0; i < grid_count && r == SV_OK; ++i) {
             float wave = sinf((float)anim_step * 0.2f + (float)(i / 4 + i % 4)) * 2.0f;
-            r = change->teleport(self, grid_items[i], offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f + wave, (float)(i % 4) * 2.0f));
+            SvVector place = offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f + wave, (float)(i % 4) * 2.0f);
+            SvResult moved = change->teleport(self, grid_items[i], place);
+            /* An item that a human picked up cannot move. The show goes on with the others. */
+            if (moved == SV_STATE)
+                ++grid_skipped;
+            else
+                r = moved;
         }
     } else if (anim_kind == ANIM_FRAMES) {
         char text[SV_HEADLINE_TEXT_MAX + 1];
@@ -1555,18 +1571,45 @@ static void animate(uint32_t tick)
         sayf("The show stopped with error %d after %u steps.", (int)r, anim_step);
         anim_kind = ANIM_NONE;
     } else if (anim_step >= anim_limit) {
-        sayf("The show ended after %u steps, one every %u ticks. No error.", anim_step, anim_every);
+        sayf("The show ended after %u steps. %u moves were skipped.", anim_step, grid_skipped);
         anim_kind = ANIM_NONE;
     }
 }
 
 static void anim_start(int kind, uint32_t every, uint32_t limit)
 {
+    grid_skipped = 0;
     anim_kind = kind;
     anim_every = every;
     anim_limit = limit;
     anim_step = 0;
     anim_next = 0;
+}
+
+static SvResult t_tour(void)
+{
+    say("Type /test go. Each sound plays once at pitch 1, one every 1.5 seconds, from number 0 to 46.");
+    say("Write down which numbers are tones (like a beep or a ring) and which are noises. The log has the numbers.");
+    return SV_OK;
+}
+
+static SvResult t_tour_go(void)
+{
+    anim_start(ANIM_TOUR, 90, 47);
+    return SV_OK;
+}
+
+static SvResult t_octaves(void)
+{
+    say("Type /test go. The phone ring (sound 27) plays 12 times: six pitches from 0.125 to 4, twice.");
+    say("Each step doubles the pitch, so each step is one octave higher. Tell me where two steps sound the same.");
+    return SV_OK;
+}
+
+static SvResult t_octaves_go(void)
+{
+    anim_start(ANIM_OCTAVES, 90, 12);
+    return SV_OK;
 }
 
 static SvResult t_scale(void)
@@ -1706,7 +1749,7 @@ static const Test tests[] = {
     { "notice_events", "Makes a car and a loaded Magnum. Type /test go to see a chat line for every game event of yours.", "Lines appear for a seat in the car, each shot, each item that goes into or out of a slot, and a change of the round.", t_notices, t_notices_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
     { "collapse_threshold", "Sets the death start to 60 and your health to 50.", "Your body falls limp at once, although the health bar shows half. The next test puts both back.", t_collapse, NULL },
-    { "ai_walk", "Makes a bot and sends it 25 units away. Type /test go to make it stop and turn.", "The bot walks to a point beside you. After a go it stops and faces the side for a few seconds.", t_ai_walk, t_ai_walk_go },
+    { "ai_walk", "Makes a bot and sends it 25 units away. Type /test go to make it stop and turn.", "The bot walks to a point beside you. After a go it stops and turns about 90 degrees from its path for a few seconds.", t_ai_walk, t_ai_walk_go },
     { "phone_claim", "Makes the plugin take a call to the number 1234 on any phone.", "Dial 1234: a chat line says the plugin took the call and the phone does not ring. Other numbers dial as before.", t_phone, NULL },
     { "storage_counter", "Stores a counter on the server and says its value.", "The number grows by 1 each run. After a server restart it keeps growing. Type /test go to erase the counter.", t_storage, t_storage_erase },
     { "read_account", "Reads your account.", "The name is yours and the money matches your game.", t_read_account, NULL },
@@ -1737,6 +1780,8 @@ static const Test tests[] = {
     { "item_grid", "Makes 16 items in a grid and moves all of them every tick in a wave. Type /test go to change the speed.", "The items move smoothly as one picture. Say no if they stutter, fall or vanish.", t_grid, t_grid_go },
     { "headline_frames", "Moves you to a newspaper. Type /test go to rewrite its first line again and again.", "Hold the newspaper open. The pattern of # and . moves. Say no if it never changes.", t_frames, t_frames_go },
     { "entity_tag", "Makes a car and stores a tag on it. Type /test go to remove the car, and again to read the tag.", "The tag reads back as hello. After the car goes, the same reference finds nothing (error 6).", t_tag, t_tag_go },
+    { "sound_tour", "Plays every game sound once, from 0 to 46. Type /test go to start.", "You hear 47 sounds. Say which numbers are tones.", t_tour, t_tour_go },
+    { "pitch_octaves", "Plays the phone ring in six octaves, twice. Type /test go to start.", "Six steps, each one octave higher. Say if two steps sound the same.", t_octaves, t_octaves_go },
 };
 
 /* ------------------------------------------------------------ flow */
@@ -1918,7 +1963,7 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         tester = actor;
         memset(result, 0, sizeof result);
         say("Test room started. Answer each test with /test yes, no or skip.");
-        say("Other commands: /test go, /test <number>, list, report, stop.");
+        say("Other commands: /test go, again, <number>, list, report, stop.");
         start_test(1);
         return SV_OK;
     }
@@ -1954,6 +1999,14 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         while (*name == ' ')
             ++name;
         kick_by_name(name);
+    } else if (!strcmp(word, "again")) {
+        if (!current) {
+            say("No test runs. Type /test start.");
+        } else {
+            sayf("[%d/%d] %s", current, test_count, tests[current - 1].name);
+            sayf("Does: %s", tests[current - 1].what);
+            sayf("Expect: %s", tests[current - 1].expect);
+        }
     } else if (!strcmp(word, "list")) {
         list();
     } else if (!strcmp(word, "report")) {
@@ -1964,7 +2017,7 @@ static SvResult SV_CALL test_command(SvOwner owner, uint64_t actor, const char *
         say("Test room stopped.");
         report();
     } else {
-        say("Commands: /test start, yes, no, skip, go, kick NAME, <number>, list, report, stop.");
+        say("Commands: /test start, yes, no, skip, go, again, kick NAME, <number>, list, report, stop.");
     }
     return SV_OK;
 }
