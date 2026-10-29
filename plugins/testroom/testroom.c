@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.9"
+#define VERSION "0.2.10"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
