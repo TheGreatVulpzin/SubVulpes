@@ -126,6 +126,11 @@ The head direction is the one that the legacy tool used. It is read from the bod
 The player's human reference must also point to that body.
 The API derives this relation from current reciprocal records, rather than the raw last-driver index.
 
+`SvObjectState.occupants[8]` names the human in each seat of the vehicle, and holds 0 for an empty seat. The index is the seat of the game, and seat 0 is the driver.
+Only the first `seat_count` slots can hold a human. The host scans the active humans whose vehicle is the object, so a bot counts, and so does a dead body that still sits in a seat.
+Read the health of the human to tell them apart. Two humans never share a slot: the first one found keeps it.
+A vehicle with no seats (`seat_count` is 0) has no occupants.
+
 The API omits `SvItemState.vehicle`, `SvItemState.linked_item` and `SvObjectState.linked_object`.
 Those historical raw indices can target a different entity after slot reuse.
 Future support needs generation-safe associations, not a conversion of the current raw index into a fresh reference.

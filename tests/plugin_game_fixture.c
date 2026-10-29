@@ -215,6 +215,7 @@ static SvResult initial_reads(SvOwner owner)
     CHECK(h.player == player && h.account == account && h.vehicle == object);
     CHECK(game->item(owner, item, &it) == SV_OK && it.parent_human == human);
     CHECK(game->object(owner, object, &o) == SV_OK && o.driver == player);
+    CHECK(o.seat_count == 1 && o.occupants[0] == human && !o.occupants[1] && !o.occupants[7]);
     CHECK(game->account(owner, account, &a) == SV_OK && a.money == 1000);
     CHECK(game->bone(owner, human, 14, &bone) == SV_OK && bone.bone == 14);
     CHECK(game->bone(owner, human, 15, &bone) == SV_INVALID);
@@ -467,8 +468,12 @@ static int vehicle_checks(SvOwner owner)
                 rider_b = page[i];
         }
     STEP(rider_a && rider_b && vehicle);
+    /* Each rider fills the seat that the human holds. An empty seat reads 0, and a rider that leaves empties its seat. */
+    STEP(game->object(owner, vehicle, &os) == SV_OK && os.seat_count == 2 && os.occupants[0] == rider_a && os.occupants[1] == rider_b);
+    STEP(!os.occupants[2] && !os.occupants[7]);
     STEP(change->vehicle_exit(owner, rider_a, 1) == SV_OK);
     STEP(game->human(owner, rider_a, &hs) == SV_OK && hs.vehicle == 0);
+    STEP(game->object(owner, vehicle, &os) == SV_OK && !os.occupants[0] && os.occupants[1] == rider_b);
     STEP(change->vehicle_exit(owner, rider_a, 0) == SV_STATE);
     STEP(change->vehicle_exit(owner, rider_b, 0) == SV_OK);
     /* Seat both riders again, then take them out the same way, so the test program sees the same end state. */
