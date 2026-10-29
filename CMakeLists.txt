@@ -194,6 +194,8 @@ if(BUILD_TESTING)
         "${CMAKE_SOURCE_DIR}/tests/plugin_install_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
     add_test(NAME sdk-package COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_SOURCE_DIR}/tests/sdk_package_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
+    add_test(NAME sdk-clean COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
+        "${CMAKE_SOURCE_DIR}/tests/sdk_clean_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
     add_test(NAME package-contents COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_SOURCE_DIR}/tests/package_test.ps1")
 endif()

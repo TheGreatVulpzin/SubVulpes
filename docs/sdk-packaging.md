@@ -2,6 +2,8 @@
 
 Status: built on 2026-10-28 (work package WP2). It covers a native plugin. Lua and WASM packages use the same name and the same script.
 
+Start with [the first steps](sdk-first-steps.md) to build, test, install and approve the template plugin.
+
 ## Build a plugin with CMake
 
 The function `sv_add_plugin` is in `tools/sdk/sv_plugin.cmake`.
@@ -53,9 +55,9 @@ The target `sdk-package` runs `tools/sdk/make_sdk.ps1`. It makes `SubVulpes-sdk-
 | Folder | Content |
 | --- | --- |
 | `include/` | The 15 public headers `sv_*.h`. No other header. |
-| `template/` | A small plugin: `hello.c`, `plugin.ini`, `build.bat` and `CMakeLists.txt`. |
-| `tools/` | `pack.ps1`, `validate_plugin.ps1`, `install_plugin.ps1` and `sv_plugin.cmake`. |
-| `docs/` | The pages of the API, starting with the SDK page, the manifest page and the ABI rules. |
+| `template/` | A small plugin: `hello.c`, `plugin.ini`, `build.bat`, `CMakeLists.txt` and `test.svtest`. |
+| `tools/` | `pack.ps1`, `validate_plugin.ps1`, `install_plugin.ps1`, `sv_plugin.cmake`, the test script, the runner and the probe plugin. |
+| `docs/` | The pages of the API, starting with the first steps, the SDK page, the manifest page and the ABI rules. |
 | `examples/status/` | The source of the status plugin. |
 
 The package has a fixed order and a fixed time stamp, so the same sources give the same hash.
@@ -71,3 +73,10 @@ Removal proof on 2026-10-28: without the check for an extra file, the test fails
 It compiles every public header alone and all together, builds the template with `build.bat` and with CMake, packs the result, checks it with the validate script and installs it on a test server.
 It checks that the package is the same in two runs and that no internal header is in it.
 Removal proof on 2026-10-28: with an internal header added to `include/`, the test fails. The restored script passes.
+
+`tests/sdk_clean_test.ps1` (group `sdk-clean`) tests an empty folder outside the repository.
+It copies only the SDK ZIP and the server executable before it clears compiler state and replaces `PATH` with Windows paths.
+The test builds the template with MSVC discovery, packs it and installs it in a temporary server folder.
+It checks the hash, approval, enable and load commands, then runs the template scenario with the runner from the ZIP.
+The test restores the environment and removes its temporary folder at the end.
+Pass `-SdkZip FILE` to test an exact release ZIP instead of a new test package.
