@@ -12,6 +12,7 @@
 #include "objects.h"
 #include "player.h"
 #include "humans.h"
+#include "items.h"
 #include "server.h"
 #include "sr_runtime.h"
 #include "sr_server.h"
@@ -32,6 +33,9 @@ FIELD(human_stun, sr_humans[i].stun_timer)
 FIELD(human_protect, sr_humans[i].protect_timer)
 FIELD(human_bone_velocity, sr_humans[i].bones[s].vel)
 FIELD(object_velocity, sr_objects[i].vel)
+FIELD(item_velocity, sr_items[i].vel)
+FIELD(item_angular_velocity, sr_items[i].angvel)
+FIELD(item_frozen, sr_items[i].at_rest)
 FIELD(human_damage_taken, *sv_damage_field_human_taken(i))
 FIELD(human_damage_dealt, *sv_damage_field_human_dealt(i))
 FIELD(object_damage_taken, *sv_damage_field_object_taken(i))
@@ -126,6 +130,119 @@ static SvResult object_add(int32_t index, uint32_t slot, SvVector change)
     return SV_OK;
 }
 
+static int finite(float value)
+{
+    return value == value && value - value == 0.0f;
+}
+
+/* A held item or an item in a chest follows its parent, so a speed on it does nothing. */
+static int item_free(const Item *it)
+{
+    return it->parent_human == -1 && it->parent_item == -1;
+}
+
+/* An item at rest skips its physics, so a new speed wakes it. */
+static SvResult item_velocity_set(int32_t index, uint32_t slot, SvVector value)
+{
+    Item *it = &sr_items[index];
+    (void)slot;
+    if (!item_free(it))
+        return SV_STATE;
+    it->vel.x = value.x;
+    it->vel.y = value.y;
+    it->vel.z = value.z;
+    it->at_rest = 0;
+    return SV_OK;
+}
+
+static SvResult item_velocity_add(int32_t index, uint32_t slot, SvVector change)
+{
+    Item *it = &sr_items[index];
+    (void)slot;
+    if (!item_free(it))
+        return SV_STATE;
+    it->vel.x += change.x;
+    it->vel.y += change.y;
+    it->vel.z += change.z;
+    it->at_rest = 0;
+    return SV_OK;
+}
+
+/* The physics makes the angular velocity from the angular momentum: its part along each row of the rotation, times the
+ * inverse inertia. This is the momentum that gives the angular velocity w. An axis with no inertia cannot spin. */
+static int spin_momentum(const Item *it, SvVector w, vec3 *out)
+{
+    const float inverse[3] = { it->inv_inertia.x, it->inv_inertia.y, it->inv_inertia.z };
+    int k;
+    out->x = out->y = out->z = 0.0f;
+    for (k = 0; k < 3; ++k) {
+        float along;
+        if (inverse[k] <= 0.0f)
+            continue;
+        along = (w.x * it->rot[k].x + w.y * it->rot[k].y + w.z * it->rot[k].z) / inverse[k];
+        out->x += along * it->rot[k].x;
+        out->y += along * it->rot[k].y;
+        out->z += along * it->rot[k].z;
+    }
+    return finite(out->x) && finite(out->y) && finite(out->z);
+}
+
+static SvResult item_spin_set(int32_t index, uint32_t slot, SvVector value)
+{
+    Item *it = &sr_items[index];
+    vec3 momentum;
+    (void)slot;
+    if (!item_free(it))
+        return SV_STATE;
+    if (!spin_momentum(it, value, &momentum))
+        return SV_FAILED;
+    it->ang_momentum = momentum;
+    it->angvel.x = value.x;
+    it->angvel.y = value.y;
+    it->angvel.z = value.z;
+    it->at_rest = 0;
+    return SV_OK;
+}
+
+static SvResult item_spin_add(int32_t index, uint32_t slot, SvVector change)
+{
+    Item *it = &sr_items[index];
+    vec3 momentum;
+    (void)slot;
+    if (!item_free(it))
+        return SV_STATE;
+    if (!spin_momentum(it, change, &momentum))
+        return SV_FAILED;
+    it->ang_momentum.x += momentum.x;
+    it->ang_momentum.y += momentum.y;
+    it->ang_momentum.z += momentum.z;
+    it->angvel.x += change.x;
+    it->angvel.y += change.y;
+    it->angvel.z += change.z;
+    it->at_rest = 0;
+    return SV_OK;
+}
+
+/* The game skips the physics of an item at rest, so the rest flag holds an item in the air. A held item and a door
+ * (the door always runs its physics) cannot freeze. */
+static SvResult frozen_check(int32_t index, SvValue value)
+{
+    const Item *it = &sr_items[index];
+    (void)value;
+    return item_free(it) && it->type != ITEM_DOOR ? SV_OK : SV_STATE;
+}
+
+/* A frozen item keeps no speed, so it does not launch when the plugin thaws it. */
+static void frozen_after(int32_t index)
+{
+    Item *it = &sr_items[index];
+    if (!it->at_rest)
+        return;
+    memset(&it->vel, 0, sizeof it->vel);
+    memset(&it->angvel, 0, sizeof it->angvel);
+    memset(&it->ang_momentum, 0, sizeof it->ang_momentum);
+}
+
 static const Prop props[] = {
     { "player.godmode", SV_ENTITY_PLAYER, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, player_godmode, NULL, NULL, NULL },
     { "player.admin", SV_ENTITY_PLAYER, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, player_admin, admin_check, admin_after, NULL },
@@ -159,6 +276,9 @@ static const Prop props[] = {
     { "world.round_time", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 600, 216000, world_round_time, NULL, NULL, NULL },
     { "world.wait_time", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 60, 216000, world_wait_time, NULL, NULL, NULL },
     { "world.end_time", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 60, 216000, world_end_time, NULL, NULL, NULL },
+    { "item.velocity", SV_ENTITY_ITEM, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, item_velocity, NULL, NULL, item_velocity_add, 0, item_velocity_set },
+    { "item.angular_velocity", SV_ENTITY_ITEM, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, item_angular_velocity, NULL, NULL, item_spin_add, 0, item_spin_set },
+    { "item.frozen", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, item_frozen, frozen_check, frozen_after, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };
@@ -239,7 +359,8 @@ SvResult sv_props_add_group(const Prop *rows, size_t count)
             return SV_INVALID;
         if (!p->name || !p->name[0] || strlen(p->name) >= SV_PROP_NAME_MAX || !p->field || !p->count ||
             (p->type != SV_PROP_INT && p->type != SV_PROP_FLOAT && p->type != SV_PROP_VECTOR) ||
-            !(p->ops & (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD)) || (p->type == SV_PROP_VECTOR && (p->ops & SV_PROP_SET)) ||
+            !(p->ops & (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD)) ||
+            (p->type == SV_PROP_VECTOR && (p->ops & SV_PROP_SET) && !p->set_vector) ||
             (p->type == SV_PROP_VECTOR && (p->ops & SV_PROP_ADD) && !p->add_vector) || name_used(p->name))
             return SV_INVALID;
         for (k = i + 1; k < count; ++k)
@@ -252,10 +373,6 @@ SvResult sv_props_add_group(const Prop *rows, size_t count)
     return SV_OK;
 }
 
-static int finite(float value)
-{
-    return value == value && value - value == 0.0f;
-}
 
 static SvResult context(SvOwner owner)
 {
@@ -330,6 +447,16 @@ static SvResult locate(SvOwner owner, uint32_t id, SvEntity entity, uint32_t slo
     return SV_OK;
 }
 
+/* A vector must be finite and not longer than the max of the row. */
+static int vector_ok(const Prop *p, SvVector v)
+{
+    double length2;
+    if (!finite(v.x) || !finite(v.y) || !finite(v.z))
+        return 0;
+    length2 = (double)v.x * v.x + (double)v.y * v.y + (double)v.z * v.z;
+    return length2 <= p->max * p->max;
+}
+
 static int in_range(const Prop *p, SvValue value)
 {
     if (p->type == SV_PROP_INT)
@@ -370,7 +497,9 @@ static SvResult SV_CALL props_set(SvOwner owner, uint32_t id, SvEntity entity, u
     SvResult result = locate(owner, id, entity, slot, SV_PROP_SET, &p, &record);
     if (result != SV_OK)
         return result;
-    if (p->type == SV_PROP_VECTOR || !in_range(p, value))
+    if (p->type == SV_PROP_VECTOR)
+        return vector_ok(p, value.v) ? p->set_vector(record, slot, value.v) : SV_INVALID;
+    if (!in_range(p, value))
         return SV_INVALID;
     if (p->check && (result = p->check(record, value)) != SV_OK)
         return result;
@@ -394,15 +523,8 @@ static SvResult SV_CALL props_add(SvOwner owner, uint32_t id, SvEntity entity, u
     SvResult result = locate(owner, id, entity, slot, SV_PROP_ADD, &p, &record);
     if (result != SV_OK)
         return result;
-    if (p->type == SV_PROP_VECTOR) {
-        double length2;
-        if (!finite(change.v.x) || !finite(change.v.y) || !finite(change.v.z))
-            return SV_INVALID;
-        length2 = (double)change.v.x * change.v.x + (double)change.v.y * change.v.y + (double)change.v.z * change.v.z;
-        if (length2 > p->max * p->max)
-            return SV_INVALID;
-        return p->add_vector(record, slot, change.v);
-    }
+    if (p->type == SV_PROP_VECTOR)
+        return vector_ok(p, change.v) ? p->add_vector(record, slot, change.v) : SV_INVALID;
     field = p->field(record, slot);
     if (p->type == SV_PROP_INT) {
         int64_t total = (int64_t)*(const int32_t *)field + change.i;

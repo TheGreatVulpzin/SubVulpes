@@ -126,6 +126,11 @@ The head direction is the one that the legacy tool used. It is read from the bod
 The player's human reference must also point to that body.
 The API derives this relation from current reciprocal records, rather than the raw last-driver index.
 
+`SvObjectState.occupants[8]` names the human in each seat of the vehicle, and holds 0 for an empty seat. The index is the seat of the game, and seat 0 is the driver.
+Only the first `seat_count` slots can hold a human. The host scans the active humans whose vehicle is the object, so a bot counts, and so does a dead body that still sits in a seat.
+Read the health of the human to tell them apart. Two humans never share a slot: the first one found keeps it.
+A vehicle with no seats (`seat_count` is 0) has no occupants.
+
 The API omits `SvItemState.vehicle`, `SvItemState.linked_item` and `SvObjectState.linked_object`.
 Those historical raw indices can target a different entity after slot reuse.
 Future support needs generation-safe associations, not a conversion of the current raw index into a fresh reference.
@@ -306,6 +311,9 @@ Rows of the first version. The range is the range that a `set` or an `add` may l
 | `object.damage_taken_scale` | object | float | get, set, add | 0 to 100 | Multiplies each damage to the health of the object, and the damage to its wheels and windows. A scale of 0 protects the object and its wheels (N29) |
 | `item.ammo` | item | int | get, set, add | 0 to 1000 | The rounds in a magazine, or the uses of a bandage. The game does not fire at 0. The upper bound is a choice of this API |
 | `item.time_to_live` | item | int | get, set | 0 to 65535 | Ticks. The game counts it down and removes the item at 0, as `item_remove` does. 65535 is the unlimited value |
+| `item.velocity` | item | vector | get, set, add | length of at most 64 | A set gives an exact launch speed and wakes an item at rest. An add changes the speed. A held item or an item in a container gives `SV_STATE`, because it follows its parent. `teleport` keeps the speed, so a plugin that holds an item in place sets the speed to zero, or freezes the item |
+| `item.angular_velocity` | item | vector | get, set, add | length of at most 64 | The spin in radians for each tick. The row also sets the angular momentum that the physics uses, with the inverse inertia of the item. An axis with no inertia does not spin. The same `SV_STATE` rule as the speed |
+| `item.frozen` | item | int | get, set | 0 to 1 | The rest flag of the game. The physics skips an item at rest, so a frozen item stays in the air and gravity does not change it. A set to 1 also zeroes the speed and the spin. A set to 0 lets the item fall again. An item that stops on the floor by itself reads 1. A held item, an item in a container and a door give `SV_STATE`. The client effect is unknown |
 | `object.time_to_live` | object | int | get, set | 0 to 65535 | The same for a vehicle. A piece of the train gives `SV_DENIED`, because the track system ends its life |
 | `object.health` | object | int | get, set, add | 0 to 1000000 | The health of a vehicle. The upper bound is a choice of this API. The game makes a vehicle with 100 |
 | `item_type.price` | world | int, 27 slots | get, set, add | 0 to 1000000 | The slot is the item type. The price in the shop. Rows of the type tables restore (see "Type rows") |

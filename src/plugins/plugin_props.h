@@ -23,6 +23,9 @@ typedef struct {
      * value of each slot that a plugin changes, and puts it back when that plugin stops. Needs at most 32 slots and no
      * vector. A group that omits this member gets 0. */
     int restore;
+    /* A vector row with SV_PROP_SET gives this, because the new value is not a plain copy (a spin needs the angular
+     * momentum). A group that omits this member gets NULL. */
+    SvResult (*set_vector)(int32_t index, uint32_t slot, SvVector value);
 } Prop;
 
 /* Adds a group of rows to the table. The rows must stay valid until the process ends, and the names must not repeat a

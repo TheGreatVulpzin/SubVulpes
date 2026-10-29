@@ -145,13 +145,14 @@ static SvResult SV_CALL read_object(SvOwner owner, SvEntity entity, SvObjectStat
         return SV_FAILED;
     for (i = 0; i < SR_MAX_HUMAN && o->num_seats > 0; ++i) {
         const Human *h = &sr_humans[i];
-        SvEntity player;
-        if (!h->active || h->health < 1 || h->vehicle_id != index || h->vehicle_seat != 0)
+        if (!h->active || h->vehicle_id != index || h->vehicle_seat < 0 || h->vehicle_seat >= o->num_seats)
             continue;
-        player = sv_entity_at(SV_ENTITY_PLAYER, h->player_id);
-        if (player && sr_players[h->player_id].human_id == i) {
-            value.driver = player;
-            break;
+        if (!value.occupants[h->vehicle_seat])
+            value.occupants[h->vehicle_seat] = sv_entity_at(SV_ENTITY_HUMAN, i);
+        if (!value.driver && h->vehicle_seat == 0 && h->health >= 1) {
+            SvEntity player = sv_entity_at(SV_ENTITY_PLAYER, h->player_id);
+            if (player && sr_players[h->player_id].human_id == i)
+                value.driver = player;
         }
     }
     value.type = o->type; value.state = o->state; value.health = o->health;

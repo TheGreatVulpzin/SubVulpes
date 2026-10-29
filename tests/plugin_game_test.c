@@ -275,6 +275,24 @@ static void effects_check(uint32_t events, vec3 bone_before)
     CHECK(test_world_value == 5);
 }
 
+/* The item that the fixture gave a speed of 2, 3, 4 and a spin of 1, -0.5, 2.5. The physics makes the spin from the angular
+ * momentum, so the record must hold the momentum too. This item type has an inverse inertia of 1 and the rotation is the
+ * identity, so the momentum equals the spin. */
+static void item_speed_check(void)
+{
+    int i, found = 0;
+    for (i = 0; i < SR_MAX_ITEM; ++i) {
+        const Item *it = &sr_items[i];
+        if (!it->active || !near_value(it->vel.x, 2.0f) || !near_value(it->vel.y, 3.0f) || !near_value(it->vel.z, 4.0f))
+            continue;
+        ++found;
+        CHECK(near_value(it->angvel.x, 1.0f) && near_value(it->angvel.y, -0.5f) && near_value(it->angvel.z, 2.5f));
+        CHECK(near_value(it->ang_momentum.x, 1.0f) && near_value(it->ang_momentum.y, -0.5f) && near_value(it->ang_momentum.z, 2.5f));
+        CHECK(it->at_rest == 0);
+    }
+    CHECK(found == 1);
+}
+
 /* The news lines that the fixture wrote: the storage, the events and what a client that joins late gets. The fixture started
  * with the lines "first", "second" and "third". */
 static void headline_check(uint32_t events)
@@ -725,6 +743,7 @@ static void write_api_tick(void)
     CHECK(event_bits((int)events + 5, 0) > 6 + 28 + 6 && event_bits((int)events, 0) == event_bits((int)events, 1));
     riders_check();
     effects_check(events, bone_before);
+    item_speed_check();
     headline_check(events);
     move_check();
     types_check();

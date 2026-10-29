@@ -54,6 +54,9 @@ typedef struct {
     uint32_t wheel_count, wheel_body_count, seat_count;
     int32_t gear;
     float engine_rpm, throttle;
+    /* The human in each seat, 0 for an empty seat. The index is the seat of the game: 0 is the driver. Only the first
+     * seat_count slots can be filled. A dead body that still sits in a seat counts, so check its health. */
+    SvEntity occupants[8];
 } SvObjectState;
 
 typedef struct {
