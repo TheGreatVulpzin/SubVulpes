@@ -637,6 +637,69 @@ static int world_checks(SvOwner owner)
     return 0;
 }
 
+static int same_vector(SvVector a, float x, float y, float z)
+{
+    return fabsf(a.x - x) < 0.0001f && fabsf(a.y - y) < 0.0001f && fabsf(a.z - z) < 0.0001f;
+}
+
+/* The speed and the spin of an item: set, add and read back. A held item and a bad value change nothing. The item thing
+ * ends with the speed 2, 3, 4 and the spin 1, -0.5, 2.5, and the test program reads them from the game record. */
+static int item_speed_checks(SvOwner owner, SvEntity thing, SvEntity rider)
+{
+    const SvVector bad_at = { 1.0f, 1.0f, 1.0f }, strong = { 60.0f, 30.0f, 0.0f };
+    uint32_t speed = 0, spin = 0, frozen = 0, nan_bits = 0x7fc00000u;
+    SvEntity held = 0;
+    SvValue w, out;
+    SvVector bad = bad_at;
+    float nan_value;
+    memcpy(&nan_value, &nan_bits, sizeof nan_value);
+    bad.z = nan_value;
+    STEP(props->find(owner, "item.velocity", &speed) == SV_OK && props->find(owner, "item.angular_velocity", &spin) == SV_OK);
+    w.v = (SvVector){ 1.0f, 2.0f, 3.0f };
+    STEP(props->set(owner + 1, speed, thing, 0, w) == SV_STATE && props->set(owner, speed, rider, 0, w) == SV_NOT_FOUND);
+    STEP(props->set(owner, speed, thing, 1, w) == SV_INVALID);
+    STEP(props->set(owner, speed, thing, 0, w) == SV_OK && props->get(owner, speed, thing, 0, &out) == SV_OK &&
+         same_vector(out.v, 1.0f, 2.0f, 3.0f));
+    STEP(push_to(owner, speed, thing, 0, bad_at) == SV_OK && props->get(owner, speed, thing, 0, &out) == SV_OK &&
+         same_vector(out.v, 2.0f, 3.0f, 4.0f));
+    w.v = strong;
+    STEP(props->set(owner, speed, thing, 0, w) == SV_INVALID && push_to(owner, speed, thing, 0, strong) == SV_INVALID);
+    w.v = bad;
+    STEP(props->set(owner, speed, thing, 0, w) == SV_INVALID && push_to(owner, speed, thing, 0, bad) == SV_INVALID);
+    STEP(props->get(owner, speed, thing, 0, &out) == SV_OK && same_vector(out.v, 2.0f, 3.0f, 4.0f));
+    w.v = (SvVector){ 0.5f, -1.0f, 2.0f };
+    STEP(props->set(owner, spin, thing, 0, w) == SV_OK && props->get(owner, spin, thing, 0, &out) == SV_OK &&
+         same_vector(out.v, 0.5f, -1.0f, 2.0f));
+    STEP(push_to(owner, spin, thing, 0, (SvVector){ 0.5f, 0.5f, 0.5f }) == SV_OK && props->get(owner, spin, thing, 0, &out) == SV_OK &&
+         same_vector(out.v, 1.0f, -0.5f, 2.5f));
+    w.v = strong;
+    STEP(props->set(owner, spin, thing, 0, w) == SV_INVALID);
+    STEP(change->item_create(owner, 12, (SvVector){ 10.0f, 5.0f, 10.0f }, &held) == SV_OK);
+    STEP(change->item_equip(owner, held, rider, 3) == SV_OK);
+    w.v = (SvVector){ 1.0f, 1.0f, 1.0f };
+    STEP(props->set(owner, speed, held, 0, w) == SV_STATE && push_to(owner, speed, held, 0, bad_at) == SV_STATE);
+    STEP(props->set(owner, spin, held, 0, w) == SV_STATE && push_to(owner, spin, held, 0, bad_at) == SV_STATE);
+    STEP(props->get(owner, speed, held, 0, &out) == SV_OK && same_vector(out.v, 0.0f, 0.0f, 0.0f));
+    STEP(props->find(owner, "item.frozen", &frozen) == SV_OK);
+    w.i = 1;
+    STEP(props->set(owner, frozen, held, 0, w) == SV_STATE);
+    STEP(change->item_detach(owner, held) == SV_OK && change->item_remove(owner, held) == SV_OK);
+    /* A frozen item loses its speed and stays at rest. A thawed item moves again, from rest. */
+    STEP(change->item_create(owner, 12, (SvVector){ 12.0f, 5.0f, 12.0f }, &held) == SV_OK);
+    w.v = (SvVector){ 1.0f, 1.0f, 1.0f };
+    STEP(props->set(owner, speed, held, 0, w) == SV_OK);
+    w.i = 2;
+    STEP(props->set(owner, frozen, held, 0, w) == SV_INVALID);
+    w.i = 1;
+    STEP(props->set(owner + 1, frozen, held, 0, w) == SV_STATE);
+    STEP(props->set(owner, frozen, held, 0, w) == SV_OK && props->get(owner, frozen, held, 0, &out) == SV_OK && out.i == 1);
+    STEP(props->get(owner, speed, held, 0, &out) == SV_OK && same_vector(out.v, 0.0f, 0.0f, 0.0f));
+    w.i = 0;
+    STEP(props->set(owner, frozen, held, 0, w) == SV_OK && props->get(owner, frozen, held, 0, &out) == SV_OK && out.i == 0);
+    STEP(change->item_remove(owner, held) == SV_OK);
+    return 0;
+}
+
 /* Teleport of a vehicle and of an item, and the rows for items, vehicles and accounts. The test program checks the
  * particles of the moved car afterwards. Returns 0 when all checks pass, or the line of the check that failed. */
 static int move_checks(SvOwner owner)
@@ -722,7 +785,9 @@ static int move_checks(SvOwner owner)
     STEP(props->set(owner, ban, account, 0, v) == SV_OK);
     STEP(game->account(owner, account, &as) == SV_OK);
     {
-        int within_line = within_checks(owner, car, thing);
+        int within_line = item_speed_checks(owner, thing, rider);
+        if (!within_line)
+            within_line = within_checks(owner, car, thing);
         if (within_line)
             return within_line;
     }
@@ -833,7 +898,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 33);
+    STEP(count == 36);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);

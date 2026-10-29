@@ -1649,8 +1649,12 @@ static SvResult t_grid(void)
             break;
         remember(made_items, &made_item_count, 24, item);
         grid_items[grid_count++] = item;
+        /* A frozen item skips the physics, so gravity does not add speed between two moves. */
+        r = set_int("item.frozen", item, 1);
+        if (r != SV_OK)
+            break;
     }
-    sayf("%d items made. They move in a wave. Type /test go to change the speed.", grid_count);
+    sayf("%d items made and frozen. They move in a wave. Type /test go to change the speed.", grid_count);
     if (!grid_count)
         return r;
     anim_start(ANIM_GRID, 1, 300);
@@ -1756,7 +1760,7 @@ static const Test tests[] = {
     { "read_inventory", "Reads the seven slots of your body.", "A slot with an item shows 1 or more. Hold an item in a hand first, then run this test again.", t_read_inventory, NULL },
     { "read_line", "Casts a line from 6 units above you to 6 units below.", "The kind is 1 (level) and the hit height is near your feet.", t_read_line, NULL },
     { "read_headline", "Reads news line 0 and the number of lines.", "The text is the first news line of the newspaper.", t_read_headline, NULL },
-    { "props_list", "Counts the rows of the property table.", "The count is 34 or more.", t_props_list, NULL },
+    { "props_list", "Counts the rows of the property table.", "The count is 36 or more.", t_props_list, NULL },
     { "add_money", "Adds 100 dollars to your account.", "Your money rises by 100 at once. The next test takes it back.", t_add_money, NULL },
     { "disown", "Makes an item beside you and gives it up, so it stays after the plugin stops.", "An item lies beside you. Type /test stop: the item stays on the ground.", t_disown, NULL },
     { "ai_threats", "Makes a bot. Type /test go to read what the bot sees.", "After you wave in front of the bot, the count is 1 or more.", t_threats, t_threats_go },
