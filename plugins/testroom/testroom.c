@@ -1,6 +1,8 @@
 /* The test room. An administrator types /test start in the chat. The plugin runs one test after another. It says what it
  * does and what the administrator should see, then waits for /test yes or /test no. It uses only the public plugin API, so
  * a failed test points at the API or at the game, and not at a private shortcut. The results go to the server log. */
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -20,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.6"
+#define VERSION "0.2.8"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -76,7 +78,7 @@ static struct { uint32_t building; SvShopCatalog old; } saved_shop[32];
 static int saved_shop_count, duel_stage;
 static SvEntity duel_a, duel_b;
 /* A timed show, driven by the tick event: a scale of sounds, a grid of moving items or a newspaper that changes. */
-enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES };
+enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES, ANIM_TOUR, ANIM_OCTAVES };
 #define GRID_ITEMS 16
 static int anim_kind, grid_count;
 static uint32_t anim_next, anim_step, anim_every, anim_limit;
@@ -1506,6 +1508,18 @@ static SvResult t_kick_run(void)
 
 /* ------------------------------------------------------------ timed shows (for a music and picture plugin) */
 
+/* One log line for each sound of the sound tests, with the local time to the millisecond. The client probe writes the same
+ * time for each sound that it plays, so tools/audio/match_probe.py can match the two logs. */
+static void log_sound(uint32_t index, float pitch)
+{
+    SYSTEMTIME now;
+    char text[96];
+    GetLocalTime(&now);
+    snprintf(text, sizeof text, "TOURSOUND %02u:%02u:%02u.%03u index=%u pitch=%.4f", now.wHour, now.wMinute, now.wSecond,
+        now.wMilliseconds, index, pitch);
+    host->log(self, text);
+}
+
 static void animate(uint32_t tick)
 {
     SvPlayerState player = { sizeof player };
@@ -1523,6 +1537,15 @@ static void animate(uint32_t tick)
         r = change->sound(self, 21, human.position, 1.0f, pitch);
         if (anim_step % 4 == 0)
             sayf("Note %u, pitch %.2f.", anim_step, pitch);
+    } else if (anim_kind == ANIM_TOUR) {
+        r = change->sound(self, anim_step, human.position, 1.0f, 1.0f);
+        sayf("Sound %u.", anim_step);
+        log_sound(anim_step, 1.0f);
+    } else if (anim_kind == ANIM_OCTAVES) {
+        float pitch = 0.125f * (float)(1u << (anim_step % 6));
+        r = change->sound(self, 27, human.position, 1.0f, pitch);
+        sayf("Pitch %.3f.", pitch);
+        log_sound(27, pitch);
     } else if (anim_kind == ANIM_GRID) {
         int i;
         for (i = 0; i < grid_count && r == SV_OK; ++i) {
@@ -1561,6 +1584,32 @@ static void anim_start(int kind, uint32_t every, uint32_t limit)
     anim_limit = limit;
     anim_step = 0;
     anim_next = 0;
+}
+
+static SvResult t_tour(void)
+{
+    say("Type /test go. Each sound plays once at pitch 1, one every 1.5 seconds, from number 0 to 46.");
+    say("Write down which numbers are tones (like a beep or a ring) and which are noises. The log has the numbers.");
+    return SV_OK;
+}
+
+static SvResult t_tour_go(void)
+{
+    anim_start(ANIM_TOUR, 90, 47);
+    return SV_OK;
+}
+
+static SvResult t_octaves(void)
+{
+    say("Type /test go. The phone ring (sound 27) plays 12 times: six pitches from 0.125 to 4, twice.");
+    say("Each step doubles the pitch, so each step is one octave higher. Tell me where two steps sound the same.");
+    return SV_OK;
+}
+
+static SvResult t_octaves_go(void)
+{
+    anim_start(ANIM_OCTAVES, 90, 12);
+    return SV_OK;
 }
 
 static SvResult t_scale(void)
@@ -1731,6 +1780,8 @@ static const Test tests[] = {
     { "item_grid", "Makes 16 items in a grid and moves all of them every tick in a wave. Type /test go to change the speed.", "The items move smoothly as one picture. Say no if they stutter, fall or vanish.", t_grid, t_grid_go },
     { "headline_frames", "Moves you to a newspaper. Type /test go to rewrite its first line again and again.", "Hold the newspaper open. The pattern of # and . moves. Say no if it never changes.", t_frames, t_frames_go },
     { "entity_tag", "Makes a car and stores a tag on it. Type /test go to remove the car, and again to read the tag.", "The tag reads back as hello. After the car goes, the same reference finds nothing (error 6).", t_tag, t_tag_go },
+    { "sound_tour", "Plays every game sound once, from 0 to 46. Type /test go to start.", "You hear 47 sounds. Say which numbers are tones.", t_tour, t_tour_go },
+    { "pitch_octaves", "Plays the phone ring in six octaves, twice. Type /test go to start.", "Six steps, each one octave higher. Say if two steps sound the same.", t_octaves, t_octaves_go },
 };
 
 /* ------------------------------------------------------------ flow */
