@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.4, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.5, built on 2026-10-28. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -66,7 +66,7 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 28 | `notice_events` | The events round, vehicle, shot, item and vehicle gone | A chat line for each event of yours |
 | 29 | `damage_dealt_zero` | `human.damage_dealt_scale` 0 | A bot that takes no damage from your Magnum |
 | 30 | `collapse_threshold` | `SvGameEngine.set` of `human.death_start` 60, `human.health` 50 | Your body falls limp at half health |
-| 31 | `ai_walk` | `SvGameAi.destination`, then `override_input` for each `go` | The bot walks 25 units. After a go it stops and faces the side |
+| 31 | `ai_walk` | `SvGameAi.destination`, then `override_input` with a yaw of 3.0 for each `go` | The bot walks 25 units. After a go it stops and turns about 90 degrees from its path |
 | 32 | `phone_claim` | The phone call decision (`SV_DENIED` for the number 1234) | A chat line, and the phone does not ring |
 | 33 | `storage_counter` | `SvGameStorage.get`, `put`, then `erase` for each `go` | A counter that grows, also after a restart |
 | 34 | `read_account` | `account` | Your name and money |

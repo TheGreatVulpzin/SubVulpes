@@ -20,7 +20,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.4"
+#define VERSION "0.2.5"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -925,10 +925,10 @@ static SvResult t_ai_walk(void)
 static SvResult t_ai_walk_go(void)
 {
     SvAiInput input = { sizeof input };
-    input.yaw = 1.5f;
+    input.yaw = 3.0f;
     if (!ai)
         return SV_INCOMPATIBLE;
-    say("The bot should stop and face the side for a few seconds.");
+    say("The bot should stop and turn about 90 degrees from its path for a few seconds.");
     return ai->override_input(self, last_npc, &input, 300);
 }
 
@@ -1692,7 +1692,7 @@ static const Test tests[] = {
     { "notice_events", "Makes a car and a loaded Magnum. Type /test go to see a chat line for every game event of yours.", "Lines appear for a seat in the car, each shot, each item that goes into or out of a slot, and a change of the round.", t_notices, t_notices_go },
     { "damage_dealt_zero", "Makes a bot and a Magnum for you, and sets your damage to 0.", "Shoot the bot. It takes no damage.", t_dealt, NULL },
     { "collapse_threshold", "Sets the death start to 60 and your health to 50.", "Your body falls limp at once, although the health bar shows half. The next test puts both back.", t_collapse, NULL },
-    { "ai_walk", "Makes a bot and sends it 25 units away. Type /test go to make it stop and turn.", "The bot walks to a point beside you. After a go it stops and faces the side for a few seconds.", t_ai_walk, t_ai_walk_go },
+    { "ai_walk", "Makes a bot and sends it 25 units away. Type /test go to make it stop and turn.", "The bot walks to a point beside you. After a go it stops and turns about 90 degrees from its path for a few seconds.", t_ai_walk, t_ai_walk_go },
     { "phone_claim", "Makes the plugin take a call to the number 1234 on any phone.", "Dial 1234: a chat line says the plugin took the call and the phone does not ring. Other numbers dial as before.", t_phone, NULL },
     { "storage_counter", "Stores a counter on the server and says its value.", "The number grows by 1 each run. After a server restart it keeps growing. Type /test go to erase the counter.", t_storage, t_storage_erase },
     { "read_account", "Reads your account.", "The name is yours and the money matches your game.", t_read_account, NULL },
