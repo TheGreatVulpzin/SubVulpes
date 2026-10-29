@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.8"
+#define VERSION "0.2.9"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -1104,11 +1104,11 @@ static SvResult make_bot(SvVector at, const char *name, SvEntity *bot, SvEntity 
 static SvResult arm(SvEntity human, SvVector at)
 {
     SvEntity gun = 0, magazine = 0;
-    SvResult r = change->item_create(self, 4, at, &gun);
+    SvResult r = change->item_create(self, 2, at, &gun);
     if (r != SV_OK)
         return r;
     remember(made_items, &made_item_count, 8, gun);
-    r = change->item_create(self, 5, at, &magazine);
+    r = change->item_create(self, 3, at, &magazine);
     if (r != SV_OK)
         return r;
     remember(made_items, &made_item_count, 8, magazine);
