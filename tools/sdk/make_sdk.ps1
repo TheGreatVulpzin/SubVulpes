@@ -30,7 +30,7 @@ $files['tools/probe/probe.dll'] = Join-Path (Resolve-Path -LiteralPath $ProbeDir
 $files['tools/probe/plugin.ini'] = Join-Path $repo 'tests\runner\probe\plugin.ini'
 $files['template/test.svtest'] = Join-Path $repo 'tools\sdk\template\test.svtest'
 foreach ($name in @('validate_plugin.ps1', 'install_plugin.ps1')) { $files["tools/$name"] = Join-Path $repo "tools\plugins\$name" }
-foreach ($name in @('plugin-abi.md', 'plugin-sdk.md', 'plugin-manifest.md', 'sdk-packaging.md', 'plugin-game-api.md',
+foreach ($name in @('plugin-abi.md', 'plugin-sdk.md', 'plugin-manifest.md', 'sdk-packaging.md', 'sdk-first-steps.md', 'plugin-game-api.md',
         'plugin-events.md', 'plugin-config.md', 'plugin-libraries.md', 'plugin-ai.md', 'plugin-economy.md', 'plugin-engine.md',
         'plugin-mission.md', 'plugin-settings.md', 'plugin-shop.md', 'plugin-storage.md', 'sdk-test-runner.md')) {
     $files["docs/$name"] = Join-Path $repo "docs\$name"

@@ -47,7 +47,7 @@ Assert (@($relative | Where-Object { $_ -clike 'include/*' -and $_ -cnotlike 'in
 foreach ($need in @('README.txt', 'VERSION.txt', 'template/hello.c', 'template/plugin.ini', 'template/build.bat', 'template/CMakeLists.txt',
         'tools/pack.ps1', 'tools/validate_plugin.ps1', 'tools/install_plugin.ps1', 'tools/sv_plugin.cmake', 'docs/plugin-abi.md',
         'docs/plugin-manifest.md', 'examples/status/status.c', 'tools/run_plugin_test.ps1', 'tools/subvulpes_plugin_test.exe',
-        'tools/probe/probe.dll', 'tools/probe/plugin.ini', 'template/test.svtest', 'docs/sdk-test-runner.md')) {
+        'tools/probe/probe.dll', 'tools/probe/plugin.ini', 'template/test.svtest', 'docs/sdk-test-runner.md', 'docs/sdk-first-steps.md')) {
     Assert ($need -cin $relative) "The package lacks $need."
 }
 foreach ($forbid in @('plugin_host.h', 'plugin_host.c', 'plugin_internal.h', 'config.txt')) {
