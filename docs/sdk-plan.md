@@ -25,7 +25,7 @@ The owner decided on 2026-10-28. The second editor does not ask about them again
 
 | Id | Decision |
 | --- | --- |
-| D1 | The Lua and WASM sources are not in the repository. A script downloads a pinned version, checks its SHA-256 and keeps it in `build/runtimes/`. The licenses (MIT) fit the GPL. |
+| D1 | The Lua and WASM sources are not in the repository. A script downloads a pinned version, checks its SHA-256 and keeps it in `build/runtimes/`. Lua and wasm3 use MIT. WAMR uses Apache 2.0 with the LLVM exception. |
 | D2 | WASM runtime: WAMR, if the spike of WP0 shows that it builds as 32-bit MSVC code, caps its memory and stops an endless loop. If it fails one of these, use wasm3 and write the reason in `docs/sdk-runtimes.md`. |
 | D3 | Trust model: the hash plus a declared list of capabilities, for every runtime. Native code has the full process, so its list is a warning and it needs an extra confirmation. For Lua and WASM the list is a wall that the host enforces, and these plugins need no DLL approval. A capability of high risk (kick, money, storage, `unsafe_events`) is marked in the review for every runtime. Publisher signatures wait. |
 | D4 | The file of a plugin is `<id>-<version>-<runtime>.svplugin`, for example `sv.health-0.1.0-lua.svplugin`. It is a ZIP inside. The runtime part is `native`, `lua` or `wasm`. The id stays short and safe for paths. A longer display name goes in the manifest (see WP1). |

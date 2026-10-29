@@ -1,0 +1,19 @@
+# The status plugin writes one line with the tick and the players when the operator types "status".
+seed 1
+expect log "Plugin active: sv.status"
+expect no-failure
+spawn player Ana team=1
+spawn player Bo team=2 admin=1
+expect entities players 2
+expect entities humans 2
+console status
+expect log "status"
+tick 3
+console status
+expect count 2 "Status:"
+expect prop human.health Ana 100
+set human.health Ana 40
+expect prop human.health Ana 40
+expect prop human.health Bo 100
+give 12 Ana
+expect no-failure

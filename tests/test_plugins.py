@@ -25,7 +25,10 @@ VERSIONS = {'test.library': '1.2.0'}
 completed = 0
 
 
-def profile(entries, *, dependencies=None, approval=True, abi='1', live='1', unsafe=None, settings='', extra=None):
+ALL_CAPS = 'read,write,ai,economy,mission,settings,storage,engine,shop,props,config,plugins'
+
+
+def profile(entries, *, dependencies=None, approval=True, abi='1', live='1', unsafe=None, settings='', extra=None, caps=ALL_CAPS):
     folder = Path(tempfile.mkdtemp(prefix='native-', dir=CASES)).resolve()
     assert folder.is_relative_to(CASES.resolve())
     plugins = folder / 'plugins'
@@ -43,7 +46,7 @@ def profile(entries, *, dependencies=None, approval=True, abi='1', live='1', uns
             shutil.copyfile(BUILD / 'tests/sv_test_helper_0e9b6.dll', target / 'sv_test_helper_0e9b6.dll')
         deps = (dependencies or {}).get(key, '')
         (target / 'plugin.ini').write_text(
-            f'[plugin]\nid={key}\nversion={VERSIONS.get(key, "0.1.0")}\nlibrary={binary.name}\napi={abi}\nlive={live}\n'
+            f'[plugin]\nid={key}\nversion={VERSIONS.get(key, "0.1.0")}\nlibrary={binary.name}\napi={abi}\ncapabilities={caps}\nlive={live}\n'
             f'dependencies={deps}\n' + (f'unsafe_events={unsafe}\n' if unsafe is not None else '') +
             (extra or {}).get(key, '') + settings)
         hashes.append(f'{key}={hashlib.sha256(binary.read_bytes()).hexdigest()}\n')
@@ -83,6 +86,8 @@ run(RUNNER, ['optional-fail'], profile(both), mode='conflict', contains=['PASS']
 # The 64-bit event mask: a numbered event reaches only the plugin that asked, and a version outside the range is refused.
 output = run(RUNNER, ['ext'], profile(fixture), mode='ext', contains=['ext event 3', 'PASS'])
 assert output.count('ext event 3') == 1, 'The numbered event did not arrive exactly once.'
+# The capability wall: a plugin that declares only "config" cannot open any other table.
+run(RUNNER, ['lifecycle'], profile(fixture, caps='config'), mode='wall', contains=['PASS'])
 # Libraries (N35, N38): the API between plugins, the dependency rule, the version rule and the stop order.
 ROLE = 'role=library\n'
 pair = {'test.library': 'enabled', 'test.consumer': 'enabled'}
@@ -245,7 +250,7 @@ output = run(RUNNER, ['config-read'], folder, mode='config-read', contains=[
     'cfg price=77 rate=2.00 enabled=1 name=Name mode=2 token_len=6', 'PASS'], absent=['s3cret'])
 # The manifest changes: the key price stays, rate changes its type, extra is new, and four keys go away.
 (folder / 'plugins/test.fixture/plugin.ini').write_text(
-    '[plugin]\nid=test.fixture\nversion=0.1.0\nlibrary=fixture.dll\napi=1\nlive=1\ndependencies=\n'
+    '[plugin]\nid=test.fixture\nversion=0.1.0\nlibrary=fixture.dll\napi=1\ncapabilities=config\nlive=1\ndependencies=\n'
     '[setting.price]\ntype=int\ndefault=125\nmin=0\nmax=1000000\nlabel=Price\nlive=1\nadmin=1\n'
     '[setting.rate]\ntype=int\ndefault=3\nmin=0\nmax=5\nlabel=Rate\n'
     '[setting.extra]\ntype=int\ndefault=9\nmin=0\nmax=99\nlabel=Extra\n')

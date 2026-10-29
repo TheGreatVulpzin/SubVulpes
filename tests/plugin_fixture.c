@@ -221,6 +221,14 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
     }
     if (!strcmp(mode, "resubscribe") && api->subscribe(owner, 0, NULL) != SV_OK)
         return SV_FAILED;
+    /* The capability wall: a manifest that declares only "config" opens that table, and it refuses the others. */
+    if (!strcmp(mode, "wall")) {
+        const void *table = NULL;
+        if (api->get_api(owner, 1u, 1u, &table) != SV_DENIED || table ||
+            api->get_api(owner, SV_API_PLUGINS, SV_PLUGINS_VERSION, &table) != SV_DENIED || table ||
+            api->get_api(owner, SV_API_CONFIG, SV_CONFIG_VERSION, &table) != SV_OK || !table)
+            return SV_FAILED;
+    }
     /* The 64-bit mask: the numbered event 3 arrives, the others do not, and a bad low bit changes nothing. */
     if (!strcmp(mode, "ext")) {
         if (api->subscribe(owner, SV_EVENT_TICK | SV_EVENT_STOP | SV_EVENT_EXT_BIT(3), event) != SV_OK ||

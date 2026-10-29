@@ -5,12 +5,15 @@
 #include <windows.h>
 #include "plugin_host.h"
 #include "plugin_config.h"
+#include "plugin_manifest.h"
 
 typedef struct {
     char id[SV_PLUGIN_ID_SIZE];
     char version[SV_PLUGIN_VERSION_SIZE];
     char path[MAX_PATH];
     char hash[65];
+    uint32_t runtime, cap_mask;
+    char name[49], description[161], author[49], homepage[97];
     char dependencies[SV_PLUGIN_DEP_MAX][SV_PLUGIN_ID_SIZE];
     /* The lowest package version that the module accepts for each dependency. An empty text accepts any version. */
     char dependency_min[SV_PLUGIN_DEP_MAX][SV_PLUGIN_VERSION_SIZE];
@@ -56,6 +59,7 @@ SvResult sv_plugin_load(SvModule *module);
 void sv_plugin_unload(SvModule *module);
 int sv_plugin_inspect(const char *id, SvModule *module);
 int sv_plugin_declared(const char *id, SvModule *module);
+int sv_plugin_validate_folder(const char *folder);
 int sv_plugin_approved(const SvModule *module);
 int sv_plugin_approve(const char *id, const char *hash);
 int sv_plugin_save_state(const char *id, int enabled);
