@@ -35,12 +35,17 @@ Build state after the checks: idle. The marker file is `build/state.txt`.
 
 | Task | State | Evidence |
 | --- | --- | --- |
-| 1. Merge `main` into `codex/sdk` | Done | Merged `main` at `19ae8b8` without conflicts. The normal build, all 14 CTest groups and the storage, native and repo checks pass. |
-| 2. Native approval commands | Open | Add the four commands to the SDK README. |
-| 3. MSVC discovery | Open | Use `vswhere` and keep the `VCVARS` override. |
-| 4. First steps | Open | Add one page and ship it in the SDK ZIP. |
-| 5. Clean-machine check | Open | Add an external test folder with no source paths. |
-| 6. Release flow | Open | Document the local ZIP checks. |
+| 1. Merge `main` into `codex/sdk` | Done | Commit `22b8357` imports `main` at `19ae8b8` without conflicts. The normal build and all 14 CTest groups pass after the merge. |
+| 2. Native approval commands | Done | The SDK README gives `--plugin-hash`, `--plugin-approve`, `--plugin-enable` and `--plugins-check`. The clean test runs each command on the installed DLL. |
+| 3. MSVC discovery | Done | The template finds MSVC with `vswhere`. `VCVARS` selects an explicit `vcvars32.bat`. The SDK checks cover discovery and the override. |
+| 4. First steps | Done | [The first steps](sdk-first-steps.md) cover the ZIP, build, scenario, install and approval. The README and [the package page](sdk-packaging.md) link this page. The ZIP carries it. |
+| 5. Clean-machine check | Done | `tests/sdk_clean_test.ps1`, CTest group `sdk-clean`, uses a new folder outside the source tree. It clears compiler state and source paths, then builds, packs, installs, approves and tests the template. |
+| 6. Release flow | Done | [The release page](sdk-release.md) gives the version, build, tests, exact ZIP check, content checks and checksum commands in order. |
 
 The merge imports the 64-bit subscription mask, the list item sizes and `SV_STORAGE_ENTITY` from `main`.
 No SDK change alters a public API header. The launcher dialog, Lua and WASM remain outside this task.
+
+Final checks: the normal build, all 15 CTest groups, storage generation, native dependencies and the repo check pass.
+The exact SDK ZIP also passes the clean test through `-SdkZip`.
+The prose lint stays below 2.5 findings per 100 words for each changed page and the SDK README.
+All work stays in local commits. No push, publish or tag command ran.
