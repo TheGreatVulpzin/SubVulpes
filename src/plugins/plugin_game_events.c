@@ -70,12 +70,30 @@ void sv_game_event_vehicle(int human, int object, int seat, int entered)
         sv_entity_at(SV_ENTITY_OBJECT, object), seat, entered);
 }
 
+/* The rounds left in a gun: the round in the chamber plus the rounds of the magazines in it. */
+int sv_game_shot_rounds(int item)
+{
+    int rounds, i, children;
+    if (item < 0 || item >= SR_MAX_ITEM)
+        return 0;
+    rounds = sr_items[item].ammo;
+    children = sr_items[item].num_children;
+    if (children > 8)
+        children = 8;
+    for (i = 0; i < children; ++i) {
+        int child = sr_items[item].children[i];
+        if (child >= 0 && child < SR_MAX_ITEM && sr_items[child].ammo > 0)
+            rounds += sr_items[child].ammo;
+    }
+    return rounds;
+}
+
 void sv_game_event_shot(int item, int human)
 {
     if (!sv_plugins_wants(SV_EVENT_SHOT) || item < 0 || item >= SR_MAX_ITEM || human < 0 || human >= SR_MAX_HUMAN)
         return;
     sv_events_post_ex(SV_EVENT_SHOT, now(), player_of(human), sv_entity_at(SV_ENTITY_HUMAN, human), 0,
-        sv_entity_at(SV_ENTITY_ITEM, item), 0, sr_items[item].type, sr_items[item].ammo);
+        sv_entity_at(SV_ENTITY_ITEM, item), 0, sr_items[item].type, sv_game_shot_rounds(item));
 }
 
 void sv_game_event_object_gone(int object)

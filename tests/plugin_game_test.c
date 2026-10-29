@@ -1301,6 +1301,24 @@ int main(int argc, char **argv)
     write_api_tick();
     /* A shot and a removed vehicle, after the write checks, which clear the queue when they start. */
     sv_game_event_shot(0, 0);
+    /* The rounds left are the chamber plus the magazine. A bad child index or a count above 8 never reads outside the table. */
+    {
+        Item saved_gun = sr_items[SR_MAX_ITEM - 1], saved_magazine = sr_items[SR_MAX_ITEM - 2];
+        sr_items[SR_MAX_ITEM - 1].ammo = 1;
+        sr_items[SR_MAX_ITEM - 1].num_children = 3;
+        sr_items[SR_MAX_ITEM - 1].children[0] = SR_MAX_ITEM - 2;
+        sr_items[SR_MAX_ITEM - 1].children[1] = -1;
+        sr_items[SR_MAX_ITEM - 1].children[2] = SR_MAX_ITEM;
+        sr_items[SR_MAX_ITEM - 2].ammo = 5;
+        CHECK(sv_game_shot_rounds(SR_MAX_ITEM - 1) == 6);
+        sr_items[SR_MAX_ITEM - 1].num_children = 0;
+        CHECK(sv_game_shot_rounds(SR_MAX_ITEM - 1) == 1);
+        sr_items[SR_MAX_ITEM - 1].num_children = 99;
+        CHECK(sv_game_shot_rounds(SR_MAX_ITEM - 1) >= 1);
+        CHECK(sv_game_shot_rounds(-1) == 0 && sv_game_shot_rounds(SR_MAX_ITEM) == 0);
+        sr_items[SR_MAX_ITEM - 1] = saved_gun;
+        sr_items[SR_MAX_ITEM - 2] = saved_magazine;
+    }
     {
         static const vec3 gone_at = { 5.0f, 5.0f, 5.0f };
         int gone = createobject(0, &gone_at, NULL, rotation, 9);

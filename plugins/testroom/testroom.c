@@ -20,7 +20,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.5"
+#define VERSION "0.2.6"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -81,6 +81,7 @@ enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES };
 static int anim_kind, grid_count;
 static uint32_t anim_next, anim_step, anim_every, anim_limit;
 static SvEntity grid_items[GRID_ITEMS];
+static uint32_t grid_skipped;
 static SvVector grid_origin;
 
 /* ------------------------------------------------------------ text */
@@ -1526,7 +1527,13 @@ static void animate(uint32_t tick)
         int i;
         for (i = 0; i < grid_count && r == SV_OK; ++i) {
             float wave = sinf((float)anim_step * 0.2f + (float)(i / 4 + i % 4)) * 2.0f;
-            r = change->teleport(self, grid_items[i], offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f + wave, (float)(i % 4) * 2.0f));
+            SvVector place = offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f + wave, (float)(i % 4) * 2.0f);
+            SvResult moved = change->teleport(self, grid_items[i], place);
+            /* An item that a human picked up cannot move. The show goes on with the others. */
+            if (moved == SV_STATE)
+                ++grid_skipped;
+            else
+                r = moved;
         }
     } else if (anim_kind == ANIM_FRAMES) {
         char text[SV_HEADLINE_TEXT_MAX + 1];
@@ -1541,13 +1548,14 @@ static void animate(uint32_t tick)
         sayf("The show stopped with error %d after %u steps.", (int)r, anim_step);
         anim_kind = ANIM_NONE;
     } else if (anim_step >= anim_limit) {
-        sayf("The show ended after %u steps, one every %u ticks. No error.", anim_step, anim_every);
+        sayf("The show ended after %u steps. %u moves were skipped.", anim_step, grid_skipped);
         anim_kind = ANIM_NONE;
     }
 }
 
 static void anim_start(int kind, uint32_t every, uint32_t limit)
 {
+    grid_skipped = 0;
     anim_kind = kind;
     anim_every = every;
     anim_limit = limit;

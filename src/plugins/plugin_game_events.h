@@ -16,6 +16,8 @@ void sv_game_event_hit(int human, int owner);
 void sv_game_event_vehicle(int human, int object, int seat, int entered);
 /* A gun fired a shot. The human is the shooter. */
 void sv_game_event_shot(int item, int human);
+/* The rounds left in a gun: the chamber plus its magazines. It is the value "extra" of the shot event. */
+int sv_game_shot_rounds(int item);
 /* The game removes a vehicle at the end of its life. Call it before the reference is retired. */
 void sv_game_event_object_gone(int object);
 /* An item went into (in 1) or out of (in 0) a slot of a human. */
