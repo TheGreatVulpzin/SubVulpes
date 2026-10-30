@@ -13,6 +13,9 @@
 #include "sv_game_shop.h"
 
 int sv_game_is_ready(void);
+int sv_network_start(void);
+void sv_network_stop(void);
+int sv_network_ids(const uint8_t ip[4], uint32_t *address, uint32_t *network);
 uint64_t sv_game_reset_sequence(void);
 extern const SvGameRead sv_game_read;
 extern const SvGameWrite sv_game_write;

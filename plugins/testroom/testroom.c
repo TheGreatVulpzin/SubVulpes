@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.14"
+#define VERSION "0.2.15"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 72
 
@@ -1792,8 +1792,10 @@ static SvResult t_connection(void)
         return SV_INCOMPATIBLE;
     r = game->connection(self, tester, &state);
     if (r == SV_OK) {
-        sayf("IP %u.%u.%u.%u port %u", (unsigned)state.ip[0], (unsigned)state.ip[1],
+        char text[64];
+        snprintf(text, sizeof text, "IP %u.%u.%u.%u port %u", (unsigned)state.ip[0], (unsigned)state.ip[1],
             (unsigned)state.ip[2], (unsigned)state.ip[3], state.port);
+        change->message_to(self, SV_MESSAGE_SERVER, tester, text);
         sayf("Idle %d ticks. Spectate %d.", state.idle_ticks, state.spectate);
     }
     return r;

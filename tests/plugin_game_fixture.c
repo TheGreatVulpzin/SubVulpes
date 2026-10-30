@@ -21,7 +21,8 @@ static uint32_t stage, account_saves;
 static SvEntity saved_account;
 static uint32_t saved_reason;
 static uint64_t reset_sequence;
-static int runtime_probe;
+static int runtime_probe, network_allowed;
+static uint32_t network_address_id, network_prefix_id;
 /* What the fixture saw of the game events. */
 static uint32_t seen_spawn, seen_death, seen_leave, seen_lost, seen_other, spawn_before_lost, seen_n, seen_ticks[8];
 static int ref_ok[8];
@@ -889,17 +890,42 @@ static int headline_checks(SvOwner owner)
     return 0;
 }
 
+static int connection_ip(const SvConnectionState *state, uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+{
+    const uint8_t real[4] = {a, b, c, d}, masked[4] = {0};
+    return state->flags == (network_allowed ? 0u : SV_CONNECTION_MASKED) &&
+        !memcmp(state->ip, network_allowed ? real : masked, 4);
+}
+
 static SvResult SV_CALL connection_command(SvOwner owner, uint64_t actor, const char *arguments)
 {
     struct { SvConnectionState state; uint32_t guard; } out = { { sizeof(SvConnectionState) }, 0x12345678u };
     SvConnectionState before;
     (void)actor;
+    if (!strncmp(arguments, "ids_", 4)) {
+        SvConnectionState again = { sizeof again };
+        CHECK(game->connection(owner, player, &out.state) == SV_OK);
+        CHECK(game->connection(owner, player, &again) == SV_OK && again.address_id == out.state.address_id &&
+            again.network_id == out.state.network_id);
+        if (!strcmp(arguments, "ids_first")) {
+            char id_line[96];
+            network_address_id = out.state.address_id;
+            network_prefix_id = out.state.network_id;
+            snprintf(id_line, sizeof id_line, "NETWORK_IDS %u %u", network_address_id, network_prefix_id);
+            CHECK(host->log(owner, id_line) == SV_OK);
+        } else if (!strcmp(arguments, "ids_same")) {
+            CHECK(out.state.address_id != network_address_id && out.state.network_id == network_prefix_id);
+        } else {
+            CHECK(out.state.address_id != network_address_id && out.state.network_id != network_prefix_id);
+        }
+        return SV_OK;
+    }
     if (!strncmp(arguments, "joined ", 7)) {
         SvEntity joined;
         unsigned port;
         CHECK(sscanf(arguments + 7, "%llu %u", &joined, &port) == 2);
         CHECK(game->connection(owner, joined, &out.state) == SV_OK);
-        CHECK(out.state.ip[0] == 127 && out.state.ip[1] == 0 && out.state.ip[2] == 0 && out.state.ip[3] == 1);
+        CHECK(connection_ip(&out.state, 127, 0, 0, 1));
         CHECK(out.state.port == port && out.state.idle_ticks == 0 && out.state.spectate == 0);
         CHECK(out.guard == 0x12345678u);
         return SV_OK;
@@ -920,7 +946,7 @@ static SvResult SV_CALL connection_command(SvOwner owner, uint64_t actor, const 
         CHECK(!memcmp(&before, &out.state, sizeof before));
     } else {
         CHECK(game->connection(owner, player, &out.state) == SV_OK);
-        CHECK(out.state.ip[0] == 203 && out.state.ip[1] == 0 && out.state.ip[2] == 113 && out.state.ip[3] == 9);
+        CHECK(connection_ip(&out.state, 203, 0, 113, 9));
         CHECK(out.state.port == 12345 && out.state.idle_ticks == 77 && out.state.spectate == -1);
     }
     CHECK(out.guard == 0x12345678u);
@@ -1537,6 +1563,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     if (!api || api->size < sizeof *api || api->abi != SV_PLUGIN_ABI)
         return SV_INCOMPATIBLE;
     host = api; plugin_owner = owner;
+    network_allowed = GetEnvironmentVariableA("SV_TEST_NETWORK", mode, sizeof mode) == 1 && mode[0] == '1';
     runtime_probe = GetEnvironmentVariableA("SV_GAME_READ_RUNTIME", mode, sizeof mode) == 1 && mode[0] == '1';
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_OK);
     game = (const SvGameRead *)table;

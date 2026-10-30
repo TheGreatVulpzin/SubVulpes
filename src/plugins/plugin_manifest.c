@@ -15,7 +15,8 @@ static const char *const field_names[FIELD_COUNT] = {
     "runtime", "capabilities", "name", "description", "author", "homepage"
 };
 static const char *const cap_names[] = {
-    "read", "write", "ai", "economy", "mission", "settings", "storage", "engine", "shop", "props", "config", "plugins"
+    "read", "write", "ai", "economy", "mission", "settings", "storage", "engine", "shop", "props", "config", "plugins",
+    "network" /* High: Reads the IP addresses of players. */
 };
 static const char *const setting_names[] = {
     "type", "live", "admin", "label", "help", "default", "min", "max", "maxlen", "choices"

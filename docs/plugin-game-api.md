@@ -423,4 +423,19 @@ For `127.0.0.1`, the stored IP number is `0x7f000001`. `read_connection` splits 
 The snapshot port stays in host order. The existing split needs no change.
 The game API test sends a real UDP join over loopback through `serverrecv` and `add_connection`.
 It checks the stored values and the public snapshot against the socket endpoint. The port has unequal bytes to expose a missing swap.
-The original client playtest remains open. Caller permissions and capabilities stay unchanged.
+The original client playtest remains open. The network permission below controls address visibility.
+
+## Network capability and connection identifiers
+
+`network` is capability bit 12, after `plugins`. It grants the real IPv4 address through the existing read table.
+Danger level: high. Reads the IP addresses of players. No new table exists.
+Without `network`, `ip` contains four zero bytes and `flags` bit 0 (`SV_CONNECTION_MASKED`) is set.
+With `network`, the address is real and bit 0 is clear. Port, idle ticks and spectate remain available to read callers.
+Both callers receive the same `address_id` and `network_id`. These are 32-bit HMAC-SHA256 hashes scoped to the profile.
+The address hash uses all four IPv4 bytes. The network hash uses the first three bytes, with a separate domain byte.
+The host makes a 16-byte salt with `BCryptGenRandom` once and saves it in `user/connection-salt.bin`.
+The host reuses that file at each start. A missing salt creates new identifiers. A malformed file prevents startup.
+Keep the salt private and preserve it to preserve the identifiers. The host never logs its contents or a real address.
+The test room declares `network` and sends the address directly to private chat, without its usual chat log.
+The capability does not isolate native code. A native plugin can read server memory, including the salt.
+Tests cover both permissions, stable identifiers, distinct addresses, a shared /24, salt reuse and the capability removal proof.

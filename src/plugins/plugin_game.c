@@ -74,7 +74,13 @@ int sv_game_start(void)
     sv_plugins_set_open(open_storage);
     sv_plugins_set_poll(poll);
     sv_game_event_poll_reset();
-    return sv_entities_start();
+    if (!sv_entities_start())
+        return 0;
+    if (!sv_network_start()) {
+        sv_entities_stop();
+        return 0;
+    }
+    return 1;
 }
 
 void sv_game_stop(void)
@@ -82,6 +88,7 @@ void sv_game_stop(void)
     ready = 0;
     sv_actions_clear();
     sv_entities_stop();
+    sv_network_stop();
 }
 
 void sv_game_ready(void) { ready = 1; }

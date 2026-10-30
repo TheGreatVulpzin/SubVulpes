@@ -54,6 +54,7 @@ accept('runtime=native\ncapabilities=read,write,props\nname=Health Commands\ndes
        ('d' * 160, 'a' * 48), '\tnative\t', 'read,write,props', 'Health Commands')
 accept('capabilities=read,write,ai,economy,mission,settings,storage,engine,shop,props,config,plugins\n',
        'read,write,ai,economy,mission,settings,storage,engine,shop,props,config,plugins')
+accept('capabilities=read,network\n', 'read,network')
 # Each wrong value gets its own line, and the report names the key and never the value.
 refuse('runtime=java\n', 'runtime')
 refuse('runtime=Native\n', 'runtime')

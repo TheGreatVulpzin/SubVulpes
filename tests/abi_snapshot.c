@@ -99,5 +99,6 @@ int main(void)
     TABLE(SvGameStorage, get, erase, 3);
     printf("SV_EVENT_ACCOUNT_SAVE kind=%u bit=%llu\n", SV_EVENT_ACCOUNT_SAVE, (unsigned long long)SV_EVENT_EXT_BIT(0));
     printf("SvAccountSaveEvent reason=%zu\n", offsetof(SvAccountSaveEvent, reason));
+    printf("SvConnectionState flags=%zu address_id=%zu network_id=%zu\n", offsetof(SvConnectionState, flags), offsetof(SvConnectionState, address_id), offsetof(SvConnectionState, network_id));
     return 0;
 }

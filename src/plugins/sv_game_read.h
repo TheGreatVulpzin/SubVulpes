@@ -6,6 +6,7 @@
 #define SV_API_GAME_READ 1u
 #define SV_GAME_READ_VERSION 1u
 #define SV_ENTITY_PAGE_MAX 256u
+#define SV_CONNECTION_MASKED 1u
 /* The longest radius of a within query, in game units. */
 #define SV_WITHIN_RADIUS_MAX 4096.0f
 #pragma pack(push, 8)
@@ -111,6 +112,7 @@ typedef struct {
     uint8_t ip[4];
     uint32_t port;
     int32_t idle_ticks, spectate;
+    uint32_t flags, address_id, network_id;
 } SvConnectionState;
 
 typedef struct {
@@ -142,7 +144,7 @@ typedef struct {
     SvResult (SV_CALL *within)(SvOwner owner, uint32_t kind, SvVector center, float radius, SvEntity *entities,
         float *distances, uint32_t capacity, uint32_t *count);
     /* IP bytes use dotted address order. Port uses host order. Spectate keeps the game value (-1 means none).
-     * SV_NOT_FOUND for a bot or a player without a connection. Plugins must restrict address disclosure to admins. */
+     * SV_NOT_FOUND for a bot or a player without a connection. Without network, the IP is zero and SV_CONNECTION_MASKED is set. */
     SvResult (SV_CALL *connection)(SvOwner owner, SvEntity player, SvConnectionState *state);
 } SvGameRead;
 #pragma pack(pop)

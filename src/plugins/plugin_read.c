@@ -6,8 +6,90 @@
 #include "collide.h"
 #include "buildings.h"
 #include "server.h"
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
 #include <math.h>
 #include <string.h>
+
+static BCRYPT_ALG_HANDLE network_hash;
+static unsigned char network_salt[16];
+
+static int salt_file(void)
+{
+    const char *path = "user/connection-salt.bin";
+    HANDLE file;
+    BY_HANDLE_FILE_INFORMATION info;
+    LARGE_INTEGER size;
+    DWORD count;
+    int ok;
+    if (!CreateDirectoryA("user", NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
+        return 0;
+    file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    if (file != INVALID_HANDLE_VALUE) {
+        ok = GetFileInformationByHandle(file, &info) &&
+            !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) &&
+            GetFileSizeEx(file, &size) && size.QuadPart == sizeof network_salt &&
+            ReadFile(file, network_salt, sizeof network_salt, &count, NULL) && count == sizeof network_salt;
+        CloseHandle(file);
+        return ok;
+    }
+    if (GetLastError() != ERROR_FILE_NOT_FOUND)
+        return 0;
+    if (BCryptGenRandom(NULL, network_salt, sizeof network_salt, BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
+        return 0;
+    file = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE)
+        return 0;
+    ok = WriteFile(file, network_salt, sizeof network_salt, &count, NULL) && count == sizeof network_salt &&
+        FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!ok)
+        DeleteFileA(path);
+    return ok;
+}
+
+void sv_network_stop(void)
+{
+    if (network_hash)
+        BCryptCloseAlgorithmProvider(network_hash, 0);
+    network_hash = NULL;
+    SecureZeroMemory(network_salt, sizeof network_salt);
+}
+
+int sv_network_start(void)
+{
+    sv_network_stop();
+    if (!salt_file() || BCryptOpenAlgorithmProvider(&network_hash, BCRYPT_SHA256_ALGORITHM, NULL,
+            BCRYPT_ALG_HANDLE_HMAC_FLAG) < 0) {
+        sv_network_stop();
+        return 0;
+    }
+    return 1;
+}
+
+static int identifier(const uint8_t ip[4], unsigned count, unsigned char domain, uint32_t *value)
+{
+    BCRYPT_HASH_HANDLE hash = NULL;
+    unsigned char input[5], digest[32];
+    int ok = 0;
+    input[0] = domain;
+    memcpy(input + 1, ip, count);
+    if (!network_hash || BCryptCreateHash(network_hash, &hash, NULL, 0, network_salt, sizeof network_salt, 0) < 0)
+        return 0;
+    if (BCryptHashData(hash, input, count + 1, 0) >= 0 && BCryptFinishHash(hash, digest, sizeof digest, 0) >= 0) {
+        *value = ((uint32_t)digest[0] << 24) | ((uint32_t)digest[1] << 16) | ((uint32_t)digest[2] << 8) | digest[3];
+        ok = 1;
+    }
+    BCryptDestroyHash(hash);
+    return ok;
+}
+
+int sv_network_ids(const uint8_t ip[4], uint32_t *address, uint32_t *network)
+{
+    return identifier(ip, 4, 1, address) && identifier(ip, 3, 2, network);
+}
 
 static SvVector vector(vec3 value)
 {
@@ -445,6 +527,12 @@ static SvResult SV_CALL read_connection(SvOwner owner, SvEntity entity, SvConnec
         value.port = port;
         value.idle_ticks = connection->idle_ticks;
         value.spectate = connection->spectate;
+        if (!sv_network_ids(value.ip, &value.address_id, &value.network_id))
+            return SV_IO;
+        if (!sv_plugins_has_capability(owner, SV_CAP_NETWORK)) {
+            memset(value.ip, 0, sizeof value.ip);
+            value.flags = SV_CONNECTION_MASKED;
+        }
         memcpy(state, &value, sizeof value);
         return SV_OK;
     }

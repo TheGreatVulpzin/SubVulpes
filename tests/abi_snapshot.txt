@@ -15,7 +15,7 @@ SvBoneState size=112
 SvInventoryState size=88
 SvWorldState size=168
 SvLineHit size=56
-SvConnectionState size=20
+SvConnectionState size=32
 SvGameRead size=64
 SvGameWrite size=104
 SvValue size=12
@@ -69,3 +69,4 @@ SvGameShop functions=4 prefix=0 first=phone:8 last=catalog_replace:20
 SvGameStorage functions=3 prefix=0 first=get:8 last=erase:16
 SV_EVENT_ACCOUNT_SAVE kind=2147483648 bit=4294967296
 SvAccountSaveEvent reason=24
+SvConnectionState flags=20 address_id=24 network_id=28

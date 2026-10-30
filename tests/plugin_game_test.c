@@ -1300,6 +1300,11 @@ static void connection_checks(void)
     sr_connections[SR_MAX_CONNECTION - 1].spectate = -1;
     sr_numofconnections = SR_MAX_CONNECTION;
     CHECK(checked_command("connectioncheck found"));
+    CHECK(checked_command("connectioncheck ids_first"));
+    sr_connections[SR_MAX_CONNECTION - 1].ip = 0xcb00710au;
+    CHECK(checked_command("connectioncheck ids_same"));
+    sr_connections[SR_MAX_CONNECTION - 1].ip = 0xcb007209u;
+    CHECK(checked_command("connectioncheck ids_other"));
     sr_players[0].is_bot = 1;
     CHECK(checked_command("connectioncheck missing"));
     sr_players[0].is_bot = 0;

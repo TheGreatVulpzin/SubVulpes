@@ -4,6 +4,8 @@
 #include "sv_plugin.h"
 #include "sv_game_events.h"
 
+#define SV_CAP_NETWORK (1u << 12)
+
 #define SV_PLUGIN_MAX 32
 #define SV_PLUGIN_COMMAND_MAX 128
 #define SV_PLUGIN_DEP_MAX 8
@@ -34,6 +36,7 @@ void sv_game_ready(void);
 void sv_game_reset(void);
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
+int sv_plugins_has_capability(SvOwner owner, uint32_t mask);
 /* Sets a function that the host calls with the owner of a plugin when that plugin stops, to give back what it changed. */
 void sv_plugins_set_release(void (*hook)(SvOwner owner));
 /* Sets a function that the host calls before the enable callback of a plugin. A result other than SV_OK refuses the start. */

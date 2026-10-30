@@ -47,6 +47,12 @@ int sv_plugins_context(SvOwner owner)
     return !stopping && owner_module(owner) != NULL;
 }
 
+int sv_plugins_has_capability(SvOwner owner, uint32_t mask)
+{
+    SvModule *module = owner_module(owner);
+    return !stopping && module && (module->cap_mask & mask) == mask;
+}
+
 int sv_plugins_write_context(SvOwner owner)
 {
     return sv_plugins_context(owner) && !in_simulation;
@@ -602,7 +608,7 @@ int sv_plugins_start(void)
     if (!sv_game_start()) {
         failed = 1;
         module_count = 0;
-        sv_log("Cannot allocate game references. Normal startup refused.");
+        sv_log("Cannot initialize game services. Normal startup refused.");
         return 0;
     }
     profile_lock = sv_plugin_lock();
