@@ -27,7 +27,7 @@ The server uses the ids 0 to 46. The table below comes from a tour of all 47 ids
 | 25 | `glassbreak01` | noise |
 | 26 | nothing | |
 | 27 | `phonering01` | the ring of a cell phone, 1.47 s long. The main frequency is about 2000 Hz. It has a second harmonic at 4006 Hz (31% of the main peak) and side peaks every 50 Hz, so the loudness shakes 50 times a second. The loudness repeats a pattern every 400 ms, and the last 0.2 s is silent. It is not a pure tone |
-| 28 to 37 | the digits of the phone | not WAV files. The client makes ten tones of 16384 bytes at 44100 Hz. Frequencies not measured yet |
+| 28 to 37 | the digits 0 to 9 of the phone | not WAV files. The client makes ten tones of 0.186 s (16384 bytes at 44100 Hz). Each tone is two sine waves of the same loudness, with a flat loudness and no fade: the standard phone tones (DTMF). Id 28 is the digit 0, and the ids 29 to 37 are the digits 1 to 9. The pairs are in the table below |
 | 38 | `reload01` | noise |
 | 39 | `shell_hit_cement` | a short tone at 2207 Hz |
 | 40 | `gearshift01` | noise |
@@ -35,9 +35,24 @@ The server uses the ids 0 to 46. The table below comes from a tour of all 47 ids
 | 42 | a stream | a buffer of 131072 bytes. Perhaps `train01`, which has 882044 bytes. Not proven |
 | 43 to 46 | nothing | the client played no sound |
 
+The phone digit tones, measured from the dump of the probe:
+
+| Id | Digit | Low (Hz) | High (Hz) |
+| --- | --- | --- | --- |
+| 28 | 0 | 941 | 1336 |
+| 29 | 1 | 697 | 1209 |
+| 30 | 2 | 697 | 1336 |
+| 31 | 3 | 697 | 1477 |
+| 32 | 4 | 770 | 1209 |
+| 33 | 5 | 770 | 1336 |
+| 34 | 6 | 770 | 1477 |
+| 35 | 7 | 852 | 1209 |
+| 36 | 8 | 852 | 1336 |
+| 37 | 9 | 852 | 1477 |
+
 The engine plays in a loop while a car runs and restarts about every 35 ms, so a test inside a car cannot show which id is the engine. Test 64 (`engine_sounds`) sets the bots to 0 and makes a car. The trains stay, because the track system owns them.
 
-The phone ring has one clear main frequency, but it also has a harmonic and a shake of the loudness. The ten digit sounds are the best hope for a set of instruments.
+The phone ring has one clear main frequency, but it also has a harmonic and a shake of the loudness. Each digit sound is a pair of two pure tones, so it plays as an interval, not as a single note. With the pitch from 0.125 to 2.0, the pairs reach from about 87 Hz to 2954 Hz. They last 0.186 s and cannot hold.
 
 ## Tools
 
