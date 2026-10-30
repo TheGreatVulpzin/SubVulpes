@@ -51,6 +51,7 @@ def bad_cases():
 def main():
     selected = sys.argv[2] if len(sys.argv) > 2 else None
     with tempfile.TemporaryDirectory(prefix='jukebox-midi-', dir=BINARY.parent) as root:
+        assert Path(root).resolve().parent == BINARY.parent
         file = Path(root) / 'input.mid'
         def run(data):
             file.write_bytes(data)
@@ -73,6 +74,11 @@ def main():
             'NOTE 0 0 60 127 73', 'NOTE 30 0 62 64 73', 'NOTE 45 0 64 32 73'], result.stdout
         result = run(F.midi(F.event(0, 153, 36, 100) + F.event(5, 36, 0) + F.event(0, 137, 36, 0) + F.END))
         assert result.returncode == 0 and 'NOTE 0 9 36 100 0' in result.stdout and 'SONG 1' in result.stdout, result.stdout
+        # A channel can span tracks, and a track can carry several channels.
+        a = F.event(0, 192, 42) + F.event(0, 144, 60, 100) + F.event(480, 145, 65, 100) + F.END
+        b = F.event(240, 144, 62, 100) + F.END
+        result = run(F.midi(a, b))
+        assert result.returncode == 0 and 'CHANNEL 0 2 42 60 62' in result.stdout and 'CHANNEL 1 1 0 65 65' in result.stdout, result.stdout
         # Fractional time carries across events. It never rounds each delta on its own.
         track = F.event(0, 255, 81, 3, 7, 161, 33) + F.event(0, 144, 60, 1)
         track += b''.join(F.event(1, 144, 60, 1) for _ in range(100)) + F.END
