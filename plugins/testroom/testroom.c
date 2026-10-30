@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.16"
+#define VERSION "0.2.17"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 72
 
@@ -45,7 +45,7 @@ enum { TODO, PASS, FAIL, SKIP };
 /* What a test changed on the player, so the next test or /test stop can undo it. */
 enum { T_HEALTH = 1, T_BLEED = 2, T_STUN = 4, T_DEALT = 8, T_LOOKS = 16, T_TYPES = 32, T_DEATH = 64, T_PHONE = 128, T_AI = 256, T_MONEY = 512, T_ECON = 1024, T_MISSION = 2048, T_SHOP = 4096,
     T_SETTING = 8192 };
-#define EVENTS_BASE (SV_EVENT_TICK | SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM |\
+#define EVENTS_BASE (SV_EVENT_EXT_BIT(1) | SV_EVENT_TICK | SV_EVENT_CHAT | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM |\
     SV_EVENT_SETTING | SV_EVENT_CONFIG)
 
 typedef struct Test {
@@ -807,6 +807,15 @@ static SvResult t_bomb(void)
 /* The chat decision: while this is on, the text that the tester types gets a prefix. */
 static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event)
 {
+    if (event->kind == SV_EVENT_TIMER) {
+        const SvTimerEvent *timer = (const SvTimerEvent *)event;
+        if (event->size < sizeof *timer)
+            return SV_INVALID;
+        if (timer->id == 0x74696d65u)
+            say("Timer ran after 60 ticks.");
+        return SV_OK;
+    }
+
     (void)owner;
     if (notices_on && event->size == sizeof(SvGameEvent)) {
         const SvGameEvent *record = (const SvGameEvent *)event;
@@ -1808,6 +1817,20 @@ static SvResult t_world_reset(void)
     return change->world_reset(self);
 }
 
+static SvResult t_timer_random(void)
+{
+    uint32_t value;
+    SvResult r;
+    if (host->size < offsetof(SvHost, random) + sizeof host->random)
+        return SV_INCOMPATIBLE;
+    r = host->random(self, &value);
+    if (r == SV_OK)
+        r = host->after(self, 60, 0x74696d65u);
+    if (r == SV_OK)
+        sayf("Plugin random %u. Timer notice in 60 ticks.", value);
+    return r;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1876,6 +1899,7 @@ static const Test tests[] = {
     { "bone_mass", "Changes and reads your head mass, then restores it.", "A chat line shows the changed and restored mass.", t_bone_mass, NULL },
     { "connection", "Reads your connection for this admin command.", "Your address, port, idle ticks and spectate value appear.", t_connection, NULL },
     { "world_reset", "Requests a round reset at the next tick.", "The round restarts.", t_world_reset, NULL },
+    { "timer_random", "Reads plugin random and sets a timer for 60 ticks.", "A random number appears, then a timer notice after 60 ticks.", t_timer_random, NULL },
 };
 
 /* ------------------------------------------------------------ flow */

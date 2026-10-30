@@ -1,18 +1,19 @@
 # Plugin API: coverage, needs and missing features
 
-Date: 2026-10-28. This page counts what the server offers to plugins today, lists the open needs of the catalog, and lists features that the catalog does not name.
+Date: 2026-10-30. This page counts what the server offers to plugins today, lists the open needs of the catalog, and lists features that the catalog does not name.
 It follows the system table of [system coverage](plugin-api-map.md). The proof for each item is in the test logs and in the page of its area. Nothing here was played with a client except where a line says so.
 
 ## What exists
 
 | Part | Count | Where |
 | --- | --- | --- |
-| Capabilities | 12 | 1 read, 2 write, 3 AI, 4 economy, 5 missions, 6 settings, 7 storage, 8 engine, 9 shop, 10 property table, 11 plugin settings, 12 plugin services |
-| Read methods | 13 | `entities`, `player`, `human`, `item`, `object`, `account`, `bone`, `inventory`, `world`, `line`, `aim`, `headline`, `within` |
-| Write methods | 24 | messages, kick, money, teleport, looks, 5 item, 2 object, 2 bot, vehicle exit and enter, sound, headline, name, speech, shot and hit visuals, `disown` |
-| Property rows | 34 | players, humans, items, objects, accounts, 27 item types, 4 bullet types, the world, 2 phone rows |
+| Capabilities | 13 | 1 read, 2 write, 3 AI, 4 economy, 5 missions, 6 settings, 7 storage, 8 engine, 9 shop, 10 property table, 11 plugin settings, 12 plugin services; network is a permission at bit 12 |
+| Read methods | 14 | `entities`, `player`, `human`, `item`, `object`, `account`, `bone`, `inventory`, `world`, `line`, `aim`, `headline`, `within`, `connection` |
+| Write methods | 25 | messages, kick, money, teleport, looks, 5 item, 2 object, 2 bot, vehicle exit and enter, sound, headline, name, speech, shot and hit visuals, `disown`, `world_reset` |
+| Property rows | 37 | players, humans, items, objects, accounts, 27 item types, 4 bullet types, the world, 2 phone rows |
 | Area tables | 7 | AI 11 methods, economy 4, missions 3, settings 3, storage 3, engine 3, shop 4 |
-| Events | 18 bits | tick, stop, lost, spawn, death, leave, chat, join, phone digit, phone call, damage, config, round, vehicle, shot, object gone, item, setting |
+| Events | 20 bits | tick, stop, lost, spawn, death, leave, chat, join, phone digit, phone call, damage, config, round, vehicle, shot, object gone, item, setting, account save, timer |
+| Host methods | 8 | `log`, `status`, `command`, `subscribe`, `get_api`, `after`, `every`, `random` |
 | Host rules | 5 | conflicts, refusal reason, plugin APIs, library plugins, and the cleanup of what a plugin made |
 
 ## Coverage by system
@@ -21,23 +22,23 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 
 | System | State | What is open |
 | --- | --- | --- |
-| Accounts | Part | Read: name, money, play time, looks. Write: money, ban time. Open: a save event, rename of an account. |
-| Players and teams | Part | Read, team, admin, god mode, kick, join and leave decisions. Open: the connection (IP, port, idle time, spectate), player input for a human, the roster and limits of a team. |
+| Accounts | Part | Read: name, money, play time, looks. Write: money, ban time. Save notices cover disk and disconnect memory updates. Open: rename of an account. |
+| Players and teams | Part | Read, team, admin, god mode, kick, join and leave decisions, connection snapshots with address masking. Open: player input for a human, the roster and limits of a team. |
 | Economy | Yes | Companies, prices, shares, stocks. Open: a decision before a purchase, taxes. |
-| Missions and rounds | Part | Slots, start, cancel, completion guard, world state and timers. Open: mission events, reset of the round, change of the game mode while the server runs. |
+| Missions and rounds | Part | Slots, start, cancel, completion guard, world state, timers and round reset. Open: mission events, change of the game mode while the server runs. |
 | NPC decisions | Yes | Threats, destination, waypoints, target, input, perception, aim, shot chance, street route, seated target. Open: a query of the road graph (N27). |
-| Humans | Part | Health, bleeding, stun, protection, bones, teleport, looks, name, speech, collapse threshold. Open: a decision on spawn and respawn, bone masses (N19), delete the body of a real player (N8). |
+| Humans | Part | Health, bleeding, stun, protection, bones, bone mass, teleport, looks, name, speech, collapse threshold. Open: a decision on spawn and respawn, delete the body of a real player (N8). |
 | Items and inventory | Yes | Create, remove, equip, attach, detach, time to live, ammunition, item types. Open: decisions for pick up, drop and use. |
 | Weapons and bullets | Part | Type rows, shot event, tracer and hit visuals. Open: one weapon with its own values (the rows are for the whole type). No explosion, fire or smoke event exists in the game. |
 | Objects and vehicles | Part | Create, remove, health, teleport, impulse, seat, engine power, damage scale. Open: seat list, wheel state, helicopter and train control, throttle and steering for a plugin driver. |
-| Physics | No | Bone velocity and object velocity only. Open: masses, gravity, particles, bonds. |
+| Physics | Part | Bone mass, bone velocity and object velocity. Open: gravity, particles, bonds. |
 | Collision | Part | Line, aim and sphere (`within`). Open: material at a hit, block cell (N39). |
 | Block areas | No | Nothing yet (N40). |
 | Buildings and city | Part | Shop catalog read and replace, newspaper. Open: floorplans, safe zones, elevators, doors, a read of the building list. |
 | Level construction | No | Nothing at the reset boundary yet. |
 | Network and communication | Part | Chat with replace, commands, messages, sounds, join. Open: voice (N47, N48), hiding an entity from some players, a list of the connections. |
-| System services | Part | Settings, storage, logs, metrics in the list. Open: timers (N41), a way to run work on a worker thread, a way to hand its result to the server thread. |
-| Math | No | Random state of a plugin (N41). |
+| System services | Part | Settings, storage, logs, metrics in the list, tick timers. Open: a way to run work on a worker thread, a way to hand its result to the server thread. |
+| Math | Part | Plugin random has independent state (N41). |
 
 ## Open needs of the catalog
 
@@ -51,7 +52,7 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | N29 | Human health above 100 | The packet clamps the sent health to 117. |
 | N33 | Account save event, done | `SV_EVENT_ACCOUNT_SAVE` follows a bulk file save or the disconnect update in memory. |
 | N40 | Block edits | Mark "client effect unknown". |
-| N41 | Timers and a random generator for each plugin | See the first item of the list of missing features. |
+| N41 | Timers and plugin random, done | `SvHost.after`, `every` and `random` use ticks and an independent state. |
 | N45 | Possess a bot | Links on both sides. |
 | N47, N48 | Voice frames and voice routing | The ring of voice frames and the 8 slots exist in the core. |
 | N4 | Colors | Decided as "no support": the colors never leave the server. |
@@ -165,3 +166,19 @@ The focused test exercises the reset hook and flag consumption. It does not run 
 Test room case 67 requests a reset. The client playtest remains open.
 
 Removal of the write context check fails the game API test. The source is restored before final checks.
+
+## Tick timers and plugin random (R9)
+
+`SvHost.after(owner, ticks, id)` schedules one notice. `every` schedules a repeating notice. Delays are 1 to `UINT32_MAX` ticks.
+Subscribe with `SV_EVENT_EXT_BIT(1)` and read `SvTimerEvent.id` from `SV_EVENT_TIMER`, which is `SV_EVENT_EXT(1)`.
+Each owner has 32 timers. A repeated ID replaces that timer. A full table returns `SV_LIMIT` without a change.
+Timers count host ticks across round resets. They run before the tick event. A timer made inside a callback starts on a later tick.
+Stopping the owner or removing its timer subscription cancels its timers. Native plugin execution can still affect wall time.
+`SvHost.random` advances one 32-bit state per plugin. The seed combines the game seed and plugin ID with FNV-1a.
+The stream uses the LCG recurrence `state = state * 1664525 + 1013904223`, modulo 2^32. Activation restarts that stream.
+Random calls never call `os_rand()` or change the game random stream. No clock or address contributes a separate seed.
+The core supplies its existing game seed before the first world tick. Random calls before that point return `SV_STATE`.
+Replay requires the same seed, plugin IDs, calls and ticks. A native plugin that reads a clock, file or network is outside this contract.
+Only a sandboxed host can enforce the replay contract. No client playtest or replay recording ran.
+
+Removal proofs cover timer capacity, delay bounds and owner checks. The source is restored before final checks.

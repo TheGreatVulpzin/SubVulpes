@@ -1,6 +1,7 @@
 SvStatus size=20
 SvEvent size=12
-SvHost size=28
+SvTimerEvent size=16
+SvHost size=40
 SvPlugin size=92
 SvConfig size=20
 SvConfigEvent size=176
@@ -53,7 +54,7 @@ SvGameShop size=24
 SvStorageKey size=48
 SvStorageValue size=1032
 SvGameStorage size=20
-SvHost functions=5 prefix=0 first=log:8 last=get_api:24
+SvHost functions=8 prefix=0 first=log:8 last=random:36
 SvPlugin functions=2 prefix=0 first=enable:84 last=disable:88
 SvConfig functions=3 prefix=0 first=get_int:8 last=get_text:16
 SvPlugins functions=3 prefix=0 first=refuse:8 last=find:16
@@ -70,3 +71,4 @@ SvGameStorage functions=3 prefix=0 first=get:8 last=erase:16
 SV_EVENT_ACCOUNT_SAVE kind=2147483648 bit=4294967296
 SvAccountSaveEvent reason=24
 SvConnectionState flags=20 address_id=24 network_id=28
+SV_EVENT_TIMER kind=2147483649 bit=8589934592

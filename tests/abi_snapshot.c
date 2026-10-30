@@ -30,6 +30,7 @@ int main(void)
     _Static_assert(SV_ACCOUNT_SAVE_DISK == 0 && SV_ACCOUNT_SAVE_DISCONNECT == 1, "Keep the account save reason codes");
     RECORD(SvStatus);
     RECORD(SvEvent);
+    RECORD(SvTimerEvent);
     RECORD(SvHost);
     RECORD(SvPlugin);
     RECORD(SvConfig);
@@ -83,7 +84,7 @@ int main(void)
     RECORD(SvStorageKey);
     RECORD(SvStorageValue);
     RECORD(SvGameStorage);
-    TABLE(SvHost, log, get_api, 5);
+    TABLE(SvHost, log, random, 8);
     TABLE(SvPlugin, enable, disable, 2);
     TABLE(SvConfig, get_int, get_text, 3);
     TABLE(SvPlugins, refuse, find, 3);
@@ -100,5 +101,6 @@ int main(void)
     printf("SV_EVENT_ACCOUNT_SAVE kind=%u bit=%llu\n", SV_EVENT_ACCOUNT_SAVE, (unsigned long long)SV_EVENT_EXT_BIT(0));
     printf("SvAccountSaveEvent reason=%zu\n", offsetof(SvAccountSaveEvent, reason));
     printf("SvConnectionState flags=%zu address_id=%zu network_id=%zu\n", offsetof(SvConnectionState, flags), offsetof(SvConnectionState, address_id), offsetof(SvConnectionState, network_id));
+    printf("SV_EVENT_TIMER kind=%u bit=%llu\n", SV_EVENT_TIMER, (unsigned long long)SV_EVENT_EXT_BIT(1));
     return 0;
 }

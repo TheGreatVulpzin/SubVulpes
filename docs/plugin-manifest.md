@@ -43,7 +43,7 @@ The list has names separated by commas, with no spaces. A name appears once. The
 | `props` | 10 | `SvGameProps` |
 | `config` | 11 | `SvConfig` |
 | `plugins` | 12 | `SvPlugins` |
-| `network` | bit 12 | Connection address permission. Danger: high. Reads the IP addresses of players. |
+| `network` | None | Connection address permission at bit 12. Danger: high. Reads the IP addresses of players. |
 
 The host checks the list when the plugin calls `get_api`. A table that the manifest did not declare gives `SV_DENIED`, and the output pointer stays empty.
 A declared table opens as before.

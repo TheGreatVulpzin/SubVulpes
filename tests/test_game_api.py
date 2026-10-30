@@ -17,9 +17,15 @@ with tempfile.TemporaryDirectory(prefix="game-api-", dir=build / "tests") as fol
     (module / "plugin.ini").write_text(
         "[plugin]\nid=test.read\nversion=0.1.0\nlibrary=read.dll\napi=1\ncapabilities=read,write,props,plugins\nlive=1\nunsafe_events=1\n", encoding="ascii"
     )
-    (root / "plugins" / "plugins.ini").write_text("[plugins]\ntest.read=required\n", encoding="ascii")
+    other = root / "plugins" / "test.runtime"
+    other.mkdir()
+    other_binary = build / "tests" / "runtime-fixture.dll"
+    shutil.copyfile(other_binary, other / "runtime.dll")
+    (other / "plugin.ini").write_text(
+        "[plugin]\nid=test.runtime\nversion=0.1.0\nlibrary=runtime.dll\napi=1\nlive=1\n", encoding="ascii")
+    (root / "plugins" / "plugins.ini").write_text("[plugins]\ntest.read=required\ntest.runtime=enabled\n", encoding="ascii")
     (root / "plugins" / "native-approvals.ini").write_text(
-        "[native]\ntest.read=" + hashlib.sha256(binary.read_bytes()).hexdigest() + "\n", encoding="ascii"
+        "[native]\ntest.read=" + hashlib.sha256(binary.read_bytes()).hexdigest() + "\ntest.runtime=" + hashlib.sha256(other_binary.read_bytes()).hexdigest() + "\n", encoding="ascii"
     )
     salt_before = None
     ids_before = None
@@ -37,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix="game-api-", dir=build / "tests") as fol
         print(run.stdout, end="")
         print(run.stderr, end="", file=sys.stderr)
         required = ("PUBLIC_READ_API_PASS", "STOP_READ_DENIED", "PUBLIC_WRITE_API_PASS", "STOP_WRITE_DENIED",
-                    "COMMAND echo hi there", "COMMAND secret two", "NPC_LIMIT_PASS", "LINE_MARK_PASS", "ACTION_GATE_PASS", "ACTION_SWEEP_PASS")
+                    "COMMAND echo hi there", "COMMAND secret two", "NPC_LIMIT_PASS", "LINE_MARK_PASS", "ACTION_GATE_PASS", "ACTION_SWEEP_PASS", "PLUGIN_RUNTIME_PASS")
         # A player runs the PUBLIC command. The ADMIN command waits for the flag. The LOCAL command never runs.
         # A player with no reference must not become the local operator (actor zero).
         absent = ("COMMAND secret one", "COMMAND localonly", "COMMAND echo nope", "Plugin command result: echo")

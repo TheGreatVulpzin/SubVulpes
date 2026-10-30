@@ -16,6 +16,7 @@
 #include "packet.h"
 #include "server.h"
 #include "sr_math.h"
+#include "sr_os.h"
 #include "sr_server.h"
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
@@ -1497,6 +1498,54 @@ static void world_reset_checks(void)
     CHECK(checked_command("resetcheck"));
 }
 
+static void runtime_checks(void)
+{
+    int first, second, tick = sr_game.ticks;
+    uint32_t game_random[624];
+    int game_index = sr_data_mti;
+    memcpy(game_random, sr_data_mt, sizeof game_random);
+    os_srand(123);
+    first = os_rand();
+    second = os_rand();
+    os_srand(123);
+    CHECK(os_rand() == first);
+    CHECK(checked_command("runtimecheck random"));
+    CHECK(checked_command("runtimeother step"));
+    CHECK(checked_command("runtimecheck random"));
+    CHECK(checked_command("runtimeother step"));
+    CHECK(checked_command("runtimecheck random"));
+    CHECK(os_rand() == second && sr_data_mti == game_index && !memcmp(game_random, sr_data_mt, sizeof game_random));
+    CHECK(checked_command("runtimeother arm"));
+    CHECK(checked_command("runtimecheck arm"));
+    sr_game.ticks = -1;
+    sv_plugins_tick();
+    CHECK(checked_command("runtimecheck one"));
+    CHECK(checked_command("runtimeother seen"));
+    sr_game.ticks = 0;
+    sv_plugins_tick();
+    CHECK(checked_command("runtimecheck two"));
+    sv_game_reset();
+    sv_plugins_tick();
+    CHECK(checked_command("runtimecheck three"));
+    sv_plugins_tick();
+    CHECK(checked_command("runtimecheck four"));
+    CHECK(checked_command("runtimecheck clear"));
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed());
+    CHECK(checked_command("runtimeother arm"));
+    sv_plugins_tick();
+    CHECK(checked_command("runtimeother seen"));
+    CHECK(sv_plugins_disable("test.runtime") == SV_OK);
+    sv_plugins_tick();
+    CHECK(sv_plugins_enable("test.runtime") == SV_OK);
+    sv_plugins_tick();
+    CHECK(checked_command("runtimeother step"));
+    CHECK(checked_command("runtimecheck random"));
+    sr_game.ticks = tick;
+    CHECK(!sv_plugins_failed());
+    puts("PLUGIN_RUNTIME_PASS");
+}
+
 int main(int argc, char **argv)
 {
     SvEntity old;
@@ -1508,6 +1557,7 @@ int main(int argc, char **argv)
     CHECK(sv_entity_capacity(UINT32_MAX) == 0);
     CHECK(sv_entity_at(0, 0) == 0);
     CHECK(sv_plugins_start());
+    sv_plugins_seed(0x12345678u);
     list_strides();
     player_lifetime();
     body_lifetime();
@@ -1613,6 +1663,7 @@ int main(int argc, char **argv)
     account_save_checks();
     connection_join_check();
     world_reset_checks();
+    runtime_checks();
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
     CHECK(!sv_game_take_reset());

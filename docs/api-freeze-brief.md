@@ -58,7 +58,7 @@ The owner decided on 2026-10-28: the first editor builds R1 to R9, and not the s
 | R6 | Account save event (N33), done | One disk notice covers all accounts: reason 0, account 0. Disconnect reason 1 carries one account reference. The 2,000-account flood test preserves other queued events. |
 | R7 | Delete the body of a real player (N8) | A write method that kills and removes the body at a safe point, with the links of the player kept whole. |
 | R8 | Block reads and edits (N39, N40) | Material at a hit and a block cell (read). Block set and clear (write). Mark "client effect unknown". |
-| R9 | Timers and plugin random (N41) | `after(owner, ticks, id)` and `every`, delivered as a numbered event, and a random state for each plugin. It lives in `plugin_host.c`. Replay contract (owner decision, 2026-10-29; see the replay idea in [ideas.md](ideas.md)): (1) The random state of a plugin is its own. It never calls `os_rand()`, so a plugin cannot move the random stream of the game. (2) The seed comes from the seed of the game and the ID of the plugin. It never comes from a clock, `time()` or an address. (3) The state is one or two numbers for each plugin, so a snapshot can hold it. Timers count ticks, not milliseconds. Say in the header that a native plugin which reads a clock, a file or the network is outside this contract, and that only a sandboxed host can enforce it. |
+| R9 | Timers and plugin random (N41), done | `after(owner, ticks, id)` and `every`, delivered as a numbered event, and a random state for each plugin. It lives in `plugin_host.c`. Replay contract (owner decision, 2026-10-29; see the replay idea in [ideas.md](ideas.md)): (1) The random state of a plugin is its own. It never calls `os_rand()`, so a plugin cannot move the random stream of the game. (2) The seed comes from the seed of the game and the ID of the plugin. It never comes from a clock, `time()` or an address. (3) The state is one or two numbers for each plugin, so a snapshot can hold it. Timers count ticks, not milliseconds. Say in the header that a native plugin which reads a clock, a file or the network is outside this contract, and that only a sandboxed host can enforce it. |
 | R10 | Launch an item and spin it | Rows `item.velocity` and `item.angular_velocity` (vector, 1 slot, GET, SET and ADD, same bound as `object.velocity`). An item at rest gets an exact launch speed from one set. A plugin that holds items in place with `teleport` (the test 59 of the test room) sets the speed to zero after each move, because `teleport` keeps the speed and gravity builds it up between two moves. Test: the test room launches an item at an angle and a plugin reads the speed back. The row `item.frozen` (int, 0 to 1) holds an item in the air through the rest flag. Done in the unit test; the test room case is open. |
 
 Every item follows the rules of `plugin-abi.md`: it goes at the end, it has `size`, it has a focused test, it has a removal proof if it is a security check, and it adds a line to `docs/plugin-game-api.md` and to `docs/plugin-coverage.md`. Each new method needs the ABI snapshot to change in the same commit.
@@ -69,7 +69,12 @@ Every item follows the rules of `plugin-abi.md`: it goes at the end, it has `siz
 
 ## Second API brief progress
 
-Items 2, 1, 3, 4 and R5 pass their checks. Next: R9.
+The second brief is complete: items 2, 1, 3, 4, R5 and R9 pass their checks.
+The normal build, all 15 tests, storage, native dependencies, repository checks and prose lint pass.
+Removal proofs cover byte order, the network permission, reset context and timer/random guards.
+Each proof restores the source before final checks. A fresh CMake configuration also builds the new timer fixture.
+
+Not checked in this work: live client play, launcher Start/Stop through the UI, or a replay recording.
 
 ## Network capability and connection identifiers
 

@@ -22,6 +22,15 @@ typedef struct {
     const void *table;
 } Offer;
 
+typedef struct {
+    uint64_t due;
+    uint32_t period, id;
+} Timer;
+
+static Timer timers[SV_PLUGIN_MAX][SV_TIMER_MAX];
+static uint32_t random_state[SV_PLUGIN_MAX], game_seed;
+static uint64_t timer_tick;
+static int random_seeded;
 static SvModule modules[SV_PLUGIN_MAX];
 static Command commands[SV_PLUGIN_COMMAND_MAX];
 static Offer offers[SV_PLUGINS_API_MAX];
@@ -303,6 +312,8 @@ static SvResult subscribe_mask(SvOwner owner, uint64_t events, SvEventFn callbac
         return SV_DENIED;
     if ((events & 0xffffffffu) & ~(uint64_t)SV_EVENT_KNOWN_MASK || (events && !callback))
         return SV_INVALID;
+    if (!(events & SV_EVENT_EXT_BIT(1)))
+        memset(timers[owner - 1], 0, sizeof timers[owner - 1]);
     module->events = events;
     module->event_callback = callback;
     return SV_OK;
@@ -313,8 +324,79 @@ static SvResult SV_CALL host_subscribe(SvOwner owner, uint64_t events, SvEventFn
     return subscribe_mask(owner, events, callback);
 }
 
+static void seed_module(uint32_t index)
+{
+    const unsigned char *id = (const unsigned char *)modules[index].id;
+    uint32_t state = 2166136261u ^ game_seed;
+    while (*id)
+        state = (state ^ *id++) * 16777619u;
+    random_state[index] = state;
+}
+
+void sv_plugins_seed(uint32_t seed)
+{
+    uint32_t i;
+    if (current || (started && GetCurrentThreadId() != server_thread))
+        return;
+    game_seed = seed;
+    random_seeded = 1;
+    for (i = 0; i < module_count; ++i)
+        seed_module(i);
+}
+
+static SvResult timer_set(SvOwner owner, uint32_t ticks, uint32_t id, int repeat)
+{
+    uint32_t i, slot = SV_TIMER_MAX;
+    Timer *timer;
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
+    if (!ticks)
+        return SV_INVALID;
+    if (!(modules[owner - 1].events & SV_EVENT_EXT_BIT(1)))
+        return SV_STATE;
+    for (i = 0; i < SV_TIMER_MAX; ++i) {
+        timer = &timers[owner - 1][i];
+        if (timer->due && timer->id == id) {
+            slot = i;
+            break;
+        }
+        if (!timer->due && slot == SV_TIMER_MAX)
+            slot = i;
+    }
+    if (slot == SV_TIMER_MAX)
+        return SV_LIMIT;
+    timer = &timers[owner - 1][slot];
+    timer->due = timer_tick + ticks;
+    timer->period = repeat ? ticks : 0;
+    timer->id = id;
+    return SV_OK;
+}
+
+static SvResult SV_CALL host_after(SvOwner owner, uint32_t ticks, uint32_t id)
+{
+    return timer_set(owner, ticks, id, 0);
+}
+
+static SvResult SV_CALL host_every(SvOwner owner, uint32_t ticks, uint32_t id)
+{
+    return timer_set(owner, ticks, id, 1);
+}
+
+static SvResult SV_CALL host_random(SvOwner owner, uint32_t *value)
+{
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
+    if (!value)
+        return SV_INVALID;
+    if (!random_seeded)
+        return SV_STATE;
+    random_state[owner - 1] = random_state[owner - 1] * 1664525u + 1013904223u;
+    *value = random_state[owner - 1];
+    return SV_OK;
+}
+
 static const SvHost host = {
-    sizeof(SvHost), SV_PLUGIN_ABI, host_log, host_status, host_command, host_subscribe, host_get_api
+    sizeof(SvHost), SV_PLUGIN_ABI, host_log, host_status, host_command, host_subscribe, host_get_api, host_after, host_every, host_random
 };
 
 static int find_module(const char *id)
@@ -394,6 +476,8 @@ static void clear_resources(uint32_t index)
     for (i = 0; i < SV_PLUGINS_API_MAX; ++i)
         if (offers[i].owner == index + 1)
             memset(&offers[i], 0, sizeof offers[i]);
+    memset(timers[index], 0, sizeof timers[index]);
+    random_state[index] = 0;
     modules[index].events = 0;
     modules[index].event_callback = NULL;
     if (release_hook)
@@ -496,6 +580,7 @@ static SvResult activate(uint32_t index, int initial)
         deactivate(index, SV_MODULE_FAILED, "Cannot open the private storage of the plugin.");
         return SV_IO;
     }
+    seed_module(index);
     module->enabling = 1;
     module->refusal[0] = 0;
     control = enter(index);
@@ -599,6 +684,9 @@ int sv_plugins_start(void)
     if (started)
         return 0;
     server_thread = GetCurrentThreadId();
+    memset(timers, 0, sizeof timers);
+    timer_tick = 0;
+    random_seeded = 0;
     memset(modules, 0, sizeof modules);
     memset(commands, 0, sizeof commands);
     memset(offers, 0, sizeof offers);
@@ -796,13 +884,36 @@ int sv_plugins_wants(uint32_t kind)
     return 0;
 }
 
+static void deliver_timers(void)
+{
+    uint32_t i, slot;
+    SvStatus status = { sizeof status };
+    sv_game_status(&status);
+    for (i = 0; i < module_count; ++i) {
+        for (slot = 0; slot < SV_TIMER_MAX && modules[i].state == SV_MODULE_ACTIVE; ++slot) {
+            Timer *timer = &timers[i][slot];
+            SvTimerEvent event;
+            if (!timer->due || timer->due > timer_tick)
+                continue;
+            event.base.size = sizeof event;
+            event.base.kind = SV_EVENT_TIMER;
+            event.base.tick = status.tick;
+            event.id = timer->id;
+            timer->due = timer->period ? timer_tick + timer->period : 0;
+            deliver_to(i, &event.base);
+        }
+    }
+}
+
 void sv_plugins_tick(void)
 {
     if (started && !stopping && !current && !failed) {
+        ++timer_tick;
         reap();
         if (poll_hook)
             poll_hook();
         deliver_queue();
+        deliver_timers();
         dispatch(SV_EVENT_TICK);
     }
 }

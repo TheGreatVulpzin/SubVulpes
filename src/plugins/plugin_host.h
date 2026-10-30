@@ -18,6 +18,8 @@ typedef enum {
 int sv_plugins_start(void);
 void sv_plugins_stop(void);
 void sv_plugins_tick(void);
+/* Supplies the same seed that initializes the game generator, before the first world tick. */
+void sv_plugins_seed(uint32_t seed);
 int sv_plugins_failed(void);
 SvResult sv_plugins_enable(const char *id);
 SvResult sv_plugins_disable(const char *id);

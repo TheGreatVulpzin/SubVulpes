@@ -29,7 +29,7 @@ set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c src/platform/x87_ma
     APPEND PROPERTY OBJECT_DEPENDS "${SV_STORAGE_HEADERS}")
 file(GLOB SV_PLUGIN_HEADERS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/plugins/*.h")
 set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c plugins/status/status.c
-    tests/plugin_fixture.c tests/plugin_api_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c
+    tests/plugin_fixture.c tests/plugin_api_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c tests/plugin_runtime_fixture.c
     APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
 set_property(SOURCE src/game/human_body.c src/game/human_arms.c src/game/human_pose.c
     src/game/humans.c src/game/item_physics.c src/game/objects.c src/game/wheels.c tests/physics_bounds.c
@@ -163,6 +163,14 @@ if(BUILD_TESTING)
     target_compile_options(sv-game-read-fixture PRIVATE /W4 /WX /utf-8)
     target_link_options(sv-game-read-fixture PRIVATE /EXPORT:sv_plugin_entry)
     set_target_properties(sv-game-read-fixture PROPERTIES PREFIX "" OUTPUT_NAME game-read-fixture
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_library(sv-game-runtime-fixture MODULE tests/plugin_runtime_fixture.c)
+    target_include_directories(sv-game-runtime-fixture PRIVATE src/plugins)
+    target_compile_definitions(sv-game-runtime-fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(sv-game-runtime-fixture PRIVATE /W4 /WX /utf-8)
+    target_link_options(sv-game-runtime-fixture PRIVATE /EXPORT:sv_plugin_entry)
+    set_target_properties(sv-game-runtime-fixture PROPERTIES PREFIX "" OUTPUT_NAME runtime-fixture
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME game-api COMMAND "${Python3_EXECUTABLE}"

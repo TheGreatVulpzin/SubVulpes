@@ -160,7 +160,7 @@ static void tick(void)
 /* Sets the server up from the settings, then runs the ticks. */
 void __cdecl sr_dedicatedserverloop(void)
 {
-    uint32_t next, now, status_ms;
+    uint32_t next, now, status_ms, game_seed;
     /* The game resets its own tick counter at each round, so the status line counts the ticks that this loop runs. */
     uint32_t ran = 0, status_ran = 0;
     int i, hours, catchup;
@@ -188,7 +188,9 @@ void __cdecl sr_dedicatedserverloop(void)
     sr_serverinfo.unused_08 = 1;
     g_printf("port:%d\n", (unsigned)(uint16_t)sr_bsdsocket.port);
     g_printf("socketenabled:%d\n", sr_bsdsocket.enabled[0]);
-    init_genrand((int)os_time64(NULL));
+    game_seed = (uint32_t)os_time64(NULL);
+    init_genrand(game_seed);
+    sv_plugins_seed(game_seed);
     sr_loadaccountsserver();
     leveleditor_load();
     setupgame();

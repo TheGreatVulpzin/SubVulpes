@@ -18,6 +18,13 @@ static uint32_t pid_godmode, pid_admin, pid_team, pid_health, pid_bleeding, pid_
 static SvOwner plugin_owner;
 static SvEntity player, human, item, object, account;
 static uint32_t stage, account_saves;
+static uint32_t random_index, timer_once, timer_repeat, timer_rearm, timer_ticks;
+static int timers_armed;
+static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event);
+#define FIXTURE_EVENTS (SV_EVENT_EXT_BIT(0) | SV_EVENT_EXT_BIT(1) | SV_EVENT_EXT_BIT(31) | \
+    SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE | \
+    SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | \
+    SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM)
 static SvEntity saved_account;
 static uint32_t saved_reason;
 static uint64_t reset_sequence;
@@ -986,6 +993,46 @@ static SvResult SV_CALL reset_command(SvOwner owner, uint64_t actor, const char 
     return SV_OK;
 }
 
+static SvResult SV_CALL runtime_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    uint32_t value = 0xabcdef01u, i;
+    static const uint32_t expected[] = {3068287380u, 1964144611u, 1062108134u, 3527336461u};
+    (void)actor;
+    if (!strcmp(arguments, "random")) {
+        CHECK(host->random(owner + 1, &value) == SV_STATE && value == 0xabcdef01u);
+        CHECK(host->random(owner, NULL) == SV_INVALID);
+        CHECK(random_index < 4 && host->random(owner, &value) == SV_OK && value == expected[random_index]);
+        ++random_index;
+    } else if (!strcmp(arguments, "arm")) {
+        CHECK(host->after(owner + 1, 1, 10) == SV_STATE && host->every(owner + 1, 1, 10) == SV_STATE);
+        CHECK(host->after(owner, 0, 10) == SV_INVALID && host->every(owner, 0, 10) == SV_INVALID);
+        CHECK(host->after(owner, 9, 10) == SV_OK && host->after(owner, 1, 10) == SV_OK);
+        CHECK(host->every(owner, 2, 20) == SV_OK);
+        for (i = 0; i < SV_TIMER_MAX - 2; ++i)
+            CHECK(host->after(owner, UINT32_MAX, 100 + i) == SV_OK);
+        CHECK(host->after(owner, 1, 500) == SV_LIMIT && host->every(owner, 1, 500) == SV_LIMIT);
+        CHECK(host->every(owner, 2, 20) == SV_OK);
+        timer_once = timer_repeat = timer_rearm = timer_ticks = 0;
+        timers_armed = 1;
+    } else if (!strcmp(arguments, "one")) {
+        CHECK(timer_ticks == 1 && timer_once == 1 && timer_repeat == 0 && timer_rearm == 0);
+    } else if (!strcmp(arguments, "two")) {
+        CHECK(timer_ticks == 2 && timer_once == 1 && timer_repeat == 1 && timer_rearm == 0);
+    } else if (!strcmp(arguments, "three")) {
+        CHECK(timer_ticks == 3 && timer_once == 1 && timer_repeat == 1 && timer_rearm == 1);
+    } else if (!strcmp(arguments, "four")) {
+        CHECK(timer_ticks == 4 && timer_once == 1 && timer_repeat == 2 && timer_rearm == 1);
+    } else if (!strcmp(arguments, "clear")) {
+        CHECK(host->subscribe(owner, FIXTURE_EVENTS & ~SV_EVENT_EXT_BIT(1), tick) == SV_OK);
+        CHECK(host->after(owner, 1, 1) == SV_STATE);
+        CHECK(host->subscribe(owner, FIXTURE_EVENTS, tick) == SV_OK);
+        timers_armed = 0;
+    } else {
+        return SV_INVALID;
+    }
+    return SV_OK;
+}
+
 static int bone_mass_checks(SvOwner owner)
 {
     uint32_t id, slot;
@@ -1314,6 +1361,27 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
 {
     const SvGameEvent *record = (const SvGameEvent *)event;
     SvHumanState h = { sizeof h };
+    if (event->kind == SV_EVENT_TIMER) {
+        const SvTimerEvent *timer = (const SvTimerEvent *)event;
+        SvWorldState world = { sizeof world };
+        CHECK(timers_armed && event->size == sizeof *timer);
+        CHECK(game->world(owner, &world) == SV_OK && event->tick == world.tick);
+        if (timer->id == 10) {
+            CHECK(timer_ticks == 0);
+            ++timer_once;
+        } else if (timer->id == 20) {
+            CHECK(timer_ticks == 1 || timer_ticks == 3);
+            ++timer_repeat;
+            if (timer_repeat == 1)
+                CHECK(host->after(owner, 1, 30) == SV_OK);
+        } else if (timer->id == 30) {
+            CHECK(timer_ticks == 2);
+            ++timer_rearm;
+        } else {
+            return SV_FAILED;
+        }
+        return SV_OK;
+    }
     if (event->kind == SV_EVENT_ACCOUNT_SAVE) {
         const SvAccountSaveEvent *save = (const SvAccountSaveEvent *)event;
         CHECK(event->size == sizeof *save && save->reason <= SV_ACCOUNT_SAVE_DISCONNECT &&
@@ -1349,7 +1417,9 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
         if (damage->amount == 88) {
             /* Every call that changes the game or the host is closed. */
             value.i = 5;
-            damage_guard_ok = change->message(owner, SV_MESSAGE_SERVER, "late") == SV_STATE &&
+            uint32_t random_value = 123;
+            damage_guard_ok = host->after(owner, 1, 1) == SV_STATE && host->every(owner, 1, 1) == SV_STATE &&
+                host->random(owner, &random_value) == SV_STATE && random_value == 123 && change->message(owner, SV_MESSAGE_SERVER, "late") == SV_STATE &&
                 change->sound(owner, 21, (SvVector){ 1.0f, 2.0f, 3.0f }, 1.0f, 1.0f) == SV_STATE &&
                 change->world_reset(owner) == SV_STATE && change->vehicle_exit(owner, human, 0) == SV_STATE && props->set(owner, pid_health, human, 0, value) == SV_STATE &&
                 props->add(owner, pid_health, human, 0, value) == SV_STATE &&
@@ -1500,6 +1570,8 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
     }
     if (event->kind != SV_EVENT_TICK)
         return game_event(owner, event);
+    if (timers_armed)
+        ++timer_ticks;
     ++stage;
     if (runtime_probe)
         return stage == 1 ? runtime_reads(owner) : SV_OK;
@@ -1591,10 +1663,15 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(props && props->size == sizeof *props && props->version == SV_GAME_PROPS_VERSION);
     CHECK(change->message(owner, SV_MESSAGE_SERVER, "before ready") == SV_STATE);
     CHECK(change->world_reset(owner) == SV_STATE);
+    {
+        uint32_t value = 123;
+        CHECK(host->random(owner, &value) == SV_STATE && value == 123);
+    }
     CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
     CHECK(host->command(owner, "connectioncheck", SV_COMMAND_LOCAL, connection_command) == SV_OK);
     CHECK(host->command(owner, "accountsavecheck", SV_COMMAND_LOCAL, account_save_command) == SV_OK);
     CHECK(host->command(owner, "resetcheck", SV_COMMAND_LOCAL, reset_command) == SV_OK);
+    CHECK(host->command(owner, "runtimecheck", SV_COMMAND_LOCAL, runtime_command) == SV_OK);
     CHECK(host->command(owner, "echo", SV_COMMAND_PUBLIC, echo_command) == SV_OK);
     CHECK(host->command(owner, "secret", SV_COMMAND_ADMIN, secret_command) == SV_OK);
     CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);
@@ -1606,10 +1683,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
     CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x1000000u, tick) == SV_INVALID);
-    return host->subscribe(owner, SV_EVENT_EXT_BIT(0) | SV_EVENT_EXT_BIT(31) |
-        SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
-        SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
-        SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM, tick);
+    return host->subscribe(owner, FIXTURE_EVENTS, tick);
 }
 
 static void SV_CALL disable(SvOwner owner)

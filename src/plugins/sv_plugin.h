@@ -47,6 +47,9 @@ enum { SV_PLUGIN_LIVE = 1u };
 #define SV_EVENT_EXT(index) (SV_EVENT_EXT_BASE + (uint32_t)(index))
 #define SV_EVENT_EXT_BIT(index) ((uint64_t)1 << (32 + (index)))
 
+#define SV_EVENT_TIMER SV_EVENT_EXT(1)
+#define SV_TIMER_MAX 32u
+
 #pragma pack(push, 8)
 typedef struct {
     uint32_t size;
@@ -62,6 +65,11 @@ typedef struct {
     uint32_t tick;
 } SvEvent;
 
+typedef struct {
+    SvEvent base;
+    uint32_t id;
+} SvTimerEvent;
+
 /* Actor zero is the local operator. Other actor values are host references. */
 typedef SvResult (SV_CALL *SvCommandFn)(SvOwner owner, uint64_t actor, const char *arguments);
 typedef SvResult (SV_CALL *SvEventFn)(SvOwner owner, const SvEvent *event);
@@ -76,6 +84,18 @@ typedef struct SvHost {
      * the others). The bits 32 to 63 are the numbered events (SV_EVENT_EXT_BIT). SV_INVALID for a bit that no event uses. */
     SvResult (SV_CALL *subscribe)(SvOwner owner, uint64_t events, SvEventFn callback);
     SvResult (SV_CALL *get_api)(SvOwner owner, uint32_t capability, uint32_t version, const void **api);
+    /* Tick timers require a subscription to SV_EVENT_EXT_BIT(1). Delays are 1 to UINT32_MAX ticks.
+     * An id replaces the timer with that id for this owner. At most SV_TIMER_MAX timers can exist per owner.
+     * Timers run before the tick event. Callbacks can schedule a timer for the next tick or later.
+     * Stop or removal of the timer subscription cancels all timers of the owner. Round resets keep timers. */
+    SvResult (SV_CALL *after)(SvOwner owner, uint32_t ticks, uint32_t id);
+    SvResult (SV_CALL *every)(SvOwner owner, uint32_t ticks, uint32_t id);
+    /* Random state belongs to this plugin. Its seed combines the game seed and the plugin ID.
+     * The generator uses one uint32_t state and never advances the game random stream.
+     * SV_STATE until the core supplies the game seed. Activation restarts the stream for this ID and seed.
+     * Replay requires the same seed, plugin IDs, calls and ticks. Native plugins that read a clock, file or network
+     * are outside this contract. Only a sandboxed host can enforce the contract. */
+    SvResult (SV_CALL *random)(SvOwner owner, uint32_t *value);
 } SvHost;
 
 #define SV_HOST_V1_SIZE ((uint32_t)offsetof(SvHost, get_api))

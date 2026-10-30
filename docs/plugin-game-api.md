@@ -21,7 +21,7 @@ For the current header, a lookup inside a valid callback can use:
 ```c
 const void *table = NULL;
 const SvGameRead *read;
-if (host->size < sizeof(SvHost) || !host->get_api)
+if (host->size < offsetof(SvHost, get_api) + sizeof host->get_api || !host->get_api)
     return SV_INCOMPATIBLE;
 if (host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) != SV_OK)
     return SV_INCOMPATIBLE;
@@ -87,6 +87,7 @@ Separate pages do not form an atomic world snapshot.
 | `item` | Parent relations, type, ammo, timers, mass, motion, child references, phone state and bills mask |
 | `object` | Driver reference, type, health, color value, timers, motion, bounds, wheel counts, seat count and engine state |
 | `account` | Name, money, `playtime_raw` and three look selectors |
+| `connection` | Address or masked bytes, host-order port, idle ticks, spectate, flags and profile identifiers |
 | `bone` | One human bone's motion, rotation, mass and radius |
 | `inventory` | One human slot's count and item references |
 | `world` | Tick/reset sequence, mode/round/state, timers, raw clock, server name, limits, spawn position/sizes, type counts and the number of news lines |
@@ -240,6 +241,7 @@ Each call checks its input first. An error leaves the game unchanged. Entity arg
 | `teleport(entity, position)` | Moves a human, a vehicle or a free item so that its place reaches the position, and gives every part the same offset. A human: the 15 bones, so bone 0 reaches the position. A vehicle: the center of the object (`position` of the object snapshot), with every particle, wheel, wheel body, rotor point and the box. An item: its position. The previous places move too, so the move adds no speed, and the speeds do not change. | `SV_NOT_FOUND` for any other kind, `SV_INVALID` for a value that is not finite or beyond 32768 in an axis, `SV_STATE` for a human in a vehicle or an item that a human or another item holds, `SV_DENIED` for a piece of the train, `SV_FAILED` for a vehicle with a list out of range |
 | `vehicle_enter(human, vehicle, seat)` | Seats a human on foot in a free seat of a vehicle. Seat 0 is the driver. The game does the same when the use button finds a free seat within 1.5 units. The human then sits where the seat is, and the next tick places it. | `SV_NOT_FOUND`, `SV_DENIED` for a piece of the train, `SV_INVALID` for a seat below 0 or from the seat count of the vehicle up, `SV_STATE` for a human that is dead or already sits in a vehicle, `SV_CONFLICT` when another human sits in that seat, `SV_FAILED` for a seat count out of range |
 | `disown(entity)` | Gives up an item, a vehicle or a bot that this plugin made, so the host does not end it when the plugin stops. For a bot give the reference of the player. See [things that a plugin made](plugin-libraries.md#things-that-a-plugin-made). | `SV_NOT_FOUND` for a thing that this plugin did not make, or that is gone |
+| `world_reset()` | Requests one round reset at the start of the next tick. Repeated requests merge. | None |
 
 The host ends the items, vehicles and bots that a plugin made with `item_create`, `object_create` and `npc_create` when that plugin stops, unless the plugin called `disown`.
 
@@ -449,3 +451,19 @@ The focused test exercises the reset hook and flag consumption. It does not run 
 Test room case 67 requests a reset. The client playtest remains open.
 
 Removal of the write context check fails the game API test. The source is restored before final checks.
+
+## Tick timers and plugin random (R9)
+
+`SvHost.after(owner, ticks, id)` schedules one notice. `every` schedules a repeating notice. Delays are 1 to `UINT32_MAX` ticks.
+Subscribe with `SV_EVENT_EXT_BIT(1)` and read `SvTimerEvent.id` from `SV_EVENT_TIMER`, which is `SV_EVENT_EXT(1)`.
+Each owner has 32 timers. A repeated ID replaces that timer. A full table returns `SV_LIMIT` without a change.
+Timers count host ticks across round resets. They run before the tick event. A timer made inside a callback starts on a later tick.
+Stopping the owner or removing its timer subscription cancels its timers. Native plugin execution can still affect wall time.
+`SvHost.random` advances one 32-bit state per plugin. The seed combines the game seed and plugin ID with FNV-1a.
+The stream uses the LCG recurrence `state = state * 1664525 + 1013904223`, modulo 2^32. Activation restarts that stream.
+Random calls never call `os_rand()` or change the game random stream. No clock or address contributes a separate seed.
+The core supplies its existing game seed before the first world tick. Random calls before that point return `SV_STATE`.
+Replay requires the same seed, plugin IDs, calls and ticks. A native plugin that reads a clock, file or network is outside this contract.
+Only a sandboxed host can enforce the replay contract. No client playtest or replay recording ran.
+
+Removal proofs cover timer capacity, delay bounds and owner checks. The source is restored before final checks.
