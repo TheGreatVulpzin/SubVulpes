@@ -124,6 +124,15 @@ Step 3 (production plugins and examples) has not started.
 7. **Second editor.** The user works without Codex for now. If another tool edits in a second worktree, two editors never touch one file.
    Each shared file (`CMakeLists.txt`, `sv_game_write.h`, `docs/s3.md`, `docs/continuation.md`) has one owner, and the user merges the branches.
 
+### Decisions of 2026-10-30
+
+1. **First release.** The first release is a release of the server. The SDK goes out as a pre-release on the GitHub releases page. Nobody pushes or tags without a request from the owner.
+2. **Official plugins.** The official plugins must be built before the release: administration commands, permissions and ban policy. RCON and the jukebox are optional.
+3. **A full API.** The API is made as full as possible. The road graph (R3), the removal of the body of a real player (R7), the block reads and edits (R8) and the trains (N49) come into scope, with the client limits written for each one.
+4. **Lua.** Lua (M3 of [the SDK plan](sdk-plan.md)) comes after the first release.
+5. **S3 closes** when four things hold: each operation of the catalog is done and tested or is on the list of operations with no support, and the owner accepts that list; the official plugins of the first release exist; the test room passes in the original client; and the SDK (M1 and M2) is merged and all test groups pass.
+6. **Review before the release.** The owner checks the needs list and every user text (launcher, server and plugin messages, documents). The file for this check is `build/review/review-pack.md`.
+
 Package and version production plugins separately. Check API and module dependencies before installation or activation.
 Prove that a compatible plugin update needs no core rebuild and preserves private settings and plugin data.
 A clean server restart is acceptable for installation. Live module replacement is not required for S3.
