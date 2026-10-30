@@ -26,7 +26,7 @@ The server uses the ids 0 to 46. The table below comes from a tour of all 47 ids
 | 23, 24 | `bullethitmetal01`, `bullethitmetal02` | noise |
 | 25 | `glassbreak01` | noise |
 | 26 | nothing | |
-| 27 | `phonering01` | a pure tone at 2005 Hz (B6 plus 26 cents), steady to 2 cents. It is the ring of a cell phone |
+| 27 | `phonering01` | the ring of a cell phone, 1.47 s long. The main frequency is about 2000 Hz. It has a second harmonic at 4006 Hz (31% of the main peak) and side peaks every 50 Hz, so the loudness shakes 50 times a second. The loudness repeats a pattern every 400 ms, and the last 0.2 s is silent. It is not a pure tone |
 | 28 to 37 | the digits of the phone | not WAV files. The client makes ten tones of 16384 bytes at 44100 Hz. Frequencies not measured yet |
 | 38 | `reload01` | noise |
 | 39 | `shell_hit_cement` | a short tone at 2207 Hz |
@@ -37,7 +37,7 @@ The server uses the ids 0 to 46. The table below comes from a tour of all 47 ids
 
 The engine plays in a loop while a car runs and restarts about every 35 ms, so a test inside a car cannot show which id is the engine. Test 64 (`engine_sounds`) sets the bots to 0 and makes a car. The trains stay, because the track system owns them.
 
-Only the phone ring is a clean tone. The ten digit sounds are the best hope for a set of instruments.
+The phone ring has one clear main frequency, but it also has a harmonic and a shake of the loudness. The ten digit sounds are the best hope for a set of instruments.
 
 ## Tools
 
