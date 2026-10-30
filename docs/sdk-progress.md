@@ -155,3 +155,21 @@ The proof log stays in ignored `build/caps-removal-proof.log`.
 
 The existing `tests/sdk_inspect_test.py` stays unchanged and passes.
 The normal build, focused tests, storage generation, native dependencies and repository check pass.
+
+## Jukebox plugin (2026-10-30)
+
+Work uses `codex/jukebox`, from `codex/sdk` at `71cb757`.
+The bounded MIDI parser passes 31 rejection cases, tempo changes, running status, percussion and exact size limits.
+All 24 reader guard removals make their tests fail. Restored source passes.
+Playback, channel controls, the demo and SDK checks remain in progress.
+
+### SDK gaps for later
+
+- A package holds only the DLL and manifest. It cannot carry an instrument file.
+  The jukebox embeds defaults and creates a versioned owner file only when that file does not exist.
+  A later SDK change can define support for resource files and their update rules.
+- The runner has no input-file step. A scenario cannot supply a MIDI fixture through the SDK script.
+  The built-in demo will give the scenario a short song without external input.
+  Parser and channel tests make their own MIDI bytes. A later SDK change can add fixture files.
+- A choice setting permits eight values. The phone bank needs thirteen.
+  The plugin uses a text setting and checks its value. The SDK stays unchanged.
