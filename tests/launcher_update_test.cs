@@ -146,6 +146,104 @@ namespace SubVulpes
                 throw new Exception("The parser accepted invalid plugin metadata.");
         }
 
+        static string InspectionText(string capabilities, string version = "0.2.0")
+        {
+            string hash = new string('a', 64), manifest = new string('b', 64), zip = new string('c', 64);
+            var lines = new List<string> {
+                "MANIFEST\ttest.review\t" + version + "\treview.dll\tnative\t" + capabilities +
+                    "\tReview & Example\tChanges player health.\tAn Author\thttps://example.test/review",
+                "INSPECT\t1\ttest.review\t" + hash + "\t" + manifest
+            };
+            foreach (string capability in capabilities.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) {
+                string level = capability == "read" || capability == "storage" || capability == "config" ? "low" : "high";
+                lines.Add("DANGER\t" + capability + "\t" + level + "\tPermission: " + capability);
+            }
+            lines.Add("DANGER\tnative\thighest\tNative code gets full process access.");
+            lines.Add("PACKAGE\t" + zip);
+            return string.Join("\n", lines);
+        }
+
+        static void CheckPluginApproval()
+        {
+            string text = InspectionText("read,write,storage");
+            var next = LauncherForm.ParsePluginInspection(text, true);
+            if (next == null || next.DisplayName != "Review & Example" || next.Author != "An Author" ||
+                next.ManifestHash != new string('b', 64) || next.Dangers.Count != 4)
+                throw new Exception("The inspection report lost identity, display fields or risks.");
+            string trust = "TRUST\t1\ttest.review\t0.1.0\tnative\tread,write,storage\t" +
+                new string('d', 64) + "\t" + new string('e', 64) + "\t\t2026-10-30T00:00:00Z";
+            var previous = LauncherForm.ParsePluginTrust(trust, "test.review");
+            if (previous == null || previous.Version != "0.1.0" || LauncherForm.NeedsFullPluginReview(next, previous))
+                throw new Exception("An update with unchanged permissions did not use one version review.");
+            previous.Capabilities = "storage,read,write";
+            if (LauncherForm.NeedsFullPluginReview(next, previous))
+                throw new Exception("Capability order changed the review mode.");
+            previous.Capabilities = "read,storage";
+            if (!LauncherForm.NeedsFullPluginReview(next, previous))
+                throw new Exception("A new capability skipped full review.");
+            previous.Capabilities = next.Capabilities; previous.Runtime = "lua";
+            if (!LauncherForm.NeedsFullPluginReview(next, previous))
+                throw new Exception("A new runtime skipped full review.");
+            previous.Runtime = next.Runtime;
+            if (!LauncherForm.NeedsFullPluginReview(next, null))
+                throw new Exception("A first approval skipped full review.");
+            foreach (string invalid in new[] {
+                text.Replace("DANGER\twrite\thigh\tPermission: write\n", ""),
+                text.Replace("DANGER\tnative\thighest", "DANGER\tnative\tlow"),
+                text + "\nPACKAGE\t" + new string('c', 64),
+                text.Replace("INSPECT\t1\ttest.review", "INSPECT\t1\tother.id"),
+                text.Replace("DANGER\tread\tlow\tPermission: read", "DANGER\tread\tlow\tPermission: read\nDANGER\tread\tlow\tDuplicate"),
+                text.Replace(new string('b', 64), "bad"),
+                text.Replace("DANGER\tnative\thighest\tNative code gets full process access.\n", "")
+            }) if (LauncherForm.ParsePluginInspection(invalid, true) != null)
+                throw new Exception("An incomplete or unsafe review was accepted.");
+            if (LauncherForm.PluginDangerColor("low") != System.Drawing.Color.DarkGreen ||
+                LauncherForm.PluginDangerColor("high") != System.Drawing.Color.SaddleBrown ||
+                LauncherForm.PluginDangerColor("highest") != System.Drawing.Color.DarkRed)
+                throw new Exception("Review risk colors changed.");
+
+            using (var dialog = new LauncherForm.PluginApprovalDialog(next, previous, true)) {
+                var risks = (System.Windows.Forms.RichTextBox)dialog.Controls.Find("capabilityReview", true)[0];
+                foreach (var pair in new[] { new[] { "native", "highest" }, new[] { "write", "high" }, new[] { "read", "low" } }) {
+                    int position = risks.Text.IndexOf(pair[0] + " (", StringComparison.Ordinal);
+                    if (position < 0) throw new Exception("The dialog omitted a requested capability.");
+                    risks.Select(position, pair[0].Length);
+                    if (risks.SelectionColor.ToArgb() != LauncherForm.PluginDangerColor(pair[1]).ToArgb())
+                        throw new Exception("The risk text lost its danger color: " + pair[0]);
+                }
+                if (dialog.FullReview || dialog.NativeConfirmation.Checked || dialog.ApproveButton.Enabled || dialog.TryApprove())
+                    throw new Exception("Native content can be approved without its extra checkbox.");
+                dialog.NativeConfirmation.Checked = true;
+                if (!dialog.ApproveButton.Enabled || !dialog.TryApprove())
+                    throw new Exception("Explicit native consent did not permit approval.");
+            }
+            using (var dialog = new LauncherForm.PluginApprovalDialog(next, null, true)) {
+                if (!dialog.FullReview || dialog.ApproveButton.Text != "Install and approve")
+                    throw new Exception("The first review lost its full disclosure or action.");
+            }
+            bool refused = false;
+            try { LauncherForm.PluginApprovalArguments(next, false); }
+            catch (IOException) { refused = true; }
+            if (!refused || !LauncherForm.PluginApprovalArguments(next, true).Contains(" -NativeConfirmed") ||
+                !LauncherForm.PluginApprovalArguments(next, true).Contains(next.ManifestHash))
+                throw new Exception("The installation command lost consent or content binding.");
+
+            // Read the real server output as well as the synthetic parser cases.
+            string build = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "server"));
+            var start = new ProcessStartInfo(Path.Combine(build, "subvulpes_server.exe"), "--plugin-inspect sv.status") {
+                WorkingDirectory = build, UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            using (var process = Process.Start(start)) {
+                string report = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                if (process.ExitCode != 0 || LauncherForm.ParsePluginInspection(report, false) == null)
+                    throw new Exception("The launcher cannot parse the real server inspection: " + error);
+            }
+        }
+
+        [STAThread]
         static int Main()
         {
             try { Run(); return 0; }
@@ -182,6 +280,7 @@ namespace SubVulpes
             CheckBackupDirectory();
             CheckAdminPassword();
             CheckPluginMetadata();
+            CheckPluginApproval();
             Console.WriteLine("Launcher update, backup, admin password and plugin metadata checks passed.");
         }
     }

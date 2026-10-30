@@ -57,7 +57,7 @@ It still has full process access. The capability list does not isolate native co
 The launcher uses the previous ID, runtime and capability set to select the review.
 The same set permits one update question with the version change.
 A different set, a different runtime or no previous scoped review requires the full review.
-The launcher dialog follows in task 3.
+The launcher dialog uses this review policy.
 
 ## Legacy behavior
 
@@ -78,3 +78,33 @@ The CTest group `plugin-trust` checks the real loader and a minimal DLL fixture.
 It checks rejection before DLL execution, malformed records, metadata changes, both legacy files and both legacy commands.
 Separate removal probes isolate the payload hash, manifest hash, runtime and capability comparisons.
 Each rejection probe fails with its comparison removed and passes after restoration.
+
+## Launcher install and update
+
+The launcher reads `--plugin-inspect` before it opens the review dialog.
+The dialog shows the display name, author, description, runtime and version.
+It shows each capability with its risk color.
+Native code appears first at the highest risk level.
+Storage and reads use the low risk color. Writes and kick use the high risk color.
+A new capability has a visible `NEW` label and needs the full review.
+An update with the same ID, runtime and capability set shows the previous and new versions in one review.
+
+The only approval action is **Install and approve**.
+Native content requires an unchecked-by-default box for full process access.
+The primary action stays disabled until the operator checks that box.
+Cancel and Escape save nothing.
+
+After consent, the launcher stops the server and calls the shared installer with `-Approve`.
+It sends the reviewed ZIP, payload and manifest hashes, runtime and complete capability set.
+The installer checks the staged files before it changes installed files.
+It saves approval last with the same server command that checks installed content.
+A refused review does not replace installed files or the previous approval.
+New plugins stay disabled until the operator enables them.
+Updates keep private plugin data and the previous enabled state.
+
+`tests/sdk_approval_install_test.py` tests this path without the GUI.
+It covers first installation, reviewed updates, private data, missing native consent and changed review inputs.
+The launcher tests read real server output and check the real dialog controls, risk colors and review mode.
+Removing the native consent guard makes the real dialog test fail.
+The restored guard passes.
+No live launcher visual check or Start/Stop check ran.

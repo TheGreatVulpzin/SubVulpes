@@ -3,13 +3,25 @@ param([Parameter(Mandatory=$true)][string]$ServerDir,
       [Parameter(Mandatory=$true)][string]$Package,
       [switch]$Inspect,
       [string]$ExpectedPackageHash,
-      [switch]$ServerInspect)
+      [switch]$ServerInspect,
+      [switch]$Approve,
+      [string]$ExpectedPayloadHash,
+      [string]$ExpectedManifestHash,
+      [string]$ExpectedRuntime,
+      [string]$ExpectedCapabilities,
+      [switch]$NativeConfirmed)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 if ($ServerInspect -and -not $Inspect) { throw 'ServerInspect requires Inspect.' }
+if ($Approve -and ($Inspect -or $ServerInspect)) { throw 'Inspection cannot save approval.' }
+if ($Approve -and (-not $NativeConfirmed -or $ExpectedRuntime -cne 'native' -or
+    $ExpectedPayloadHash -cnotmatch '^[0-9a-f]{64}$' -or $ExpectedManifestHash -cnotmatch '^[0-9a-f]{64}$' -or
+    $ExpectedPackageHash -cnotmatch '^[0-9a-f]{64}$' -or -not $ExpectedCapabilities)) {
+    throw 'The package review or native confirmation is incomplete.'
+}
 
 function Assert-Plain([string]$Path) {
     $candidate = [IO.Path]::GetFullPath($Path)
@@ -268,6 +280,10 @@ if ($Inspect) {
     return
 }
 
+if ($Approve -and -not (Test-Path -LiteralPath (Join-Path $serverRoot 'subvulpes_server.exe') -PathType Leaf)) {
+    throw 'Approval needs the server executable in the server folder.'
+}
+
 $private = Join-Path $serverRoot 'user/plugins'
 New-Directory $private
 $lockPath = Join-Path $private 'host.lock'
@@ -336,8 +352,20 @@ try {
     $validator = Join-Path $serverRoot 'subvulpes_server.exe'
     if (Test-Path -LiteralPath $validator -PathType Leaf) {
         Assert-FileTarget $validator
-        $report = @(& $validator --plugin-validate-folder $stage)
+        $report = if ($Approve) { @(& $validator --plugin-inspect-folder $stage) } else { @(& $validator --plugin-validate-folder $stage) }
         if ($LASTEXITCODE -ne 0) { throw ('The server refused the manifest: ' + (($report | Select-Object -First 3) -join ' | ')) }
+        if ($Approve) {
+            $identityRows = @($report | Where-Object { $_ -clike "INSPECT`t*" })
+            $manifestRows = @($report | Where-Object { $_ -clike "MANIFEST`t*" })
+            if ($identityRows.Count -ne 1 -or $manifestRows.Count -ne 1) { throw 'The server returned an incomplete review.' }
+            $identityFields = $identityRows[0].Split([char]9)
+            $manifestFields = $manifestRows[0].Split([char]9)
+            $expectedCaps = if ($ExpectedCapabilities -ceq '-') { '' } else { $ExpectedCapabilities }
+            if ($identityFields.Count -ne 5 -or $manifestFields.Count -ne 10 -or
+                $identityFields[2] -cne $manifest.Id -or $identityFields[3] -cne $ExpectedPayloadHash -or
+                $identityFields[4] -cne $ExpectedManifestHash -or $manifestFields[4] -cne $ExpectedRuntime -or
+                $manifestFields[5] -cne $expectedCaps) { throw 'The plugin changed after review.' }
+        }
     }
     if ($hadManifest) {
         $backupDir = Join-Path $serverRoot 'backup/plugins'
@@ -360,6 +388,12 @@ try {
         if ($oldDllPath -and $oldDllPath -ine $dllPath) {
             Assert-FileTarget $oldDllPath
             Remove-Item -LiteralPath $oldDllPath -Force
+        }
+        # Approve last so a refused review leaves the saved approval intact.
+        if ($Approve) {
+            $approvalReport = @(& $validator --plugin-trust $manifest.Id $ExpectedPayloadHash $ExpectedManifestHash `
+                $ExpectedRuntime $ExpectedCapabilities $ExpectedPackageHash --native-confirmed)
+            if ($LASTEXITCODE -ne 0) { throw 'The server refused approval. The installed files will return to their previous state.' }
         }
     } catch {
         if ($changed) {
@@ -386,7 +420,8 @@ try {
         }
         throw
     }
-    Write-Output "Installed module: $($manifest.Id). Native approval remains a separate action."
+    if ($Approve) { Write-Output "Installed and approved module: $($manifest.Id)." }
+    else { Write-Output "Installed module: $($manifest.Id). Native approval remains a separate action." }
     if ($backupPath) { Write-Output "Rollback package: $backupPath" }
 } finally {
     try {

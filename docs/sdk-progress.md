@@ -58,7 +58,7 @@ All work stays in local commits. No push, publish or tag command ran.
 | 0. Update the branch | Done | Clean fast-forward to `7681f99`. The baseline CTest run passes all 15 groups. |
 | 1. Server inspection | Done | The inspection group and the ancestor-junction removal proof pass. |
 | 2. Trust store | Done | The owner allows approval-only edits. The focused loader tests and four removal proofs pass. |
-| 3. Unified dialog | Open | Follows task 2. |
+| 3. Unified dialog | Done | Combined installation and approval, update classification, real-control colors and the native-checkbox removal proof pass. |
 | 4. Development switch | Open | Follows task 3. |
 | 5. Clean-machine approval path | Open | Follows task 4. |
 | 6. Launcher UX audit | Open | Follows task 5. The audit document does not exist yet. |
@@ -80,7 +80,7 @@ Payload, manifest, runtime and capability rejection probes each fail with their 
 
 Tasks 3 through 6 remain open because they follow task 2.
 The unified dialog, development switch, clean-machine approval path and UX audit are not built in this change.
-The native-checkbox and development-store removal proofs remain open with tasks 3 and 4.
+The native-checkbox proof passes in task 3. The development-store proof remains open with task 4.
 The old approval CLI and native bypass keep their current behavior.
 
 No visual launcher check, Start/Stop check or client playtest ran.
@@ -89,9 +89,14 @@ No push, tag or merge into `main` ran.
 Task 2 checks pass: the normal build, all 17 CTest groups, storage generation, native dependencies and the repository check.
 The inspection group passes 33 cases.
 The ancestor-junction rejection test fails with its check removed and passes after restoration.
-The hash and capability removal proofs pass in task 2. The native-checkbox and development-store proofs stay open.
+The hash and capability removal proofs pass in task 2. The native-checkbox proof passes. The development-store proof stays open.
 Local evidence stays in the ignored `build/m2-*.log` files.
 
 The first full task 2 run stops when C: runs out of space.
 The repeated run passes after generated test output cleanup.
 Oversized inspection fixtures now use NTFS sparse allocation without changing their logical sizes or rejection checks.
+
+Task 3 checks pass: the normal build, six affected launcher/install/SDK/package groups, storage generation, native dependencies and the repository check.
+The real dialog control keeps each risk color after attachment to its form.
+The native-checkbox rejection test fails with its guard removed and passes after restoration.
+Offscreen native-window capture does not give a reliable visual result. No live launcher visual check or Start/Stop check ran.
