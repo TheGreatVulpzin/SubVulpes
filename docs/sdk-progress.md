@@ -52,63 +52,82 @@ All work stays in local commits. No push, publish or tag command ran.
 
 ## M2: approval and launcher UX (2026-10-30)
 
+The requested native workflow is complete.
+The launcher redesign waits for the owner's layout choice.
+Lua, WASM and public API changes remain outside this work.
 
-| Task | State | Evidence or dependency |
+| Task | State | Evidence |
 | --- | --- | --- |
-| 0. Update the branch | Done | Clean fast-forward to `7681f99`. The baseline CTest run passes all 15 groups. |
-| 1. Server inspection | Done | The inspection group and the ancestor-junction removal proof pass. |
-| 2. Trust store | Done | The owner allows approval-only edits. The focused loader tests and four removal proofs pass. |
-| 3. Unified dialog | Done | Combined installation and approval, update classification, real-control colors and the native-checkbox removal proof pass. |
-| 4. Development switch | Done | One-run scope, locked files, minute warning and three removal probes pass. |
-| 5. Clean-machine approval path | Done | The clean SDK uses inspection, the shared approved installer and the scoped approval file. |
-| 6. Launcher UX audit | Open | Follows task 5. The audit document does not exist yet. |
+| 0. Update the branch | Done | Clean fast-forward to `7681f99`. The initial CTest run passes all 15 groups. |
+| 1. Server inspection | Done | `--plugin-inspect ZIP|ID`, 33 inspection cases and the ancestor-junction removal proof pass. |
+| 2. Trust store | Done | Separate commit `cd704b1` adds scoped records and four independent comparison proofs. |
+| 3. Unified dialog | Done | One install/update review, native consent, real-control risk colors and shared installer tests pass. |
+| 4. Development switch | Done | Fourteen development cases, file locks, minute warnings and three guard-removal probes pass. |
+| 5. Clean-machine approval path | Done | The unpacked SDK uses the inspected hashes and shared approved installer, then checks the saved record and activation. |
+| 6. Launcher UX audit | Done | [The audit](launcher-ux.md) gives source findings, a plain-text layout, priorities and open choices. No redesign code is added. |
 
-Milestone M2 stays open.
+### Approval and compatibility
 
-The brief for this work restricts edits to SDK, launcher, inspection and test files.
-Task 0 imports `main` at `7681f99` by a clean fast-forward on `codex/sdk`.
+The [approval guide](sdk-approval.md) defines the record and commands.
+The store binds the ID, payload hash, manifest hash, runtime and complete capability set.
+It also keeps the version, ZIP hash and UTC time.
+A scoped mismatch or invalid record rejects content before DLL execution, even when a legacy hash matches.
+The same ID, runtime and capability set uses one version-change review.
+A new capability requires the full review.
 
-Task 1 adds `--plugin-inspect ZIP|ID`.
-The command reuses the WP1 manifest reader, the folder validator and the installer ZIP checks.
-The report contains display metadata, runtime, capabilities, payload and manifest hashes, the package hash and risk text.
-The [manifest page](plugin-manifest.md#inspect-a-plugin-for-approval) defines its record format.
+Both legacy approval files remain readable.
+`--plugin-approve ID HASH` keeps its explicit full native-content meaning and exact current hash check.
+`--allow-unapproved-native` keeps its content-approval bypass.
+The owner authorizes `plugin_files.c` and `plugin_internal.h` for task 2 approval code only.
+The loader-flow function stays unchanged. Later tasks do not edit those files.
+No public `sv_*.h`, `plugin_read.c` or `plugin_props.c` file changes.
 
-Task 2 is complete. The owner allows approval and trust-store edits in `plugin_files.c` and `plugin_internal.h` for this task.
-The loader flow and public headers stay unchanged.
-The [approval page](sdk-approval.md) defines the scoped record, precedence and CLI behavior.
-Payload, manifest, runtime and capability rejection probes each fail with their comparison removed and pass after restoration.
+Development mode scopes the normal configured profile to a plain local folder.
+It does not discover or install plugins from an unrelated folder.
+Outside content needs prior approval, and profile files, manifests and DLLs stay pinned for the run.
+No development approval is saved. Normal storage locks, logs and explicit operator changes keep their usual behavior.
 
-Tasks 3 through 6 remain open because they follow task 2.
-The unified dialog, development switch, clean-machine approval path and UX audit are not built in this change.
-The native-checkbox proof passes in task 3. The development-store proof passes in task 4.
-The old approval CLI and native bypass keep their current behavior.
+### Removal evidence
 
-No visual launcher check, Start/Stop check or client playtest ran.
-No push, tag or merge into `main` ran.
+| Check | Result |
+| --- | --- |
+| Payload hash match | Rejection fails with the comparison removed and passes after restoration. |
+| Manifest hash match | Rejection fails with the comparison removed and passes after restoration. |
+| Runtime match | Rejection fails with the comparison removed and passes after restoration. |
+| Capability set match | Rejection fails with the comparison removed and passes after restoration. |
+| Native checkbox | The real dialog test fails without the consent guard and passes after restoration. |
+| Development no-save guard | A persistent CLI action is accepted with the guard removed. The restored guard rejects it. Ordinary development runs leave approval unchanged. |
+| Development outside-folder approval | The rejection probe fails without its guard and passes after restoration. |
+| Development folder boundary | A sibling-prefix probe fails without its separator guard and passes after restoration. |
 
-Task 2 checks pass: the normal build, all 17 CTest groups, storage generation, native dependencies and the repository check.
-The inspection group passes 33 cases.
-The ancestor-junction rejection test fails with its check removed and passes after restoration.
-The hash and capability removal proofs pass in task 2. The native-checkbox proof passes. The development-store proof passes in task 4.
-Local evidence stays in the ignored `build/m2-*.log` files.
+The earlier inspection ancestor-junction proof also passes.
+All mutated source files return to their original bytes before the final builds.
+Local proof and test logs stay in ignored `build/m2-*.log` files.
+
+### Final checks and limits
+
+The normal build, all 19 CTest groups, storage generation, native dependencies and the repository check pass.
+The clean-machine test runs outside the repository with compiler state cleared.
+It uses no legacy approval for its installed template.
+The shared installer also passes from a working folder outside the selected server folder.
+Reviewed updates keep private plugin data.
 
 The first full task 2 run stops when C: runs out of space.
-The repeated run passes after generated test output cleanup.
-Oversized inspection fixtures now use NTFS sparse allocation without changing their logical sizes or rejection checks.
+The repeated run passes after generated output cleanup.
+Oversized inspection fixtures use NTFS sparse allocation without changing logical sizes or rejection checks.
 
-Task 3 checks pass: the normal build, six affected launcher/install/SDK/package groups, storage generation, native dependencies and the repository check.
-The real dialog control keeps each risk color after attachment to its form.
-The native-checkbox rejection test fails with its guard removed and passes after restoration.
-Offscreen native-window capture does not give a reliable visual result. No live launcher visual check or Start/Stop check ran.
+Automated checks inspect the real dialog controls and rich-text colors.
+Offscreen native-window capture does not give a reliable visual result.
+No live launcher visual check, Start/Stop check or client playtest ran.
+The changed prose passes the ASD-STE100 gate below 2.5 findings per 100 words.
 
-Task 4 checks pass: the normal build, development, trust and lifecycle groups, storage generation, native dependencies and the repository check.
-The development test covers 14 cases, pinned files and the real minute warning.
-Persistence, outside-folder approval and folder-boundary rejection each fail with their guard removed and pass after restoration.
-Development approval scopes the normal configured profile. It does not discover or install plugins from an unrelated folder.
-No task 4 edit changes `plugin_files.c` or `plugin_internal.h`.
+All work stays in local commits on `codex/sdk`.
+No push, tag or merge into `main` ran.
 
-Task 5 checks pass: the normal build, all 19 CTest groups, storage generation, native dependencies and the repository check.
-The clean test installs from the unpacked SDK folder, checks every scoped approval field and starts the plugin without legacy approval.
-The shared installer now enters the selected server folder for approval and restores the caller location afterward.
-The approved-install regression also runs from outside the server folder.
-The SDK carries the approval guide. Its first steps use the unified launcher review by default.
+### Open UX choices
+
+1. Navigation: retain tabs for the first pass, or use a left sidebar. The audit recommends tabs.
+2. Console: keep it on Server, or use a drawer available from every page.
+3. Diagnostics: keep an explicit advanced toggle, or give diagnostics a permanent navigation entry.
+
+Choose navigation first. The visual redesign waits for the owner.
