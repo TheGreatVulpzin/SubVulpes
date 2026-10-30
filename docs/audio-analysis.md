@@ -10,7 +10,7 @@ The API accepts a pitch from 0.1 to 4.0. The client limits the pitch to 2.0 at t
 
 ## The sound ids
 
-The server uses the ids 0 to 46. The table below comes from a tour of all 47 ids with the probe (test 62): for each id, the sound that the client played within 100 ms. The constants of `game_setup.c` (`crash=20`, `humanhit=22`, `phone_ring=27`, `digit=28..37`, `magazine=38`, `gear=40`) agree for the ids 27 and up. For the ids 19 to 25 the measured table is one lower than the constants. One tour measured this, so a second tour should confirm it before a plugin depends on it.
+The server uses the ids 0 to 46. The table below comes from a tour of all 47 ids with the probe (test 62): for each id, the sound that the client played within 100 ms. The constants of `game_setup.c` (`crash=20`, `humanhit=22`, `phone_ring=27`, `digit=28..37`, `magazine=38`, `gear=40`) agree for the ids 27 and up. For the ids 19 to 25 the measured table is one lower than the constants. A second measurement confirmed the id 21: test 58 sent 25 notes to the id 21, and the client played `bullethitbody01` for all 25 (the constants say `carcrash02`). So the measured table wins. The other ids of 19 to 25 follow from the same tour and are not measured twice.
 
 | Id | Sound | Note |
 | --- | --- | --- |
