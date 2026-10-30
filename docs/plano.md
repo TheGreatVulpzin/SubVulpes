@@ -132,6 +132,8 @@ Step 3 (production plugins and examples) has not started.
 4. **Lua.** Lua (M3 of [the SDK plan](sdk-plan.md)) comes after the first release.
 5. **S3 closes** when four things hold: each operation of the catalog is done and tested or is on the list of operations with no support, and the owner accepts that list; the official plugins of the first release exist; the test room passes in the original client; and the SDK (M1 and M2) is merged and all test groups pass.
 6. **Review before the release.** The owner checks the needs list and every user text (launcher, server and plugin messages, documents). The file for this check is `build/review/review-pack.md`.
+7. **Launcher redesign (after the release).** The new launcher uses WPF with themes in resource dictionaries. WPF ships with .NET Framework 4, so the build stays a plain `csc` build with no SDK. The owner decides when it starts. The work starts from [the audit](launcher-ux.md) on the SDK branch. The sidebar attempt of 2026-10-30 is kept on the branch `codex/launcher-nav`.
+8. **Web panel (after the release).** Reuse an existing game server panel (Pterodactyl, PufferPanel or Crafty) with a small template file, instead of a panel of our own. It needs the console lines and the console actor of need N54. The Pterodactyl daemon runs Linux containers and the server is a Windows program, so the panel choice needs a test first.
 
 Package and version production plugins separately. Check API and module dependencies before installation or activation.
 Prove that a compatible plugin update needs no core rebuild and preserves private settings and plugin data.
