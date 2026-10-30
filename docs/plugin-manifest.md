@@ -72,6 +72,57 @@ It carries native code only, so `runtime=lua` and `runtime=wasm` are refused unt
 `tests/test_plugins.py` covers the capability wall in the mode `wall`.
 Removal proofs on 2026-10-28: without the capability check in `get_api`, without the unsafe-name check of the script, and without the server check in the installer, a test fails each time. The restored source passes.
 
+## Inspect a plugin for approval
+
+Run one of these commands in the server folder:
+
+```text
+subvulpes_server.exe --plugin-inspect sv.health
+subvulpes_server.exe --plugin-inspect path\to\sv.health-0.1.0-native.svplugin
+```
+
+The command reads an installed ID, a `.svplugin` file or a ZIP.
+It does not load plugin code or save approval.
+A successful command returns 0 and prints tab-separated records in this order:
+
+```text
+MANIFEST ID VERSION LIBRARY RUNTIME CAPABILITIES NAME DESCRIPTION AUTHOR HOMEPAGE
+INSPECT 1 ID PAYLOAD_SHA256 MANIFEST_SHA256
+DANGER CAPABILITY LEVEL TEXT
+PACKAGE ZIP_SHA256
+```
+
+The spaces above stand for tabs. Empty display fields stay empty.
+The first record uses the existing manifest format.
+The number `1` identifies the inspection format.
+The hashes use 64 lower-case hexadecimal characters.
+The final record has an empty hash for an installed ID.
+Its ZIP hash covers the original package bytes for a package.
+
+One `DANGER` record describes each declared capability.
+The levels are `low`, `high` and `highest`.
+Read, storage and configuration use `low`.
+Write and the other mutation capabilities use `high`.
+Native code always has a separate `highest` record.
+The native warning states that code has full process access and can read private data or stop the server.
+The `unsafe_events` flag always adds its own `high` record.
+
+Package inspection needs Windows PowerShell and the shipped `install_plugin.ps1` beside the server executable.
+The installer reuses its ZIP entry checks, size bounds and payload checks.
+It stages the checked bytes and asks the server to read the manifest with the WP1 reader.
+The internal `--plugin-inspect-folder FOLDER` command serves this step.
+The server also calls the existing folder validator before it prints review records.
+Files stay locked against writes and replacement while the server hashes and reads them.
+The installer removes its temporary folder after the review.
+
+A failed command returns a nonzero exit code.
+A caller must require exit code 0 and the full record set before it uses a review.
+A partial report does not grant approval.
+Only native packages have an adapter today.
+
+The focused CTest group is `plugin-inspect`.
+It checks metadata, all three hashes, changed metadata, changed payloads, risk lines, invalid packages and read-only behavior.
+
 ## Network capability and connection identifiers
 
 `network` is capability bit 12, after `plugins`. It grants the real IPv4 address through the existing read table.

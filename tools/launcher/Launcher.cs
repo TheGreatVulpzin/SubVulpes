@@ -871,7 +871,7 @@ namespace SubVulpes
             enable.Click += async delegate { await ChangePlugin(true); };
             var disable = new Button { Text = "Disable", AutoSize = true };
             disable.Click += async delegate { await ChangePlugin(false); };
-            var approve = new Button { Text = "Approve native DLL", AutoSize = true };
+            var approve = new Button { Text = "Review approval...", AutoSize = true };
             approve.Click += async delegate { await ApprovePlugin(); };
             var install = new Button { Text = "Install / update plugin package", AutoSize = true };
             install.Click += async delegate { await InstallPlugin(); };
@@ -914,7 +914,8 @@ namespace SubVulpes
 
         internal sealed class PluginMetadata
         {
-            internal string Id, Version, Hash, PackageHash, State, Required, Reason;
+            internal string Id, Version, Hash, PackageHash, State, Required, Reason, ManifestHash;
+            internal readonly List<PluginDanger> Dangers = new List<PluginDanger>();
             internal string Runtime = "native", Capabilities = "", Name = "", Description = "", Author = "", Homepage = "";
             internal string DisplayName { get { return Name.Length == 0 ? Id : Name; } }
         }
@@ -1036,35 +1037,163 @@ namespace SubVulpes
             return text.ToString();
         }
 
-        bool ReviewPlugin(PluginMetadata metadata, string title, string question, bool nativeApproval = false)
+        internal sealed class PluginDanger
         {
-            using (var dialog = new Form {
-                Text = title, StartPosition = FormStartPosition.CenterParent, Width = 640, Height = 490,
-                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false
-            })
-            using (var titleFont = new Font(Font, FontStyle.Bold)) {
-                var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(12) };
+            internal string Capability, Level, Text;
+        }
+
+        internal static Color PluginDangerColor(string level)
+        {
+            return level == "low" ? Color.DarkGreen : level == "high" ? Color.SaddleBrown : Color.DarkRed;
+        }
+
+        internal static bool CanApprovePlugin(string runtime, bool nativeConfirmed)
+        {
+            return runtime == "lua" || runtime == "wasm" || (runtime == "native" && nativeConfirmed);
+        }
+
+        internal static bool NeedsFullPluginReview(PluginMetadata next, PluginMetadata previous)
+        {
+            return previous == null || next.Id != previous.Id || next.Runtime != previous.Runtime ||
+                !new HashSet<string>(next.Capabilities.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries),
+                    StringComparer.Ordinal).SetEquals(previous.Capabilities.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        internal static PluginMetadata ParsePluginInspection(string output, bool package)
+        {
+            if (output == null || output.Length > 65536) return null;
+            string[] lines = output.Replace("\r", "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length < 3) return null;
+            string[] manifest = lines[0].Split('\t'), identity = lines[1].Split('\t'), bundle = lines[lines.Length - 1].Split('\t');
+            if (manifest.Length != 10 || manifest[0] != "MANIFEST" || identity.Length != 5 ||
+                identity[0] != "INSPECT" || identity[1] != "1" || manifest[1] != identity[2] ||
+                !Regex.IsMatch(identity[3], @"\A[0-9a-f]{64}\z") || !Regex.IsMatch(identity[4], @"\A[0-9a-f]{64}\z") ||
+                bundle.Length != 2 || bundle[0] != "PACKAGE" ||
+                (package ? !Regex.IsMatch(bundle[1], @"\A[0-9a-f]{64}\z") : bundle[1] != "")) return null;
+            string suffix = string.Join("\t", manifest.Skip(4).ToArray());
+            PluginMetadata metadata = ParsePluginRow("MODULE\t" + manifest[1] + "\t" + manifest[2] + "\t" +
+                identity[3] + "\t" + (package ? bundle[1] : identity[3]) + "\t" + suffix, true);
+            if (metadata == null) return null;
+            metadata.PackageHash = bundle[1];
+            metadata.ManifestHash = identity[4];
+            var expected = new HashSet<string>(metadata.Capabilities.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries),
+                StringComparer.Ordinal);
+            if (metadata.Runtime == "native") expected.Add("native");
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 2; i < lines.Length - 1; i++) {
+                string[] danger = lines[i].Split('\t');
+                if (danger.Length != 4 || danger[0] != "DANGER" || !expected.Contains(danger[1]) ||
+                    !seen.Add(danger[1]) || danger[3].Length == 0 || !PluginText(danger[3], 256)) return null;
+                string level = danger[1] == "native" ? "highest" :
+                    danger[1] == "read" || danger[1] == "storage" || danger[1] == "config" ? "low" : "high";
+                if (danger[2] != level) return null;
+                metadata.Dangers.Add(new PluginDanger { Capability = danger[1], Level = level, Text = danger[3] });
+            }
+            return expected.SetEquals(seen) ? metadata : null;
+        }
+
+        internal static PluginMetadata ParsePluginTrust(string output, string id)
+        {
+            string[] lines = output.Replace("\r", "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length != 1) throw new IOException("The server returned an invalid saved review.");
+            string[] fields = lines[0].Split('\t');
+            if (fields.Length == 2 && fields[0] == "TRUST_NONE" && fields[1] == id) return null;
+            if (fields.Length != 10 || fields[0] != "TRUST" || fields[1] != "1" || fields[2] != id ||
+                !Regex.IsMatch(fields[7], @"\A[0-9a-f]{64}\z") ||
+                (fields[8].Length != 0 && !Regex.IsMatch(fields[8], @"\A[0-9a-f]{64}\z")) ||
+                !Regex.IsMatch(fields[9], @"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\z"))
+                throw new IOException("The server returned an invalid saved review.");
+            PluginMetadata result = ParsePluginRow("MODULE\t" + id + "\t" + fields[3] + "\t" + fields[6] +
+                "\t" + (fields[8].Length == 0 ? fields[6] : fields[8]) + "\t" + fields[4] + "\t" + fields[5] + "\t\t\t\t", true);
+            if (result == null) throw new IOException("The server returned an invalid saved review.");
+            result.ManifestHash = fields[7]; result.PackageHash = fields[8];
+            return result;
+        }
+
+        internal sealed class PluginApprovalDialog : Form
+        {
+            internal readonly CheckBox NativeConfirmation;
+            internal readonly Button ApproveButton;
+            internal readonly bool FullReview;
+            readonly PluginMetadata metadata;
+
+            internal PluginApprovalDialog(PluginMetadata next, PluginMetadata previous, bool install)
+            {
+                metadata = next;
+                FullReview = NeedsFullPluginReview(next, previous);
+                Text = "Install and approve plugin";
+                StartPosition = FormStartPosition.CenterParent;
+                Font = SystemFonts.MessageBoxFont;
+                ClientSize = new Size(700, 580); MinimumSize = new Size(600, 480);
+                MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; KeyPreview = true;
+                var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(12) };
                 table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-                table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                table.Controls.Add(new Label { Text = metadata.DisplayName, Font = titleFont, AutoSize = true, MaximumSize = new Size(590, 0) }, 0, 0);
-                table.Controls.Add(new Label { Text = metadata.Id, Font = PluginIdFont, AutoSize = true, Margin = new Padding(3, 3, 3, 12) }, 0, 1);
-                table.Controls.Add(new TextBox { Text = PluginReviewDetails(metadata, question, nativeApproval), Multiline = true, ReadOnly = true, Dock = DockStyle.Fill,
-                    ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None, BackColor = SystemColors.Control }, 0, 2);
-                var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-                var accept = new Button { Text = "Yes", DialogResult = DialogResult.Yes, AutoSize = true };
-                var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-                buttons.Controls.AddRange(new Control[] { cancel, accept });
-                table.Controls.Add(buttons, 0, 3);
-                dialog.Controls.Add(table);
-                dialog.AcceptButton = accept; dialog.CancelButton = cancel;
-                return dialog.ShowDialog(this) == DialogResult.Yes;
+                for (int i = 0; i < 6; i++) table.RowStyles.Add(new RowStyle(i == 3 ? SizeType.Percent : SizeType.AutoSize, i == 3 ? 100 : 0));
+                table.Controls.Add(new Label { Text = next.DisplayName + " (" + next.Id + ")", AutoSize = true,
+                    MaximumSize = new Size(650, 0), UseMnemonic = false, Margin = new Padding(3, 3, 3, 8) }, 0, 0);
+                string details = (next.Description.Length == 0 ? "" : next.Description + "\r\n") + "Author: " + (next.Author.Length == 0 ? "Not stated" : next.Author) +
+                    "\r\nRuntime: " + next.Runtime;
+                table.Controls.Add(new Label { Text = details, AutoSize = true, MaximumSize = new Size(650, 0), UseMnemonic = false, Margin = new Padding(3, 3, 3, 8) }, 0, 1);
+                string version = previous == null ? "Version " + next.Version :
+                    "Version " + previous.Version + " to " + next.Version;
+                table.Controls.Add(new Label { Text = version + (FullReview ? ". Review all requested capabilities." :
+                    ". Runtime and capabilities are unchanged."), AutoSize = true, MaximumSize = new Size(650, 0), UseMnemonic = false,
+                    Margin = new Padding(3, 3, 3, 8) }, 0, 2);
+                var review = new RichTextBox { ReadOnly = true, Dock = DockStyle.Fill, BackColor = SystemColors.Window,
+                    BorderStyle = BorderStyle.FixedSingle, DetectUrls = false, TabIndex = 0, Name = "capabilityReview" };
+                table.Controls.Add(review, 0, 3);
+                NativeConfirmation = new CheckBox { Text = "I accept full process access for this native plugin.",
+                    AutoSize = true, Visible = next.Runtime == "native", Checked = false, ForeColor = Color.DarkRed,
+                    Name = "nativeConfirmation", TabIndex = 1, Margin = new Padding(3, 12, 3, 12) };
+                table.Controls.Add(NativeConfirmation, 0, 4);
+                var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, TabIndex = 2 };
+                ApproveButton = new Button { Text = "Install and approve", AutoSize = true, TabIndex = 0, Name = "installAndApprove" };
+                var cancel = new LinkLabel { Text = "Cancel", AutoSize = true, Margin = new Padding(12, 8, 12, 3), TabIndex = 1 };
+                cancel.LinkClicked += delegate { DialogResult = DialogResult.Cancel; Close(); };
+                ApproveButton.Click += delegate { TryApprove(); };
+                NativeConfirmation.CheckedChanged += delegate { UpdateApprovalState(); };
+                actions.Controls.Add(ApproveButton); actions.Controls.Add(cancel);
+                table.Controls.Add(actions, 0, 5); Controls.Add(table);
+                var oldCaps = new HashSet<string>(previous == null ? new string[0] : previous.Capabilities.Split(','));
+                foreach (PluginDanger danger in next.Dangers.OrderByDescending(d => d.Level == "highest" ? 2 : d.Level == "high" ? 1 : 0)) {
+                    review.SelectionColor = PluginDangerColor(danger.Level);
+                    review.AppendText((previous != null && danger.Capability != "native" && !oldCaps.Contains(danger.Capability) ? "NEW: " : "") +
+                        danger.Capability + " (" + danger.Level + "): " + danger.Text + "\r\n\r\n");
+                }
+                review.SelectionColor = SystemColors.ControlText;
+                review.AppendText((install ? "The server stops before installation. New plugins start disabled.\r\n" : "") +
+                    "SHA-256: " + (next.PackageHash.Length == 0 ? next.Hash : next.PackageHash));
+                review.SelectionStart = 0; review.SelectionLength = 0;
+                AcceptButton = ApproveButton;
+                KeyDown += (sender, e) => { if (e.KeyCode == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); } };
+                UpdateApprovalState();
+            }
+
+            void UpdateApprovalState()
+            {
+                ApproveButton.Enabled = CanApprovePlugin(metadata.Runtime, NativeConfirmation.Checked);
+            }
+
+            internal bool TryApprove()
+            {
+                if (!CanApprovePlugin(metadata.Runtime, NativeConfirmation.Checked)) return false;
+                DialogResult = DialogResult.OK; Close(); return true;
             }
         }
 
-        static string RunPluginTool(string serverFolder, string arguments)
+        PluginMetadata ReadPreviousPluginReview(string serverFolder, string id)
+        {
+            try { return ParsePluginTrust(RunPluginTool(serverFolder, "--plugin-trust-status " + id), id); }
+            catch (IOException) { return null; }
+        }
+
+        bool ReviewPluginApproval(PluginMetadata metadata, PluginMetadata previous, bool install)
+        {
+            using (var dialog = new PluginApprovalDialog(metadata, previous, install))
+                return dialog.ShowDialog(this) == DialogResult.OK;
+        }
+
+        static string RunPluginTool(string serverFolder, string arguments, int timeout = 10000)
         {
             string executable = Path.Combine(serverFolder, "subvulpes_server.exe");
             var info = new FileInfo(executable);
@@ -1079,7 +1208,7 @@ namespace SubVulpes
             using (var process = Process.Start(start)) {
                 Task<string> output = process.StandardOutput.ReadToEndAsync();
                 Task<string> error = process.StandardError.ReadToEndAsync();
-                if (!process.WaitForExit(10000)) {
+                if (!process.WaitForExit(timeout)) {
                     process.Kill();
                     process.WaitForExit();
                     throw new IOException("Plugin metadata request timed out.");
@@ -1308,24 +1437,25 @@ namespace SubVulpes
             if (pluginBusy || updating) return;
             string id = SelectedPlugin();
             if (id == null) return;
-            if (server != null) { message.Text = "Stop the server before approving a native DLL."; return; }
-            pluginBusy = true;
-            SetState(serverState);
+            if (server != null) { message.Text = "Stop the server before reviewing installed content."; return; }
+            pluginBusy = true; SetState(serverState);
             string selectedFolder = folder;
+            string outcome = null;
             try {
-                string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-hash " + id));
-                Match hash = Regex.Match(output, @"(?m)^SHA256\t[^\r\n\t]+\t([0-9a-f]{64})\r?$");
-                if (!hash.Success) throw new IOException("The server did not return a valid SHA-256.");
-                if (server != null || folder != selectedFolder) return;
-                var selected = pluginList.Items[id] as PluginListItem;
-                PluginMetadata metadata = selected == null ? new PluginMetadata { Id = id, Version = "" } : selected.Metadata;
-                metadata.Hash = hash.Groups[1].Value;
-                if (!ReviewPlugin(metadata, "Approve native DLL", "Approve this exact native content?", true)) return;
-                string digest = hash.Groups[1].Value;
-                message.Text = (await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-approve " + id + " " + digest))).Trim();
-            } catch (Exception ex) { message.Text = "Cannot approve native DLL: " + ex.Message; }
+                message.Text = "Reading installed plugin content...";
+                string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-inspect " + id));
+                PluginMetadata metadata = ParsePluginInspection(output, false);
+                if (metadata == null) throw new IOException("The server returned an incomplete plugin review.");
+                PluginMetadata previous = await Task.Run(() => ReadPreviousPluginReview(selectedFolder, id));
+                if (server != null || folder != selectedFolder || !ReviewPluginApproval(metadata, previous, false)) return;
+                string arguments = "--plugin-trust " + id + " " + metadata.Hash + " " + metadata.ManifestHash + " " +
+                    metadata.Runtime + " " + (metadata.Capabilities.Length == 0 ? "-" : metadata.Capabilities) + " - --native-confirmed";
+                await Task.Run(() => RunPluginTool(selectedFolder, arguments));
+                message.Text = outcome = metadata.DisplayName + " " + metadata.Version + " is approved.";
+            } catch (Exception ex) { message.Text = outcome = "Plugin approval failed: " + ex.Message; }
             finally { pluginBusy = false; SetState(serverState); }
             await RefreshPlugins();
+            if (outcome != null) message.Text = outcome;
         }
 
         internal static string QuoteProcessArgument(string value)
@@ -1342,11 +1472,24 @@ namespace SubVulpes
             return result.Append('\\', slashes * 2).Append('"').ToString();
         }
 
-        static string RunPluginInstaller(string serverFolder, string script, string zip, bool inspect, string packageHash = null)
+        internal static string PluginApprovalArguments(PluginMetadata metadata, bool nativeConfirmed)
+        {
+            if (metadata == null || metadata.Runtime != "native" || !CanApprovePlugin(metadata.Runtime, nativeConfirmed) ||
+                !Regex.IsMatch(metadata.Hash ?? "", @"\A[0-9a-f]{64}\z") ||
+                !Regex.IsMatch(metadata.ManifestHash ?? "", @"\A[0-9a-f]{64}\z") ||
+                !Regex.IsMatch(metadata.PackageHash ?? "", @"\A[0-9a-f]{64}\z"))
+                throw new IOException("The package review is incomplete.");
+            return " -Approve -ExpectedPayloadHash " + metadata.Hash + " -ExpectedManifestHash " + metadata.ManifestHash +
+                " -ExpectedRuntime " + metadata.Runtime + " -ExpectedCapabilities " +
+                QuoteProcessArgument(metadata.Capabilities.Length == 0 ? "-" : metadata.Capabilities) + " -NativeConfirmed";
+        }
+
+        static string RunPluginInstaller(string serverFolder, string script, string zip, bool inspect, string packageHash = null, PluginMetadata approval = null)
         {
             string arguments = "-NoProfile -ExecutionPolicy Bypass -File " + QuoteProcessArgument(script) +
                 " -ServerDir " + QuoteProcessArgument(serverFolder) + " -Package " + QuoteProcessArgument(zip) +
                 (inspect ? " -Inspect" : "") + (packageHash == null ? "" : " -ExpectedPackageHash " + packageHash);
+            if (approval != null) arguments += PluginApprovalArguments(approval, true);
             var start = new ProcessStartInfo("powershell.exe", arguments) {
                 WorkingDirectory = serverFolder, UseShellExecute = false, CreateNoWindow = true,
                 RedirectStandardOutput = true, RedirectStandardError = true
@@ -1372,31 +1515,25 @@ namespace SubVulpes
                 zip = dialog.FileName;
             }
             string selectedFolder = folder;
+            string outcome = null;
             string script = Path.Combine(selectedFolder, "install_plugin.ps1");
             if (!File.Exists(script)) { message.Text = "The server package has no plugin installer."; return; }
-            pluginBusy = true;
-            SetState(serverState);
+            pluginBusy = true; SetState(serverState);
             try {
-                string inspection = await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, true));
-                PluginMetadata metadata = null;
-                foreach (string line in inspection.Replace("\r", "").Split('\n')) {
-                    PluginMetadata candidate = ParsePluginRow(line, true);
-                    if (candidate != null) { metadata = candidate; break; }
-                }
-                if (metadata == null) throw new IOException("The installer did not return valid package metadata.");
-                if (!ReviewPlugin(metadata, "Install plugin package",
-                    "Install this package? The server stops first. Native approval is a separate step. New modules start disabled.")) return;
-                if (!await StopServer()) return;
-                message.Text = "Installing plugin package...";
-                string packageHash = metadata.PackageHash;
-                string result = await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, false, packageHash));
-                message.Text = result.Trim();
-            } catch (Exception ex) { message.Text = "Plugin installation failed: " + ex.Message; }
-            finally {
-                pluginBusy = false;
-                SetState(serverState);
-            }
+                message.Text = "Reading plugin package...";
+                string inspection = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-inspect " + QuoteProcessArgument(zip), 45000));
+                PluginMetadata metadata = ParsePluginInspection(inspection, true);
+                if (metadata == null) throw new IOException("The server returned an incomplete package review.");
+                PluginMetadata previous = await Task.Run(() => ReadPreviousPluginReview(selectedFolder, metadata.Id));
+                if (selectedFolder != folder || !ReviewPluginApproval(metadata, previous, true)) return;
+                if (!await StopServer() || selectedFolder != folder) return;
+                message.Text = "Installing and approving " + metadata.DisplayName + "...";
+                await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, false, metadata.PackageHash, metadata));
+                message.Text = outcome = metadata.DisplayName + " " + metadata.Version + " is installed and approved. New plugins start disabled.";
+            } catch (Exception ex) { message.Text = outcome = "Plugin installation failed: " + ex.Message; }
+            finally { pluginBusy = false; SetState(serverState); }
             await RefreshPlugins();
+            if (outcome != null) message.Text = outcome;
         }
 
         // ------------------------------------------------------------ the server

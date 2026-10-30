@@ -1,4 +1,5 @@
 #include "plugin_manifest.h"
+#include "plugin_caps.h"
 #include "plugin_internal.h"
 #include <stdlib.h>
 #include <string.h>
@@ -14,9 +15,21 @@ static const char *const field_names[FIELD_COUNT] = {
     "id", "version", "library", "api", "live", "unsafe_events", "role", "dependencies", "conflicts",
     "runtime", "capabilities", "name", "description", "author", "homepage"
 };
-static const char *const cap_names[] = {
-    "read", "write", "ai", "economy", "mission", "settings", "storage", "engine", "shop", "props", "config", "plugins",
-    "network" /* High: Reads the IP addresses of players. */
+/* Row order defines the manifest bits. Rows 1 to 12 match the public API IDs minus one. The row network has no API table. */
+const SvCapabilityInfo sv_plugin_caps[SV_CAP_COUNT] = {
+    { "read", "low", "Reads game state and player data." },
+    { "write", "high", "Changes the world and can kick players." },
+    { "ai", "high", "Controls bots and their behavior." },
+    { "economy", "high", "Changes money and the economy." },
+    { "mission", "high", "Changes missions and their state." },
+    { "settings", "high", "Changes server settings." },
+    { "storage", "low", "Reads and writes plugin data." },
+    { "engine", "high", "Controls engine operations." },
+    { "shop", "high", "Changes shops and sales." },
+    { "props", "high", "Changes player and world properties." },
+    { "config", "low", "Reads plugin settings." },
+    { "plugins", "high", "Uses APIs from other plugins." },
+    { "network", "high", "Reads the IP addresses of players." }
 };
 static const char *const setting_names[] = {
     "type", "live", "admin", "label", "help", "default", "min", "max", "maxlen", "choices"
@@ -314,7 +327,11 @@ static void capabilities(Reader *reader, SvManifest *manifest)
         if (next)
             *next = 0;
         part = trim(part);
-        index = lookup_exact(part, cap_names, sizeof cap_names / sizeof cap_names[0]);
+        for (index = 0; index < SV_CAP_COUNT; ++index)
+            if (!strcmp(part, sv_plugin_caps[index].name))
+                break;
+        if (index == SV_CAP_COUNT)
+            index = -1;
         if (index < 0)
             problem(reader, "capabilities", "The list contains an unknown or empty capability.");
         else if (manifest->cap_mask & (1u << (unsigned)index))
@@ -464,19 +481,19 @@ int sv_manifest_caps_text(uint32_t mask, uint32_t unsafe, char *out, size_t capa
     if (!out || !capacity)
         return 0;
     out[0] = 0;
-    if (mask & ~((1u << (sizeof cap_names / sizeof cap_names[0])) - 1u))
+    if (mask & ~((1u << (SV_CAP_COUNT)) - 1u))
         return 0;
-    for (i = 0; i <= sizeof cap_names / sizeof cap_names[0]; ++i) {
+    for (i = 0; i <= SV_CAP_COUNT; ++i) {
         const char *text;
         size_t length;
-        if (i == sizeof cap_names / sizeof cap_names[0]) {
+        if (i == SV_CAP_COUNT) {
             if (!unsafe)
                 break;
             text = "unsafe_events";
         } else {
             if (!(mask & (1u << (unsigned)i)))
                 continue;
-            text = cap_names[i];
+            text = sv_plugin_caps[i].name;
         }
         length = strlen(text);
         if (length + (used != 0) >= capacity - used) {

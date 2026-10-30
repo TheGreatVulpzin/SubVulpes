@@ -39,6 +39,7 @@ try {
     $sdkFolders = @(Get-ChildItem -LiteralPath (Join-Path $root 'unpacked') -Directory)
     if ($sdkFolders.Count -ne 1) { throw 'The SDK ZIP must hold one folder.' }
     $sdk = $sdkFolders[0].FullName
+    Copy-Item -LiteralPath (Join-Path $sdk 'tools\install_plugin.ps1') -Destination (Join-Path $serverDir 'install_plugin.ps1')
 
     # Clear compiler state so build.bat must find MSVC with vswhere.
     $names = @('PATH', 'TEMP', 'TMP', 'VCVARS', 'INCLUDE', 'LIB', 'LIBPATH', 'CL', '_CL_', 'LINK', '_LINK_',
@@ -65,25 +66,49 @@ try {
         -OutputDir (Join-Path $root 'dist') -ServerExe $server
     if ($line -cnotmatch "^PACKAGE`t(.+)`t[0-9a-f]{64}$") { throw 'The pack script gave no package path.' }
     $package = $Matches[1]
-    & (Join-Path $sdk 'tools\install_plugin.ps1') -ServerDir $serverDir -Package $package
+    # Read the same report and use the same approved-install path as the launcher dialog.
+    $inspection = @(& $server --plugin-inspect $package)
+    if ($LASTEXITCODE -ne 0) { throw 'The server could not inspect the clean package.' }
+    $manifestRows = @($inspection | Where-Object { $_ -clike "MANIFEST`t*" })
+    $identityRows = @($inspection | Where-Object { $_ -clike "INSPECT`t*" })
+    $bundleRows = @($inspection | Where-Object { $_ -clike "PACKAGE`t*" })
+    if ($manifestRows.Count -ne 1 -or $identityRows.Count -ne 1 -or $bundleRows.Count -ne 1 -or
+        @($inspection | Where-Object { $_ -clike "DANGER`tnative`thighest`t*" }).Count -ne 1) {
+        throw 'The clean package review is incomplete.'
+    }
+    $declaration = $manifestRows[0].Split([char]9)
+    $identity = $identityRows[0].Split([char]9)
+    $bundle = $bundleRows[0].Split([char]9)
+    if ($declaration.Count -ne 10 -or $identity.Count -ne 5 -or $bundle.Count -ne 2 -or
+        $declaration[1] -cne 'my.hello' -or $declaration[4] -cne 'native' -or $identity[2] -cne 'my.hello' -or
+        $identity[3] -cnotmatch '^[0-9a-f]{64}$' -or $identity[4] -cnotmatch '^[0-9a-f]{64}$' -or
+        $bundle[1] -cnotmatch '^[0-9a-f]{64}$') { throw 'The clean review has invalid identity or hashes.' }
+    $capabilities = if ($declaration[5]) { $declaration[5] } else { '-' }
+    & (Join-Path $sdk 'tools\install_plugin.ps1') -ServerDir $serverDir -Package $package -Approve `
+        -ExpectedPackageHash $bundle[1] -ExpectedPayloadHash $identity[3] -ExpectedManifestHash $identity[4] `
+        -ExpectedRuntime $declaration[4] -ExpectedCapabilities $capabilities -NativeConfirmed
     if (-not (Test-Path -LiteralPath (Join-Path $serverDir 'plugins\my.hello\hello.dll'))) {
         throw 'The clean install did not copy hello.dll.'
     }
-
-    # Run the documented approval commands against the installed DLL.
+    $approvalPath = Join-Path $serverDir 'user\plugins\approvals.ini'
+    $approvalLines = @(Get-Content -LiteralPath $approvalPath | Where-Object { $_ -clike 'my.hello=*' })
+    if ($approvalLines.Count -ne 1) { throw 'The clean install saved no unique scoped approval.' }
+    $approval = $approvalLines[0].Substring('my.hello='.Length).Split('|')
+    if ($approval.Count -ne 8 -or $approval[0] -cne '1' -or $approval[1] -cne $declaration[2] -or
+        $approval[2] -cne $declaration[4] -or $approval[3] -cne $capabilities -or
+        $approval[4] -cne $identity[3] -or $approval[5] -cne $identity[4] -or $approval[6] -cne $bundle[1] -or
+        $approval[7] -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$') {
+        throw 'The scoped approval differs from the clean package review.'
+    }
+    if (Test-Path -LiteralPath (Join-Path $serverDir 'user\plugins\native-approvals.ini')) {
+        throw 'The clean test used legacy DLL approval instead of the reviewed install path.'
+    }
     Push-Location $serverDir
     try {
-        $report = @(& $server --plugin-hash my.hello)
-        if ($LASTEXITCODE -ne 0) { throw 'The server could not hash the installed DLL.' }
-        $hashLine = @($report | Where-Object { $_ -cmatch "SHA256`tmy\.hello`t([0-9a-f]{64})$" })
-        if ($hashLine.Count -ne 1) { throw 'The server gave no unique SHA256 line.' }
-        $hash = ($hashLine[0] -split "`t")[-1]
-        & $server --plugin-approve my.hello $hash
-        if ($LASTEXITCODE -ne 0) { throw 'The server refused the DLL approval.' }
         & $server --plugin-enable my.hello
         if ($LASTEXITCODE -ne 0) { throw 'The server could not enable the plugin.' }
         & $server --plugins-check
-        if ($LASTEXITCODE -ne 0) { throw 'The installed plugin did not start.' }
+        if ($LASTEXITCODE -ne 0) { throw 'The scoped approval did not start the installed plugin.' }
     } finally { Pop-Location }
 
     $run = @(& (Join-Path $sdk 'tools\run_plugin_test.ps1') -Plugin (Join-Path $serverDir 'plugins\my.hello') `

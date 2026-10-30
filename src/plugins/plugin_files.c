@@ -316,11 +316,203 @@ int sv_plugin_validate_folder(const char *folder)
     return 0;
 }
 
+/* One record binds the review to exact content and declared permissions. */
+typedef struct {
+    char version[24], runtime[8], caps[256], payload[65], manifest[65], bundle[65], time[21];
+} SvApproval;
+
+static int approval_hash(const char *text)
+{
+    size_t i;
+    if (strlen(text) != 64)
+        return 0;
+    for (i = 0; i < 64; ++i)
+        if (!((text[i] >= '0' && text[i] <= '9') || (text[i] >= 'a' && text[i] <= 'f')))
+            return 0;
+    return 1;
+}
+
+/* 0 means absent, -1 means unsafe, and 1 means a plain path. */
+static int approval_path(char path[MAX_PATH], int create)
+{
+    static const char *folders[] = { "user", "user/plugins" };
+    size_t i;
+    DWORD attributes, error;
+    for (i = 0; i < sizeof folders / sizeof folders[0]; ++i) {
+        attributes = GetFileAttributesA(folders[i]);
+        if (attributes == INVALID_FILE_ATTRIBUTES) {
+            error = GetLastError();
+            if (!create)
+                return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? 0 : -1;
+            if (!CreateDirectoryA(folders[i], NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
+                return -1;
+        }
+        if (!plain_path(folders[i], 1))
+            return -1;
+    }
+    if (!absolute("user/plugins/approvals.ini", path))
+        return -1;
+    attributes = GetFileAttributesA(path);
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ? (create ? 1 : 0) : -1;
+    }
+    return plain_path(path, 0) ? 1 : -1;
+}
+
+static int approval_time(const char *text)
+{
+    size_t i;
+    if (strlen(text) != 20)
+        return 0;
+    for (i = 0; i < 20; ++i) {
+        char separator = i == 4 || i == 7 ? '-' : i == 10 ? 'T' : i == 13 || i == 16 ? ':' : i == 19 ? 'Z' : 0;
+        if (separator ? text[i] != separator : (text[i] < '0' || text[i] > '9'))
+            return 0;
+    }
+    return 1;
+}
+
+static int approval_read(const char *id, SvApproval *saved)
+{
+    char path[MAX_PATH], record[640], *field[8], *next;
+    char *destinations[] = { saved->version, saved->runtime, saved->caps, saved->payload,
+                            saved->manifest, saved->bundle, saved->time };
+    static const size_t capacities[] = { 24, 8, 256, 65, 65, 65, 21 };
+    DWORD count;
+    size_t i;
+    int state = approval_path(path, 0);
+    if (state <= 0)
+        return state;
+    count = GetPrivateProfileStringA("approvals", id, "!", record, sizeof record, path);
+    if (!strcmp(record, "!")) {
+        char present[2];
+        /* A literal marker is an invalid record, not a missing approval. */
+        return GetPrivateProfileStringA("approvals", id, "", present, sizeof present, path) ? -1 : 0;
+    }
+    if (!count || count >= sizeof record - 1)
+        return -1;
+    next = record;
+    for (i = 0; i < 8; ++i) {
+        field[i] = next;
+        next = strchr(next, '|');
+        if ((i < 7) != (next != NULL))
+            return -1;
+        if (next)
+            *next++ = 0;
+    }
+    if (strcmp(field[0], "1"))
+        return -1;
+    memset(saved, 0, sizeof *saved);
+    for (i = 0; i < 7; ++i) {
+        if (!field[i + 1][0] || strlen(field[i + 1]) >= capacities[i])
+            return -1;
+        strcpy(destinations[i], field[i + 1]);
+    }
+    for (i = 0; saved->version[i]; ++i)
+        if (!isalnum((unsigned char)saved->version[i]) && !strchr(".+-", saved->version[i]))
+            return -1;
+    if (strcmp(saved->runtime, "native") && strcmp(saved->runtime, "lua") && strcmp(saved->runtime, "wasm"))
+        return -1;
+    if (!approval_hash(saved->payload) || !approval_hash(saved->manifest) ||
+        (strcmp(saved->bundle, "-") && !approval_hash(saved->bundle)) || !approval_time(saved->time))
+        return -1;
+    if (!strcmp(saved->caps, "-"))
+        saved->caps[0] = 0;
+    for (i = 0; saved->caps[i]; ++i)
+        if (!(saved->caps[i] >= 'a' && saved->caps[i] <= 'z') && saved->caps[i] != '_' && saved->caps[i] != ',')
+            return -1;
+    if (!strcmp(saved->bundle, "-"))
+        saved->bundle[0] = 0;
+    return 1;
+}
+
+static int approval_manifest(const SvModule *module, char digest[65])
+{
+    char path[MAX_PATH], *base;
+    HANDLE file;
+    LARGE_INTEGER size;
+    int ok;
+    strcpy(path, module->path);
+    base = strrchr(path, '\\');
+    if (!base || (size_t)(base - path) + 1 + sizeof "plugin.ini" > sizeof path)
+        return 0;
+    strcpy(base + 1, "plugin.ini");
+    if (!plain_path(path, 0))
+        return 0;
+    file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                       FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    if (file == INVALID_HANDLE_VALUE)
+        return 0;
+    ok = GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart <= 65536 && hash_file(file, digest);
+    CloseHandle(file);
+    return ok;
+}
+
+static int approval_matches(const SvApproval *saved, const SvModule *module)
+{
+    char caps[256], manifest[65];
+    if (strcmp(saved->payload, module->hash))
+        return 0;
+    if (strcmp(saved->runtime, sv_manifest_runtime_name(module->runtime)))
+        return 0;
+    if (!sv_manifest_caps_text(module->cap_mask, module->unsafe, caps, sizeof caps) || strcmp(saved->caps, caps))
+        return 0;
+    if (!approval_manifest(module, manifest) || strcmp(saved->manifest, manifest))
+        return 0;
+    return 1;
+}
+
+int sv_plugin_trust_status(const char *id)
+{
+    SvApproval saved;
+    int state;
+    if (!sv_plugin_id(id))
+        return 1;
+    state = approval_read(id, &saved);
+    if (state < 0)
+        return 1;
+    if (!state) {
+        printf("TRUST_NONE\t%s\n", id);
+        return 0;
+    }
+    printf("TRUST\t1\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", id, saved.version, saved.runtime,
+           saved.caps, saved.payload, saved.manifest, saved.bundle, saved.time);
+    return 0;
+}
+
+int sv_plugin_trust_save(const char *id, const char *payload, const char *manifest,
+                         const char *runtime, const char *caps, const char *bundle)
+{
+    SvModule module;
+    char path[MAX_PATH], current[65], declared[256], record[640];
+    SYSTEMTIME now;
+    int length;
+    if (!approval_hash(payload) || !approval_hash(manifest) ||
+        (strcmp(bundle, "-") && !approval_hash(bundle)) || !sv_plugin_inspect(id, &module) ||
+        strcmp(payload, module.hash) || strcmp(runtime, sv_manifest_runtime_name(module.runtime)) ||
+        !sv_manifest_caps_text(module.cap_mask, module.unsafe, declared, sizeof declared) ||
+        strcmp(!strcmp(caps, "-") ? "" : caps, declared) ||
+        !approval_manifest(&module, current) || strcmp(manifest, current) || approval_path(path, 1) != 1)
+        return 0;
+    GetSystemTime(&now);
+    length = snprintf(record, sizeof record, "1|%s|%s|%s|%s|%s|%s|%04u-%02u-%02uT%02u:%02u:%02uZ",
+                      module.version, runtime, declared[0] ? declared : "-", payload, manifest, bundle,
+                      now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond);
+    if (length < 0 || (size_t)length >= sizeof record)
+        return 0;
+    return WritePrivateProfileStringA("approvals", id, record, path) != 0;
+}
+
 int sv_plugin_approved(const SvModule *module)
 {
     static const char *files[] = { "plugins/native-approvals.ini", "user/plugins/native-approvals.ini" };
     char path[MAX_PATH], hash[66];
+    SvApproval saved;
+    int state = approval_read(module->id, &saved);
     size_t i;
+    if (state)
+        return state > 0 && approval_matches(&saved, module);
     for (i = 0; i < sizeof files / sizeof files[0]; ++i) {
         if (i == 1 && (!plain_path("user", 1) || !plain_path("user/plugins", 1)))
             continue;
@@ -423,7 +615,14 @@ int sv_plugin_approve(const char *id, const char *hash)
         return 0;
     if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES && !plain_path(path, 0))
         return 0;
-    return WritePrivateProfileStringA("native", id, hash, path) != 0;
+    {
+        char scoped[MAX_PATH];
+        int state = approval_path(scoped, 0);
+        if (state < 0 || !WritePrivateProfileStringA("native", id, hash, path))
+            return 0;
+        /* An explicit legacy approval keeps its full native-content meaning. */
+        return !state || WritePrivateProfileStringA("approvals", id, NULL, scoped) != 0;
+    }
 }
 
 int sv_plugin_save_state(const char *id, int enabled)

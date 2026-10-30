@@ -49,3 +49,109 @@ Final checks: the normal build, all 15 CTest groups, storage generation, native 
 The exact SDK ZIP also passes the clean test through `-SdkZip`.
 The prose lint stays below 2.5 findings per 100 words for each changed page and the SDK README.
 All work stays in local commits. No push, publish or tag command ran.
+
+## M2: approval and launcher UX (2026-10-30)
+
+The requested native workflow is complete.
+The launcher redesign waits for the owner's layout choice.
+Lua, WASM and public API changes remain outside this work.
+
+| Task | State | Evidence |
+| --- | --- | --- |
+| 0. Update the branch | Done | Clean fast-forward to `7681f99`. The initial CTest run passes all 15 groups. |
+| 1. Server inspection | Done | `--plugin-inspect ZIP|ID`, 33 inspection cases and the ancestor-junction removal proof pass. |
+| 2. Trust store | Done | Separate commit `cd704b1` adds scoped records and four independent comparison proofs. |
+| 3. Unified dialog | Done | One install/update review, native consent, real-control risk colors and shared installer tests pass. |
+| 4. Development switch | Done | Fourteen development cases, file locks, minute warnings and three guard-removal probes pass. |
+| 5. Clean-machine approval path | Done | The unpacked SDK uses the inspected hashes and shared approved installer, then checks the saved record and activation. |
+| 6. Launcher UX audit | Done | [The audit](launcher-ux.md) gives source findings, a plain-text layout, priorities and open choices. No redesign code is added. |
+
+### Approval and compatibility
+
+The [approval guide](sdk-approval.md) defines the record and commands.
+The store binds the ID, payload hash, manifest hash, runtime and complete capability set.
+It also keeps the version, ZIP hash and UTC time.
+A scoped mismatch or invalid record rejects content before DLL execution, even when a legacy hash matches.
+The same ID, runtime and capability set uses one version-change review.
+A new capability requires the full review.
+
+Both legacy approval files remain readable.
+`--plugin-approve ID HASH` keeps its explicit full native-content meaning and exact current hash check.
+`--allow-unapproved-native` keeps its content-approval bypass.
+The owner authorizes `plugin_files.c` and `plugin_internal.h` for task 2 approval code only.
+The loader-flow function stays unchanged. Later tasks do not edit those files.
+No public `sv_*.h`, `plugin_read.c` or `plugin_props.c` file changes.
+
+Development mode scopes the normal configured profile to a plain local folder.
+It does not discover or install plugins from an unrelated folder.
+Outside content needs prior approval, and profile files, manifests and DLLs stay pinned for the run.
+No development approval is saved. Normal storage locks, logs and explicit operator changes keep their usual behavior.
+
+### Removal evidence
+
+| Check | Result |
+| --- | --- |
+| Payload hash match | Rejection fails with the comparison removed and passes after restoration. |
+| Manifest hash match | Rejection fails with the comparison removed and passes after restoration. |
+| Runtime match | Rejection fails with the comparison removed and passes after restoration. |
+| Capability set match | Rejection fails with the comparison removed and passes after restoration. |
+| Native checkbox | The real dialog test fails without the consent guard and passes after restoration. |
+| Development no-save guard | A persistent CLI action is accepted with the guard removed. The restored guard rejects it. Ordinary development runs leave approval unchanged. |
+| Development outside-folder approval | The rejection probe fails without its guard and passes after restoration. |
+| Development folder boundary | A sibling-prefix probe fails without its separator guard and passes after restoration. |
+
+The earlier inspection ancestor-junction proof also passes.
+All mutated source files return to their original bytes before the final builds.
+Local proof and test logs stay in ignored `build/m2-*.log` files.
+
+### Final checks and limits
+
+The normal build, all 19 CTest groups, storage generation, native dependencies and the repository check pass.
+The clean-machine test runs outside the repository with compiler state cleared.
+It uses no legacy approval for its installed template.
+The shared installer also passes from a working folder outside the selected server folder.
+Reviewed updates keep private plugin data.
+
+The first full task 2 run stops when C: runs out of space.
+The repeated run passes after generated output cleanup.
+Oversized inspection fixtures use NTFS sparse allocation without changing logical sizes or rejection checks.
+
+Automated checks inspect the real dialog controls and rich-text colors.
+Offscreen native-window capture does not give a reliable visual result.
+No live launcher visual check, Start/Stop check or client playtest ran.
+The changed prose passes the ASD-STE100 gate below 2.5 findings per 100 words.
+
+All work stays in local commits on `codex/sdk`.
+No push, tag or merge into `main` ran.
+
+### Open UX choices
+
+1. Navigation: retain tabs for the first pass, or use a left sidebar. The audit recommends tabs.
+2. Console: keep it on Server, or use a drawer available from every page.
+3. Diagnostics: keep an explicit advanced toggle, or give diagnostics a permanent navigation entry.
+
+Choose navigation first. The visual redesign waits for the owner.
+
+### Capability table review
+
+`src/plugins/plugin_manifest.c` owns one capability table.
+`plugin_caps.h` declares its name, danger level and danger text fields.
+Manifest parsing, canonical capability text and inspection use the same rows.
+The API approval check uses the shared capability count.
+
+A search of all `src/` files finds no other capability name catalog.
+The dispatch table in `plugin_game.c` keeps API versions and function pointers.
+It cannot replace those fields with review metadata.
+Public API IDs stay unchanged because plugins use them as an interface contract.
+Launcher reviews read danger text from the server inspection report.
+The native runtime warning and `unsafe_events` flag remain separate from the 12 capability bits.
+
+`capability-bits` checks each parsed name against its fixed expected bit and public API ID.
+It also checks the canonical name for each bit.
+The removal proof swaps the `read` and `write` rows in the production table.
+The test fails with `read: expected bit 0x001, got 0x002.`
+After source restoration and rebuild, the test passes.
+The proof log stays in ignored `build/caps-removal-proof.log`.
+
+The existing `tests/sdk_inspect_test.py` stays unchanged and passes.
+The normal build, focused tests, storage generation, native dependencies and repository check pass.

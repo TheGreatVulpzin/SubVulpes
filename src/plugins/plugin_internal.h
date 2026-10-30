@@ -62,6 +62,10 @@ int sv_plugin_declared(const char *id, SvModule *module);
 int sv_plugin_validate_folder(const char *folder);
 int sv_plugin_approved(const SvModule *module);
 int sv_plugin_approve(const char *id, const char *hash);
+/* The scoped review store. Neither command loads plugin code. */
+int sv_plugin_trust_status(const char *id);
+int sv_plugin_trust_save(const char *id, const char *payload, const char *manifest,
+                         const char *runtime, const char *caps, const char *bundle);
 int sv_plugin_save_state(const char *id, int enabled);
 HANDLE sv_plugin_lock(void);
 /* The private settings file of a plugin: user/plugins/ID.settings.ini. With create, the folders are made. */
