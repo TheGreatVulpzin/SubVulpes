@@ -45,7 +45,7 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | --- | --- | --- |
 | N8 | Delete the body of a real player | Kill with `human.health` meanwhile. |
 | N10, N39 | Material at a hit, block cell | Same query family as `line`. |
-| N19 | Bone masses | A row `human.bone_mass`. The bonds read the mass of each bone live, so a write works at once. |
+| N19 | Bone masses, done | `human.bone_mass`: 15 float slots, GET, SET and ADD, range 0.5 to 500. |
 | N26 | Request to reset the round | The rows for state and timers exist. |
 | N27 | Road graph query | The data is `g_city.intersections` and `g_city.roads`. |
 | N29 | Human health above 100 | The packet clamps the sent health to 117. |
@@ -103,3 +103,11 @@ The rules of the ABI are in [plugin ABI rules](plugin-abi.md). A request for a t
 - No stress test of the event queue under 100 players and 256 bots.
 - The behavior of the original client is unknown for renamed names, bullet speed rows, fire delay rows and the collapse threshold above 0.
 - The pages in `docs/plugin-api-map.md` and `docs/plano.md` repeat counts. Update them with each new method.
+
+## Bone mass (R4)
+
+`human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 500, inclusive.
+Writes change the live bone mass. Invalid slots, nonfinite values and results outside the range fail without a write.
+The game API fixture checks all slots, both endpoints, addition and failed writes. No client playtest ran.
+
+Removal proofs for the slot bound and both range checks fail the game API test. The source is restored before final checks.

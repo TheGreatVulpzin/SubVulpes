@@ -32,6 +32,7 @@ FIELD(human_bleeding, sr_humans[i].bleeding)
 FIELD(human_stun, sr_humans[i].stun_timer)
 FIELD(human_protect, sr_humans[i].protect_timer)
 FIELD(human_bone_velocity, sr_humans[i].bones[s].vel)
+FIELD(human_bone_mass, sr_humans[i].bones[s].mass)
 FIELD(object_velocity, sr_objects[i].vel)
 FIELD(item_velocity, sr_items[i].vel)
 FIELD(item_angular_velocity, sr_items[i].angvel)
@@ -279,6 +280,7 @@ static const Prop props[] = {
     { "item.velocity", SV_ENTITY_ITEM, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, item_velocity, NULL, NULL, item_velocity_add, 0, item_velocity_set },
     { "item.angular_velocity", SV_ENTITY_ITEM, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, item_angular_velocity, NULL, NULL, item_spin_add, 0, item_spin_set },
     { "item.frozen", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, item_frozen, frozen_check, frozen_after, NULL },
+    { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 500, human_bone_mass, NULL, NULL, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };

@@ -378,3 +378,11 @@ The host refuses a denied command and logs `Plugin command permission denied`. T
 The tests run the chat function against a real player record. They check the three levels, an unknown command, and a player with no reference.
 Removing the routing, the admin flag check, the zero-actor guard or the `admin` reservation made `game-api` fail each time.
 A plugin answers one player with `message_to`. The server filters that event for each connection, so the original client gets a normal message. The [legacy module list](legacy-modules.md) names this as N1.
+
+## Bone mass (R4)
+
+`human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 500, inclusive.
+Writes change the live bone mass. Invalid slots, nonfinite values and results outside the range fail without a write.
+The game API fixture checks all slots, both endpoints, addition and failed writes. No client playtest ran.
+
+Removal proofs for the slot bound and both range checks fail the game API test. The source is restored before final checks.

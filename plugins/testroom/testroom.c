@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.12"
+#define VERSION "0.2.13"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 72
 
@@ -1760,6 +1760,30 @@ static SvResult t_tag(void)
     return r;
 }
 
+static SvResult t_bone_mass(void)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvValue saved, value, mass_read;
+    uint32_t id = prop_id("human.bone_mass");
+    SvResult r = body(&player, &human), restored;
+    if (r != SV_OK)
+        return r;
+    r = props->get(self, id, player.human, 2, &saved);
+    if (r != SV_OK)
+        return r;
+    value.f = saved.f < 499.0f ? saved.f + 1.0f : 1.0f;
+    r = props->set(self, id, player.human, 2, value);
+    if (r != SV_OK)
+        return r;
+    r = props->get(self, id, player.human, 2, &mass_read);
+    restored = props->set(self, id, player.human, 2, saved);
+    if (r != SV_OK || restored != SV_OK || mass_read.f != value.f)
+        return SV_FAILED;
+    sayf("Head mass read %.2f. Restored %.2f.", mass_read.f, saved.f);
+    return SV_OK;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1825,6 +1849,7 @@ static const Test tests[] = {
     { "sound_tour", "Plays every game sound once, from 0 to 46. Type /test go to start.", "You hear 47 sounds. Say which numbers are tones.", t_tour, t_tour_go },
     { "pitch_octaves", "Plays the phone ring in six octaves, twice. Type /test go to start.", "Six steps, each one octave higher. Say if two steps sound the same.", t_octaves, t_octaves_go },
     { "engine_sounds", "Sets the bots to 0 and makes a car. Plays the sounds 3 to 9 twice while you sit in the car. Type /test go to start.", "You hear a car engine for one or more numbers. Say which ones.", t_engine, t_engine_go },
+    { "bone_mass", "Changes and reads your head mass, then restores it.", "A chat line shows the changed and restored mass.", t_bone_mass, NULL },
 };
 
 /* ------------------------------------------------------------ flow */

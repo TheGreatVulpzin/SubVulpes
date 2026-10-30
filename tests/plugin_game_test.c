@@ -1318,6 +1318,8 @@ int main(int argc, char **argv)
     sr_data_object[0].num_wheels = 0;
     sr_game.round_number = 8;
     write_api_tick();
+    CHECK(sr_humans[0].bones[0].mass == 1.5f);
+    CHECK(sr_humans[0].bones[14].mass == 500.0f);
     /* A shot and a removed vehicle, after the write checks, which clear the queue when they start. */
     sv_game_event_shot(0, 0);
     /* The rounds left are the chamber plus the magazine. A bad child index or a count above 8 never reads outside the table. */

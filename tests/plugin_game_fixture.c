@@ -889,6 +889,44 @@ static int headline_checks(SvOwner owner)
 
 /* The property table itself: names, descriptions, operations and the checks that do not belong to one row.
  * Returns 0 when all checks pass, or the line of the check that failed. */
+static int bone_mass_checks(SvOwner owner)
+{
+    uint32_t id, slot;
+    SvPropInfo info = { sizeof info };
+    SvValue value = {0}, out;
+    SvBoneState bone = { sizeof bone };
+    STEP(props->find(owner, "human.bone_mass", &id) == SV_OK);
+    STEP(props->info(owner, id, &info) == SV_OK && info.type == SV_PROP_FLOAT && info.count == 15 &&
+        info.min == 0.5 && info.max == 500 && info.ops == (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD));
+    for (slot = 0; slot < 15; ++slot) {
+        value.f = slot ? 500.0f : 0.5f;
+        STEP(props->set(owner, id, human, slot, value) == SV_OK);
+        STEP(props->get(owner, id, human, slot, &out) == SV_OK && out.f == value.f);
+        STEP(game->bone(owner, human, slot, &bone) == SV_OK && bone.mass == value.f);
+    }
+    value.f = 0.25f;
+    STEP(props->set(owner, id, human, 0, value) == SV_INVALID);
+    value.f = 501.0f;
+    STEP(props->set(owner, id, human, 0, value) == SV_INVALID);
+    value.f = -0.25f;
+    STEP(props->add(owner, id, human, 0, value) == SV_INVALID);
+    value.f = 1.0f;
+    STEP(props->add(owner, id, human, 14, value) == SV_INVALID);
+    STEP(props->add(owner, id, human, 0, value) == SV_OK);
+    STEP(props->get(owner, id, human, 0, &out) == SV_OK && out.f == 1.5f);
+    value.f = NAN;
+    STEP(props->set(owner, id, human, 0, value) == SV_INVALID && props->add(owner, id, human, 0, value) == SV_INVALID);
+    value.f = INFINITY;
+    STEP(props->set(owner, id, human, 0, value) == SV_INVALID && props->add(owner, id, human, 0, value) == SV_INVALID);
+    value.f = 2.0f;
+    STEP(props->set(owner, id, human, 15, value) == SV_INVALID && props->get(owner, id, human, 15, &out) == SV_INVALID);
+    STEP(props->add(owner, id, human, 15, value) == SV_INVALID);
+    STEP(props->set(owner + 1, id, human, 0, value) == SV_STATE);
+    STEP(props->set(owner, id, player, 0, value) == SV_NOT_FOUND);
+    STEP(props->get(owner, id, human, 0, &out) == SV_OK && out.f == 1.5f);
+    return 0;
+}
+
 static int props_checks(SvOwner owner)
 {
     SvPropInfo info = { sizeof info }, small = { 4 };
@@ -909,7 +947,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 36);
+    STEP(count == 37);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);
@@ -1109,6 +1147,8 @@ static SvResult write_checks(SvOwner owner)
             bad_line = move_checks(owner);
         if (!bad_line)
             bad_line = props_checks(owner);
+        if (!bad_line)
+            bad_line = bone_mass_checks(owner);
         if (!bad_line)
             bad_line = damage_checks(owner);
         if (bad_line) {
