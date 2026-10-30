@@ -53,8 +53,7 @@ All work stays in local commits. No push, publish or tag command ran.
 ## M2: approval and launcher UX (2026-10-30)
 
 The requested native workflow is complete.
-The owner chose a saved switch between main tabs and a sidebar.
-The broader launcher redesign remains a proposal.
+The launcher redesign waits for the owner's layout choice.
 Lua, WASM and public API changes remain outside this work.
 
 | Task | State | Evidence |
@@ -65,7 +64,7 @@ Lua, WASM and public API changes remain outside this work.
 | 3. Unified dialog | Done | One install/update review, native consent, real-control risk colors and shared installer tests pass. |
 | 4. Development switch | Done | Fourteen development cases, file locks, minute warnings and three guard-removal probes pass. |
 | 5. Clean-machine approval path | Done | The unpacked SDK uses the inspected hashes and shared approved installer, then checks the saved record and activation. |
-| 6. Launcher UX audit | Done | [The audit](launcher-ux.md) gives source findings, a plain-text layout, priorities and open choices. The audit adds no redesign code. The later navigation switch is described below. |
+| 6. Launcher UX audit | Done | [The audit](launcher-ux.md) gives source findings, a plain-text layout, priorities and open choices. No redesign code is added. |
 
 ### Approval and compatibility
 
@@ -125,22 +124,13 @@ The changed prose passes the ASD-STE100 gate below 2.5 findings per 100 words.
 All work stays in local commits on `codex/sdk`.
 No push, tag or merge into `main` ran.
 
-### Navigation toggle
-
-The owner requested a switch for main navigation.
-Use **Launcher settings > Navigation > Tabs / Sidebar**. The choice takes effect without a restart.
-The launcher saves `navigation=tabs` or `navigation=sidebar` in `launcher.ini`. Tabs are the default.
-Both modes use the same pages. The selected page, unsaved fields and nested Debug tabs stay intact.
-The sidebar uses horizontal labels and system selection colors.
-The launcher test checks repeated switches, label layout, draft fields, saved choice and hidden Debug behavior.
-The normal build, focused launcher test and required checks pass. No live visual check ran.
-
 ### Open UX choices
 
-1. Console: keep it on Server, or use a drawer available from every page.
-2. Diagnostics: keep an explicit advanced toggle, or give diagnostics a permanent navigation entry.
+1. Navigation: retain tabs for the first pass, or use a left sidebar. The audit recommends tabs.
+2. Console: keep it on Server, or use a drawer available from every page.
+3. Diagnostics: keep an explicit advanced toggle, or give diagnostics a permanent navigation entry.
 
-The broader visual redesign waits for the owner.
+Choose navigation first. The visual redesign waits for the owner.
 
 ### Capability table review
 

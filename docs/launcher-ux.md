@@ -1,6 +1,6 @@
 # Launcher UX audit and proposed layout
 
-Status: audit and proposed layout. Main navigation now has a saved Tabs / Sidebar switch.
+Status: proposal for the owner. This task changes no launcher layout.
 The review covers the current `tools/launcher/Launcher.cs`, including the new approval dialog.
 It is a source review. A live keyboard, display scaling and visual check still needs to run.
 
@@ -27,7 +27,7 @@ Source anchors: `LauncherForm`, `ServerPage`, `LauncherSettingsPage`, `PluginsPa
 
 ## Proposed layout
 
-Use the saved navigation choice. Tabs remain the default.
+Recommendation: keep tabs for the first pass.
 Add a persistent context header and operation footer.
 Use a compact list with selected-plugin details below it.
 The example shows the Plugins page.
@@ -79,25 +79,11 @@ Cancel can stop discovery, reading or downloading.
 File replacement must finish or roll back before the launcher closes.
 Keep technical details available through a copyable error view.
 
-## Navigation choice
+## Choices for the owner
 
-The owner chose a switch between tabs and a sidebar for main navigation.
-In **Launcher settings**, use **Navigation** to select **Tabs** or **Sidebar**.
-The launcher saves this choice in `launcher.ini` as `navigation=tabs` or `navigation=sidebar`.
-Tabs are the default. The choice takes effect without a restart.
-
-Both modes use the same pages and controls.
-Switching preserves the selected page, unsaved fields and nested Debug tabs.
-The sidebar shows horizontal labels and uses system selection colors.
-The focused launcher test checks layout, repeated switches, saved choice, draft fields and hidden Debug behavior.
-The normal build and required checks pass. No live visual check ran.
-
-The broader header, plugin details, console and diagnostics changes remain proposals.
-
-## Open choices for the owner
-
+- Navigation: keep tabs for the first pass, or use a left sidebar. Tabs preserve the current page model.
 - Console: keep it on Server, or make it a drawer available from every page.
 - Diagnostics: keep it behind an explicit advanced toggle, or give it a permanent navigation entry.
 
-The proposed header, operation feedback and plugin details work with either navigation mode.
-The broader visual redesign waits for the owner's choice.
+Choose navigation first. The proposed header, operation feedback and plugin details work with either navigation model.
+The visual redesign waits for the owner's choice.
