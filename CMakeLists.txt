@@ -73,6 +73,9 @@ set(SV_SDK_VERSION "v0.0.0-dev" CACHE STRING "The version of the SDK package")
 sv_add_plugin(sv-testroom ID sv.testroom MANIFEST "${CMAKE_SOURCE_DIR}/plugins/testroom/plugin.ini"
     SOURCES plugins/testroom/testroom.c)
 
+# Optional SDK example. The official profile and server package do not carry it.
+add_subdirectory(plugins/jukebox)
+
 set(SV_LAUNCHER "${CMAKE_SOURCE_DIR}/build/launcher/subvulpes_launcher.exe")
 add_custom_command(OUTPUT "${SV_LAUNCHER}"
     COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat"
@@ -145,6 +148,33 @@ if(BUILD_TESTING)
     set_target_properties(sv-capability-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME capability-bits COMMAND sv-capability-test)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_executable(jukebox-instruments-test tests/jukebox_instruments_test.c plugins/jukebox/instruments.c)
+    target_include_directories(jukebox-instruments-test PRIVATE plugins/jukebox)
+    target_compile_definitions(jukebox-instruments-test PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(jukebox-instruments-test PRIVATE /W4 /WX /utf-8)
+    set_target_properties(jukebox-instruments-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME jukebox-instruments COMMAND jukebox-instruments-test "${CMAKE_SOURCE_DIR}/plugins/jukebox/instruments.ini")
+    add_executable(jukebox-host-test tests/jukebox_host_test.c)
+    target_include_directories(jukebox-host-test PRIVATE src/plugins)
+    target_compile_definitions(jukebox-host-test PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(jukebox-host-test PRIVATE /W4 /WX /utf-8)
+    set_target_properties(jukebox-host-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_dependencies(jukebox-host-test sv-jukebox)
+    add_test(NAME jukebox-playback COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/jukebox_playback_test.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME jukebox-scenario COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/jukebox_scenario_test.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME jukebox-sdk COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/jukebox_sdk_test.py" "${CMAKE_BINARY_DIR}")
+
+    add_executable(jukebox-midi-test tests/jukebox_midi_driver.c plugins/jukebox/midi.c)
+    target_include_directories(jukebox-midi-test PRIVATE plugins/jukebox)
+    target_compile_definitions(jukebox-midi-test PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(jukebox-midi-test PRIVATE /W4 /WX /utf-8)
+    set_target_properties(jukebox-midi-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME jukebox-midi COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/jukebox_midi_test.py" "$<TARGET_FILE:jukebox-midi-test>")
+
     add_executable(sv-abi-snapshot tests/abi_snapshot.c)
     set_property(SOURCE tests/abi_snapshot.c APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
     target_include_directories(sv-abi-snapshot PRIVATE src/plugins)

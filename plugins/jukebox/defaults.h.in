@@ -1,0 +1,3 @@
+/* instruments.ini owns the defaults. Only a missing owner file receives these bytes. */
+static const char jb_default_instruments[] =
+"@JB_DEFAULT_TEXT@";

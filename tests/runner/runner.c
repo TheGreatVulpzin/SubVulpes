@@ -327,6 +327,7 @@ int main(int argc, char **argv)
     sr_itemtypes[0].inv_inertia = (vec3){ 1, 1, 1 };
     memset(&sr_data_objecttype[0], 0, sizeof sr_data_objecttype[0]);
     sr_data_server.max_players = 128;
+    sr_data_soundlist.num_sounds = 47;
     if (!sv_plugins_start()) {
         printf("FAIL %s: the plugin host did not start\n", scenario_name);
         return 1;
