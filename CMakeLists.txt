@@ -156,6 +156,8 @@ if(BUILD_TESTING)
         "${CMAKE_SOURCE_DIR}/tests/sdk_trust_test.py" "${CMAKE_BINARY_DIR}")
     add_test(NAME plugin-approved-install COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/sdk_approval_install_test.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME plugin-development COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/sdk_dev_plugins_test.py" "${CMAKE_BINARY_DIR}")
     add_test(NAME manifest-rules COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_manifest.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c

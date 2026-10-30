@@ -108,3 +108,34 @@ The launcher tests read real server output and check the real dialog controls, r
 Removing the native consent guard makes the real dialog test fail.
 The restored guard passes.
 No live launcher visual check or Start/Stop check ran.
+
+## Development approval for one run
+
+Use a plain local folder that contains configured native plugins:
+
+```text
+subvulpes_server.exe --dev-plugins plugins
+subvulpes_server.exe --dev-plugins plugins/my.hello --plugins-check
+```
+
+The folder scopes approval for the normal server profile.
+It does not discover, install or enable plugins.
+A plugin outside this folder must already have content approval.
+This rule also covers disabled profile entries, because they can start later in the run.
+
+The server checks the whole profile before it grants development approval.
+It pins the profile, manifests and DLLs against replacement for the run.
+A folder-name prefix cannot include a sibling folder.
+Outside-folder content must match its saved approval at startup.
+Restart the server to change this snapshot.
+
+The switch prints a native-code warning at startup and each minute.
+It writes no approval, and the next normal run still needs the normal approval.
+Server logs, storage locks and explicit operator changes keep their normal behavior.
+Development mode accepts a server run or `--plugins-check`.
+It refuses persistent CLI actions and cannot combine with `--allow-unapproved-native`.
+The old native bypass still works by itself.
+
+The `plugin-development` group checks 14 cases, file locks and the real minute warning.
+Separate removal probes cover the persistent-command guard, outside-folder approval and the folder boundary.
+Each probe fails with its guard removed and passes after restoration.

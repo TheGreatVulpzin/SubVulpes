@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string.h>
+#include <stdlib.h>
 #include "sv_plugin.h"
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
@@ -19,6 +20,9 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 
 static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
 {
+    const char *wait = getenv("SV_PLUGIN_TRUST_WAIT");
+    if (wait && !strcmp(wait, "1"))
+        Sleep(62000);
     return host->log(owner, "Trust fixture enabled.");
 }
 

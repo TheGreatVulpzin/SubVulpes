@@ -2,6 +2,7 @@
 #include "plugin_internal.h"
 #include <bcrypt.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #pragma comment(lib, "bcrypt.lib")
@@ -226,4 +227,119 @@ int sv_plugin_inspect_cli(int argc, char **argv)
     if (result)
         fputs("Cannot inspect the plugin. Check the manifest, payload, package and installer.\n", stderr);
     return result;
+}
+
+
+static HANDLE dev_files[1 + 2 * SV_PLUGIN_MAX];
+static unsigned dev_file_count;
+static HANDLE dev_stop_event, dev_warning_thread;
+
+static void dev_warning(void)
+{
+    sv_log("WARNING: development plugin approval is active for this run only. Native code has full process access. Approval is not saved.");
+}
+
+static DWORD WINAPI dev_warnings(void *unused)
+{
+    (void)unused;
+    while (WaitForSingleObject(dev_stop_event, 60000) == WAIT_TIMEOUT)
+        dev_warning();
+    return 0;
+}
+
+void sv_plugin_dev_stop(void)
+{
+    if (dev_stop_event)
+        SetEvent(dev_stop_event);
+    if (dev_warning_thread) {
+        WaitForSingleObject(dev_warning_thread, INFINITE);
+        CloseHandle(dev_warning_thread);
+    }
+    if (dev_stop_event)
+        CloseHandle(dev_stop_event);
+    dev_warning_thread = dev_stop_event = NULL;
+    while (dev_file_count)
+        CloseHandle(dev_files[--dev_file_count]);
+    sv_plugins_native_bypass(0);
+}
+
+static int dev_hold(const char *path, LONGLONG limit)
+{
+    char hash[65];
+    HANDLE file;
+    if (dev_file_count >= sizeof dev_files / sizeof dev_files[0])
+        return 0;
+    file = digest_file(path, limit, hash);
+    if (file == INVALID_HANDLE_VALUE)
+        return 0;
+    dev_files[dev_file_count++] = file;
+    return 1;
+}
+
+int sv_plugin_dev_start(const char *folder)
+{
+    SvModule *profile = NULL, current;
+    uint32_t count = 0, i, inside_count = 0;
+    char absolute[MAX_PATH], root[MAX_PATH], path[MAX_PATH], canonical[MAX_PATH];
+    const char *problem = "Development approval needs a plain local folder and a valid native plugin profile.";
+    DWORD length, attributes;
+    size_t root_length;
+    int inside, ok = 0;
+    length = GetFullPathNameA(folder, sizeof absolute, absolute, NULL);
+    if (!length || length >= sizeof absolute || !plain_tree(absolute))
+        goto done;
+    attributes = GetFileAttributesA(absolute);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY))
+        goto done;
+    length = GetLongPathNameA(absolute, root, sizeof root);
+    if (!length || length >= sizeof root)
+        goto done;
+    root_length = strlen(root);
+    while (root_length > 3 && (root[root_length - 1] == '\\' || root[root_length - 1] == '/'))
+        root[--root_length] = 0;
+    if (!dev_hold("plugins/plugins.ini", 65536))
+        goto done;
+    profile = calloc(SV_PLUGIN_MAX, sizeof *profile);
+    if (!profile || !sv_plugin_profile(profile, &count))
+        goto done;
+    for (i = 0; i < count; ++i) {
+        snprintf(path, sizeof path, "plugins/%s/plugin.ini", profile[i].id);
+        if (!dev_hold(path, 65536) || !sv_plugin_declared(profile[i].id, &current) ||
+            current.runtime != SV_RUNTIME_NATIVE || !dev_hold(current.path, 64 * 1024 * 1024) ||
+            !sv_plugin_inspect(profile[i].id, &current))
+            goto done;
+        length = GetLongPathNameA(current.path, canonical, sizeof canonical);
+        if (!length || length >= sizeof canonical)
+            goto done;
+        inside = !_strnicmp(canonical, root, root_length) &&
+            (root[root_length - 1] == '\\' || root[root_length - 1] == '/' ||
+             canonical[root_length] == '\\' || canonical[root_length] == '/');
+        if (inside) {
+            ++inside_count;
+            /* Development approval stays in memory. */
+        } else if (!sv_plugin_approved(&current)) {
+            problem = "An unapproved plugin is outside the development folder. Review it or choose the correct folder.";
+            goto done;
+        }
+    }
+    if (!inside_count) {
+        problem = "The folder holds no configured native plugin. Install the plugin and add it to the normal profile first.";
+        goto done;
+    }
+    dev_stop_event = CreateEventA(NULL, TRUE, FALSE, NULL);
+    if (!dev_stop_event)
+        goto done;
+    dev_warning_thread = CreateThread(NULL, 0, dev_warnings, NULL, 0, NULL);
+    if (!dev_warning_thread)
+        goto done;
+    sv_plugins_native_bypass(1);
+    dev_warning();
+    ok = 1;
+done:
+    free(profile);
+    if (!ok) {
+        sv_plugin_dev_stop();
+        fprintf(stderr, "%s\n", problem);
+    }
+    return ok;
 }

@@ -22,6 +22,8 @@
 
 void __cdecl sr_getpaths(void);
 int sv_plugin_inspect_cli(int argc, char **argv);
+int sv_plugin_dev_start(const char *folder);
+void sv_plugin_dev_stop(void);
 
 /* ------------------------------------------------------------ console and log */
 
@@ -306,21 +308,43 @@ static DWORD WINAPI test_crash(void *arg)
 int main(int argc, char **argv)
 {
     unsigned cw;
-    int cli, argument;
+    int cli, argument, native_bypass = 0;
+    const char *dev_folder = NULL;
     const char *stop_name = getenv("SV_STOP_EVENT");
+    for (argument = 1; argument < argc; ++argument) {
+        if (!strcmp(argv[argument], "--dev-plugins")) {
+            if (dev_folder || argument + 1 >= argc || !argv[argument + 1][0]) {
+                fputs("Use --dev-plugins FOLDER once, for a server run or --plugins-check.\n", stderr);
+                return 2;
+            }
+            dev_folder = argv[argument + 1];
+            memmove(argv + argument, argv + argument + 2, (size_t)(argc - argument - 1) * sizeof *argv);
+            argc -= 2;
+            --argument;
+        }
+    }
     for (argument = 1; argument < argc; ++argument) {
         if (!strcmp(argv[argument], "--allow-unapproved-native")) {
             sv_plugins_native_bypass(1);
+            native_bypass = 1;
             memmove(argv + argument, argv + argument + 1, (size_t)(argc - argument) * sizeof *argv);
             --argc;
             --argument;
         }
     }
+    if (dev_folder && (native_bypass || (argc != 1 && (argc != 2 || strcmp(argv[1], "--plugins-check"))))) {
+        fputs("Use --dev-plugins only for a server run or --plugins-check. Do not combine it with the native bypass.\n", stderr);
+        return 2;
+    }
     if (argc > 1) {
+        if (dev_folder && !sv_plugin_dev_start(dev_folder))
+            return 2;
         cli = sv_plugin_inspect_cli(argc, argv);
         if (cli >= 0)
             return cli;
         cli = sv_plugins_cli(argc, argv);
+        if (dev_folder)
+            sv_plugin_dev_stop();
         if (cli >= 0)
             return cli;
         fprintf(stderr, "Use --plugins-check, --plugins-list, --plugin-enable ID, --plugin-disable ID,\n"
@@ -340,8 +364,10 @@ int main(int argc, char **argv)
     /* Keep 53-bit x87 precision for game calculations. */
     _controlfp_s(&cw, _PC_53, _MCW_PC);
     x87_init();
-    if (!sv_plugins_start()) {
+    if ((dev_folder && !sv_plugin_dev_start(dev_folder)) || !sv_plugins_start()) {
         sv_plugins_stop();
+        if (dev_folder)
+            sv_plugin_dev_stop();
         if (g_log)
             fclose(g_log);
         if (g_stop_event)
@@ -356,6 +382,8 @@ int main(int argc, char **argv)
     sr_getpaths();
     sv_control_stop();
     sv_plugins_stop();
+    if (dev_folder)
+        sv_plugin_dev_stop();
     InterlockedExchange(&g_sampler_stop, 1);
     if (g_sampler) {
         WaitForSingleObject(g_sampler, INFINITE);
