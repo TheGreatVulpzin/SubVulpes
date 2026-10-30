@@ -3,6 +3,10 @@
 
 #include "sv_game.h"
 
+#define SV_EVENT_ACCOUNT_SAVE SV_EVENT_EXT(0)
+
+enum { SV_ACCOUNT_SAVE_DISK = 0, SV_ACCOUNT_SAVE_DISCONNECT = 1 };
+
 /* A game event record. The first field is the SvEvent of the plugin ABI version 1, with its size set to
  * sizeof(SvGameEvent), so a plugin that knows only SvEvent reads the same first 12 bytes. A plugin must check the size
  * before it reads the fields that follow.
@@ -24,6 +28,8 @@
  *   SV_EVENT_OBJECT_GONE  object (a reference that no longer resolves), value the type and extra the color. Posted when the
  *                   game removes a vehicle at the end of its life
  *   SV_EVENT_ITEM   human and player, item, value the slot, extra 1 when the item went into the slot and 0 when it left
+ *   SV_EVENT_ACCOUNT_SAVE  uses SvAccountSaveEvent below, with the account and the reason for the notice.
+ *                   The disconnect update does not write the account file. Subscribe with SV_EVENT_EXT_BIT(0).
  *
  * The host gives these records at a safe point, before the tick event, in the order in which they happened. The full
  * API is available in the callback. See docs/plugin-events.md. */
@@ -35,6 +41,14 @@ typedef struct {
     SvEntity item, object;
     int32_t value, extra;
 } SvGameEvent;
+
+/* A notice after the save. Only reason SV_ACCOUNT_SAVE_DISK means that the data reached disk.
+ * SV_ACCOUNT_SAVE_DISCONNECT follows the account update in memory at disconnect, without a disk write. */
+typedef struct {
+    SvEvent base;
+    SvEntity account;
+    uint32_t reason;
+} SvAccountSaveEvent;
 
 /* A chat text: the player that typed it and the text, at most 63 bytes. It is a decision at a safe point. The plugin
  * answers SV_OK to let the text go to the chat, or SV_DENIED to drop it. A text that starts with "/" is a command, and the

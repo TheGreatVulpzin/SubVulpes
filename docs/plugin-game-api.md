@@ -395,3 +395,17 @@ Bots and players without a connection return `SV_NOT_FOUND`. Invalid connection 
 Plugins must restrict address disclosure to administrators. The fixture checks copies, bounds, bots and missing connections. No client playtest ran.
 
 Removal proofs for the snapshot size and connection count fail the game API test. The source is restored before final checks.
+
+## Account save notice (R6)
+
+`SV_EVENT_ACCOUNT_SAVE` is `SV_EVENT_EXT(0)`. Subscribe with `SV_EVENT_EXT_BIT(0)` and read `SvAccountSaveEvent.account` and its final field, `reason`.
+Reason 0 (`SV_ACCOUNT_SAVE_DISK`) follows the bulk disk save after every write and the file close succeed.
+The bulk save posts one notice per account. Failed saves post no notice. Only reason 0 means the data reached disk.
+A plugin that needs a disk write must use reason 0.
+Reason 1 (`SV_ACCOUNT_SAVE_DISCONNECT`) follows the existing money update at disconnect in `deleteplayer`. It saves to memory only.
+There is no single-account disk save in this core. A disconnect notice does not promise disk persistence.
+Notices enter the normal queue and run at a safe point. An account reference can be stale at delivery.
+The fixture checks the closed file, failed writes, failed opens and the disconnect update. No client playtest ran.
+No short test room case exists because the write API does not request an account save.
+
+An account read at delivery returns the current state, which can include later changes.

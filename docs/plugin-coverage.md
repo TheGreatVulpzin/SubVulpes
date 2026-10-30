@@ -49,7 +49,7 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | N26 | Request to reset the round | The rows for state and timers exist. |
 | N27 | Road graph query | The data is `g_city.intersections` and `g_city.roads`. |
 | N29 | Human health above 100 | The packet clamps the sent health to 117. |
-| N33 | Account save event | The other events of N33 exist. |
+| N33 | Account save event, done | `SV_EVENT_ACCOUNT_SAVE` follows a bulk file save or the disconnect update in memory. |
 | N40 | Block edits | Mark "client effect unknown". |
 | N41 | Timers and a random generator for each plugin | See the first item of the list of missing features. |
 | N45 | Possess a bot | Links on both sides. |
@@ -120,3 +120,17 @@ Bots and players without a connection return `SV_NOT_FOUND`. Invalid connection 
 Plugins must restrict address disclosure to administrators. The fixture checks copies, bounds, bots and missing connections. No client playtest ran.
 
 Removal proofs for the snapshot size and connection count fail the game API test. The source is restored before final checks.
+
+## Account save notice (R6)
+
+`SV_EVENT_ACCOUNT_SAVE` is `SV_EVENT_EXT(0)`. Subscribe with `SV_EVENT_EXT_BIT(0)` and read `SvAccountSaveEvent.account` and its final field, `reason`.
+Reason 0 (`SV_ACCOUNT_SAVE_DISK`) follows the bulk disk save after every write and the file close succeed.
+The bulk save posts one notice per account. Failed saves post no notice. Only reason 0 means the data reached disk.
+A plugin that needs a disk write must use reason 0.
+Reason 1 (`SV_ACCOUNT_SAVE_DISCONNECT`) follows the existing money update at disconnect in `deleteplayer`. It saves to memory only.
+There is no single-account disk save in this core. A disconnect notice does not promise disk persistence.
+Notices enter the normal queue and run at a safe point. An account reference can be stale at delivery.
+The fixture checks the closed file, failed writes, failed opens and the disconnect update. No client playtest ran.
+No short test room case exists because the write API does not request an account save.
+
+An account read at delivery returns the current state, which can include later changes.

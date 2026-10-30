@@ -17,7 +17,9 @@ static uint32_t pid_godmode, pid_admin, pid_team, pid_health, pid_bleeding, pid_
     pid_object_velocity;
 static SvOwner plugin_owner;
 static SvEntity player, human, item, object, account;
-static uint32_t stage;
+static uint32_t stage, account_saves;
+static SvEntity saved_account;
+static uint32_t saved_reason;
 static uint64_t reset_sequence;
 static int runtime_probe;
 /* What the fixture saw of the game events. */
@@ -917,6 +919,28 @@ static SvResult SV_CALL connection_command(SvOwner owner, uint64_t actor, const 
     return SV_OK;
 }
 
+static SvResult SV_CALL account_save_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    SvAccountState state = { sizeof state };
+    (void)owner;
+    (void)actor;
+    if (!strcmp(arguments, "clear")) {
+        account_saves = 0;
+        saved_account = 0;
+        saved_reason = UINT32_MAX;
+    } else if (!strcmp(arguments, "bulk")) {
+        CHECK(account_saves == 1 && saved_account && saved_reason == SV_ACCOUNT_SAVE_DISK);
+        CHECK(game->account(owner, saved_account, &state) == SV_OK);
+    } else if (!strcmp(arguments, "leave")) {
+        CHECK(account_saves == 1 && game->account(owner, saved_account, &state) == SV_OK && state.money == 321 && saved_reason == SV_ACCOUNT_SAVE_DISCONNECT);
+    } else if (!strcmp(arguments, "stale")) {
+        CHECK(account_saves == 1 && saved_account && game->account(owner, saved_account, &state) == SV_NOT_FOUND);
+    } else {
+        CHECK(account_saves == 0);
+    }
+    return SV_OK;
+}
+
 static int bone_mass_checks(SvOwner owner)
 {
     uint32_t id, slot;
@@ -1243,6 +1267,14 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
 {
     const SvGameEvent *record = (const SvGameEvent *)event;
     SvHumanState h = { sizeof h };
+    if (event->kind == SV_EVENT_ACCOUNT_SAVE) {
+        const SvAccountSaveEvent *save = (const SvAccountSaveEvent *)event;
+        CHECK(event->size == sizeof *save && save->account && save->reason <= SV_ACCOUNT_SAVE_DISCONNECT);
+        ++account_saves;
+        saved_account = save->account;
+        saved_reason = save->reason;
+        return SV_OK;
+    }
     if (event->kind == SV_EVENT_DAMAGE) {
         /* A decision inside the simulation. The amounts 77, 55, 66, 67, 88 and 5 are the ones that the test program uses. The
          * record is writable, and new_amount is the only field that the fixture writes. */
@@ -1511,6 +1543,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(change->message(owner, SV_MESSAGE_SERVER, "before ready") == SV_STATE);
     CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
     CHECK(host->command(owner, "connectioncheck", SV_COMMAND_LOCAL, connection_command) == SV_OK);
+    CHECK(host->command(owner, "accountsavecheck", SV_COMMAND_LOCAL, account_save_command) == SV_OK);
     CHECK(host->command(owner, "echo", SV_COMMAND_PUBLIC, echo_command) == SV_OK);
     CHECK(host->command(owner, "secret", SV_COMMAND_ADMIN, secret_command) == SV_OK);
     CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);
@@ -1522,7 +1555,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(host->get_api(owner, SV_API_GAME_READ, UINT32_MAX, &table) == SV_INCOMPATIBLE && table == NULL);
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, NULL) == SV_INVALID);
     CHECK(host->subscribe(owner, 0x80000000u, tick) == SV_INVALID && host->subscribe(owner, SV_EVENT_TICK | 0x1000000u, tick) == SV_INVALID);
-    return host->subscribe(owner, SV_EVENT_EXT_BIT(31) |
+    return host->subscribe(owner, SV_EVENT_EXT_BIT(0) | SV_EVENT_EXT_BIT(31) |
         SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE |
         SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT |
         SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM, tick);

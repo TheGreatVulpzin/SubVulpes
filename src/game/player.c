@@ -56,8 +56,10 @@ void deleteplayer(int player)
     playersellstock(player, p->stocks);
     if ((uint32_t)player < 256)
         playersellstock(player, p->stocks);
-    if ((sr_game.gametype == 3 || sr_game.gametype == 4) && p->account != -1)
+    if ((sr_game.gametype == 3 || sr_game.gametype == 4) && p->account != -1) {
         sr_accounts[p->account].money = p->money;
+        sv_game_event_account_save(p->account, SV_ACCOUNT_SAVE_DISCONNECT);
+    }
     for (team = 0; team < 5; ++team) {
         int *manager = (int *)TEAM_FIELD(team0_manager, team);
         if (*manager == player)

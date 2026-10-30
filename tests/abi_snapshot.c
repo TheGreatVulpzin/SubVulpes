@@ -27,6 +27,7 @@
 int main(void)
 {
     _Static_assert(sizeof(void *) == 4, "Build the ABI snapshot for x86");
+    _Static_assert(SV_ACCOUNT_SAVE_DISK == 0 && SV_ACCOUNT_SAVE_DISCONNECT == 1, "Keep the account save reason codes");
     RECORD(SvStatus);
     RECORD(SvEvent);
     RECORD(SvHost);
@@ -51,6 +52,7 @@ int main(void)
     RECORD(SvPropInfo);
     RECORD(SvGameProps);
     RECORD(SvGameEvent);
+    RECORD(SvAccountSaveEvent);
     RECORD(SvChatEvent);
     RECORD(SvDamageEvent);
     RECORD(SvAiThreat);
@@ -95,5 +97,7 @@ int main(void)
     TABLE(SvGameSettings, describe, set, 3);
     TABLE(SvGameShop, phone, catalog_replace, 4);
     TABLE(SvGameStorage, get, erase, 3);
+    printf("SV_EVENT_ACCOUNT_SAVE kind=%u bit=%llu\n", SV_EVENT_ACCOUNT_SAVE, (unsigned long long)SV_EVENT_EXT_BIT(0));
+    printf("SvAccountSaveEvent reason=%zu\n", offsetof(SvAccountSaveEvent, reason));
     return 0;
 }

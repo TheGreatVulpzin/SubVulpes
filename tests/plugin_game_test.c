@@ -1312,6 +1312,72 @@ static void connection_checks(void)
     CHECK(!sv_plugins_failed());
 }
 
+static size_t __cdecl failed_account_write(void *data, size_t size, size_t count, void *file)
+{
+    (void)data;
+    (void)size;
+    (void)count;
+    (void)file;
+    return 0;
+}
+
+static void account_save_checks(void)
+{
+    SrFileTransfer saved_write = sr_data_file_write;
+    int count = sr_numofaccounts, mode = sr_game.gametype, player, other;
+    FILE *file;
+    int version, key, accounts, ids[2], money;
+    char name[32];
+    sv_entity_created(SV_ENTITY_ACCOUNT, 0);
+    CHECK(checked_command("accountsavecheck clear"));
+    sr_data_file_write = (SrFileTransfer)fwrite;
+    sr_numofaccounts = 1;
+    saveaccountsserver();
+    CHECK(sv_events_pending() == 1);
+    /* The file is closed before the notice is delivered. Read its account value before the callback. */
+    file = fopen("user/server.srk", "rb");
+    CHECK(file && fread(&version, 4, 1, file) == 1 && version == 3);
+    CHECK(fread(&key, 4, 1, file) == 1 && fread(&accounts, 4, 1, file) == 1 && accounts == 1);
+    CHECK(fread(ids, 4, 2, file) == 2 && fread(name, 1, 32, file) == 32 && fread(&money, 4, 1, file) == 1);
+    CHECK(money == sr_accounts[0].money && fclose(file) == 0);
+    sv_plugins_tick();
+    CHECK(checked_command("accountsavecheck bulk"));
+    CHECK(checked_command("accountsavecheck clear"));
+    sr_data_file_write = failed_account_write;
+    saveaccountsserver();
+    CHECK(sv_events_pending() == 0);
+    sr_data_file_write = (SrFileTransfer)fwrite;
+    CHECK(remove("user/server.srk") == 0 && CreateDirectoryA("user/server.srk", NULL));
+    saveaccountsserver();
+    CHECK(sv_events_pending() == 0 && RemoveDirectoryA("user/server.srk"));
+    sr_numofaccounts = count;
+    sr_game.gametype = 3;
+    player = createplayer();
+    sr_players[player].account_id[0] = 991;
+    sr_players[player].account_id[1] = 992;
+    other = createaccount(player);
+    CHECK(other >= 1);
+    sr_players[player].account = other;
+    sr_players[player].money = 321;
+    deleteplayer(player);
+    CHECK(sr_accounts[other].money == 321);
+    sv_plugins_tick();
+    CHECK(checked_command("accountsavecheck leave"));
+    CHECK(checked_command("accountsavecheck clear"));
+    sv_game_event_account_save(-1, SV_ACCOUNT_SAVE_DISK);
+    sv_game_event_account_save(SR_MAX_ACCOUNT, SV_ACCOUNT_SAVE_DISK);
+    CHECK(sv_events_pending() == 0);
+    CHECK(checked_command("accountsavecheck clear"));
+    sv_game_event_account_save(0, SV_ACCOUNT_SAVE_DISK);
+    sv_entity_deleted(SV_ENTITY_ACCOUNT, 0);
+    sv_plugins_tick();
+    CHECK(checked_command("accountsavecheck stale"));
+    sv_entity_created(SV_ENTITY_ACCOUNT, 0);
+    sr_game.gametype = mode;
+    sr_data_file_write = saved_write;
+    CHECK(!sv_plugins_failed());
+}
+
 int main(int argc, char **argv)
 {
     SvEntity old;
@@ -1425,6 +1491,7 @@ int main(int argc, char **argv)
     CHECK(sv_game_read.world(1, &(SvWorldState){ sizeof(SvWorldState) }) == SV_STATE);
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
+    account_save_checks();
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);

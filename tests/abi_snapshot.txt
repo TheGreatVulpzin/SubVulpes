@@ -22,6 +22,7 @@ SvValue size=12
 SvPropInfo size=72
 SvGameProps size=28
 SvGameEvent size=80
+SvAccountSaveEvent size=32
 SvChatEvent size=152
 SvDamageEvent size=56
 SvAiThreat size=32
@@ -66,3 +67,5 @@ SvGameMission functions=3 prefix=0 first=slots:8 last=cancel:16
 SvGameSettings functions=3 prefix=0 first=describe:8 last=set:16
 SvGameShop functions=4 prefix=0 first=phone:8 last=catalog_replace:20
 SvGameStorage functions=3 prefix=0 first=get:8 last=erase:16
+SV_EVENT_ACCOUNT_SAVE kind=2147483648 bit=4294967296
+SvAccountSaveEvent reason=24

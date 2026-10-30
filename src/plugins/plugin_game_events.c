@@ -50,6 +50,21 @@ void sv_game_event_leave(int player)
     sv_events_post(SV_EVENT_LEAVE, now(), sv_entity_at(SV_ENTITY_PLAYER, player), 0, 0);
 }
 
+void sv_game_event_account_save(int account, int reason)
+{
+    SvAccountSaveEvent event = {0};
+    if (!sv_plugins_wants(SV_EVENT_ACCOUNT_SAVE))
+        return;
+    event.account = sv_entity_at(SV_ENTITY_ACCOUNT, account);
+    if (!event.account)
+        return;
+    event.reason = (uint32_t)reason;
+    event.base.size = sizeof event;
+    event.base.kind = SV_EVENT_ACCOUNT_SAVE;
+    event.base.tick = now();
+    sv_events_post_record(&event.base);
+}
+
 void sv_game_event_hit(int human, int owner)
 {
     if (human < 0 || human >= SR_MAX_HUMAN)

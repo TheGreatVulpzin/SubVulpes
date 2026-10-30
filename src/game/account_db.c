@@ -1,6 +1,7 @@
 /* Account names and account files. */
 #include "player.h"
 #include "plugin_entities.h"
+#include "plugin_game_events.h"
 #include "sv_game_settings.h"
 
 #include <stdio.h>
@@ -77,25 +78,29 @@ int createaccount(int player)
 
 void saveaccountsserver(void)
 {
-    int version = 3, i;
+    int version = 3, i, saved = 1;
     g_parser.file = os_fopen("user/server.srk", "wb");
     if (!g_parser.file)
         return;
-    game_fwrite(&version, 4, 1, g_parser.file);
-    game_fwrite(&sr_account_key, 4, 1, g_parser.file);
-    game_fwrite(&sr_numofaccounts, 4, 1, g_parser.file);
+    saved &= game_fwrite(&version, 4, 1, g_parser.file) == 1;
+    saved &= game_fwrite(&sr_account_key, 4, 1, g_parser.file) == 1;
+    saved &= game_fwrite(&sr_numofaccounts, 4, 1, g_parser.file) == 1;
     for (i = 0; i < sr_numofaccounts; ++i) {
         Account *a = &sr_accounts[i];
-        game_fwrite(&a->id[0], 4, 1, g_parser.file);
-        game_fwrite(&a->id[1], 4, 1, g_parser.file);
-        game_fwrite(a->name, 1, 32, g_parser.file);
-        game_fwrite(&a->money, 4, 1, g_parser.file);
-        game_fwrite(&a->playtime, 4, 1, g_parser.file);
-        game_fwrite(&a->look_a, 4, 1, g_parser.file);
-        game_fwrite(&a->look_b, 4, 1, g_parser.file);
-        game_fwrite(&a->look_c, 4, 1, g_parser.file);
+        saved &= game_fwrite(&a->id[0], 4, 1, g_parser.file) == 1;
+        saved &= game_fwrite(&a->id[1], 4, 1, g_parser.file) == 1;
+        saved &= game_fwrite(a->name, 1, 32, g_parser.file) == 32;
+        saved &= game_fwrite(&a->money, 4, 1, g_parser.file) == 1;
+        saved &= game_fwrite(&a->playtime, 4, 1, g_parser.file) == 1;
+        saved &= game_fwrite(&a->look_a, 4, 1, g_parser.file) == 1;
+        saved &= game_fwrite(&a->look_b, 4, 1, g_parser.file) == 1;
+        saved &= game_fwrite(&a->look_c, 4, 1, g_parser.file) == 1;
     }
-    os_fclose(g_parser.file);
+    if (os_fclose(g_parser.file) != 0)
+        saved = 0;
+    if (saved)
+        for (i = 0; i < sr_numofaccounts; ++i)
+            sv_game_event_account_save(i, SV_ACCOUNT_SAVE_DISK);
 }
 
 void saveaccountsclient(void)
