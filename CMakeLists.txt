@@ -162,6 +162,11 @@ if(BUILD_TESTING)
     add_dependencies(jukebox-host-test sv-jukebox)
     add_test(NAME jukebox-playback COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/jukebox_playback_test.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME jukebox-scenario COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/jukebox_scenario_test.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME jukebox-sdk COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/jukebox_sdk_test.py" "${CMAKE_BINARY_DIR}")
+
     add_executable(jukebox-midi-test tests/jukebox_midi_driver.c plugins/jukebox/midi.c)
     target_include_directories(jukebox-midi-test PRIVATE plugins/jukebox)
     target_compile_definitions(jukebox-midi-test PRIVATE _CRT_SECURE_NO_WARNINGS)
