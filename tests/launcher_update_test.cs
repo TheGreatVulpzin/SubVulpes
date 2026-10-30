@@ -243,6 +243,82 @@ namespace SubVulpes
             }
         }
 
+        static void CheckNavigationModes()
+        {
+            string testBase = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tests"));
+            string root = Path.Combine(testBase, "navigation-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string file = Path.Combine(root, "launcher.ini");
+            File.WriteAllText(file, "server_folder=C:\\Test-server\r\n");
+            try {
+                using (var navigation = new LauncherNavigation(new KeyFile(file))) {
+                    navigation.Size = new System.Drawing.Size(800, 500);
+                    var server = new System.Windows.Forms.TabPage("Server");
+                    var settings = new System.Windows.Forms.TabPage("Server settings");
+                    var debug = new System.Windows.Forms.TabPage("Debug");
+                    var draft = new System.Windows.Forms.TextBox { Text = "Unsaved server name" };
+                    var nested = new System.Windows.Forms.TabControl();
+                    nested.TabPages.Add("Test"); nested.TabPages.Add("Captures"); nested.SelectedIndex = 1;
+                    debug.Controls.Add(nested); settings.Controls.Add(draft);
+                    navigation.TabPages.AddRange(new[] { server, settings, debug });
+                    navigation.SelectedTab = settings;
+                    navigation.CreateControl();
+                    if (navigation.Sidebar || navigation.Alignment != System.Windows.Forms.TabAlignment.Top)
+                        throw new Exception("Navigation must default to tabs.");
+                    for (int i = 0; i < 4; i++) {
+                        navigation.Sidebar = true;
+                        var side = navigation.GetTabRect(0);
+                        if (navigation.Alignment != System.Windows.Forms.TabAlignment.Left ||
+                            side.Width < 120 || side.Height < navigation.Font.Height || side.Width <= side.Height)
+                            throw new Exception("Sidebar labels lost their horizontal layout: " + side);
+                        if (navigation.SelectedTab != settings || settings.Controls[0] != draft ||
+                            draft.Text != "Unsaved server name" || navigation.TabPages.Count != 3 ||
+                            nested.Alignment != System.Windows.Forms.TabAlignment.Top || nested.SelectedIndex != 1)
+                            throw new Exception("Switching main navigation lost page state or changed nested tabs.");
+                        navigation.Sidebar = false;
+                        var tab = navigation.GetTabRect(0);
+                        if (navigation.Alignment != System.Windows.Forms.TabAlignment.Top ||
+                            tab.Height < navigation.Font.Height || tab.Height >= side.Height ||
+                            navigation.SelectedTab != settings || draft.Text != "Unsaved server name")
+                            throw new Exception("Returning to tabs lost layout or the active draft: " + tab);
+                    }
+                    settings.Text = "Server settings *";
+                    navigation.Sidebar = true;
+                    if (navigation.SelectedTab != settings || settings.Text != "Server settings *")
+                        throw new Exception("The unsaved-page label changed page identity.");
+                    using (var restarted = new LauncherNavigation(new KeyFile(file))) {
+                        if (!restarted.Sidebar || restarted.Alignment != System.Windows.Forms.TabAlignment.Left)
+                            throw new Exception("The saved sidebar preference did not survive restart.");
+                    }
+                    navigation.SelectedTab = server;
+                    navigation.TabPages.Remove(debug);
+                    navigation.Sidebar = false;
+                    if (navigation.TabPages.Contains(debug) || navigation.SelectedTab != server)
+                        throw new Exception("Hidden Debug returned while switching navigation.");
+                    navigation.TabPages.Add(debug);
+                    navigation.Sidebar = true;
+                    if (navigation.TabPages.Count != 3 || navigation.SelectedTab != server)
+                        throw new Exception("Restoring Debug duplicated or changed pages.");
+                }
+                if (new KeyFile(file).Get("server_folder", "") != "C:\\Test-server")
+                    throw new Exception("Saving navigation changed an unrelated launcher setting.");
+                File.WriteAllText(file, "navigation=unknown\r\n");
+                string original = File.ReadAllText(file);
+                using (var fallback = new LauncherNavigation(new KeyFile(file))) {
+                    if (fallback.Sidebar || fallback.Alignment != System.Windows.Forms.TabAlignment.Top)
+                        throw new Exception("Unknown navigation preferences must fall back to tabs.");
+                }
+                if (File.ReadAllText(file) != original)
+                    throw new Exception("Reading a navigation preference changed the settings file.");
+            } finally {
+                string resolved = Path.GetFullPath(root);
+                if (!resolved.StartsWith(testBase.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase) ||
+                    !Path.GetFileName(resolved).StartsWith("navigation-", StringComparison.Ordinal))
+                    throw new IOException("The navigation cleanup path leaves the test directory.");
+                Directory.Delete(resolved, true);
+            }
+        }
+
         [STAThread]
         static int Main()
         {
@@ -281,7 +357,8 @@ namespace SubVulpes
             CheckAdminPassword();
             CheckPluginMetadata();
             CheckPluginApproval();
-            Console.WriteLine("Launcher update, backup, admin password and plugin metadata checks passed.");
+            CheckNavigationModes();
+            Console.WriteLine("Launcher update, backup, admin password, plugin metadata and navigation checks passed.");
         }
     }
 }

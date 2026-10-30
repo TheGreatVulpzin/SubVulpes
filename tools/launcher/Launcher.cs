@@ -287,6 +287,68 @@ namespace SubVulpes
         }
     }
 
+    internal sealed class LauncherNavigation : TabControl
+    {
+        readonly KeyFile settings;
+        bool sidebar;
+
+        internal LauncherNavigation(KeyFile settings)
+        {
+            if (settings == null) throw new ArgumentNullException("settings");
+            this.settings = settings;
+            Name = "mainNavigation";
+            AccessibleName = "Main navigation";
+            Dock = DockStyle.Fill;
+            Font = SystemFonts.MessageBoxFont;
+            SetSidebar(settings.Get("navigation", "tabs") == "sidebar", false);
+        }
+
+        internal bool Sidebar
+        {
+            get { return sidebar; }
+            set { SetSidebar(value, true); }
+        }
+
+        void SetSidebar(bool value, bool save)
+        {
+            if (sidebar == value) return;
+            TabPage selected = SelectedTab;
+            SuspendLayout();
+            try {
+                sidebar = value;
+                Alignment = value ? TabAlignment.Left : TabAlignment.Top;
+                Multiline = value;
+                DrawMode = value ? TabDrawMode.OwnerDrawFixed : TabDrawMode.Normal;
+                SizeMode = value ? TabSizeMode.Fixed : TabSizeMode.Normal;
+                ItemSize = value
+                    ? new Size(Math.Max(28, Font.Height + 14),
+                        Math.Max(144, TextRenderer.MeasureText("Launcher settings *", Font).Width + 24))
+                    : new Size(0, Font.Height + 8);
+                if (selected != null && TabPages.Contains(selected)) SelectedTab = selected;
+            } finally { ResumeLayout(true); }
+            Invalidate();
+            if (save) {
+                settings.Set("navigation", value ? "sidebar" : "tabs");
+                settings.Save();
+            }
+        }
+
+        protected override void OnDrawItem(DrawItemEventArgs e)
+        {
+            if (!sidebar) { base.OnDrawItem(e); return; }
+            if (e.Index < 0 || e.Index >= TabPages.Count) return;
+            bool selected = SelectedIndex == e.Index;
+            Color background = selected ? SystemColors.Highlight : SystemColors.Control;
+            Color foreground = selected ? SystemColors.HighlightText : SystemColors.ControlText;
+            using (var brush = new SolidBrush(background)) e.Graphics.FillRectangle(brush, e.Bounds);
+            Rectangle text = Rectangle.Inflate(e.Bounds, -10, -2);
+            TextRenderer.DrawText(e.Graphics, TabPages[e.Index].Text, Font, text, foreground,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            if (Focused && selected)
+                ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(e.Bounds, -3, -3), foreground, background);
+        }
+    }
+
     class LauncherForm : Form
     {
         static readonly Regex TicksLine = new Regex(@"^Server status: ([0-9.]+) ticks/s, (\d+) players, (\d+) bots$");
@@ -357,7 +419,7 @@ namespace SubVulpes
         bool settingCaptures;
 
         // Frame
-        TabControl mainTabs;
+        LauncherNavigation mainTabs;
         readonly Dictionary<string, TabPage> pages = new Dictionary<string, TabPage>();
         string serverState = "Stopped", speedStatus = "- ticks/s", playersStatus = "- players";
         Label message, serverStatus, missingText;
@@ -425,7 +487,7 @@ namespace SubVulpes
             DragEnter += (s, e) => { if (ZipOf(e) != null) e.Effect = DragDropEffects.Copy; };
             DragDrop += async (s, e) => { string zip = ZipOf(e); if (zip != null) await InstallUpdate(zip); };
 
-            mainTabs = new TabControl { Dock = DockStyle.Fill };
+            mainTabs = new LauncherNavigation(settings);
             message = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(8, 4, 8, 4) };
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(4) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -574,6 +636,22 @@ namespace SubVulpes
             folderRow.Controls.Add(folderBox, 1, 0);
             folderRow.Controls.Add(browseButton, 2, 0);
             page.Controls.Add(folderRow);
+            var navigationRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 0, 0, 8) };
+            navigationRow.Controls.Add(new Label { Text = "Navigation", AutoSize = true, Margin = new Padding(3, 7, 12, 3) });
+            var navigationMode = new ComboBox { Name = "mainNavigationMode", AccessibleName = "Navigation mode",
+                DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+            navigationMode.Items.AddRange(new object[] { "Tabs", "Sidebar" });
+            navigationMode.SelectedIndex = mainTabs.Sidebar ? 1 : 0;
+            navigationMode.SelectedIndexChanged += delegate {
+                bool restoreFocus = navigationMode.Focused;
+                try {
+                    mainTabs.Sidebar = navigationMode.SelectedIndex == 1;
+                    message.Text = "Navigation: " + navigationMode.SelectedItem + ".";
+                } catch (Exception ex) { message.Text = "Cannot save the navigation choice: " + ex.Message; }
+                if (restoreFocus) navigationMode.Focus();
+            };
+            navigationRow.Controls.Add(navigationMode);
+            page.Controls.Add(navigationRow);
             var updates = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 0, 0, 8) };
             checkUpdate = new Button { Text = "Check for updates", AutoSize = true };
             checkUpdate.Click += async delegate { await CheckForUpdates(); };
