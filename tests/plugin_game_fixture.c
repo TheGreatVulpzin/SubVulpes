@@ -927,8 +927,7 @@ static SvResult SV_CALL account_save_command(SvOwner owner, uint64_t actor, cons
         saved_account = 0;
         saved_reason = UINT32_MAX;
     } else if (!strcmp(arguments, "bulk")) {
-        CHECK(account_saves == 1 && saved_account && saved_reason == SV_ACCOUNT_SAVE_DISK);
-        CHECK(game->account(owner, saved_account, &state) == SV_OK);
+        CHECK(account_saves == 1 && saved_account == 0 && saved_reason == SV_ACCOUNT_SAVE_DISK);
     } else if (!strcmp(arguments, "leave")) {
         CHECK(account_saves == 1 && game->account(owner, saved_account, &state) == SV_OK && state.money == 321 && saved_reason == SV_ACCOUNT_SAVE_DISCONNECT);
     } else if (!strcmp(arguments, "stale")) {
@@ -1269,7 +1268,8 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
     SvHumanState h = { sizeof h };
     if (event->kind == SV_EVENT_ACCOUNT_SAVE) {
         const SvAccountSaveEvent *save = (const SvAccountSaveEvent *)event;
-        CHECK(event->size == sizeof *save && save->account && save->reason <= SV_ACCOUNT_SAVE_DISCONNECT);
+        CHECK(event->size == sizeof *save && save->reason <= SV_ACCOUNT_SAVE_DISCONNECT &&
+            (save->reason == SV_ACCOUNT_SAVE_DISK ? save->account == 0 : save->account != 0));
         ++account_saves;
         saved_account = save->account;
         saved_reason = save->reason;

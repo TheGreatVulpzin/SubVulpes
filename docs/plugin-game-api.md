@@ -400,7 +400,7 @@ Removal proofs for the snapshot size and connection count fail the game API test
 
 `SV_EVENT_ACCOUNT_SAVE` is `SV_EVENT_EXT(0)`. Subscribe with `SV_EVENT_EXT_BIT(0)` and read `SvAccountSaveEvent.account` and its final field, `reason`.
 Reason 0 (`SV_ACCOUNT_SAVE_DISK`) follows the bulk disk save after every write and the file close succeed.
-The bulk save posts one notice per account. Failed saves post no notice. Only reason 0 means the data reached disk.
+The bulk save posts one notice for all accounts, with `account = 0`. Failed saves post no notice. Only reason 0 means the data reached disk.
 A plugin that needs a disk write must use reason 0.
 Reason 1 (`SV_ACCOUNT_SAVE_DISCONNECT`) follows the existing money update at disconnect in `deleteplayer`. It saves to memory only.
 There is no single-account disk save in this core. A disconnect notice does not promise disk persistence.
@@ -409,3 +409,7 @@ The fixture checks the closed file, failed writes, failed opens and the disconne
 No short test room case exists because the write API does not request an account save.
 
 An account read at delivery returns the current state, which can include later changes.
+
+The disk notice covers all accounts, including an empty account list. Disconnect notices carry one account reference.
+`os_fclose` forwards `fclose` and returns 0 on success. The `!= 0` check rejects a failed close.
+The flood test saves 2,000 accounts and checks one disk notice, with an earlier queued event intact and no loss notice.

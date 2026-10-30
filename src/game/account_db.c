@@ -99,8 +99,7 @@ void saveaccountsserver(void)
     if (os_fclose(g_parser.file) != 0)
         saved = 0;
     if (saved)
-        for (i = 0; i < sr_numofaccounts; ++i)
-            sv_game_event_account_save(i, SV_ACCOUNT_SAVE_DISK);
+        sv_game_event_account_save(0, SV_ACCOUNT_SAVE_DISK);
 }
 
 void saveaccountsclient(void)

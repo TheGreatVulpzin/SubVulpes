@@ -42,8 +42,8 @@ typedef struct {
     int32_t value, extra;
 } SvGameEvent;
 
-/* A notice after the save. Only reason SV_ACCOUNT_SAVE_DISK means that the data reached disk.
- * SV_ACCOUNT_SAVE_DISCONNECT follows the account update in memory at disconnect, without a disk write. */
+/* One notice after the bulk save: SV_ACCOUNT_SAVE_DISK means all accounts reached disk and account is 0.
+ * SV_ACCOUNT_SAVE_DISCONNECT follows one account update in memory at disconnect. It carries that account reference. */
 typedef struct {
     SvEvent base;
     SvEntity account;

@@ -3,8 +3,6 @@
 
 #include "sv_game_events.h"
 
-#include "sv_game_events.h"
-
 /* The places where the game posts events for plugins. Each function does a few array reads and a queue post, and it
  * does nothing else when no plugin asked for the event. See docs/plugin-events.md. */
 
@@ -14,7 +12,7 @@ void sv_game_event_spawn(int player, int human);
 void sv_game_event_death(int human);
 /* A player slot was released: a connection ended, or a bot went. The reference no longer resolves at delivery. */
 void sv_game_event_leave(int player);
-/* The account save completed. The reference is captured now and can be stale at delivery. */
+/* A disk save covers all accounts and uses account 0. A disconnect captures one account reference. */
 void sv_game_event_account_save(int account, int reason);
 /* A bullet of this player hit this human and did damage. */
 void sv_game_event_hit(int human, int owner);

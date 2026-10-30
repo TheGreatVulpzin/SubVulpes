@@ -55,9 +55,11 @@ void sv_game_event_account_save(int account, int reason)
     SvAccountSaveEvent event = {0};
     if (!sv_plugins_wants(SV_EVENT_ACCOUNT_SAVE))
         return;
-    event.account = sv_entity_at(SV_ENTITY_ACCOUNT, account);
-    if (!event.account)
-        return;
+    if (reason == SV_ACCOUNT_SAVE_DISCONNECT) {
+        event.account = sv_entity_at(SV_ENTITY_ACCOUNT, account);
+        if (!event.account)
+            return;
+    }
     event.reason = (uint32_t)reason;
     event.base.size = sizeof event;
     event.base.kind = SV_EVENT_ACCOUNT_SAVE;
