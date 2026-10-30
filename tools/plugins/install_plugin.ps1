@@ -2,12 +2,14 @@
 param([Parameter(Mandatory=$true)][string]$ServerDir,
       [Parameter(Mandatory=$true)][string]$Package,
       [switch]$Inspect,
-      [string]$ExpectedPackageHash)
+      [string]$ExpectedPackageHash,
+      [switch]$ServerInspect)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+if ($ServerInspect -and -not $Inspect) { throw 'ServerInspect requires Inspect.' }
 
 function Assert-Plain([string]$Path) {
     $candidate = [IO.Path]::GetFullPath($Path)
@@ -229,6 +231,34 @@ try {
     [byte[]]$dllBytes = Read-Entry $names[$manifest.Library] 67108864
     Assert-Dll $dllBytes
 } finally { $zip.Dispose() }
+
+if ($Inspect -and $ServerInspect) {
+    # The server owns manifest rules and review text. Reuse the checked package bytes.
+    $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+    $reviewStage = Join-Path $tempParent ('sv-inspect-' + [Guid]::NewGuid().ToString('N'))
+    try {
+        Assert-Plain $tempParent
+        [IO.Directory]::CreateDirectory($reviewStage) | Out-Null
+        Assert-Plain $reviewStage
+        [IO.File]::WriteAllBytes((Join-Path $reviewStage 'plugin.ini'), $manifestBytes)
+        [IO.File]::WriteAllBytes((Join-Path $reviewStage $manifest.Library), $dllBytes)
+        $inspector = Join-Path $serverRoot 'subvulpes_server.exe'
+        Assert-Plain $inspector
+        & $inspector --plugin-inspect-folder $reviewStage
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } finally {
+        $resolvedStage = [IO.Path]::GetFullPath($reviewStage)
+        if ([IO.Path]::GetDirectoryName($resolvedStage) -ine $tempParent -or
+            [IO.Path]::GetFileName($resolvedStage) -cnotmatch '^sv-inspect-[0-9a-f]{32}$') {
+            throw 'The inspection cleanup path is outside its temp folder.'
+        }
+        if (Test-Path -LiteralPath $resolvedStage) {
+            Assert-Plain $resolvedStage
+            Remove-Item -LiteralPath $resolvedStage -Recurse -Force
+        }
+    }
+    return
+}
 
 if ($Inspect) {
     $algorithm = [Security.Cryptography.SHA256]::Create()

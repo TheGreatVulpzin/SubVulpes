@@ -40,6 +40,8 @@ set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 include(tools/sdk/sv_plugin.cmake)
 sv_add_plugin(sv-status ID sv.status MANIFEST "${CMAKE_SOURCE_DIR}/plugins/status/plugin.ini"
     SOURCES plugins/status/status.c OFFICIAL)
+# Package inspection uses the installer shipped beside the server.
+configure_file(tools/plugins/install_plugin.ps1 "${CMAKE_BINARY_DIR}/install_plugin.ps1" COPYONLY)
 configure_file(plugins/plugins.ini "${CMAKE_BINARY_DIR}/plugins/plugins.ini" COPYONLY)
 # The official list, the declared official plugins and the default profile must agree.
 get_property(SV_OFFICIAL_IDS GLOBAL PROPERTY SV_OFFICIAL_PLUGIN_IDS)
@@ -140,6 +142,8 @@ if(BUILD_TESTING)
         "${CMAKE_SOURCE_DIR}/tests/sdk/test_runtime_download.py")
     add_test(NAME plugin-lifecycle COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_plugins.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME plugin-inspect COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/sdk_inspect_test.py" "${CMAKE_BINARY_DIR}")
     add_test(NAME manifest-rules COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_manifest.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c

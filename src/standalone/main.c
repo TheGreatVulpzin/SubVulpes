@@ -21,6 +21,7 @@
 
 
 void __cdecl sr_getpaths(void);
+int sv_plugin_inspect_cli(int argc, char **argv);
 
 /* ------------------------------------------------------------ console and log */
 
@@ -316,6 +317,9 @@ int main(int argc, char **argv)
         }
     }
     if (argc > 1) {
+        cli = sv_plugin_inspect_cli(argc, argv);
+        if (cli >= 0)
+            return cli;
         cli = sv_plugins_cli(argc, argv);
         if (cli >= 0)
             return cli;

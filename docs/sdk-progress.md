@@ -49,3 +49,50 @@ Final checks: the normal build, all 15 CTest groups, storage generation, native 
 The exact SDK ZIP also passes the clean test through `-SdkZip`.
 The prose lint stays below 2.5 findings per 100 words for each changed page and the SDK README.
 All work stays in local commits. No push, publish or tag command ran.
+
+## M2: approval and launcher UX (2026-10-30)
+
+
+| Task | State | Evidence or dependency |
+| --- | --- | --- |
+| 0. Update the branch | Done | Clean fast-forward to `7681f99`. The baseline CTest run passes all 15 groups. |
+| 1. Server inspection | Done | The inspection group and the ancestor-junction removal proof pass. |
+| 2. Trust store | Open, blocked | Approval enforcement needs the forbidden `plugin_files.c` file. |
+| 3. Unified dialog | Open | Follows task 2. |
+| 4. Development switch | Open | Follows task 3. |
+| 5. Clean-machine approval path | Open | Follows task 4. |
+| 6. Launcher UX audit | Open | Follows task 5. The audit document does not exist yet. |
+
+Milestone M2 stays open.
+
+The brief for this work restricts edits to SDK, launcher, inspection and test files.
+Task 0 imports `main` at `7681f99` by a clean fast-forward on `codex/sdk`.
+
+Task 1 adds `--plugin-inspect ZIP|ID`.
+The command reuses the WP1 manifest reader, the folder validator and the installer ZIP checks.
+The report contains display metadata, runtime, capabilities, payload and manifest hashes, the package hash and risk text.
+The [manifest page](plugin-manifest.md#inspect-a-plugin-for-approval) defines its record format.
+
+Task 2 is blocked by the brief's file restriction.
+The loader reads content approval in `sv_plugin_approved` and enforces it in `sv_plugin_load`, both in `src/plugins/plugin_files.c`.
+That file is forbidden.
+The loader currently reads only DLL hashes from `native-approvals.ini`.
+It does not read `user/plugins/approvals.ini` or bind approval to the runtime, manifest hash and capability set.
+A launcher-only trust file cannot enforce that match when the server starts.
+Task 2 needs permission to change `plugin_files.c`.
+Its focused loader tests can stay under `tests/sdk_*`.
+The brief says to stop and record this need when a task needs a forbidden file.
+
+Tasks 3 through 6 remain open because they follow task 2.
+The unified dialog, development switch, clean-machine approval path and UX audit are not built in this change.
+The hash-match, capability-match, native-checkbox and development-store removal proofs remain open with those tasks.
+The old approval CLI and native bypass keep their current behavior.
+
+No visual launcher check, Start/Stop check or client playtest ran.
+No push, tag or merge into `main` ran.
+
+Final checks pass: the normal build, all 16 CTest groups, storage generation, native dependencies and the repository check.
+The inspection group passes 33 cases.
+The ancestor-junction rejection test fails with its check removed and passes after restoration.
+The four WP5 approval removal proofs stay open with tasks 2 through 4.
+Local evidence stays in the ignored `build/m2-*.log` files.
