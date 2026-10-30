@@ -192,6 +192,21 @@ int sv_plugin_inspect_cli(int argc, char **argv)
 {
     int result;
     char folder[MAX_PATH];
+    if (argc >= 2 && !strcmp(argv[1], "--plugin-trust-status")) {
+        if (argc == 3 && !sv_plugin_trust_status(argv[2]))
+            return 0;
+        fputs("Cannot read the saved plugin review.\n", stderr);
+        return 2;
+    }
+    if (argc >= 2 && !strcmp(argv[1], "--plugin-trust")) {
+        if (argc == 9 && !strcmp(argv[8], "--native-confirmed") &&
+            sv_plugin_trust_save(argv[2], argv[3], argv[4], argv[5], argv[6], argv[7])) {
+            printf("APPROVED\t%s\n", argv[2]);
+            return 0;
+        }
+        fputs("The plugin changed or the review is incomplete. Inspect and review it again.\n", stderr);
+        return 2;
+    }
     if (argc < 2 || (strcmp(argv[1], "--plugin-inspect") && strcmp(argv[1], "--plugin-inspect-folder")))
         return -1;
     if (argc != 3) {

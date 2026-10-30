@@ -57,7 +57,7 @@ All work stays in local commits. No push, publish or tag command ran.
 | --- | --- | --- |
 | 0. Update the branch | Done | Clean fast-forward to `7681f99`. The baseline CTest run passes all 15 groups. |
 | 1. Server inspection | Done | The inspection group and the ancestor-junction removal proof pass. |
-| 2. Trust store | Open, blocked | Approval enforcement needs the forbidden `plugin_files.c` file. |
+| 2. Trust store | Done | The owner allows approval-only edits. The focused loader tests and four removal proofs pass. |
 | 3. Unified dialog | Open | Follows task 2. |
 | 4. Development switch | Open | Follows task 3. |
 | 5. Clean-machine approval path | Open | Follows task 4. |
@@ -73,26 +73,25 @@ The command reuses the WP1 manifest reader, the folder validator and the install
 The report contains display metadata, runtime, capabilities, payload and manifest hashes, the package hash and risk text.
 The [manifest page](plugin-manifest.md#inspect-a-plugin-for-approval) defines its record format.
 
-Task 2 is blocked by the brief's file restriction.
-The loader reads content approval in `sv_plugin_approved` and enforces it in `sv_plugin_load`, both in `src/plugins/plugin_files.c`.
-That file is forbidden.
-The loader currently reads only DLL hashes from `native-approvals.ini`.
-It does not read `user/plugins/approvals.ini` or bind approval to the runtime, manifest hash and capability set.
-A launcher-only trust file cannot enforce that match when the server starts.
-Task 2 needs permission to change `plugin_files.c`.
-Its focused loader tests can stay under `tests/sdk_*`.
-The brief says to stop and record this need when a task needs a forbidden file.
+Task 2 is complete. The owner allows approval and trust-store edits in `plugin_files.c` and `plugin_internal.h` for this task.
+The loader flow and public headers stay unchanged.
+The [approval page](sdk-approval.md) defines the scoped record, precedence and CLI behavior.
+Payload, manifest, runtime and capability rejection probes each fail with their comparison removed and pass after restoration.
 
 Tasks 3 through 6 remain open because they follow task 2.
 The unified dialog, development switch, clean-machine approval path and UX audit are not built in this change.
-The hash-match, capability-match, native-checkbox and development-store removal proofs remain open with those tasks.
+The native-checkbox and development-store removal proofs remain open with tasks 3 and 4.
 The old approval CLI and native bypass keep their current behavior.
 
 No visual launcher check, Start/Stop check or client playtest ran.
 No push, tag or merge into `main` ran.
 
-Final checks pass: the normal build, all 16 CTest groups, storage generation, native dependencies and the repository check.
+Task 2 checks pass: the normal build, all 17 CTest groups, storage generation, native dependencies and the repository check.
 The inspection group passes 33 cases.
 The ancestor-junction rejection test fails with its check removed and passes after restoration.
-The four WP5 approval removal proofs stay open with tasks 2 through 4.
+The hash and capability removal proofs pass in task 2. The native-checkbox and development-store proofs stay open.
 Local evidence stays in the ignored `build/m2-*.log` files.
+
+The first full task 2 run stops when C: runs out of space.
+The repeated run passes after generated test output cleanup.
+Oversized inspection fixtures now use NTFS sparse allocation without changing their logical sizes or rejection checks.

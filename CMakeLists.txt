@@ -122,6 +122,14 @@ if(BUILD_TESTING)
     set_target_properties(sv-plugin-dependent PROPERTIES PREFIX "" OUTPUT_NAME dependent
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_library(sv-trust-fixture MODULE tests/runner/trust_fixture.c)
+    target_include_directories(sv-trust-fixture PRIVATE src/plugins)
+    target_compile_definitions(sv-trust-fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(sv-trust-fixture PRIVATE /W4 /WX /utf-8)
+    target_link_options(sv-trust-fixture PRIVATE /EXPORT:sv_plugin_entry)
+    set_target_properties(sv-trust-fixture PROPERTIES PREFIX "" OUTPUT_NAME trust-fixture
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_executable(sv-plugin-test tests/plugin_host_test.c src/plugins/plugin_host.c
         src/plugins/plugin_files.c src/plugins/plugin_control.c src/plugins/plugin_events.c src/plugins/plugin_config.c
         src/plugins/plugin_manifest.c)
@@ -144,6 +152,8 @@ if(BUILD_TESTING)
         "${CMAKE_SOURCE_DIR}/tests/test_plugins.py" "${CMAKE_BINARY_DIR}")
     add_test(NAME plugin-inspect COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/sdk_inspect_test.py" "${CMAKE_BINARY_DIR}")
+    add_test(NAME plugin-trust COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/sdk_trust_test.py" "${CMAKE_BINARY_DIR}")
     add_test(NAME manifest-rules COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_manifest.py" "${CMAKE_BINARY_DIR}")
     add_executable(sv-codec-test tests/codec_bounds.c tests/platform_support.c

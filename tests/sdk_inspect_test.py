@@ -21,6 +21,20 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def oversized_file(path, size):
+    with path.open('wb') as stream:
+        if os.name == 'nt':
+            import ctypes
+            from ctypes import wintypes
+            import msvcrt
+            count = wintypes.DWORD()
+            # NTFS keeps the logical size without allocating zero-filled test data.
+            ctypes.windll.kernel32.DeviceIoControl(
+                wintypes.HANDLE(msvcrt.get_osfhandle(stream.fileno())), 0x900C4,
+                None, 0, None, 0, ctypes.byref(count), None)
+        stream.truncate(size)
+
+
 with tempfile.TemporaryDirectory(prefix='inspect-', dir=BUILD / 'tests') as temporary:
     root = Path(temporary).resolve()
     temp = root / 'tmp'
@@ -100,8 +114,7 @@ with tempfile.TemporaryDirectory(prefix='inspect-', dir=BUILD / 'tests') as temp
     manifest.write_bytes(BASE.encode('ascii'))
     payload.write_bytes(b'MZ' + b'x' * 100)
     run('test.inspect', success=False)
-    with payload.open('wb') as stream:
-        stream.truncate(67108865)
+    oversized_file(payload, 67108865)
     run('test.inspect', success=False)
     payload.write_bytes(DLL)
     run('missing.plugin', success=False)
@@ -129,8 +142,7 @@ with tempfile.TemporaryDirectory(prefix='inspect-', dir=BUILD / 'tests') as temp
     invalid = root / 'invalid.zip'
     invalid.write_bytes(b'PK invalid ZIP')
     run(invalid, success=False)
-    with invalid.open('wb') as stream:
-        stream.truncate(73400321)
+    oversized_file(invalid, 73400321)
     run(invalid, success=False)
 
     # Directory junctions must not bypass the plain-path check.
