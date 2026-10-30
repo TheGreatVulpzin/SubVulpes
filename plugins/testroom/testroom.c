@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.10"
+#define VERSION "0.2.11"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 64
 
@@ -1552,6 +1552,9 @@ static void animate(uint32_t tick)
             float wave = sinf((float)anim_step * 0.2f + (float)(i / 4 + i % 4)) * 2.0f;
             SvVector place = offset(grid_origin, (float)(i / 4) * 2.0f, 1.5f + wave, (float)(i % 4) * 2.0f);
             SvResult moved = change->teleport(self, grid_items[i], place);
+            /* A move wakes the item, so freeze it again before the physics runs. */
+            if (moved == SV_OK)
+                moved = set_int("item.frozen", grid_items[i], 1);
             /* An item that a human picked up cannot move. The show goes on with the others. */
             if (moved == SV_STATE)
                 ++grid_skipped;

@@ -701,6 +701,12 @@ static int item_speed_checks(SvOwner owner, SvEntity thing, SvEntity rider)
     STEP(props->get(owner, speed, held, 0, &out) == SV_OK && same_vector(out.v, 0.0f, 0.0f, 0.0f));
     w.i = 0;
     STEP(props->set(owner, frozen, held, 0, w) == SV_OK && props->get(owner, frozen, held, 0, &out) == SV_OK && out.i == 0);
+    /* A teleport wakes a frozen item, so a plugin freezes it again after each move. */
+    w.i = 1;
+    STEP(props->set(owner, frozen, held, 0, w) == SV_OK);
+    STEP(change->teleport(owner, held, (SvVector){ 13.0f, 5.0f, 13.0f }) == SV_OK);
+    STEP(props->get(owner, frozen, held, 0, &out) == SV_OK && out.i == 0);
+    STEP(props->set(owner, frozen, held, 0, w) == SV_OK && props->get(owner, frozen, held, 0, &out) == SV_OK && out.i == 1);
     STEP(change->item_remove(owner, held) == SV_OK);
     return 0;
 }

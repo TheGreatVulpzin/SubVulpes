@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.10, built on 2026-10-29. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.11, built on 2026-10-29. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -94,7 +94,7 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 56 | `plugins_calls` | `SvHost.subscribe` with an extended bit, `refuse`, `find` | All three answers match the wanted codes |
 | 57 | `kick` | `kick` for the player that `/test kick NAME` names | The player leaves and cannot join again |
 | 58 | `pitch_scale` | `sound` with 25 pitches from 0.5 to 2.0, one every 15 ticks | A rising scale in even steps |
-| 59 | `item_grid` | `item_create` 16 times, `item.frozen` on each, then `teleport` of every item each tick | The items hover and move as one smooth picture, and do not fall |
+| 59 | `item_grid` | `item_create` 16 times, `item.frozen` on each, then `teleport` and `item.frozen` again for every item each tick | The items hover and move as one smooth picture, and do not fall |
 | 60 | `headline_frames` | `headline` on line 0, one new text every 60, 20 or 6 ticks | A moving pattern in the open newspaper |
 | 61 | `entity_tag` | `SvGameStorage` with the scope `SV_STORAGE_ENTITY` on a car, then `object_remove` | The tag reads back, and after the car goes the same reference finds nothing |
 | 62 | `sound_tour` | `sound` for the ids 0 to 46 at pitch 1, one every 1.5 seconds, with a `TOURSOUND` line in the log | 47 sounds. See [the audio page](audio-analysis.md) |
