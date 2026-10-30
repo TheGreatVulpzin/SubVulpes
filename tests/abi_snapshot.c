@@ -44,6 +44,7 @@ int main(void)
     RECORD(SvInventoryState);
     RECORD(SvWorldState);
     RECORD(SvLineHit);
+    RECORD(SvConnectionState);
     RECORD(SvGameRead);
     RECORD(SvGameWrite);
     RECORD(SvValue);
@@ -84,7 +85,7 @@ int main(void)
     TABLE(SvPlugin, enable, disable, 2);
     TABLE(SvConfig, get_int, get_text, 3);
     TABLE(SvPlugins, refuse, find, 3);
-    TABLE(SvGameRead, entities, within, 13);
+    TABLE(SvGameRead, entities, connection, 14);
     TABLE(SvGameWrite, message, disown, 24);
     TABLE(SvGameProps, find, add, 5);
     TABLE(SvGameAi, threats, seated_target, 11);

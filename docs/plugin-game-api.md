@@ -386,3 +386,12 @@ Writes change the live bone mass. Invalid slots, nonfinite values and results ou
 The game API fixture checks all slots, both endpoints, addition and failed writes. No client playtest ran.
 
 Removal proofs for the slot bound and both range checks fail the game API test. The source is restored before final checks.
+
+## Connection read (R1)
+
+`SvGameRead.connection` copies an IPv4 address, port, idle ticks and spectate value into `SvConnectionState`.
+The IP bytes use dotted address order. The port uses host order. The spectate value keeps the game encoding, including -1.
+Bots and players without a connection return `SV_NOT_FOUND`. Invalid connection counts return `SV_STATE`. Failed calls leave the output unchanged.
+Plugins must restrict address disclosure to administrators. The fixture checks copies, bounds, bots and missing connections. No client playtest ran.
+
+Removal proofs for the snapshot size and connection count fail the game API test. The source is restored before final checks.

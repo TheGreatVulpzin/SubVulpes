@@ -78,7 +78,7 @@ Ranked by how much a plugin author loses without it.
 
 ### Reads
 
-1. The connection of a player: address, port, idle ticks, spectate, bandwidth. An admin plugin needs the address to ban.
+1. Connection snapshots cover address, port, idle ticks and spectate. Bandwidth remains unsupported.
 2. The seats and the occupants of a vehicle, the wheels, the rotor.
 3. The building list: type, bounds, shop, safe zone. The shop and the NPC plugins need it.
 4. The kill and death count of a round. The core keeps none, so each plugin keeps its own from the events.
@@ -111,3 +111,12 @@ Writes change the live bone mass. Invalid slots, nonfinite values and results ou
 The game API fixture checks all slots, both endpoints, addition and failed writes. No client playtest ran.
 
 Removal proofs for the slot bound and both range checks fail the game API test. The source is restored before final checks.
+
+## Connection read (R1)
+
+`SvGameRead.connection` copies an IPv4 address, port, idle ticks and spectate value into `SvConnectionState`.
+The IP bytes use dotted address order. The port uses host order. The spectate value keeps the game encoding, including -1.
+Bots and players without a connection return `SV_NOT_FOUND`. Invalid connection counts return `SV_STATE`. Failed calls leave the output unchanged.
+Plugins must restrict address disclosure to administrators. The fixture checks copies, bounds, bots and missing connections. No client playtest ran.
+
+Removal proofs for the snapshot size and connection count fail the game API test. The source is restored before final checks.

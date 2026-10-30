@@ -107,6 +107,13 @@ typedef struct {
 } SvLineHit;
 
 typedef struct {
+    uint32_t size;
+    uint8_t ip[4];
+    uint32_t port;
+    int32_t idle_ticks, spectate;
+} SvConnectionState;
+
+typedef struct {
     uint32_t size, version;
     SvResult (SV_CALL *entities)(SvOwner owner, uint32_t kind, uint32_t cursor,
         SvEntity *entities, uint32_t capacity, uint32_t *count, uint32_t *next);
@@ -134,6 +141,9 @@ typedef struct {
      * is 1 to SV_ENTITY_PAGE_MAX. SV_LIMIT means that more records matched than fit, and the first "capacity" are given. */
     SvResult (SV_CALL *within)(SvOwner owner, uint32_t kind, SvVector center, float radius, SvEntity *entities,
         float *distances, uint32_t capacity, uint32_t *count);
+    /* IP bytes use dotted address order. Port uses host order. Spectate keeps the game value (-1 means none).
+     * SV_NOT_FOUND for a bot or a player without a connection. Plugins must restrict address disclosure to admins. */
+    SvResult (SV_CALL *connection)(SvOwner owner, SvEntity player, SvConnectionState *state);
 } SvGameRead;
 #pragma pack(pop)
 

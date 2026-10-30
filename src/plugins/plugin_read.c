@@ -5,6 +5,7 @@
 #include "sr_runtime.h"
 #include "collide.h"
 #include "buildings.h"
+#include "server.h"
 #include <math.h>
 #include <string.h>
 
@@ -418,8 +419,40 @@ static SvResult SV_CALL read_within(SvOwner owner, uint32_t kind, SvVector cente
     return more ? SV_LIMIT : SV_OK;
 }
 
+static SvResult SV_CALL read_connection(SvOwner owner, SvEntity entity, SvConnectionState *state)
+{
+    int32_t index, i;
+    SvConnectionState value = { sizeof value };
+    SvResult result = resolve(owner, SV_ENTITY_PLAYER, entity, &index);
+    if (result != SV_OK)
+        return result;
+    if (!state || state->size < sizeof value)
+        return SV_INVALID;
+    if (sr_numofconnections < 0 || sr_numofconnections > SR_MAX_CONNECTION)
+        return SV_STATE;
+    if (sr_players[index].is_bot)
+        return SV_NOT_FOUND;
+    for (i = 0; i < sr_numofconnections; ++i) {
+        const Connection *connection = &sr_connections[i];
+        uint32_t port;
+        if (connection->player_id != index)
+            continue;
+        value.ip[0] = (uint8_t)(connection->ip >> 24);
+        value.ip[1] = (uint8_t)(connection->ip >> 16);
+        value.ip[2] = (uint8_t)(connection->ip >> 8);
+        value.ip[3] = (uint8_t)connection->ip;
+        port = (uint16_t)connection->port;
+        value.port = port;
+        value.idle_ticks = connection->idle_ticks;
+        value.spectate = connection->spectate;
+        memcpy(state, &value, sizeof value);
+        return SV_OK;
+    }
+    return SV_NOT_FOUND;
+}
+
 const SvGameRead sv_game_read = {
     sizeof(SvGameRead), SV_GAME_READ_VERSION, read_entities,
     read_player, read_human, read_item, read_object, read_account,
-    read_bone, read_inventory, read_world, read_line, read_aim, read_headline, read_within
+    read_bone, read_inventory, read_world, read_line, read_aim, read_headline, read_within, read_connection
 };

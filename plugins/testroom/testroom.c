@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.13"
+#define VERSION "0.2.14"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 72
 
@@ -1784,6 +1784,21 @@ static SvResult t_bone_mass(void)
     return SV_OK;
 }
 
+static SvResult t_connection(void)
+{
+    SvConnectionState state = { sizeof state };
+    SvResult r;
+    if (game->size < offsetof(SvGameRead, connection) + sizeof game->connection)
+        return SV_INCOMPATIBLE;
+    r = game->connection(self, tester, &state);
+    if (r == SV_OK) {
+        sayf("IP %u.%u.%u.%u port %u", (unsigned)state.ip[0], (unsigned)state.ip[1],
+            (unsigned)state.ip[2], (unsigned)state.ip[3], state.port);
+        sayf("Idle %d ticks. Spectate %d.", state.idle_ticks, state.spectate);
+    }
+    return r;
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1850,6 +1865,7 @@ static const Test tests[] = {
     { "pitch_octaves", "Plays the phone ring in six octaves, twice. Type /test go to start.", "Six steps, each one octave higher. Say if two steps sound the same.", t_octaves, t_octaves_go },
     { "engine_sounds", "Sets the bots to 0 and makes a car. Plays the sounds 3 to 9 twice while you sit in the car. Type /test go to start.", "You hear a car engine for one or more numbers. Say which ones.", t_engine, t_engine_go },
     { "bone_mass", "Changes and reads your head mass, then restores it.", "A chat line shows the changed and restored mass.", t_bone_mass, NULL },
+    { "connection", "Reads your connection for this admin command.", "Your address, port, idle ticks and spectate value appear.", t_connection, NULL },
 };
 
 /* ------------------------------------------------------------ flow */

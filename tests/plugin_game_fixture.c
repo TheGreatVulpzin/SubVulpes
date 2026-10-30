@@ -889,6 +889,34 @@ static int headline_checks(SvOwner owner)
 
 /* The property table itself: names, descriptions, operations and the checks that do not belong to one row.
  * Returns 0 when all checks pass, or the line of the check that failed. */
+static SvResult SV_CALL connection_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    struct { SvConnectionState state; uint32_t guard; } out = { { sizeof(SvConnectionState) }, 0x12345678u };
+    SvConnectionState before;
+    (void)actor;
+    CHECK(game->connection(owner + 1, player, NULL) == SV_STATE);
+    CHECK(game->connection(owner, human, &out.state) == SV_NOT_FOUND);
+    CHECK(game->connection(owner, player, NULL) == SV_INVALID);
+    out.state.size--;
+    before = out.state;
+    CHECK(game->connection(owner, player, &out.state) == SV_INVALID && !memcmp(&before, &out.state, sizeof before));
+    out.state.size = sizeof out.state;
+    before = out.state;
+    if (!strcmp(arguments, "missing")) {
+        CHECK(game->connection(owner, player, &out.state) == SV_NOT_FOUND);
+        CHECK(!memcmp(&before, &out.state, sizeof before));
+    } else if (!strcmp(arguments, "badcount")) {
+        CHECK(game->connection(owner, player, &out.state) == SV_STATE);
+        CHECK(!memcmp(&before, &out.state, sizeof before));
+    } else {
+        CHECK(game->connection(owner, player, &out.state) == SV_OK);
+        CHECK(out.state.ip[0] == 203 && out.state.ip[1] == 0 && out.state.ip[2] == 113 && out.state.ip[3] == 9);
+        CHECK(out.state.port == 12345 && out.state.idle_ticks == 77 && out.state.spectate == -1);
+    }
+    CHECK(out.guard == 0x12345678u);
+    return SV_OK;
+}
+
 static int bone_mass_checks(SvOwner owner)
 {
     uint32_t id, slot;
@@ -1482,6 +1510,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     CHECK(props && props->size == sizeof *props && props->version == SV_GAME_PROPS_VERSION);
     CHECK(change->message(owner, SV_MESSAGE_SERVER, "before ready") == SV_STATE);
     CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
+    CHECK(host->command(owner, "connectioncheck", SV_COMMAND_LOCAL, connection_command) == SV_OK);
     CHECK(host->command(owner, "echo", SV_COMMAND_PUBLIC, echo_command) == SV_OK);
     CHECK(host->command(owner, "secret", SV_COMMAND_ADMIN, secret_command) == SV_OK);
     CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);

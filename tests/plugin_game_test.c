@@ -1258,6 +1258,60 @@ static void list_strides(void)
     CHECK(caller[8 * 32 - 1] == host[7 * 36 + 31] && caller[8 * 32] == 0xee);
 }
 
+extern void (*sv_test_log_hook)(const char *line);
+static int command_failed;
+static void (*command_previous_log)(const char *line);
+
+static void command_log(const char *line)
+{
+    if (strstr(line, "Plugin command result: "))
+        command_failed = 1;
+    if (command_previous_log)
+        command_previous_log(line);
+}
+
+static int checked_command(const char *text)
+{
+    int handled;
+    command_failed = 0;
+    command_previous_log = sv_test_log_hook;
+    sv_test_log_hook = command_log;
+    handled = sv_plugins_command(0, text);
+    sv_test_log_hook = command_previous_log;
+    return handled && !command_failed;
+}
+
+static void connection_checks(void)
+{
+    Connection saved = sr_connections[SR_MAX_CONNECTION - 1];
+    int saved_count = sr_numofconnections, saved_players[SR_MAX_CONNECTION], i;
+    sr_numofconnections = 0;
+    CHECK(checked_command("connectioncheck missing"));
+    for (i = 0; i < SR_MAX_CONNECTION; ++i) {
+        saved_players[i] = sr_connections[i].player_id;
+        sr_connections[i].player_id = -1;
+    }
+    sr_connections[SR_MAX_CONNECTION - 1].player_id = 0;
+    sr_connections[SR_MAX_CONNECTION - 1].ip = 0xcb007109u;
+    sr_connections[SR_MAX_CONNECTION - 1].port = 12345;
+    sr_connections[SR_MAX_CONNECTION - 1].idle_ticks = 77;
+    sr_connections[SR_MAX_CONNECTION - 1].spectate = -1;
+    sr_numofconnections = SR_MAX_CONNECTION;
+    CHECK(checked_command("connectioncheck found"));
+    sr_players[0].is_bot = 1;
+    CHECK(checked_command("connectioncheck missing"));
+    sr_players[0].is_bot = 0;
+    sr_numofconnections = SR_MAX_CONNECTION + 1;
+    CHECK(checked_command("connectioncheck badcount"));
+    sr_numofconnections = -1;
+    CHECK(checked_command("connectioncheck badcount"));
+    for (i = 0; i < SR_MAX_CONNECTION; ++i)
+        sr_connections[i].player_id = saved_players[i];
+    sr_connections[SR_MAX_CONNECTION - 1] = saved;
+    sr_numofconnections = saved_count;
+    CHECK(!sv_plugins_failed());
+}
+
 int main(int argc, char **argv)
 {
     SvEntity old;
@@ -1304,6 +1358,7 @@ int main(int argc, char **argv)
     actions_sweep_check();
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
+    connection_checks();
     sr_humans[0].inventory[0].count = 9;
     sr_humans[0].vehicle_id = -1;
     sr_items[0].num_children = -1;
