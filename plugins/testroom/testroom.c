@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.15"
+#define VERSION "0.2.16"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 72
 
@@ -1801,6 +1801,13 @@ static SvResult t_connection(void)
     return r;
 }
 
+static SvResult t_world_reset(void)
+{
+    if (change->size < offsetof(SvGameWrite, world_reset) + sizeof change->world_reset)
+        return SV_INCOMPATIBLE;
+    return change->world_reset(self);
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1868,6 +1875,7 @@ static const Test tests[] = {
     { "engine_sounds", "Sets the bots to 0 and makes a car. Plays the sounds 3 to 9 twice while you sit in the car. Type /test go to start.", "You hear a car engine for one or more numbers. Say which ones.", t_engine, t_engine_go },
     { "bone_mass", "Changes and reads your head mass, then restores it.", "A chat line shows the changed and restored mass.", t_bone_mass, NULL },
     { "connection", "Reads your connection for this admin command.", "Your address, port, idle ticks and spectate value appear.", t_connection, NULL },
+    { "world_reset", "Requests a round reset at the next tick.", "The round restarts.", t_world_reset, NULL },
 };
 
 /* ------------------------------------------------------------ flow */

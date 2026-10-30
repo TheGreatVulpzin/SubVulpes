@@ -1476,6 +1476,27 @@ static void account_save_checks(void)
     CHECK(!sv_plugins_failed());
 }
 
+static void world_reset_checks(void)
+{
+    uint64_t sequence = sv_game_reset_sequence();
+    int resets = 0;
+    CHECK(!sv_game_take_reset());
+    CHECK(checked_command("resetcheck"));
+    CHECK(!sv_plugins_failed() && sv_game_reset_sequence() == sequence);
+    /* The main loop consumes this request before callbacks and calls resetgame once. Its reset hook clears the flag. */
+    if (sv_game_take_reset()) {
+        ++resets;
+        sv_game_reset();
+    }
+    CHECK(resets == 1 && sv_game_reset_sequence() == sequence + 1 && !sv_game_take_reset());
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed() && !sv_game_take_reset());
+    CHECK(checked_command("resetcheck"));
+    sv_game_reset();
+    CHECK(!sv_game_take_reset());
+    CHECK(checked_command("resetcheck"));
+}
+
 int main(int argc, char **argv)
 {
     SvEntity old;
@@ -1591,8 +1612,10 @@ int main(int argc, char **argv)
     CHECK(!sv_plugins_failed());
     account_save_checks();
     connection_join_check();
+    world_reset_checks();
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
+    CHECK(!sv_game_take_reset());
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);
     types_restored_check();
     made_stopped_check();

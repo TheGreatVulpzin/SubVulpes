@@ -101,6 +101,8 @@ typedef struct {
      * plugin stops. This call gives one of them up, so it stays in the game after the stop. For a bot give the reference of
      * the player. SV_NOT_FOUND when this plugin did not make the thing, or when it is gone. */
     SvResult (SV_CALL *disown)(SvOwner owner, SvEntity entity);
+    /* Requests one reset at the start of the next server tick. Repeated requests merge into one reset. */
+    SvResult (SV_CALL *world_reset)(SvOwner owner);
 } SvGameWrite;
 #pragma pack(pop)
 

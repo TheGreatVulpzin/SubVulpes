@@ -93,6 +93,8 @@ static void tick(void)
 {
     int i, state;
 
+    if (sv_game_take_reset())
+        resetgame();
     sv_control_poll();
     sv_plugins_tick();
     if (sv_plugins_failed())

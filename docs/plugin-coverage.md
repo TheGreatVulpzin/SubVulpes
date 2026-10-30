@@ -46,7 +46,7 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | N8 | Delete the body of a real player | Kill with `human.health` meanwhile. |
 | N10, N39 | Material at a hit, block cell | Same query family as `line`. |
 | N19 | Bone masses, done | `human.bone_mass`: 15 float slots, GET, SET and ADD, range 0.5 to 500. |
-| N26 | Request to reset the round | The rows for state and timers exist. |
+| N26 | Round reset, done | `world_reset` defers and merges reset requests. State and timer rows also exist. |
 | N27 | Road graph query | The data is `g_city.intersections` and `g_city.roads`. |
 | N29 | Human health above 100 | The packet clamps the sent health to 117. |
 | N33 | Account save event, done | `SV_EVENT_ACCOUNT_SAVE` follows a bulk file save or the disconnect update in memory. |
@@ -85,7 +85,7 @@ Ranked by how much a plugin author loses without it.
 
 ### Writes and decisions
 
-1. Round control: reset, force the end, select the next level seed, change the game mode.
+1. Round control still lacks a forced end, selection of the next level seed and a game mode change. Reset requests exist.
 2. Vehicle control for a plugin driver: throttle, steering, gear, brake.
 3. Doors, elevators and safe zones.
 4. The input of a human for a cutscene or a test bot.
@@ -155,3 +155,13 @@ Keep the salt private and preserve it to preserve the identifiers. The host neve
 The test room declares `network` and sends the address directly to private chat, without its usual chat log.
 The capability does not isolate native code. A native plugin can read server memory, including the salt.
 Tests cover both permissions, stable identifiers, distinct addresses, a shared /24, salt reuse and the capability removal proof.
+
+## Round reset request (R5)
+
+`SvGameWrite.world_reset` requests one reset at the start of the next server tick. It requires the normal write context and a ready world.
+The main loop consumes the flag before control requests, plugin callbacks and simulation. Two requests before that point cause one call to `resetgame()`.
+A normal core reset or host stop also clears the flag. The fixture checks deferred requests, coalescing, context rejection and flag cleanup.
+The focused test exercises the reset hook and flag consumption. It does not run map creation or a client playtest.
+Test room case 67 requests a reset. The client playtest remains open.
+
+Removal of the write context check fails the game API test. The source is restored before final checks.

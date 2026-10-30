@@ -439,3 +439,13 @@ Keep the salt private and preserve it to preserve the identifiers. The host neve
 The test room declares `network` and sends the address directly to private chat, without its usual chat log.
 The capability does not isolate native code. A native plugin can read server memory, including the salt.
 Tests cover both permissions, stable identifiers, distinct addresses, a shared /24, salt reuse and the capability removal proof.
+
+## Round reset request (R5)
+
+`SvGameWrite.world_reset` requests one reset at the start of the next server tick. It requires the normal write context and a ready world.
+The main loop consumes the flag before control requests, plugin callbacks and simulation. Two requests before that point cause one call to `resetgame()`.
+A normal core reset or host stop also clears the flag. The fixture checks deferred requests, coalescing, context rejection and flag cleanup.
+The focused test exercises the reset hook and flag consumption. It does not run map creation or a client playtest.
+Test room case 67 requests a reset. The client playtest remains open.
+
+Removal of the write context check fails the game API test. The source is restored before final checks.

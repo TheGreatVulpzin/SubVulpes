@@ -88,7 +88,7 @@ int main(void)
     TABLE(SvConfig, get_int, get_text, 3);
     TABLE(SvPlugins, refuse, find, 3);
     TABLE(SvGameRead, entities, connection, 14);
-    TABLE(SvGameWrite, message, disown, 24);
+    TABLE(SvGameWrite, message, world_reset, 25);
     TABLE(SvGameProps, find, add, 5);
     TABLE(SvGameAi, threats, seated_target, 11);
     TABLE(SvGameEconomy, company, add_stocks, 4);

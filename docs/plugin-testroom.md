@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.15, built on 2026-10-30. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.16, built on 2026-10-30. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -105,7 +105,9 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 
 | 66 | `connection` | `SvGameRead.connection` through the admin command | Your connection values appear in private chat |
 
-Tests 30 to 66 have not run against the original client yet.
+| 67 | `world_reset` | `SvGameWrite.world_reset` | The round restarts at the next tick |
+
+Tests 30 to 67 have not run against the original client yet.
 Tests 58 to 60 measure what a music and picture plugin needs: the sound pitch, many moving items and a newspaper that changes while it is open. They use the tick event. Each one stops by itself and reports the number of steps or the first error. Test 60 leaves line 0 of the news changed until the next round.
 Test 57 refuses the tester, bots and administrators. The kick puts the IP address of the player in the kick list of the server. The list lives in memory only. It blocks that address until the server restarts or an administrator types `/clearkick`. A friend on your own network shares your address, so you stay blocked too until you type `/clearkick`.
 Each test that changes money, stocks, a company price, a mission, a shop catalog or the bot count puts the old value back in the next test or in `/test stop`.

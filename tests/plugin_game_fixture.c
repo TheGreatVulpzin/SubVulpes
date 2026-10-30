@@ -974,6 +974,18 @@ static SvResult SV_CALL account_save_command(SvOwner owner, uint64_t actor, cons
     return SV_OK;
 }
 
+static SvResult SV_CALL reset_command(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    SvWorldState before = { sizeof before }, after = { sizeof after };
+    (void)actor;
+    (void)arguments;
+    CHECK(game->world(owner, &before) == SV_OK);
+    CHECK(change->world_reset(owner + 1) == SV_STATE);
+    CHECK(change->world_reset(owner) == SV_OK && change->world_reset(owner) == SV_OK);
+    CHECK(game->world(owner, &after) == SV_OK && after.reset_sequence == before.reset_sequence);
+    return SV_OK;
+}
+
 static int bone_mass_checks(SvOwner owner)
 {
     uint32_t id, slot;
@@ -1339,7 +1351,7 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
             value.i = 5;
             damage_guard_ok = change->message(owner, SV_MESSAGE_SERVER, "late") == SV_STATE &&
                 change->sound(owner, 21, (SvVector){ 1.0f, 2.0f, 3.0f }, 1.0f, 1.0f) == SV_STATE &&
-                change->vehicle_exit(owner, human, 0) == SV_STATE && props->set(owner, pid_health, human, 0, value) == SV_STATE &&
+                change->world_reset(owner) == SV_STATE && change->vehicle_exit(owner, human, 0) == SV_STATE && props->set(owner, pid_health, human, 0, value) == SV_STATE &&
                 props->add(owner, pid_health, human, 0, value) == SV_STATE &&
                 host->command(owner, "late", SV_COMMAND_PUBLIC, echo_command) == SV_STATE &&
                 host->subscribe(owner, SV_EVENT_TICK, tick_forward) == SV_STATE &&
@@ -1578,9 +1590,11 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     props = (const SvGameProps *)table;
     CHECK(props && props->size == sizeof *props && props->version == SV_GAME_PROPS_VERSION);
     CHECK(change->message(owner, SV_MESSAGE_SERVER, "before ready") == SV_STATE);
+    CHECK(change->world_reset(owner) == SV_STATE);
     CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
     CHECK(host->command(owner, "connectioncheck", SV_COMMAND_LOCAL, connection_command) == SV_OK);
     CHECK(host->command(owner, "accountsavecheck", SV_COMMAND_LOCAL, account_save_command) == SV_OK);
+    CHECK(host->command(owner, "resetcheck", SV_COMMAND_LOCAL, reset_command) == SV_OK);
     CHECK(host->command(owner, "echo", SV_COMMAND_PUBLIC, echo_command) == SV_OK);
     CHECK(host->command(owner, "secret", SV_COMMAND_ADMIN, secret_command) == SV_OK);
     CHECK(host->command(owner, "localonly", SV_COMMAND_LOCAL, localonly_command) == SV_OK);

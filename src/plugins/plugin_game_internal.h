@@ -13,6 +13,7 @@
 #include "sv_game_shop.h"
 
 int sv_game_is_ready(void);
+SvResult SV_CALL sv_game_request_reset(SvOwner owner);
 int sv_network_start(void);
 void sv_network_stop(void);
 int sv_network_ids(const uint8_t ip[4], uint32_t *address, uint32_t *network);

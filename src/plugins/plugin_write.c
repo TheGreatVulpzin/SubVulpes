@@ -589,5 +589,5 @@ const SvGameWrite sv_game_write = {
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
     write_object_create, write_object_remove, write_npc_create, write_npc_remove,
     write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak, write_bullet, write_bullet_hit,
-    write_disown
+    write_disown, sv_game_request_reset
 };

@@ -17,7 +17,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-static int ready;
+static int ready, reset_pending;
 static uint64_t reset_sequence;
 
 /* Gives back what a plugin changed, and ends what it made, when that plugin stops. */
@@ -67,7 +67,7 @@ void sv_systems_install(void)
 
 int sv_game_start(void)
 {
-    ready = 0;
+    ready = reset_pending = 0;
     sv_actions_clear();
     sv_made_clear();
     sv_plugins_set_release(release);
@@ -85,14 +85,29 @@ int sv_game_start(void)
 
 void sv_game_stop(void)
 {
-    ready = 0;
+    ready = reset_pending = 0;
     sv_actions_clear();
     sv_entities_stop();
     sv_network_stop();
 }
 
 void sv_game_ready(void) { ready = 1; }
-void sv_game_reset(void) { ++reset_sequence; sv_actions_clear(); }
+void sv_game_reset(void) { ++reset_sequence; reset_pending = 0; sv_actions_clear(); }
+
+SvResult SV_CALL sv_game_request_reset(SvOwner owner)
+{
+    if (!sv_plugins_write_context(owner) || !ready)
+        return SV_STATE;
+    reset_pending = 1;
+    return SV_OK;
+}
+
+int sv_game_take_reset(void)
+{
+    int pending = reset_pending;
+    reset_pending = 0;
+    return ready && pending;
+}
 int sv_game_is_ready(void) { return ready; }
 uint64_t sv_game_reset_sequence(void) { return reset_sequence; }
 

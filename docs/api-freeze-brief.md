@@ -54,7 +54,7 @@ The owner decided on 2026-10-28: the first editor builds R1 to R9, and not the s
 | R2 | Occupants of a vehicle | Add `occupants[8]` (entities of humans, 0 for an empty seat) at the end of `SvObjectState`. Scan the humans whose `vehicle_id` is the object. Done and tested in the unit test (2026-10-29). |
 | R3 | Road graph (N27) | Three reads: `intersection(index)`, `road(index)` and `street_near(point, radius, flags)`. The data is `g_city.intersections[1024]` and `g_city.roads[512]` (`sr_types.h`). Add `road_count` and `intersection_count` at the end of `SvWorldState`. `street_near` gives the nearest lane point to the position, the direction and the next intersection, and it skips a lane that has a vehicle within 6 units. `scenario_createcar` in `scenario.c` shows how the game puts a car on a lane. Mark the lane mapping "read from code, not tested". |
 | R4 | Bone mass (N19), done | A row `human.bone_mass`: float, 15 slots, get, set and add, range 0.5 to 500. The bonds read `Human.bones[k].mass` live, so a write works at once. |
-| R5 | Reset the round (N26) | A write method `world_reset(void)` that sets a flag. The main loop runs `resetgame()` at the start of the next tick, outside the simulation. |
+| R5 | Reset the round (N26), done | A write method `world_reset(void)` that sets a flag. The main loop runs `resetgame()` at the start of the next tick, outside the simulation. |
 | R6 | Account save event (N33), done | One disk notice covers all accounts: reason 0, account 0. Disconnect reason 1 carries one account reference. The 2,000-account flood test preserves other queued events. |
 | R7 | Delete the body of a real player (N8) | A write method that kills and removes the body at a safe point, with the links of the player kept whole. |
 | R8 | Block reads and edits (N39, N40) | Material at a hit and a block cell (read). Block set and clear (write). Mark "client effect unknown". |
@@ -69,7 +69,7 @@ Every item follows the rules of `plugin-abi.md`: it goes at the end, it has `siz
 
 ## Second API brief progress
 
-Items 2, 1, 3 and 4 pass their checks. Next: R5, then R9.
+Items 2, 1, 3, 4 and R5 pass their checks. Next: R9.
 
 ## Network capability and connection identifiers
 

@@ -34,6 +34,8 @@ int sv_game_start(void);
 void sv_game_stop(void);
 void sv_game_ready(void);
 void sv_game_reset(void);
+/* Consumes a request before any callbacks or simulation at the next server tick. */
+int sv_game_take_reset(void);
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
 int sv_plugins_has_capability(SvOwner owner, uint32_t mask);
