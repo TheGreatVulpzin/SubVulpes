@@ -1,5 +1,6 @@
 /* Call native modules only on the server thread and between lifecycle transitions. */
 #include "plugin_internal.h"
+#include "plugin_caps.h"
 #include "sv_plugins_api.h"
 #include <float.h>
 #include <stdarg.h>
@@ -203,7 +204,7 @@ static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_
     if (!api)
         return SV_INVALID;
     *api = NULL;
-    if (capability >= 1u && capability <= SV_API_PLUGINS &&
+    if (capability >= 1u && capability <= SV_CAP_COUNT &&
         !(modules[owner - 1].cap_mask & (1u << (capability - 1u))))
         return SV_DENIED;
     if (capability == SV_API_CONFIG) {

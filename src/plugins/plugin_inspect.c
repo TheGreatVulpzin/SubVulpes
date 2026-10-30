@@ -1,5 +1,6 @@
 /* Read review metadata without loading plugin code or saving approval. */
 #include "plugin_internal.h"
+#include "plugin_caps.h"
 #include <bcrypt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,26 +78,10 @@ done:
 
 static void dangers(const SvManifest *manifest)
 {
-    static const struct {
-        const char *name, *level, *text;
-    } caps[] = {
-        { "read", "low", "Reads game state and player data." },
-        { "write", "high", "Changes the world and can kick players." },
-        { "ai", "high", "Controls bots and their behavior." },
-        { "economy", "high", "Changes money and the economy." },
-        { "mission", "high", "Changes missions and their state." },
-        { "settings", "high", "Changes server settings." },
-        { "storage", "low", "Reads and writes plugin data." },
-        { "engine", "high", "Controls engine operations." },
-        { "shop", "high", "Changes shops and sales." },
-        { "props", "high", "Changes player and world properties." },
-        { "config", "low", "Reads plugin settings." },
-        { "plugins", "high", "Uses APIs from other plugins." }
-    };
     size_t i;
-    for (i = 0; i < sizeof caps / sizeof caps[0]; ++i)
+    for (i = 0; i < SV_CAP_COUNT; ++i)
         if (manifest->cap_mask & (1u << i))
-            printf("DANGER\t%s\t%s\t%s\n", caps[i].name, caps[i].level, caps[i].text);
+            printf("DANGER\t%s\t%s\t%s\n", sv_plugin_caps[i].name, sv_plugin_caps[i].level, sv_plugin_caps[i].text);
     if (manifest->unsafe)
         puts("DANGER\tunsafe_events\thigh\tRuns callbacks inside the simulation. A fault can stop the server.");
     if (manifest->runtime == SV_RUNTIME_NATIVE)

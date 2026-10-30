@@ -131,3 +131,27 @@ No push, tag or merge into `main` ran.
 3. Diagnostics: keep an explicit advanced toggle, or give diagnostics a permanent navigation entry.
 
 Choose navigation first. The visual redesign waits for the owner.
+
+### Capability table review
+
+`src/plugins/plugin_manifest.c` owns one capability table.
+`plugin_caps.h` declares its name, danger level and danger text fields.
+Manifest parsing, canonical capability text and inspection use the same rows.
+The API approval check uses the shared capability count.
+
+A search of all `src/` files finds no other capability name catalog.
+The dispatch table in `plugin_game.c` keeps API versions and function pointers.
+It cannot replace those fields with review metadata.
+Public API IDs stay unchanged because plugins use them as an interface contract.
+Launcher reviews read danger text from the server inspection report.
+The native runtime warning and `unsafe_events` flag remain separate from the 12 capability bits.
+
+`capability-bits` checks each parsed name against its fixed expected bit and public API ID.
+It also checks the canonical name for each bit.
+The removal proof swaps the `read` and `write` rows in the production table.
+The test fails with `read: expected bit 0x001, got 0x002.`
+After source restoration and rebuild, the test passes.
+The proof log stays in ignored `build/caps-removal-proof.log`.
+
+The existing `tests/sdk_inspect_test.py` stays unchanged and passes.
+The normal build, focused tests, storage generation, native dependencies and repository check pass.
