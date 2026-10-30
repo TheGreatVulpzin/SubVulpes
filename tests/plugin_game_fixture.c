@@ -889,8 +889,6 @@ static int headline_checks(SvOwner owner)
     return 0;
 }
 
-/* The property table itself: names, descriptions, operations and the checks that do not belong to one row.
- * Returns 0 when all checks pass, or the line of the check that failed. */
 static SvResult SV_CALL connection_command(SvOwner owner, uint64_t actor, const char *arguments)
 {
     struct { SvConnectionState state; uint32_t guard; } out = { { sizeof(SvConnectionState) }, 0x12345678u };
@@ -979,6 +977,8 @@ static int bone_mass_checks(SvOwner owner)
     return 0;
 }
 
+/* The property table itself: names, descriptions, operations and the checks that do not belong to one row.
+ * Returns 0 when all checks pass, or the line of the check that failed. */
 static int props_checks(SvOwner owner)
 {
     SvPropInfo info = { sizeof info }, small = { 4 };
