@@ -158,18 +158,111 @@ The normal build, focused tests, storage generation, native dependencies and rep
 
 ## Jukebox plugin (2026-10-30)
 
-Work uses `codex/jukebox`, from `codex/sdk` at `71cb757`.
-The bounded MIDI parser passes 31 rejection cases, tempo changes, running status, percussion and exact size limits.
-All 24 reader guard removals make their tests fail. Restored source passes.
-Playback, channel controls, the demo and SDK checks remain in progress.
+Complete on `codex/jukebox`, from `codex/sdk` at `e8c1e7a`.
+The optional plugin uses only `read`, `write` and `config` through the public SDK headers.
+It stays out of `plugins/official.ini`. No launcher or core API changes are part of this work.
+See [the jukebox guide](plugin-jukebox.md) for installation, commands, instrument edits and the listening method.
+
+### Result and checks
+
+- MIDI formats 0 and 1, tempo changes, running status, program metadata and all 16 channels work.
+- Administrator commands include play, demo, stop, status, scale, chord and live channel controls.
+- The phone bank supports nearest, keypad and fixed members. Drums use the measured sound ID 21.
+- An exclusive create operation seeds version 1 of the instrument file only when no file exists.
+  Reload and re-enable preserve owner edits, comments, line endings and unsupported versions byte for byte.
+- Tick counters drive playback. Integer tempo conversion carries fractional time across events.
+  Velocity controls volume. The per-tick budget includes every player copy and drops quiet notes first.
+
+The normal build and all 25 CTest groups pass across the core and SDK runs.
+The SDK run also repeats the existing runner scenarios after the fixture fix.
+Storage generation, native dependencies and the repository check pass.
+The new groups are `jukebox-midi`, `jukebox-instruments`, `jukebox-playback`, `jukebox-scenario` and `jukebox-sdk`.
+
+The DLL test captures actual calls to the public sound method.
+It checks order, pitch, ticks, player positions, 15-channel routing, bad channel numbers, velocity priority and fan-out limits.
+The instrument test covers every bank, every note with allowed transposition, every drum pitch and the whole-song keypad choice.
+All 31 malformed MIDI cases also reach the plugin and give clear errors without sound calls.
+The scenario runs the built-in demo twice. Its six sound calls keep their order and counted playback ticks.
+Numeric pitch checks permit at most 0.000002 of float rounding.
+
+The SDK test makes and extracts the SDK, copies only the plugin sources, and builds through `sv_add_plugin`.
+It checks that CMake uses the extracted public headers.
+It packs exactly the DLL and manifest, inspects the package and runs the demo with the extracted runner and probe.
+The template's entry point, command registration and public API lookup form the starting pattern.
+The jukebox adds host table size checks and a standalone CMake path.
+
+Evidence stays in ignored `build/jukebox-*.log` files.
+No MIDI file, game sound or game asset is committed. Tests make MIDI bytes in temporary folders.
 
 ### SDK gaps for later
 
-- A package holds only the DLL and manifest. It cannot carry an instrument file.
-  The jukebox embeds defaults and creates a versioned owner file only when that file does not exist.
-  A later SDK change can define support for resource files and their update rules.
-- The runner has no input-file step. A scenario cannot supply a MIDI fixture through the SDK script.
-  The built-in demo will give the scenario a short song without external input.
-  Parser and channel tests make their own MIDI bytes. A later SDK change can add fixture files.
-- A choice setting permits eight values. The phone bank needs thirteen.
-  The plugin uses a text setting and checks its value. The SDK stays unchanged.
+| Gap | Current solution | Later work |
+| --- | --- | --- |
+| A package holds only the DLL and manifest. It cannot carry an instrument file. | Embed defaults from one source INI. Create the versioned owner file only if it does not exist. | Define resource files and rules that preserve owner edits during updates. |
+| The runner has no input-file step. The SDK script cannot supply a MIDI fixture. | Use the built-in demo for the scenario. Parser and channel tests make their own files. | Add input fixtures to scenarios. |
+| A choice setting permits eight values. The phone bank needs thirteen. | Use a text setting and check the value in the plugin. | Consider larger choice lists. |
+
+The SDK scripts, template and public headers stay unchanged.
+
+### Approved runner fixture fix
+
+The first demo run returns `SV_INVALID` for every sound.
+`SoundList sr_data_soundlist` starts at zero. Normal game setup sets `num_sounds` to 47.
+The runner does not call that setup, so its public sound method rejects every ID.
+The owner approved one line before `sv_plugins_start()` in `tests/runner/runner.c`:
+
+```c
+sr_data_soundlist.num_sounds = 47;
+```
+
+Separate commit `27cd9bb` contains only that line. The fixed runner and extracted SDK scenarios pass.
+No new public API is needed.
+The runner leaves its game clock at zero, as its guide states.
+The plugin counts tick callbacks itself. Traces show that count as `at` and the host game tick as `tick`.
+
+### Reader removal proofs
+
+Each proof removes one production check and runs its named rejection case.
+Every mutant fails its test. Failures include wrong acceptance, a changed error or a process fault.
+The tests check the expected diagnostic as well as rejection.
+The script restores the exact source bytes, rebuilds and passes the full parser test after the mutations.
+
+| Removed check | Test with check removed |
+| --- | --- |
+| `byte` | Fails. |
+| `delta-length` | Fails. |
+| `event-count` | Fails. |
+| `running-status` | Fails. |
+| `channel-data` | Fails. |
+| `meta-length` | Fails. |
+| `meta-type` | Fails. |
+| `tempo-length` | Fails. |
+| `tempo-zero` | Fails. |
+| `end-track` | Fails. |
+| `system-length` | Fails. |
+| `missing-end` | Fails. |
+| `file-size` | Fails. |
+| `header-size` | Fails. |
+| `header-tag` | Fails. |
+| `header-length` | Fails. |
+| `track-count` | Fails. |
+| `format` | Fails. |
+| `division` | Fails. |
+| `track-header` | Fails. |
+| `track-tag` | Fails. |
+| `track-length` | Fails. |
+| `trailing-data` | Fails. |
+| `system-status` | Fails. |
+
+Run `python -I tests/jukebox_removal_test.py build/server` from an x86 MSVC prompt, with no other build running.
+`build/jukebox-removal.log` records all 24 proofs and the restored parser pass.
+The parser also accepts the exact file, track and event limits.
+
+### Limits not measured
+
+No in-game listening, real MIDI listening, client polyphony measurement or jitter measurement ran.
+A successful SDK sound call does not prove client audio playback or network arrival time.
+The guide describes how to compare chord bursts with the existing audio probe.
+The default instrument file is a starting point for those listening tests.
+
+The branch has no push, tag or merge into `main`.
