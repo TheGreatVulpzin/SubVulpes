@@ -73,6 +73,9 @@ set(SV_SDK_VERSION "v0.0.0-dev" CACHE STRING "The version of the SDK package")
 sv_add_plugin(sv-testroom ID sv.testroom MANIFEST "${CMAKE_SOURCE_DIR}/plugins/testroom/plugin.ini"
     SOURCES plugins/testroom/testroom.c)
 
+# Optional SDK example. The official profile and server package do not carry it.
+add_subdirectory(plugins/jukebox)
+
 set(SV_LAUNCHER "${CMAKE_SOURCE_DIR}/build/launcher/subvulpes_launcher.exe")
 add_custom_command(OUTPUT "${SV_LAUNCHER}"
     COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat"
