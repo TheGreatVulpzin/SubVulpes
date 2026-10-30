@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.11, built on 2026-10-29. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.12, built on 2026-10-29. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -99,8 +99,9 @@ Each result goes to the server log as `TESTROOM <number> <name> PASS|FAIL|SKIP c
 | 61 | `entity_tag` | `SvGameStorage` with the scope `SV_STORAGE_ENTITY` on a car, then `object_remove` | The tag reads back, and after the car goes the same reference finds nothing |
 | 62 | `sound_tour` | `sound` for the ids 0 to 46 at pitch 1, one every 1.5 seconds, with a `TOURSOUND` line in the log | 47 sounds. See [the audio page](audio-analysis.md) |
 | 63 | `pitch_octaves` | `sound` of id 27 at the pitches 0.125 to 4, twice | Six octaves. Two steps that sound the same show a limit of the client |
+| 64 | `engine_sounds` | `bot_count` to 0, `object_create` of a car, then `sound` of the ids 3 to 9, twice, one every 1.5 seconds | The player sits in the car. One or more numbers sound like an engine. The trains stay, because the track system owns them. The setting returns after the test |
 
-Tests 30 to 63 have not run against the original client yet.
+Tests 30 to 64 have not run against the original client yet.
 Tests 58 to 60 measure what a music and picture plugin needs: the sound pitch, many moving items and a newspaper that changes while it is open. They use the tick event. Each one stops by itself and reports the number of steps or the first error. Test 60 leaves line 0 of the news changed until the next round.
 Test 57 refuses the tester, bots and administrators. The kick puts the IP address of the player in the kick list of the server. The list lives in memory only. It blocks that address until the server restarts or an administrator types `/clearkick`. A friend on your own network shares your address, so you stay blocked too until you type `/clearkick`.
 Each test that changes money, stocks, a company price, a mission, a shop catalog or the bot count puts the old value back in the next test or in `/test stop`.

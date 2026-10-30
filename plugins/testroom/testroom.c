@@ -22,9 +22,9 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.11"
+#define VERSION "0.2.12"
 #define LINE_MAX_CHARS 60
-#define MAX_TESTS 64
+#define MAX_TESTS 72
 
 static const SvHost *host;
 static SvOwner self;
@@ -78,7 +78,7 @@ static struct { uint32_t building; SvShopCatalog old; } saved_shop[32];
 static int saved_shop_count, duel_stage;
 static SvEntity duel_a, duel_b;
 /* A timed show, driven by the tick event: a scale of sounds, a grid of moving items or a newspaper that changes. */
-enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES, ANIM_TOUR, ANIM_OCTAVES };
+enum { ANIM_NONE, ANIM_SCALE, ANIM_GRID, ANIM_FRAMES, ANIM_TOUR, ANIM_OCTAVES, ANIM_ENGINE };
 #define GRID_ITEMS 16
 static int anim_kind, grid_count;
 static uint32_t anim_next, anim_step, anim_every, anim_limit;
@@ -1546,6 +1546,11 @@ static void animate(uint32_t tick)
         r = change->sound(self, 27, human.position, 1.0f, pitch);
         sayf("Pitch %.3f.", pitch);
         log_sound(27, pitch);
+    } else if (anim_kind == ANIM_ENGINE) {
+        uint32_t id = 3 + anim_step % 7;
+        r = change->sound(self, id, human.position, 1.0f, 1.0f);
+        sayf("Sound %u.", id);
+        log_sound(id, 1.0f);
     } else if (anim_kind == ANIM_GRID) {
         int i;
         for (i = 0; i < grid_count && r == SV_OK; ++i) {
@@ -1612,6 +1617,36 @@ static SvResult t_octaves(void)
 static SvResult t_octaves_go(void)
 {
     anim_start(ANIM_OCTAVES, 90, 12);
+    return SV_OK;
+}
+
+/* The sounds 3 to 9 made no noise on the tour. This test plays them again while the player sits in a car, with no bots
+ * around, so the log shows whether one of them is the engine. The trains belong to the track system and stay. */
+static SvResult t_engine(void)
+{
+    SvSettingValue value = { sizeof value };
+    SvResult r = settings ? settings->get(self, "bot_count", &value) : SV_INCOMPATIBLE;
+    if (r != SV_OK)
+        return r;
+    if (!(touched & T_SETTING))
+        saved_bots = value.value;
+    touched |= T_SETTING;
+    value.type = SV_CORE_SETTING_INT;
+    value.value = 0;
+    r = settings->set(self, "bot_count", &value);
+    if (r != SV_OK)
+        return r;
+    r = t_car();
+    if (r != SV_OK)
+        return r;
+    sayf("The bot count was %d. It is 0 now. A car stands next to you. Get in, drive away from the train track, then type /test go.",
+        (int)saved_bots);
+    return SV_OK;
+}
+
+static SvResult t_engine_go(void)
+{
+    anim_start(ANIM_ENGINE, 90, 14);
     return SV_OK;
 }
 
@@ -1789,6 +1824,7 @@ static const Test tests[] = {
     { "entity_tag", "Makes a car and stores a tag on it. Type /test go to remove the car, and again to read the tag.", "The tag reads back as hello. After the car goes, the same reference finds nothing (error 6).", t_tag, t_tag_go },
     { "sound_tour", "Plays every game sound once, from 0 to 46. Type /test go to start.", "You hear 47 sounds. Say which numbers are tones.", t_tour, t_tour_go },
     { "pitch_octaves", "Plays the phone ring in six octaves, twice. Type /test go to start.", "Six steps, each one octave higher. Say if two steps sound the same.", t_octaves, t_octaves_go },
+    { "engine_sounds", "Sets the bots to 0 and makes a car. Plays the sounds 3 to 9 twice while you sit in the car. Type /test go to start.", "You hear a car engine for one or more numbers. Say which ones.", t_engine, t_engine_go },
 };
 
 /* ------------------------------------------------------------ flow */
