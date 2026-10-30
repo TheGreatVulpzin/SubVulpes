@@ -391,9 +391,12 @@ try {
         }
         # Approve last so a refused review leaves the saved approval intact.
         if ($Approve) {
-            $approvalReport = @(& $validator --plugin-trust $manifest.Id $ExpectedPayloadHash $ExpectedManifestHash `
-                $ExpectedRuntime $ExpectedCapabilities $ExpectedPackageHash --native-confirmed)
-            if ($LASTEXITCODE -ne 0) { throw 'The server refused approval. The installed files will return to their previous state.' }
+            Push-Location -LiteralPath $serverRoot
+            try {
+                $approvalReport = @(& $validator --plugin-trust $manifest.Id $ExpectedPayloadHash $ExpectedManifestHash `
+                    $ExpectedRuntime $ExpectedCapabilities $ExpectedPackageHash --native-confirmed)
+                if ($LASTEXITCODE -ne 0) { throw 'The server refused approval. The installed files will return to their previous state.' }
+            } finally { Pop-Location }
         }
     } catch {
         if ($changed) {

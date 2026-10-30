@@ -60,7 +60,7 @@ All work stays in local commits. No push, publish or tag command ran.
 | 2. Trust store | Done | The owner allows approval-only edits. The focused loader tests and four removal proofs pass. |
 | 3. Unified dialog | Done | Combined installation and approval, update classification, real-control colors and the native-checkbox removal proof pass. |
 | 4. Development switch | Done | One-run scope, locked files, minute warning and three removal probes pass. |
-| 5. Clean-machine approval path | Open | Follows task 4. |
+| 5. Clean-machine approval path | Done | The clean SDK uses inspection, the shared approved installer and the scoped approval file. |
 | 6. Launcher UX audit | Open | Follows task 5. The audit document does not exist yet. |
 
 Milestone M2 stays open.
@@ -106,3 +106,9 @@ The development test covers 14 cases, pinned files and the real minute warning.
 Persistence, outside-folder approval and folder-boundary rejection each fail with their guard removed and pass after restoration.
 Development approval scopes the normal configured profile. It does not discover or install plugins from an unrelated folder.
 No task 4 edit changes `plugin_files.c` or `plugin_internal.h`.
+
+Task 5 checks pass: the normal build, all 19 CTest groups, storage generation, native dependencies and the repository check.
+The clean test installs from the unpacked SDK folder, checks every scoped approval field and starts the plugin without legacy approval.
+The shared installer now enters the selected server folder for approval and restores the caller location afterward.
+The approved-install regression also runs from outside the server folder.
+The SDK carries the approval guide. Its first steps use the unified launcher review by default.

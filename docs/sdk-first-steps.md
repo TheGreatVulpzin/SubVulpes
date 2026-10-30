@@ -7,7 +7,7 @@ Use a server that matches the SDK version. Rebuild old DLLs after the ABI reset.
 1. Extract `SubVulpes-sdk-VERSION.zip` into an empty folder. Keep its folders together.
    Open Windows PowerShell in the folder that holds `README.txt`.
    Use `powershell -NoProfile -ExecutionPolicy Bypass` to run the unsigned SDK scripts in this session.
-   Set the path to a stopped test server:
+   Set the path to a test server:
 
    ```powershell
    $server = 'C:\SubVulpes-test'
@@ -34,30 +34,30 @@ Use a server that matches the SDK version. Rebuild old DLLs after the ABI reset.
    Expect `PASS test.svtest`. The SDK supplies the runner and probe plugin.
    The scenario needs no client and changes no approval on your server.
 
-4. Install the package while the test server is stopped:
+4. Open the launcher in the test server folder. Select **Plugins**, then **Install / update plugin package**.
+   Choose `dist\my.hello-0.1.0-native.svplugin`.
+   Read the name, author, description and capability risks.
+   For native code, check the box for full process access.
+   Select **Install and approve**.
+   The launcher stops the server after consent. A new plugin stays disabled.
+   An update shows the version change. New capabilities require the full review.
 
-   ```powershell
-   .\tools\install_plugin.ps1 -ServerDir $server -Package dist\my.hello-0.1.0-native.svplugin
-   ```
-
-   The installer leaves a new plugin disabled. Approve only native code that you trust.
-   A native DLL can do anything that the server process can do.
-
-5. Approve and enable the installed DLL from the test server folder:
+5. Enable `my.hello` in the plugin list. Start the test server and type `hello` in its console.
+   Expect a log line that starts with `Hello from`.
+   To check activation from the CLI while the server is stopped, use:
 
    ```powershell
    Push-Location $server
-   .\subvulpes_server.exe --plugin-hash my.hello
-   # Replace SHA256 with the 64 hexadecimal characters on the SHA256 line.
-   .\subvulpes_server.exe --plugin-approve my.hello SHA256
    .\subvulpes_server.exe --plugin-enable my.hello
    .\subvulpes_server.exe --plugins-check
    Pop-Location
    ```
 
-   Each command must return 0. Start the test server and type `hello` in its console.
-   Expect a log line that starts with `Hello from`.
-   After each DLL change, build, test, install and approve the new hash.
+   Each command must return 0. After a DLL change, build, test, pack and review the updated package again.
 
-Edit `template\hello.c` for your code. Keep the IDs in `hello.c` and `plugin.ini` equal.
+Native code has full access to the server process. Approve only code that you trust.
+The [approval guide](sdk-approval.md) describes the shared CLI path, legacy approvals and one-run development mode.
+The clean-machine test uses the same reviewed install path without the GUI.
+
+Edit `template\hello.c` for your code. Keep its ID and version equal to those in `plugin.ini`.
 Read [the API guide](plugin-sdk.md), [the manifest rules](plugin-manifest.md) and [the scenario guide](sdk-test-runner.md).

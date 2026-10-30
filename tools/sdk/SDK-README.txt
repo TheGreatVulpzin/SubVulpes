@@ -19,13 +19,21 @@ First plugin
        powershell -NoProfile -ExecutionPolicy Bypass -File tools\pack.ps1 -Folder template\out -OutputDir dist -ServerExe SERVERFOLDER\subvulpes_server.exe
        powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_plugin_test.ps1 -Plugin dist\my.hello-0.1.0-native.svplugin -Scenario template\test.svtest -ServerExe SERVERFOLDER\subvulpes_server.exe
      Expect PASS test.svtest. Use a server that matches this SDK version.
-  4. Stop the test server. Install the package:
-       powershell -NoProfile -ExecutionPolicy Bypass -File tools\install_plugin.ps1 -ServerDir SERVERFOLDER -Package dist\my.hello-0.1.0-native.svplugin
-     The installer leaves a new plugin disabled.
-  5. Approve and enable it as shown below.
+  4. Open Plugins in the server launcher. Choose Install / update plugin package and select the .svplugin file.
+     Read the identity and capability risks. Check the native full-process box, then select Install and approve.
+     The launcher stops the server after consent. A new plugin stays disabled.
+  5. Enable my.hello in Plugins. Start the server and type hello in its console.
+     Expect a log line that starts with Hello from.
+     After a DLL change, build, test, pack and review the updated package again.
 
-Native approval on a test server
-  Run these commands from SERVERFOLDER while the server is stopped:
+Reviewed approval
+  The launcher uses --plugin-inspect and the scoped store user/plugins/approvals.ini.
+  The clean-machine check uses the same installer path without the GUI.
+  Read docs/sdk-approval.md for the record, CLI path and one-run development mode.
+
+Legacy native approval CLI
+  These compatibility commands grant full native-content approval and replace the scoped review for that ID.
+  Prefer the launcher review for capability tracking. Run from SERVERFOLDER while the server is stopped:
     .\subvulpes_server.exe --plugin-hash my.hello
     .\subvulpes_server.exe --plugin-approve my.hello SHA256
     .\subvulpes_server.exe --plugin-enable my.hello

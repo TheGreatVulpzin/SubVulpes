@@ -35,9 +35,9 @@ with tempfile.TemporaryDirectory(prefix='approve-install-', dir=BUILD / 'tests')
         archive.writestr('plugin.ini', MANIFEST.encode())
         archive.writestr('trust-fixture.dll', payload)
 
-    def command(args, success=True):
+    def command(args, success=True, cwd=None):
         global checks
-        result = subprocess.run(args, cwd=server_dir, env=environment, capture_output=True,
+        result = subprocess.run(args, cwd=server_dir if cwd is None else cwd, env=environment, capture_output=True,
                                 text=True, errors='replace', timeout=60)
         assert (result.returncode == 0) == success, (result.returncode, result.stdout, result.stderr)
         checks += 1
@@ -63,7 +63,7 @@ with tempfile.TemporaryDirectory(prefix='approve-install-', dir=BUILD / 'tests')
             args += ['-' + key, value]
         if confirmed:
             args += ['-NativeConfirmed']
-        return command(args, success)
+        return command(args, success, cwd=work)
 
     install(confirmed=False, success=False)
     assert not (server_dir / 'plugins/test.trust').exists()
