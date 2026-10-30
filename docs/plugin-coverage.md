@@ -138,3 +138,5 @@ An account read at delivery returns the current state, which can include later c
 The disk notice covers all accounts, including an empty account list. Disconnect notices carry one account reference.
 `os_fclose` forwards `fclose` and returns 0 on success. The `!= 0` check rejects a failed close.
 The flood test saves 2,000 accounts and checks one disk notice, with an earlier queued event intact and no loss notice.
+
+The R1 network test sends a real UDP join through `serverrecv` and checks the stored endpoint and public connection snapshot.

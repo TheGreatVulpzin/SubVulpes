@@ -894,6 +894,16 @@ static SvResult SV_CALL connection_command(SvOwner owner, uint64_t actor, const 
     struct { SvConnectionState state; uint32_t guard; } out = { { sizeof(SvConnectionState) }, 0x12345678u };
     SvConnectionState before;
     (void)actor;
+    if (!strncmp(arguments, "joined ", 7)) {
+        SvEntity joined;
+        unsigned port;
+        CHECK(sscanf(arguments + 7, "%llu %u", &joined, &port) == 2);
+        CHECK(game->connection(owner, joined, &out.state) == SV_OK);
+        CHECK(out.state.ip[0] == 127 && out.state.ip[1] == 0 && out.state.ip[2] == 0 && out.state.ip[3] == 1);
+        CHECK(out.state.port == port && out.state.idle_ticks == 0 && out.state.spectate == 0);
+        CHECK(out.guard == 0x12345678u);
+        return SV_OK;
+    }
     CHECK(game->connection(owner + 1, player, NULL) == SV_STATE);
     CHECK(game->connection(owner, human, &out.state) == SV_NOT_FOUND);
     CHECK(game->connection(owner, player, NULL) == SV_INVALID);

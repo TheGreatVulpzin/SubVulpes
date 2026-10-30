@@ -66,3 +66,7 @@ Every item follows the rules of `plugin-abi.md`: it goes at the end, it has `siz
 ## Checks before each commit
 
 `tools\build_hook.bat`, `ctest --test-dir build/server`, `python -I tools/re/gen_storage.py --check`, `python -I tools/ci/check_native.py` and `python -I tools/ci/check_repo.py`. Lint the prose with `ste-lint.py --fail-over 2.5`. No push, no tag, no merge, no AI coauthor line.
+
+## Second API brief progress
+
+Items 2, 1 and 3 pass their checks. Next: item 4, the network permission and masked record. R5 and R9 follow.

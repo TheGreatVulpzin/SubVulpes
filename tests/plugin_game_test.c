@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <winsock2.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,7 @@
 #include "objects.h"
 #include "player.h"
 #include "events.h"
+#include "packet.h"
 #include "server.h"
 #include "sr_math.h"
 #include "sr_server.h"
@@ -1312,6 +1314,92 @@ static void connection_checks(void)
     CHECK(!sv_plugins_failed());
 }
 
+/* The real UDP join fills Connection through serverrecv and add_connection. The socket supplies network address bytes. */
+static void connection_join_check(void)
+{
+    BsdSocket socket_before = sr_bsdsocket;
+    Connection connection_before = sr_connections[0];
+    WSADATA data;
+    SOCKET receiver, sender = INVALID_SOCKET;
+    struct sockaddr_in receiver_address = {0}, sender_address = {0};
+    fd_set readable;
+    struct timeval timeout = {5, 0};
+    u_long nonblocking = 1;
+    uint8_t packet[46] = {0};
+    uint32_t ids[2] = {9001, 9002};
+    uint32_t events_before = sr_numofevents;
+    int length, attempt, joined, account, accounts_before = sr_numofaccounts;
+    int players_before = sr_serverinfo.num_players, packets_before = sr_serverinfo.packets_in;
+    int kicked_before = sr_numofkicked;
+    unsigned port = 0;
+    char command[96];
+    CHECK(sr_numofconnections == 0 && sv_events_pending() == 0);
+    CHECK(WSAStartup(MAKEWORD(2, 2), &data) == 0);
+    receiver = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    CHECK(receiver != INVALID_SOCKET);
+    receiver_address.sin_family = AF_INET;
+    receiver_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    CHECK(bind(receiver, (const struct sockaddr *)&receiver_address, sizeof receiver_address) == 0);
+    length = sizeof receiver_address;
+    CHECK(getsockname(receiver, (struct sockaddr *)&receiver_address, &length) == 0);
+    CHECK(ioctlsocket(receiver, FIONBIO, &nonblocking) == 0);
+    /* Unequal port bytes make removal of the port swap observable. */
+    for (attempt = 0; attempt < 8; ++attempt) {
+        sender = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        CHECK(sender != INVALID_SOCKET);
+        memset(&sender_address, 0, sizeof sender_address);
+        sender_address.sin_family = AF_INET;
+        sender_address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        CHECK(bind(sender, (const struct sockaddr *)&sender_address, sizeof sender_address) == 0);
+        length = sizeof sender_address;
+        CHECK(getsockname(sender, (struct sockaddr *)&sender_address, &length) == 0);
+        port = ntohs(sender_address.sin_port);
+        if ((port & 255u) != (port >> 8))
+            break;
+        CHECK(closesocket(sender) == 0);
+        sender = INVALID_SOCKET;
+    }
+    CHECK(sender != INVALID_SOCKET);
+    memcpy(packet, &sr_socketid, 4);
+    packet[4] = 2;
+    packet[5] = (uint8_t)sr_currentversion;
+    memcpy(packet + 6, "Endian", 7);
+    memcpy(packet + 38, ids, sizeof ids);
+    CHECK(sendto(sender, (const char *)packet, sizeof packet, 0,
+        (const struct sockaddr *)&receiver_address, sizeof receiver_address) == (int)sizeof packet);
+    FD_ZERO(&readable);
+    FD_SET(receiver, &readable);
+    CHECK(select(0, &readable, NULL, NULL, &timeout) == 1);
+    sr_bsdsocket.current = 0;
+    sr_bsdsocket.enabled[0] = 1;
+    sr_bsdsocket.handle[0] = (int)receiver;
+    sr_bsdsocket.addr_len = sizeof sr_bsdsocket.addr;
+    sr_numofkicked = 0;
+    serverrecv();
+    CHECK(sr_numofconnections == 1);
+    joined = sr_connections[0].player_id;
+    CHECK(joined >= 0 && joined < SR_MAX_PLAYER && !strcmp(sr_players[joined].name, "Endian"));
+    CHECK(sr_connections[0].ip == 0x7f000001u && (uint16_t)sr_connections[0].port == port);
+    snprintf(command, sizeof command, "connectioncheck joined %llu %u",
+        (unsigned long long)sv_entity_at(SV_ENTITY_PLAYER, joined), port);
+    CHECK(checked_command(command));
+    account = sr_players[joined].account;
+    CHECK(account == accounts_before);
+    deleteplayer(joined);
+    sv_entity_deleted(SV_ENTITY_ACCOUNT, (uint32_t)account);
+    sr_numofaccounts = accounts_before;
+    sr_numofconnections = 0;
+    sr_connections[0] = connection_before;
+    sr_bsdsocket = socket_before;
+    sr_serverinfo.num_players = players_before;
+    sr_serverinfo.packets_in = packets_before;
+    sr_numofkicked = kicked_before;
+    sr_numofevents = events_before;
+    sv_events_clear();
+    CHECK(closesocket(sender) == 0 && closesocket(receiver) == 0 && WSACleanup() == 0);
+    CHECK(!sv_plugins_failed());
+}
+
 static size_t __cdecl failed_account_write(void *data, size_t size, size_t count, void *file)
 {
     (void)data;
@@ -1497,6 +1585,7 @@ int main(int argc, char **argv)
     sv_plugins_tick();
     CHECK(!sv_plugins_failed());
     account_save_checks();
+    connection_join_check();
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);

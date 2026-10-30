@@ -413,3 +413,14 @@ An account read at delivery returns the current state, which can include later c
 The disk notice covers all accounts, including an empty account list. Disconnect notices carry one account reference.
 `os_fclose` forwards `fclose` and returns 0 on success. The `!= 0` check rejects a failed close.
 The flood test saves 2,000 accounts and checks one disk notice, with an earlier queued event intact and no loss notice.
+
+## Connection byte order from the network code
+
+The game stores `Connection.ip` and the low 16 bits of `Connection.port` in host order.
+The join handler calls `add_connection` in [server.c](../src/net/server.c). It stores the results of `sender_ip()` and `sender_port()`.
+Those helpers read network bytes from `BsdSocket.addr` and convert them with `_byteswap_ulong` and `_byteswap_ushort`.
+For `127.0.0.1`, the stored IP number is `0x7f000001`. `read_connection` splits it with shifts 24, 16, 8 and 0.
+The snapshot port stays in host order. The existing split needs no change.
+The game API test sends a real UDP join over loopback through `serverrecv` and `add_connection`.
+It checks the stored values and the public snapshot against the socket endpoint. The port has unequal bytes to expose a missing swap.
+The original client playtest remains open. Caller permissions and capabilities stay unchanged.
