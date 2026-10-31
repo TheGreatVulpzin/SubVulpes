@@ -266,3 +266,61 @@ The guide describes how to compare chord bursts with the existing audio probe.
 The default instrument file is a starting point for those listening tests.
 
 The branch has no push, tag or merge into `main`.
+
+## Jukebox 0.2.0 (2026-10-31)
+
+Version 0.2.0 is complete on `main`. It remains an optional native SDK example.
+Changes stay in the plugin, jukebox tests and its documentation. No core, API or launcher source changed.
+See [the guide](plugin-jukebox.md) for every command and setting.
+
+### Result
+
+- All 47 sound IDs have editable names, kinds, roots, tails and gains in `sounds.ini`.
+  Missing tables use exclusive creation. Existing owner files stay unchanged, including old or invalid versions.
+- Modes are voices, phone, keypad and fixed sound. Old bank settings and legacy mode names remain readable.
+  Ping is the default melody voice. Drums retain their mapping. A channel voice overrides every melody mode.
+- Mono waits for `ceil(tail / pitch)` ticks. It preserves unfinished tails across stop and song changes.
+  The busiest three melody channels start on. Channel commands, compact lists and `.mix` presets simplify selection.
+- Integer timing supports live BPM, speed and global key changes. Drum output ignores the global key.
+  Song names resolve by exact name, prefix, then contained text. Ambiguous names list at most eight matches.
+- Measured gains, channel volume and master volume limit every sound call to 1.0.
+  Presets store channel state, mode, tempo, key and volume. Bad files apply no partial state.
+
+### Checks
+
+The normal `cmake --build build/fresh` build passes with MSVC x86.
+The storage check passes for 138 objects. The native dependency check passes for 91 server sources.
+Its existing script fixes the path to `build/server`, so a local copy checks the `build/fresh` model and map.
+The repository script stays unchanged. The old build folder supplies no evidence for this work.
+
+The full `ctest --test-dir build/fresh --output-on-failure` run passes 23 of 25 groups, with `vcvars32` loaded.
+`launcher-update-paths` fails because its test expects `build/server/subvulpes_server.exe`.
+`package-contents` fails because the release script expects `build/server/plugins/sv.status/plugin.ini`.
+Both paths are fixed in existing files outside this task's allowed changes. Those files stay unchanged.
+After the preset-size message fix, all five jukebox groups pass again.
+The SDK checks build and package the plugin with extracted headers, then run the demo twice through the scenario runner.
+The package remains two files and requests only read, write and config.
+
+Focused checks cover all sound IDs, octave folds, aliases, channel bounds, mono tails, automatic selection and preset reloads.
+They also cover live tempo changes, tempo maps, global key, volume caps and rejected numbers without state changes.
+Name checks include more than 128 eligible files and the eight-name ambiguity limit.
+A failed MIDI load leaves the active sound table unchanged.
+
+Removal checks pass for 57 guards: 24 MIDI reader guards, 28 sound or preset bounds, and five control bounds.
+Each proof removes one guard and requires its rejection test to fail. The scripts restore exact source bytes afterward.
+Run the removal scripts only with no other build active:
+
+```text
+python -I tests/jukebox_removal_test.py build/fresh
+python -I tests/jukebox_v2_removal_test.py build/fresh
+```
+
+Logs stay in ignored `build/planning/jukebox-*.log` files.
+The guide's STE lint score is 1.59 per 100 words.
+
+### Limits
+
+No version 0.2.0 in-game listening, real MIDI listening, client polyphony test or jitter measurement ran.
+No launcher Start/Stop test or live client session ran for this plugin change.
+Server sound calls prove scheduling and API use. They do not prove how many sounds the client hears at once.
+No push or tag ran.
