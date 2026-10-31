@@ -174,6 +174,10 @@ static int convert(Reader *r, Events *all, unsigned division, JbSong *song)
         if (!song->notes)
             return fail(r, "Not enough memory for MIDI notes.");
     }
+    song->division = division;
+    song->tempos = malloc((all->count + 1) * sizeof *song->tempos);
+    if (!song->tempos) return fail(r, "Not enough memory for the tempo map.");
+    song->tempos[song->tempo_count++] = (JbTempo){0, 500000};
     for (i = 0; i < all->count; ++i) {
         const MidiEvent *e = &all->events[i];
         /* A gap is at most one four-byte delta. The bounded product fits uint64_t. */
@@ -183,12 +187,14 @@ static int convert(Reader *r, Events *all, unsigned division, JbSong *song)
         previous = e->tick;
         if (e->kind == TEMPO) {
             tempo = e->tempo;
+            song->tempos[song->tempo_count++] = (JbTempo){e->tick, e->tempo};
         } else if (e->kind == PROGRAM) {
             programs[e->channel] = e->a;
         } else if (e->kind == NOTE) {
             JbNote *note = &song->notes[song->count++];
             JbChannel *channel = &song->channels[e->channel];
             note->tick = ticks;
+            note->midi_tick = e->tick;
             note->channel = e->channel;
             note->key = e->a;
             note->velocity = e->b;
@@ -205,6 +211,7 @@ static int convert(Reader *r, Events *all, unsigned division, JbSong *song)
         }
     }
     song->end_tick = ticks;
+    song->end_midi_tick = previous;
     return 1;
 }
 
@@ -276,5 +283,6 @@ done:
 void jb_song_free(JbSong *song)
 {
     free(song->notes);
+    free(song->tempos);
     memset(song, 0, sizeof *song);
 }
