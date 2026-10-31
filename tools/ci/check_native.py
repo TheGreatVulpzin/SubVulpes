@@ -1,5 +1,6 @@
 """Check the built server's sources, include paths and linked symbols."""
 import json
+import argparse
 import re
 from pathlib import Path
 
@@ -7,7 +8,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
-    build = ROOT / 'build/server'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--build-dir', type=Path, default=ROOT / 'build/server')
+    build = parser.parse_args().build_dir.resolve()
     reply = build / '.cmake/api/v1/reply'
     indexes = list(reply.glob('index-*.json'))
     if not indexes:

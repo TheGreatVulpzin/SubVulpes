@@ -1,6 +1,6 @@
 # Test room plugin
 
-Status: version 0.2.17, built on 2026-10-30. It is a tool for developers. The server package does not carry it.
+Status: version 0.2.18, built on 2026-10-31. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.
 
@@ -130,3 +130,11 @@ These methods have no test here:
 - `SvGameAi.street_route`. A plugin cannot read the road graph yet (work item R3), so it cannot build a valid route.
 - `SvPlugins.provide` and `find` with a real provider. They need a second plugin. The host test covers them.
 - `SvGameProps.add` and the vector rows that no test above uses.
+
+## Core command hooks
+
+| 69 | kicked_count | Reads the core kick list count | A count appears in private chat |
+| 70 | core_command | Denies /svhookprobe through N56 | A probe notice appears in private chat |
+| 71 | login_deny | Denies /admin test through N57 | A login refusal appears in private chat |
+
+Tests 69 to 71 have no original client result yet.

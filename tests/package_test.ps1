@@ -1,6 +1,6 @@
 # Run after the normal build. Test files stay in build/package/.
 [CmdletBinding()]
-param()
+param([string]$BuildDir = 'build/server')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -13,7 +13,7 @@ foreach ($name in @('city.sbc', 'block/test.sbl', 'building/test.sbb', 'texture/
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($path)) -Force | Out-Null
     [IO.File]::WriteAllText($path, 'package test fixture')
 }
-$package = & $script -Version $version -DataDir $fixture
+$package = & $script -Version $version -DataDir $fixture -BuildDir $BuildDir
 $passed = 0
 $prefix = "SubVulpes-server-$version/"
 
@@ -71,34 +71,34 @@ foreach ($name in @('server.srk', 'sv_snapshot.bin', 'subrosadedicated024d.exe')
     $path = Join-Path $package.Package $name
     [IO.File]::WriteAllText($path, 'package test fixture')
     try {
-        Expect-Rejection $name { & $script -Version $version -DataDir $fixture } 'Forbidden package entry:*'
+        Expect-Rejection $name { & $script -Version $version -DataDir $fixture -BuildDir $BuildDir } 'Forbidden package entry:*'
     } finally { Remove-Item -LiteralPath $path }
 }
 $data = Join-Path $package.Package 'user'
 New-Item -ItemType Directory -Path $data | Out-Null
 try {
-    Expect-Rejection 'account directory' { & $script -Version $version -DataDir $fixture } 'Forbidden package entry:*'
+    Expect-Rejection 'account directory' { & $script -Version $version -DataDir $fixture -BuildDir $BuildDir } 'Forbidden package entry:*'
 } finally { Remove-Item -LiteralPath $data }
 $readme = Join-Path $package.Package 'LEIA-ME.txt'
 $saved = [IO.File]::ReadAllBytes($readme)
 try {
     [IO.File]::WriteAllText($readme, 'serverpassword=package-test-value')
-    Expect-Rejection 'password assignment' { & $script -Version $version -DataDir $fixture } 'Private data detected*'
+    Expect-Rejection 'password assignment' { & $script -Version $version -DataDir $fixture -BuildDir $BuildDir } 'Private data detected*'
 } finally { [IO.File]::WriteAllBytes($readme, $saved) }
 $config = Join-Path $package.Package 'config.txt'
 try {
     [IO.File]::WriteAllText($config, 'serverpassword=package-test-value')
-    Expect-Rejection 'stray config' { & $script -Version $version -DataDir $fixture } 'Forbidden package entry*'
+    Expect-Rejection 'stray config' { & $script -Version $version -DataDir $fixture -BuildDir $BuildDir } 'Forbidden package entry*'
 } finally { Remove-Item -LiteralPath $config -ErrorAction SilentlyContinue }
-Expect-Rejection 'version path traversal' { & $script -Version '../invalid' -DataDir $fixture } 'Use a version*'
-Expect-Rejection 'missing data argument' { & $script -Version $version } 'Pass -DataDir*'
+Expect-Rejection 'version path traversal' { & $script -Version '../invalid' -DataDir $fixture -BuildDir $BuildDir } 'Use a version*'
+Expect-Rejection 'missing data argument' { & $script -Version $version -BuildDir $BuildDir } 'Pass -DataDir*'
 
 foreach ($name in @('config.txt', 'server.srk', 'forbidden.exe', 'user/account.txt')) {
     $path = Join-Path $fixture $name
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($path)) -Force | Out-Null
     [IO.File]::WriteAllText($path, 'package test fixture')
     try {
-        Expect-Rejection "data source $name" { & $script -Version $version -DataDir $fixture } 'Forbidden data entry:*'
+        Expect-Rejection "data source $name" { & $script -Version $version -DataDir $fixture -BuildDir $BuildDir } 'Forbidden data entry:*'
         Expect-Rejection "data archive $name" { & (Join-Path $repo 'tools\release\make_data_zip.ps1') -Source $fixture } 'Forbidden data entry:*'
     } finally {
         Remove-Item -LiteralPath $path
@@ -140,7 +140,7 @@ $oldName = $env:GITHUB_REF_NAME
 try {
     $env:GITHUB_REF_TYPE = 'tag'
     $env:GITHUB_REF_NAME = $version
-    $fromTag = & $script -DataDir $fixture
+    $fromTag = & $script -DataDir $fixture -BuildDir $BuildDir
     Assert ($fromTag.Version -eq $version) 'Actions tag fallback failed.'
     Write-Host 'PASS: Actions tag version fallback'
     $passed++

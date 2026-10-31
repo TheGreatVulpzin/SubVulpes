@@ -290,3 +290,12 @@ The invalid input mode uses sanitized packets or state checks. S1 cases cover bo
 - `recvpacket` compares the first byte of the socket id as a signed char. An id byte of 0x80 or more never matches.
 - `pbitread` checks partial bits against the packet length. A failed read stops later reads until the next packet.
 - `packorientation` tests each side with a compare that is false for a NaN. The form of each test decides which branch a NaN takes.
+
+## Plugin command decisions
+
+Plugins can decide inherited commands through N56. Default preserves the admin flag rule.
+Allow permits only the current command. Deny stops the command and login.
+The core still checks each login password unless a plugin denies the attempt first.
+A denied login does not count as a password attempt. No event carries a password.
+Without subscribers, the inherited rules stay the same.
+See the plugin event and game API pages for the record layouts and kick list methods.

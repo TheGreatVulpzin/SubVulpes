@@ -467,3 +467,16 @@ Replay requires the same seed, plugin IDs, calls and ticks. A native plugin that
 Only a sandboxed host can enforce the replay contract. No client playtest or replay recording ran.
 
 Removal proofs cover timer capacity, delay bounds and owner checks. The source is restored before final checks.
+
+## Core kick list
+
+`SvGameWrite` appends `kicked_count`, `kicked_remove` and `kicked_clear` after `world_reset`.
+They require the write callback context, a ready world and the `network` capability.
+Check the table size before each new method. Version 1 remains valid for older callers.
+The address argument has the four dotted-order bytes from `SvConnectionState.ip`.
+No method lists addresses.
+`kicked_count` writes the count. `kicked_remove` removes all entries for one address. No match returns `SV_NOT_FOUND`.
+`kicked_clear` empties the list. A null output or address returns `SV_INVALID`.
+An internal count outside 0 to `SR_MAX_KICKEDIP` returns `SV_FAILED` and changes nothing.
+Without `network`, all three methods return `SV_DENIED` and leave outputs unchanged.
+The game API test covers both capability states, byte order, middle removal, a missing address and malformed counts.

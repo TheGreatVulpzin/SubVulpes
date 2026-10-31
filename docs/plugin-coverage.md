@@ -9,10 +9,10 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | --- | --- | --- |
 | Capabilities | 13 | 1 read, 2 write, 3 AI, 4 economy, 5 missions, 6 settings, 7 storage, 8 engine, 9 shop, 10 property table, 11 plugin settings, 12 plugin services; network is a permission at bit 12 |
 | Read methods | 14 | `entities`, `player`, `human`, `item`, `object`, `account`, `bone`, `inventory`, `world`, `line`, `aim`, `headline`, `within`, `connection` |
-| Write methods | 25 | messages, kick, money, teleport, looks, 5 item, 2 object, 2 bot, vehicle exit and enter, sound, headline, name, speech, shot and hit visuals, `disown`, `world_reset` |
+| Write methods | 28 | messages, kick, money, teleport, looks, 5 item, 2 object, 2 bot, vehicle exit and enter, sound, headline, name, speech, shot and hit visuals, `disown`, `world_reset`, `kicked_count`, `kicked_remove`, `kicked_clear` |
 | Property rows | 37 | players, humans, items, objects, accounts, 27 item types, 4 bullet types, the world, 2 phone rows |
 | Area tables | 7 | AI 11 methods, economy 4, missions 3, settings 3, storage 3, engine 3, shop 4 |
-| Events | 20 bits | tick, stop, lost, spawn, death, leave, chat, join, phone digit, phone call, damage, config, round, vehicle, shot, object gone, item, setting, account save, timer |
+| Events | 23 bits | tick, stop, lost, spawn, death, leave, chat, join, phone digit, phone call, damage, config, round, vehicle, shot, object gone, item, setting, account save, timer, core command, admin login, admin success |
 | Host methods | 8 | `log`, `status`, `command`, `subscribe`, `get_api`, `after`, `every`, `random` |
 | Host rules | 5 | conflicts, refusal reason, plugin APIs, library plugins, and the cleanup of what a plugin made |
 
@@ -55,6 +55,9 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | N41 | Timers and plugin random, done | `SvHost.after`, `every` and `random` use ticks and an independent state. |
 | N45 | Possess a bot | Links on both sides. |
 | N47, N48 | Voice frames and voice routing | The ring of voice frames and the 8 slots exist in the core. |
+| N51 | Core kick list, done | Count, remove and clear require `network`. No address list exists. |
+| N56 | Core command decision, done | Default, allow and deny preserve inherited prefix matches. |
+| N57 | Admin login hooks, done | Decision before the attempt count. Success notice after both flags. No password in either event. |
 | N4 | Colors | Decided as "no support": the colors never leave the server. |
 | `/deactivate` | No support | Both wait for the acceptance of the owner to close S3. |
 

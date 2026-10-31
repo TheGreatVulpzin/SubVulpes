@@ -1,6 +1,7 @@
 /* A second owner checks independent random state and timer cleanup through the public host API. */
 #include <string.h>
 #include "sv_plugin.h"
+#include "sv_game_events.h"
 
 static const SvHost *host;
 static uint32_t random_index, timer_count;
@@ -11,6 +12,13 @@ static SvResult SV_CALL event(SvOwner owner, const SvEvent *base)
 {
     const SvTimerEvent *timer = (const SvTimerEvent *)base;
     (void)owner;
+    if (base->kind == SV_EVENT_CORE_COMMAND) {
+        SvCoreCommandEvent *command = (SvCoreCommandEvent *)base;
+        CHECK(command->decision == SV_COMMAND_DEFAULT);
+        if (!strcmp(command->arguments, "conflict")) command->decision = SV_COMMAND_DENY;
+        if (!strcmp(command->arguments, "reverse")) command->decision = SV_COMMAND_ALLOW;
+        return SV_OK;
+    }
     CHECK(armed && base->kind == SV_EVENT_TIMER && base->size == sizeof *timer && timer->id == 10);
     ++timer_count;
     return SV_OK;
@@ -42,7 +50,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     host = api;
     random_index = timer_count = 0;
     armed = 0;
-    CHECK(host->subscribe(owner, SV_EVENT_EXT_BIT(1), event) == SV_OK);
+    CHECK(host->subscribe(owner, SV_EVENT_EXT_BIT(1) | SV_EVENT_EXT_BIT(2), event) == SV_OK);
     return host->command(owner, "runtimeother", SV_COMMAND_LOCAL, command);
 }
 

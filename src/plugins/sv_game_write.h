@@ -103,6 +103,11 @@ typedef struct {
     SvResult (SV_CALL *disown)(SvOwner owner, SvEntity entity);
     /* Requests one reset at the start of the next server tick. Repeated requests merge into one reset. */
     SvResult (SV_CALL *world_reset)(SvOwner owner);
+    /* Kick list access needs network. Addresses use the byte order of SvConnectionState.ip.
+     * No method lists addresses. Malformed internal counts return SV_FAILED. */
+    SvResult (SV_CALL *kicked_count)(SvOwner owner, uint32_t *count);
+    SvResult (SV_CALL *kicked_remove)(SvOwner owner, const uint8_t address[4]);
+    SvResult (SV_CALL *kicked_clear)(SvOwner owner);
 } SvGameWrite;
 #pragma pack(pop)
 

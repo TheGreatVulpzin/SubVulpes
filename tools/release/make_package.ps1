@@ -1,9 +1,10 @@
 [CmdletBinding()]
-param([string]$Version, [string]$DataDir)
+param([string]$Version, [string]$DataDir, [string]$BuildDir = 'build/server')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$buildPath = if ([IO.Path]::IsPathRooted($BuildDir)) { [IO.Path]::GetFullPath($BuildDir) } else { [IO.Path]::GetFullPath((Join-Path $repo $BuildDir)) }
 . (Join-Path $PSScriptRoot 'server_data.ps1')
 if (-not $DataDir) { throw 'Pass -DataDir with the server data directory.' }
 $dataFiles = @(Get-ServerDataFiles $DataDir)
@@ -42,19 +43,19 @@ foreach ($line in Get-Content -LiteralPath (Join-Path $repo 'plugins\official.in
 }
 if ($official.Count -eq 0) { throw 'official.ini lists no plugin.' }
 $sources = [ordered]@{
-    'subvulpes_server.exe' = 'build\server\subvulpes_server.exe'
+    'subvulpes_server.exe' = Join-Path $buildPath 'subvulpes_server.exe'
     'subvulpes_launcher.exe' = 'build\launcher\subvulpes_launcher.exe'
     'LEIA-ME.txt' = 'tools\release\LEIA-ME.txt'
     'readme.txt' = 'tools\release\newspaper.txt'
     'plugins/plugins.ini' = 'plugins\plugins.ini'
-    'plugins/native-approvals.ini' = 'build\server\plugins\native-approvals.ini'
+    'plugins/native-approvals.ini' = Join-Path $buildPath 'plugins\native-approvals.ini'
     'install_plugin.ps1' = 'tools\plugins\install_plugin.ps1'
 }
 $directories = @('data', 'data/block', 'data/building', 'data/texture', 'data/weapon', 'plugins')
 $libraries = @{}
 foreach ($id in $official.Keys) {
-    $built = "build\server\plugins\$id"
-    $manifestFile = Join-Path $repo "$built\plugin.ini"
+    $built = Join-Path $buildPath "plugins\$id"
+    $manifestFile = "$built\plugin.ini"
     if (-not (Test-Path -LiteralPath $manifestFile -PathType Leaf)) { throw "Build or source file is missing: $built\plugin.ini" }
     $library = (Select-String -LiteralPath $manifestFile -Pattern '^library=(.+)$' | Select-Object -First 1).Matches[0].Groups[1].Value.Trim()
     if ($library -cnotmatch '^[A-Za-z0-9_.-]+\.dll$') { throw "The manifest of $id names a bad library." }
@@ -63,24 +64,29 @@ foreach ($id in $official.Keys) {
     $sources[$libraries[$id]] = "$built\$library"
     $directories += "plugins/$id"
 }
+foreach ($key in @($sources.Keys)) {
+    if (-not [IO.Path]::IsPathRooted($sources[$key])) {
+        $sources[$key] = Join-Path $repo $sources[$key]
+    }
+}
 $allowed = @($sources.Keys) + @('version.txt')
 $allowed += @($dataFiles | ForEach-Object { "data/$($_.Relative)" })
 $officialKeys = [string[]]@($official.Keys)
 [Array]::Sort($officialKeys, [StringComparer]::Ordinal)
 $approvalLines = @('[native]')
 foreach ($id in $officialKeys) {
-    $approvalLines += "$id=$((Get-FileHash -LiteralPath (Join-Path $repo $sources[$libraries[$id]]) -Algorithm SHA256).Hash.ToLowerInvariant())"
+    $approvalLines += "$id=$((Get-FileHash -LiteralPath $sources[$libraries[$id]] -Algorithm SHA256).Hash.ToLowerInvariant())"
 }
-$approvalText = [IO.File]::ReadAllText((Join-Path $repo $sources['plugins/native-approvals.ini'])).Replace("`r", '').Trim()
+$approvalText = [IO.File]::ReadAllText($sources['plugins/native-approvals.ini']).Replace("`r", '').Trim()
 if ($approvalText -cne ($approvalLines -join "`n")) { throw 'The official native approval does not match the built official plugins.' }
-$profileText = [IO.File]::ReadAllText((Join-Path $repo $sources['plugins/plugins.ini'])).Replace("`r", '').Trim()
+$profileText = [IO.File]::ReadAllText($sources['plugins/plugins.ini']).Replace("`r", '').Trim()
 $expectedProfile = (@('[plugins]') + @($official.Keys | ForEach-Object { "$_=$($official[$_])" })) -join "`n"
 if ($profileText -cne $expectedProfile) { throw 'plugins/plugins.ini does not match plugins/official.ini.' }
 
 # Copy build outputs, package defaults and checked data files.
 # The package has no config.txt: the launcher creates it with a new admin password.
 foreach ($source in $sources.Values) {
-    $path = Join-Path $repo $source
+    $path = $source
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Build or source file is missing: $source"
     }
@@ -116,7 +122,7 @@ Assert-Package
 foreach ($entry in $sources.GetEnumerator()) {
     $target = Join-Path $package $entry.Key
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $repo $entry.Value) -Destination $target -Force
+    Copy-Item -LiteralPath $entry.Value -Destination $target -Force
 }
 foreach ($file in $dataFiles) {
     $target = Join-Path $package "data/$($file.Relative)"

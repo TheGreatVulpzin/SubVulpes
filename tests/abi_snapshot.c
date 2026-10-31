@@ -55,6 +55,8 @@ int main(void)
     RECORD(SvGameEvent);
     RECORD(SvAccountSaveEvent);
     RECORD(SvChatEvent);
+    RECORD(SvCoreCommandEvent);
+    RECORD(SvAdminLoginEvent);
     RECORD(SvDamageEvent);
     RECORD(SvAiThreat);
     RECORD(SvAiThreats);
@@ -89,7 +91,7 @@ int main(void)
     TABLE(SvConfig, get_int, get_text, 3);
     TABLE(SvPlugins, refuse, find, 3);
     TABLE(SvGameRead, entities, connection, 14);
-    TABLE(SvGameWrite, message, world_reset, 25);
+    TABLE(SvGameWrite, message, kicked_clear, 28);
     TABLE(SvGameProps, find, add, 5);
     TABLE(SvGameAi, threats, seated_target, 11);
     TABLE(SvGameEconomy, company, add_stocks, 4);
@@ -102,5 +104,10 @@ int main(void)
     printf("SvAccountSaveEvent reason=%zu\n", offsetof(SvAccountSaveEvent, reason));
     printf("SvConnectionState flags=%zu address_id=%zu network_id=%zu\n", offsetof(SvConnectionState, flags), offsetof(SvConnectionState, address_id), offsetof(SvConnectionState, network_id));
     printf("SV_EVENT_TIMER kind=%u bit=%llu\n", SV_EVENT_TIMER, (unsigned long long)SV_EVENT_EXT_BIT(1));
+    printf("Core hooks kinds=%u,%u,%u decisions=%u,%u,%u\n", SV_EVENT_CORE_COMMAND,
+        SV_EVENT_ADMIN_LOGIN, SV_EVENT_ADMIN_SUCCESS, SV_COMMAND_DEFAULT, SV_COMMAND_ALLOW, SV_COMMAND_DENY);
+    printf("SvCoreCommandEvent name=%zu arguments=%zu builtin=%zu decision=%zu\n",
+        offsetof(SvCoreCommandEvent, name), offsetof(SvCoreCommandEvent, arguments),
+        offsetof(SvCoreCommandEvent, builtin), offsetof(SvCoreCommandEvent, decision));
     return 0;
 }

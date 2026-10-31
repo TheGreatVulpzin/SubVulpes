@@ -36,8 +36,15 @@ static void say(const char *text)
 static void admin_login(int player, const char *text)
 {
     Player *p = &sr_players[player];
+    SvAdminLoginEvent event = { { sizeof event, SV_EVENT_ADMIN_LOGIN, 0 }, 0 };
     int i, found = -1;
-    if (strncmp(text, "/admin ", 7) != 0 || ++p->admin_tries >= MAX_ADMIN_TRIES)
+    if (strncmp(text, "/admin ", 7) != 0)
+        return;
+    event.player = sv_entity_at(SV_ENTITY_PLAYER, player);
+    event.base.tick = (uint32_t)sr_game.ticks;
+    if (event.player && sv_plugins_decide(&event.base) == SV_DENIED)
+        return;
+    if (++p->admin_tries >= MAX_ADMIN_TRIES)
         return;
     if (strcmp(text + 7, sr_option.password) != 0)
         return;
@@ -48,8 +55,51 @@ static void admin_login(int player, const char *text)
     p->is_admin = 1;
     if (found != -1)
         sr_connections[found].is_admin = 1;
+    event.base.kind = SV_EVENT_ADMIN_SUCCESS;
+    sv_events_post_record(&event.base);
     sprintf(msgbuf, "%s admin", p->name);
     say(msgbuf);
+}
+
+/* Match the inherited prefix rules, including prefixes that need a trailing space. */
+static const char *core_builtin(const char *text)
+{
+    static const struct { const char *prefix, *name; } commands[] = {
+        { "/hlist", "list" }, { "/list1", "list" }, { "/list2", "list" }, { "/list3", "list" },
+        { "/godmode", "godmode" }, { "/heli", "heli" }, { "/phone", "phone" }, { "/arm", "arm" },
+        { "/cash", "cash" }, { "/resetgame", "resetgame" }, { "/ban1 ", "ban" },
+        { "/give ", "give" }, { "/bany ", "ban" }, { "/bann", "ban" }, { "/kick ", "kick" },
+        { "/message ", "message" }, { "/clearkick", "clearkick" }
+    };
+    size_t i;
+    for (i = 0; i < sizeof commands / sizeof commands[0]; ++i)
+        if (!strncmp(text, commands[i].prefix, strlen(commands[i].prefix)))
+            return commands[i].name;
+    return "";
+}
+
+static uint32_t core_decision(SvEntity player, const char *text)
+{
+    SvCoreCommandEvent event = { { sizeof event, SV_EVENT_CORE_COMMAND, 0 }, 0 };
+    size_t i = 1, n = 0;
+    if (!player || !sv_plugins_wants(SV_EVENT_CORE_COMMAND))
+        return SV_COMMAND_DEFAULT;
+    event.base.tick = (uint32_t)sr_game.ticks;
+    event.player = player;
+    while (i < 64 && text[i] && text[i] != ' ' && n < sizeof event.name - 1)
+        event.name[n++] = (char)tolower((unsigned char)text[i++]);
+    while (i < 64 && text[i] == ' ')
+        ++i;
+    /* No plugin receives a login password, including command observers. */
+    if (strcmp(event.name, "admin") && i < 64) {
+        n = strnlen(text + i, 64 - i);
+        if (n >= sizeof event.arguments)
+            n = sizeof event.arguments - 1;
+        memcpy(event.arguments, text + i, n);
+    }
+    strcpy(event.builtin, core_builtin(text));
+    sv_plugins_decide(&event.base);
+    return event.decision;
 }
 
 /* List the connections from first to last (exclusive): the name and the account. */
@@ -250,6 +300,7 @@ int server_playermessage(int player, char *text)
     Player *p;
     SvEntity actor;
     int len, n, total;
+    uint32_t decision;
     if (player == -1)
         return 0;
     p = &sr_players[player];
@@ -277,8 +328,11 @@ int server_playermessage(int player, char *text)
     actor = sv_entity_at(SV_ENTITY_PLAYER, player);
     if (actor != 0 && sv_plugins_command(actor, text))
         return 1;
+    decision = core_decision(actor, text);
+    if (decision == SV_COMMAND_DENY)
+        return 1;
     admin_login(player, text);
-    if (p->is_admin != 0)
+    if (p->is_admin != 0 || decision == SV_COMMAND_ALLOW)
         admin_commands(player, text, n);
     return 1;
 }

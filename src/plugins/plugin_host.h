@@ -72,7 +72,9 @@ void sv_systems_install(void);
 /* Gives a decision event to the active plugins that asked for its kind, in load order, with the full API. The first
  * plugin that answers SV_DENIED ends the call and the result is SV_DENIED. Any other answer than SV_OK or SV_DENIED is a
  * failure, and the plugin is disabled. The result is SV_OK when no plugin answers SV_DENIED, and also when the call is not
- * on the server thread, the host is not running or the call comes from inside a plugin callback. */
+ * on the server thread, the host is not running or the call comes from inside a plugin callback.
+ * CORE_COMMAND instead collects bounded decisions from all subscribers. Only decision can change.
+ * Deny wins over allow, and allow wins over default. A callback error contributes no decision. */
 SvResult sv_plugins_decide(const SvEvent *event);
 int sv_game_actor_admin(uint64_t actor);
 void sv_log(const char *fmt, ...);

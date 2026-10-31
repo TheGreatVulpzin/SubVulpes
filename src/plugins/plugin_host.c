@@ -763,7 +763,13 @@ static void dispatch(uint32_t kind)
 SvResult sv_plugins_decide(const SvEvent *event)
 {
     uint32_t i;
+    uint32_t decision = SV_COMMAND_DEFAULT;
+    SvCoreCommandEvent command = { 0 };
+    int core_command;
     if (!started || stopping || failed || current || GetCurrentThreadId() != server_thread || !event)
+        return SV_OK;
+    core_command = event->kind == SV_EVENT_CORE_COMMAND;
+    if (core_command && event->size < sizeof command)
         return SV_OK;
     for (i = 0; i < module_count; ++i) {
         SvModule *module = &modules[i];
@@ -774,16 +780,34 @@ SvResult sv_plugins_decide(const SvEvent *event)
             continue;
         QueryPerformanceCounter(&before);
         control = enter(i);
-        result = module->event_callback(i + 1, event);
+        if (core_command) {
+            command = *(const SvCoreCommandEvent *)event;
+            command.decision = SV_COMMAND_DEFAULT;
+        }
+        result = module->event_callback(i + 1, core_command ? &command.base : event);
         leave(control);
         QueryPerformanceCounter(&after);
         QueryPerformanceFrequency(&frequency);
         ++module->calls;
         module->elapsed_us += (uint64_t)((after.QuadPart - before.QuadPart) * 1000000.0 / frequency.QuadPart);
-        if (result == SV_DENIED)
+        if (core_command) {
+            if (result == SV_DENIED)
+                command.decision = SV_COMMAND_DENY;
+            if (command.decision > SV_COMMAND_DENY)
+                result = SV_FAILED;
+            if ((result == SV_OK || result == SV_DENIED) && command.decision > decision)
+                decision = command.decision;
+            if (result == SV_DENIED)
+                result = SV_OK;
+        } else if (result == SV_DENIED)
             return SV_DENIED;
         if (result != SV_OK)
             deactivate(i, SV_MODULE_FAILED, "Event callback reported failure.");
+    }
+    if (core_command) {
+        ((SvCoreCommandEvent *)event)->decision = decision;
+        if (decision == SV_COMMAND_DENY)
+            return SV_DENIED;
     }
     return SV_OK;
 }

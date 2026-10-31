@@ -794,6 +794,112 @@ static void write_api_tick(void)
 
 /* Plugin commands in the chat. Only the PUBLIC command runs for a player. The ADMIN command runs
  * after the /admin flag is set. The LOCAL command never runs for a player. */
+static void core_message(const char *value)
+{
+    char text[64];
+    strcpy(text, value);
+    CHECK(server_playermessage(0, text) == 1 && !sv_plugins_failed());
+}
+
+static void core_commands_check(void)
+{
+    int money = sr_players[0].money, count = sr_numofconnections;
+    int admin = sr_players[0].is_admin, tries = sr_players[0].admin_tries;
+    int kicked = sr_numofkicked;
+    Connection saved = sr_connections[0];
+    char password[sizeof sr_option.password];
+    uint32_t ips[4];
+    memcpy(password, sr_option.password, sizeof password);
+    memcpy(ips, sr_kickedip, sizeof ips);
+    sr_players[0].is_admin = 0;
+    CHECK(sv_plugins_command(0, "corecheck default"));
+    core_message("/cash");
+    CHECK(sr_players[0].money == money);
+    sr_players[0].is_admin = 1;
+    core_message("/cash");
+    CHECK(sr_players[0].money == money + 100000);
+    CHECK(sv_plugins_command(0, "corecheck deny"));
+    core_message("/cash");
+    CHECK(sr_players[0].money == money + 100000);
+    core_message("/cash reverse");
+    CHECK(sr_players[0].money == money + 100000);
+    CHECK(sv_plugins_command(0, "corecheck allow"));
+    sr_players[0].is_admin = 0;
+    core_message("/cash");
+    CHECK(sr_players[0].money == money + 200000);
+    core_message("/cash conflict");
+    CHECK(sr_players[0].money == money + 200000);
+    CHECK(sv_plugins_command(0, "corecheck expect army arm"));
+    /* No body prevents this inherited command from changing the test inventory. */
+    {
+        int human = sr_players[0].human_id;
+        sr_players[0].human_id = -1;
+        core_message("/army");
+        sr_players[0].human_id = human;
+    }
+    CHECK(sv_plugins_command(0, "corecheck expected"));
+    CHECK(sv_plugins_command(0, "corecheck expect army empty"));
+    core_message("/ARMY");
+    CHECK(sv_plugins_command(0, "corecheck expected"));
+    CHECK(sv_plugins_command(0, "corecheck expect kick empty"));
+    core_message("/kick");
+    CHECK(sv_plugins_command(0, "corecheck expected"));
+    CHECK(sv_plugins_command(0, "corecheck expect kick kick"));
+    core_message("/kick missing");
+    CHECK(sv_plugins_command(0, "corecheck expected"));
+    {
+        char text[64], expected[100] = "corecheck expect ";
+        memset(text, 'a', sizeof text);
+        text[0] = '/';
+        memset(expected + 17, 'a', 62);
+        strcpy(expected + 79, " empty");
+        CHECK(sv_plugins_command(0, expected));
+        CHECK(server_playermessage(0, text) == 1 && text[63] == 0);
+        CHECK(sv_plugins_command(0, "corecheck expected"));
+    }
+    strcpy(sr_option.password, "test-only");
+    sr_players[0].admin_tries = 0;
+    sr_connections[0].player_id = 0;
+    sr_connections[0].is_admin = 0;
+    sr_numofconnections = 1;
+    CHECK(sv_plugins_command(0, "corecheck login deny"));
+    core_message("/admin test-only");
+    CHECK(!sr_players[0].is_admin && !sr_connections[0].is_admin && !sr_players[0].admin_tries);
+    CHECK(sv_plugins_command(0, "corecheck login allow"));
+    CHECK(sv_plugins_command(0, "corecheck deny"));
+    core_message("/admin test-only");
+    CHECK(!sr_players[0].is_admin && !sr_players[0].admin_tries);
+    CHECK(sv_plugins_command(0, "corecheck allow"));
+    core_message("/admin wrong");
+    CHECK(!sr_players[0].is_admin && sr_players[0].admin_tries == 1);
+    core_message("/admin test-only");
+    CHECK(sr_players[0].is_admin && sr_connections[0].is_admin && sr_players[0].admin_tries == 2);
+    sv_plugins_tick();
+    CHECK(!sv_plugins_failed() && sv_plugins_command(0, "corecheck success"));
+    CHECK(sv_plugins_command(0, "corecheck default"));
+    sr_numofkicked = 4;
+    sr_kickedip[0] = 0x04030201u; sr_kickedip[1] = 0x01020304u; sr_kickedip[2] = 0x05060708u;
+    sr_kickedip[3] = 0x01020304u;
+    CHECK(sv_plugins_command(0, "corecheck kicked"));
+    if (getenv("SV_TEST_NETWORK")[0] == '1')
+        CHECK(sr_numofkicked == 0 && sr_kickedip[0] == 0x04030201u && sr_kickedip[1] == 0x05060708u);
+    else CHECK(sr_numofkicked == 4);
+    sr_numofkicked = -1;
+    CHECK(sv_plugins_command(0, "corecheck kicked bad"));
+    sr_numofkicked = SR_MAX_KICKEDIP + 1;
+    CHECK(sv_plugins_command(0, "corecheck kicked bad"));
+    CHECK(!sv_plugins_failed());
+    sr_numofkicked = kicked;
+    memcpy(sr_kickedip, ips, sizeof ips);
+    sr_connections[0] = saved;
+    sr_numofconnections = count;
+    sr_players[0].is_admin = admin;
+    sr_players[0].admin_tries = tries;
+    sr_players[0].money = money;
+    memcpy(sr_option.password, password, sizeof password);
+    puts("CORE_COMMAND_LOGIN_KICKED_PASS");
+}
+
 static void chat_commands(void)
 {
     char text[64];
@@ -1662,6 +1768,7 @@ int main(int argc, char **argv)
     CHECK(!sv_plugins_failed());
     account_save_checks();
     connection_join_check();
+    core_commands_check();
     world_reset_checks();
     runtime_checks();
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);

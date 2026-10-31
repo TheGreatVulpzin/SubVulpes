@@ -18,10 +18,13 @@ static uint32_t pid_godmode, pid_admin, pid_team, pid_health, pid_bleeding, pid_
 static SvOwner plugin_owner;
 static SvEntity player, human, item, object, account;
 static uint32_t stage, account_saves;
+static uint32_t core_mode, login_denied, login_seen;
+static char expected_name[64], expected_builtin[16];
 static uint32_t random_index, timer_once, timer_repeat, timer_rearm, timer_ticks;
 static int timers_armed;
 static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event);
-#define FIXTURE_EVENTS (SV_EVENT_EXT_BIT(0) | SV_EVENT_EXT_BIT(1) | SV_EVENT_EXT_BIT(31) | \
+#define FIXTURE_EVENTS (SV_EVENT_EXT_BIT(0) | SV_EVENT_EXT_BIT(1) | SV_EVENT_EXT_BIT(2) | \
+    SV_EVENT_EXT_BIT(3) | SV_EVENT_EXT_BIT(4) | SV_EVENT_EXT_BIT(31) | \
     SV_EVENT_TICK | SV_EVENT_LOST | SV_EVENT_SPAWN | SV_EVENT_DEATH | SV_EVENT_LEAVE | \
     SV_EVENT_CHAT | SV_EVENT_JOIN | SV_EVENT_DAMAGE | SV_EVENT_ROUND | SV_EVENT_VEHICLE | SV_EVENT_SHOT | \
     SV_EVENT_OBJECT_GONE | SV_EVENT_ITEM)
@@ -58,6 +61,43 @@ static DWORD WINAPI wrong_thread(void *argument)
     (void)argument;
     return game->world(plugin_owner, &state) == SV_STATE &&
         host->get_api(plugin_owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_STATE ? 0 : 1;
+}
+
+static SvResult SV_CALL core_check(SvOwner owner, uint64_t actor, const char *arguments)
+{
+    const uint8_t ip[4] = { 1, 2, 3, 4 };
+    uint32_t count = 999;
+    (void)actor;
+    if (!strcmp(arguments, "allow")) core_mode = SV_COMMAND_ALLOW;
+    else if (!strcmp(arguments, "deny")) core_mode = SV_COMMAND_DENY;
+    else if (!strcmp(arguments, "default")) core_mode = SV_COMMAND_DEFAULT;
+    else if (!strcmp(arguments, "login deny")) login_denied = 1;
+    else if (!strcmp(arguments, "login allow")) login_denied = 0;
+    else if (!strcmp(arguments, "success")) { CHECK(login_seen == 1); }
+    else if (!strncmp(arguments, "expect ", 7)) {
+        CHECK(sscanf(arguments + 7, "%63s %15s", expected_name, expected_builtin) == 2);
+        if (!strcmp(expected_builtin, "empty")) expected_builtin[0] = 0;
+    } else if (!strcmp(arguments, "expected")) { CHECK(!expected_name[0]); }
+    else if (!strncmp(arguments, "kicked", 6)) {
+        SvResult result = change->kicked_count(owner, &count);
+        if (!network_allowed) {
+            CHECK(result == SV_DENIED && count == 999);
+            CHECK(change->kicked_remove(owner, ip) == SV_DENIED && change->kicked_clear(owner) == SV_DENIED);
+        } else if (!strcmp(arguments, "kicked bad")) {
+            CHECK(result == SV_FAILED && count == 999);
+            CHECK(change->kicked_remove(owner, ip) == SV_FAILED && change->kicked_clear(owner) == SV_FAILED);
+        } else {
+            CHECK(result == SV_OK && count == 4);
+            CHECK(change->kicked_count(owner, NULL) == SV_INVALID);
+            CHECK(change->kicked_remove(owner, NULL) == SV_INVALID);
+            CHECK(change->kicked_remove(owner, ip) == SV_OK);
+            CHECK(change->kicked_count(owner, &count) == SV_OK && count == 2);
+            CHECK(change->kicked_remove(owner, ip) == SV_NOT_FOUND);
+            CHECK(change->kicked_clear(owner) == SV_OK);
+            CHECK(change->kicked_count(owner, &count) == SV_OK && count == 0);
+        }
+    } else return SV_INVALID;
+    return SV_OK;
 }
 
 /* A chat command logs its name and text. The actor is never zero, since zero is the local operator. */
@@ -1438,6 +1478,30 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
             damage->new_amount = SV_DAMAGE_MAX + 1;
         return SV_OK;
     }
+    if (event->kind == SV_EVENT_CORE_COMMAND) {
+        SvCoreCommandEvent *command = (SvCoreCommandEvent *)event;
+        CHECK(event->size == sizeof *command && command->decision == SV_COMMAND_DEFAULT);
+        CHECK(command->name[63] == 0 && command->arguments[63] == 0 && command->builtin[15] == 0);
+        if (expected_name[0]) {
+            CHECK(!strcmp(command->name, expected_name) && !strcmp(command->builtin, expected_builtin));
+            expected_name[0] = 0;
+        }
+        if (!strcmp(command->name, "admin")) CHECK(!command->arguments[0]);
+        command->decision = core_mode;
+        return SV_OK;
+    }
+    if (event->kind == SV_EVENT_ADMIN_LOGIN) {
+        CHECK(event->size == sizeof(SvAdminLoginEvent));
+        return login_denied ? SV_DENIED : SV_OK;
+    }
+    if (event->kind == SV_EVENT_ADMIN_SUCCESS) {
+        const SvAdminLoginEvent *login = (const SvAdminLoginEvent *)event;
+        SvPlayerState state = { sizeof state };
+        CHECK(event->size == sizeof *login);
+        CHECK(game->player(owner, login->player, &state) == SV_OK && state.is_admin);
+        ++login_seen;
+        return SV_OK;
+    }
     if (event->kind == SV_EVENT_CHAT) {
         /* A decision: drop a text that has the word deny. */
         const SvChatEvent *chat = (const SvChatEvent *)event;
@@ -1669,6 +1733,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     }
     CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
     CHECK(host->command(owner, "connectioncheck", SV_COMMAND_LOCAL, connection_command) == SV_OK);
+    CHECK(host->command(owner, "corecheck", SV_COMMAND_LOCAL, core_check) == SV_OK);
     CHECK(host->command(owner, "accountsavecheck", SV_COMMAND_LOCAL, account_save_command) == SV_OK);
     CHECK(host->command(owner, "resetcheck", SV_COMMAND_LOCAL, reset_command) == SV_OK);
     CHECK(host->command(owner, "runtimecheck", SV_COMMAND_LOCAL, runtime_command) == SV_OK);

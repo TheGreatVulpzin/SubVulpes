@@ -8,6 +8,7 @@ namespace SubVulpes
 {
     static class LauncherUpdateTests
     {
+        static string serverBuild;
         static void Expect(string path, string expected)
         {
             string result = LauncherForm.UpdateKey(path);
@@ -229,7 +230,7 @@ namespace SubVulpes
                 throw new Exception("The installation command lost consent or content binding.");
 
             // Read the real server output as well as the synthetic parser cases.
-            string build = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "server"));
+            string build = serverBuild;
             var start = new ProcessStartInfo(Path.Combine(build, "subvulpes_server.exe"), "--plugin-inspect sv.status") {
                 WorkingDirectory = build, UseShellExecute = false, CreateNoWindow = true,
                 RedirectStandardOutput = true, RedirectStandardError = true
@@ -244,8 +245,10 @@ namespace SubVulpes
         }
 
         [STAThread]
-        static int Main()
+        static int Main(string[] arguments)
         {
+            serverBuild = arguments.Length == 1 ? Path.GetFullPath(arguments[0]) :
+                Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "server"));
             try { Run(); return 0; }
             catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
         }

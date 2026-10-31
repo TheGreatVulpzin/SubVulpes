@@ -583,11 +583,63 @@ static SvResult SV_CALL write_disown(SvOwner owner, SvEntity entity)
     return sv_made_disown(owner, entity);
 }
 
+static SvResult kicked_context(SvOwner owner)
+{
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!sv_plugins_has_capability(owner, SV_CAP_NETWORK))
+        return SV_DENIED;
+    if (sr_numofkicked < 0 || sr_numofkicked > SR_MAX_KICKEDIP)
+        return SV_FAILED;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_kicked_count(SvOwner owner, uint32_t *count)
+{
+    SvResult result = kicked_context(owner);
+    if (result != SV_OK)
+        return result;
+    if (!count)
+        return SV_INVALID;
+    *count = (uint32_t)sr_numofkicked;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_kicked_remove(SvOwner owner, const uint8_t address[4])
+{
+    int i, used, kept = 0;
+    uint32_t ip;
+    SvResult result = kicked_context(owner);
+    if (result != SV_OK)
+        return result;
+    if (!address)
+        return SV_INVALID;
+    ip = (uint32_t)address[0] << 24 | (uint32_t)address[1] << 16 |
+        (uint32_t)address[2] << 8 | address[3];
+    used = sr_numofkicked;
+    for (i = 0; i < used; ++i)
+        if (sr_kickedip[i] != ip)
+            sr_kickedip[kept++] = sr_kickedip[i];
+    if (kept == used)
+        return SV_NOT_FOUND;
+    sr_numofkicked = kept;
+    return SV_OK;
+}
+
+static SvResult SV_CALL write_kicked_clear(SvOwner owner)
+{
+    SvResult result = kicked_context(owner);
+    if (result != SV_OK)
+        return result;
+    sr_numofkicked = 0;
+    return SV_OK;
+}
+
 const SvGameWrite sv_game_write = {
     sizeof(SvGameWrite), SV_GAME_WRITE_VERSION, write_message, write_kick, write_add_money,
     write_teleport, write_looks, write_message_to,
     write_item_create, write_item_remove, write_item_equip, write_item_attach, write_item_detach,
     write_object_create, write_object_remove, write_npc_create, write_npc_remove,
     write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak, write_bullet, write_bullet_hit,
-    write_disown, sv_game_request_reset
+    write_disown, sv_game_request_reset, write_kicked_count, write_kicked_remove, write_kicked_clear
 };

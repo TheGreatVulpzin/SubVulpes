@@ -22,7 +22,7 @@
 #include "sv_config.h"
 #include "sv_plugins_api.h"
 
-#define VERSION "0.2.17"
+#define VERSION "0.2.18"
 #define LINE_MAX_CHARS 60
 #define MAX_TESTS 72
 
@@ -69,6 +69,7 @@ static SvEntity last_magazine, last_car, last_npc, last_npc_human, last_gun;
 static float saved_speed, saved_bullet_mass;
 static unsigned name_step;
 static int chat_prefix_on, notices_on, phone_claim_on, setting_notice_on;
+static int command_hook_test;
 static SvEntity money_account, stock_player, phone_item;
 static int32_t money_added, saved_shares, stocks_added, saved_bots;
 static float saved_price;
@@ -249,6 +250,9 @@ static void cleanup(void)
     SvPlayerState player = { sizeof player };
     SvHumanState human = { sizeof human };
     int i;
+    if (command_hook_test)
+        host->subscribe(self, EVENTS_BASE, on_event);
+    command_hook_test = 0;
     if ((touched & T_AI) && ai)
         ai->release(self, last_npc);
     if (touched & T_DEATH)
@@ -807,6 +811,22 @@ static SvResult t_bomb(void)
 /* The chat decision: while this is on, the text that the tester types gets a prefix. */
 static SvResult SV_CALL on_event(SvOwner owner, const SvEvent *event)
 {
+    if (event->kind == SV_EVENT_CORE_COMMAND && event->size >= sizeof(SvCoreCommandEvent)) {
+        SvCoreCommandEvent *command = (SvCoreCommandEvent *)event;
+        if (command_hook_test == 1 && command->player == tester && !strcmp(command->name, "svhookprobe")) {
+            command->decision = SV_COMMAND_DENY;
+            say("Core command event received. Probe denied.");
+        }
+        return SV_OK;
+    }
+    if (event->kind == SV_EVENT_ADMIN_LOGIN && event->size >= sizeof(SvAdminLoginEvent)) {
+        const SvAdminLoginEvent *login = (const SvAdminLoginEvent *)event;
+        if (command_hook_test == 2 && login->player == tester) {
+            say("Login denied before the password check.");
+            return SV_DENIED;
+        }
+        return SV_OK;
+    }
     if (event->kind == SV_EVENT_TIMER) {
         const SvTimerEvent *timer = (const SvTimerEvent *)event;
         if (event->size < sizeof *timer)
@@ -1831,6 +1851,32 @@ static SvResult t_timer_random(void)
     return r;
 }
 
+static SvResult t_kicked_count(void)
+{
+    uint32_t count;
+    SvResult r;
+    if (change->size < offsetof(SvGameWrite, kicked_clear) + sizeof change->kicked_clear)
+        return SV_INCOMPATIBLE;
+    r = change->kicked_count(self, &count);
+    if (r == SV_OK)
+        sayf("Core kick list: %u addresses.", count);
+    return r;
+}
+
+static SvResult t_core_command(void)
+{
+    command_hook_test = 1;
+    say("Type /svhookprobe. Then type /test yes or /test no.");
+    return host->subscribe(self, EVENTS_BASE | SV_EVENT_EXT_BIT(2), on_event);
+}
+
+static SvResult t_login_deny(void)
+{
+    command_hook_test = 2;
+    say("Type /admin test. The hook must deny this attempt.");
+    return host->subscribe(self, EVENTS_BASE | SV_EVENT_EXT_BIT(3), on_event);
+}
+
 static const Test tests[] = {
     { "chat_all", "Sends one message to every client.", "The line 'TEST: every player sees this line.' appears in the chat.", t_chat_all, NULL },
     { "chat_private", "Sends a message to you only.", "You see the line. Other players would not.", t_chat_private, NULL },
@@ -1900,6 +1946,9 @@ static const Test tests[] = {
     { "connection", "Reads your connection for this admin command.", "Your address, port, idle ticks and spectate value appear.", t_connection, NULL },
     { "world_reset", "Requests a round reset at the next tick.", "The round restarts.", t_world_reset, NULL },
     { "timer_random", "Reads plugin random and sets a timer for 60 ticks.", "A random number appears, then a timer notice after 60 ticks.", t_timer_random, NULL },
+    { "kicked_count", "Reads the core kick list count.", "A count appears in private chat.", t_kicked_count, NULL },
+    { "core_command", "Denies the probe command through N56.", "The probe event appears in private chat.", t_core_command, NULL },
+    { "login_deny", "Denies a password attempt through N57.", "The login denial appears in private chat.", t_login_deny, NULL },
 };
 
 /* ------------------------------------------------------------ flow */

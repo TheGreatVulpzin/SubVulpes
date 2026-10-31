@@ -4,6 +4,9 @@
 #include "sv_game.h"
 
 #define SV_EVENT_ACCOUNT_SAVE SV_EVENT_EXT(0)
+#define SV_EVENT_CORE_COMMAND SV_EVENT_EXT(2)
+#define SV_EVENT_ADMIN_LOGIN SV_EVENT_EXT(3)
+#define SV_EVENT_ADMIN_SUCCESS SV_EVENT_EXT(4)
 
 enum { SV_ACCOUNT_SAVE_DISK = 0, SV_ACCOUNT_SAVE_DISCONNECT = 1 };
 
@@ -49,6 +52,26 @@ typedef struct {
     SvEntity account;
     uint32_t reason;
 } SvAccountSaveEvent;
+
+enum { SV_COMMAND_DEFAULT = 0, SV_COMMAND_ALLOW = 1, SV_COMMAND_DENY = 2 };
+
+/* Only decision is writable. Each subscriber gets the original input and a default decision.
+ * Deny wins over allow. Password login arguments are always empty. */
+typedef struct {
+    SvEvent base;
+    SvEntity player;
+    char name[64];
+    char arguments[64];
+    char builtin[16];
+    uint32_t decision;
+} SvCoreCommandEvent;
+
+/* The login decision precedes the attempt counter. SV_DENIED skips the password check.
+ * The success notice follows both admin flags. Neither record carries the password. */
+typedef struct {
+    SvEvent base;
+    SvEntity player;
+} SvAdminLoginEvent;
 
 /* A chat text: the player that typed it and the text, at most 63 bytes. It is a decision at a safe point. The plugin
  * answers SV_OK to let the text go to the chat, or SV_DENIED to drop it. A text that starts with "/" is a command, and the

@@ -94,3 +94,31 @@ Use kind 3 only when the safe route cannot say the rule. Keep the answer short: 
    - Not tested: the three damage sites inside the real bullet and vehicle code (the test calls the functions that they call), the callback of a plugin that crashes (that is a crash of the server), and the cost of many decisions in one tick.
 
 Each step has tests, a removal proof for each check that guards memory or a limit, and a note here. The original client sees no change: the core sends the same packets.
+
+## Core command and login hooks
+
+The core posts `SV_EVENT_CORE_COMMAND` after plugin commands and before its inherited login and commands.
+Subscribe with `SV_EVENT_EXT_BIT(2)` and read `SvCoreCommandEvent` after checking its size.
+The record holds the player, a lowercase command name, arguments and the inherited command name in `builtin`.
+Names and arguments hold at most 63 bytes. The builtin holds at most 15 bytes.
+The builtin keeps the inherited case-sensitive prefix tests. For example, `/army` has builtin `arm`, while `/ARMY` has no builtin.
+The list commands use builtin `list`. The account ban commands use builtin `ban`.
+
+Only `decision` is writable. Each subscriber receives the original input and `SV_COMMAND_DEFAULT`.
+Default keeps the admin flag rule. Allow runs the inherited commands for this text without that flag.
+Deny stops the commands and login and keeps the text out of chat.
+The host calls at most 32 plugins in load order. Deny wins over allow, and allow wins over default.
+A callback failure contributes no decision and disables that plugin.
+Allow never grants a password login. Login still checks the password and attempt limit.
+The command arguments are empty for `admin`, so no plugin receives its password.
+
+`SV_EVENT_ADMIN_LOGIN` uses `SvAdminLoginEvent` and subscription bit `SV_EVENT_EXT_BIT(3)`.
+It runs before the attempt counter and password check. An `SV_DENIED` answer skips both.
+`SV_EVENT_ADMIN_SUCCESS` uses the same record and subscription bit `SV_EVENT_EXT_BIT(4)`.
+The core queues this notice after it sets both admin flags. The host delivers it before a later tick callback.
+Both records contain only the player. They contain no attempt text or password.
+Without subscribers, the inherited command and login rules stay the same.
+
+The game API test covers default, allow, deny, conflicting subscribers in both orders, prefix matching and password privacy.
+It also covers login refusal without an attempt, a wrong password and a success notice after both flags.
+The original client test remains open.
