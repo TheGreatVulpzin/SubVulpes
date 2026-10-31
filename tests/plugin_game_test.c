@@ -807,6 +807,7 @@ static void core_commands_check(void)
     int admin = sr_players[0].is_admin, tries = sr_players[0].admin_tries;
     int kicked = sr_numofkicked;
     Connection saved = sr_connections[0];
+    Connection peer = sr_connections[1];
     char password[sizeof sr_option.password];
     uint32_t ips[4];
     memcpy(password, sr_option.password, sizeof password);
@@ -829,6 +830,33 @@ static void core_commands_check(void)
     CHECK(sr_players[0].money == money + 200000);
     core_message("/cash conflict");
     CHECK(sr_players[0].money == money + 200000);
+    {
+        uint32_t message = sr_numofevents;
+        int godmode = sr_players[0].godmode;
+        int server = sr_server;
+        sr_server = 1;
+        sr_connections[0].player_id = 0; sr_connections[0].is_admin = 0;
+        sr_connections[1].player_id = 1; sr_connections[1].is_admin = 0;
+        sr_numofconnections = 2;
+        core_message("/godmode");
+        CHECK(sr_players[0].godmode != godmode && !sr_players[0].is_admin);
+        CHECK(sr_events[message].type == 2 && sr_events[message].attach_type == 0);
+        CHECK(!event_hidden_from((int)message, 0) && event_hidden_from((int)message, 1));
+        CHECK(event_bits((int)message, 0) > 6 && event_bits((int)message, 1) == 6);
+        CHECK(sv_plugins_command(0, "corecheck default"));
+        sr_players[0].is_admin = 1;
+        sr_connections[0].is_admin = sr_connections[1].is_admin = 1;
+        message = sr_numofevents;
+        core_message("/godmode");
+        CHECK(sr_events[message].type == 2 && sr_events[message].attach_type == 4);
+        CHECK(!event_hidden_from((int)message, 0) && !event_hidden_from((int)message, 1));
+        CHECK(event_bits((int)message, 0) > 6 && event_bits((int)message, 1) > 6);
+        sr_players[0].is_admin = 0;
+        sr_connections[0].is_admin = sr_connections[1].is_admin = 0;
+        CHECK(sv_plugins_command(0, "corecheck allow"));
+        sr_players[0].godmode = godmode;
+        sr_server = server;
+    }
     CHECK(sv_plugins_command(0, "corecheck expect army arm"));
     /* No body prevents this inherited command from changing the test inventory. */
     {
@@ -892,6 +920,7 @@ static void core_commands_check(void)
     sr_numofkicked = kicked;
     memcpy(sr_kickedip, ips, sizeof ips);
     sr_connections[0] = saved;
+    sr_connections[1] = peer;
     sr_numofconnections = count;
     sr_players[0].is_admin = admin;
     sr_players[0].admin_tries = tries;

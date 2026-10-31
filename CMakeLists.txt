@@ -40,6 +40,11 @@ set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 include(tools/sdk/sv_plugin.cmake)
 sv_add_plugin(sv-status ID sv.status MANIFEST "${CMAKE_SOURCE_DIR}/plugins/status/plugin.ini"
     SOURCES plugins/status/status.c OFFICIAL)
+sv_add_plugin(sv-permissions ID sv.permissions MANIFEST "${CMAKE_SOURCE_DIR}/plugins/permissions/plugin.ini"
+    SOURCES plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c OFFICIAL)
+set_property(SOURCE plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c
+    tests/official/permission_groups_test.c tests/official/permission_probe.c APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h;${CMAKE_SOURCE_DIR}/plugins/permissions/groups.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h")
 # Package inspection uses the installer shipped beside the server.
 configure_file(tools/plugins/install_plugin.ps1 "${CMAKE_BINARY_DIR}/install_plugin.ps1" COPYONLY)
 configure_file(plugins/plugins.ini "${CMAKE_BINARY_DIR}/plugins/plugins.ini" COPYONLY)
@@ -148,6 +153,18 @@ if(BUILD_TESTING)
     set_target_properties(sv-capability-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME capability-bits COMMAND sv-capability-test)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_executable(permission-groups-test tests/official/permission_groups_test.c plugins/permissions/groups.c plugins/common/official.c)
+    target_include_directories(permission-groups-test PRIVATE src/plugins plugins/permissions)
+    target_compile_definitions(permission-groups-test PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(permission-groups-test PRIVATE /W4 /WX /utf-8)
+    set_target_properties(permission-groups-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME permissions-groups COMMAND permission-groups-test)
+    set_tests_properties(permissions-groups PROPERTIES TIMEOUT 10)
+    sv_add_plugin(sv-permission-probe ID test.permissions
+        MANIFEST "${CMAKE_SOURCE_DIR}/tests/official/permission_probe/plugin.ini"
+        SOURCES tests/official/permission_probe.c plugins/common/official.c)
+    add_test(NAME permissions-sdk COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/official/permissions_test.py" "${CMAKE_BINARY_DIR}")
     add_executable(jukebox-instruments-test tests/jukebox_instruments_test.c plugins/jukebox/instruments.c)
     target_include_directories(jukebox-instruments-test PRIVATE plugins/jukebox)
     target_compile_definitions(jukebox-instruments-test PRIVATE _CRT_SECURE_NO_WARNINGS)

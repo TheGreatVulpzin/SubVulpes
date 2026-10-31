@@ -114,7 +114,7 @@ static int find_player(const char *name)
 {
     int i;
     for (i = 0; i < player_count; ++i)
-        if (!strcmp(players[i].name, name))
+        if (players[i].index >= 0 && !strcmp(players[i].name, name))
             return players[i].index;
     fail("no player named %s (use spawn first)", name);
 }
@@ -123,22 +123,24 @@ static void spawn_player(char *name, int team, int admin)
 {
     float pos[3], rot[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
     int p, account, human, i;
-    if (player_count >= MAX_PLAYERS)
-        fail("at most %d players", MAX_PLAYERS);
+    int record = player_count;
     if (!*name || strlen(name) > 31 || strchr(name, ' '))
         fail("a player name has 1 to 31 characters and no space");
     for (i = 0; i < player_count; ++i)
-        if (!strcmp(players[i].name, name))
-            fail("the player %s exists", name);
-    pos[0] = 10.0f + 3.0f * (float)player_count;
+        if (!strcmp(players[i].name, name)) {
+            if (players[i].index >= 0) fail("the player %s exists", name);
+            record = i;
+        }
+    if (record >= MAX_PLAYERS) fail("at most %d players", MAX_PLAYERS);
+    pos[0] = 10.0f + 3.0f * (float)record;
     pos[1] = 20.0f;
     pos[2] = 30.0f;
     p = createplayer();
     if (p < 0)
         fail("the game has no free player slot");
     strcpy(sr_players[p].name, name);
-    sr_players[p].account_id[0] = 1000u + (uint32_t)player_count;
-    sr_players[p].account_id[1] = 2000u + (uint32_t)player_count;
+    sr_players[p].account_id[0] = 1000u + (uint32_t)record;
+    sr_players[p].account_id[1] = 2000u + (uint32_t)record;
     account = createaccount(p);
     if (account < 0)
         fail("the game could not make an account");
@@ -151,8 +153,9 @@ static void spawn_player(char *name, int team, int admin)
     sr_players[p].team = team;
     sr_humans[human].team = team;
     sr_players[p].is_admin = admin;
-    strcpy(players[player_count].name, name);
-    players[player_count++].index = p;
+    strcpy(players[record].name, name);
+    players[record].index = p;
+    if (record == player_count) ++player_count;
 }
 
 /* Runs a probe command and returns the new log text from the first line that starts with "PROBE ". */
@@ -224,6 +227,11 @@ static void run_step(char *line)
                 fail("unknown option %s", option);
         }
         spawn_player(name, team, admin);
+    } else if (!strcmp(word, "leave")) {
+        int player = find_player(rest), i;
+        deleteplayer(player);
+        for (i = 0; i < player_count; ++i)
+            if (players[i].index == player) players[i].index = -1;
     } else if (!strcmp(word, "tick")) {
         long n = strtol(rest, NULL, 10), i;
         if (n < 1 || n > 100000)
@@ -328,6 +336,7 @@ int main(int argc, char **argv)
     memset(&sr_data_objecttype[0], 0, sizeof sr_data_objecttype[0]);
     sr_data_server.max_players = 128;
     sr_data_soundlist.num_sounds = 47;
+    strcpy(sr_option.password, "svtest");
     if (!sv_plugins_start()) {
         printf("FAIL %s: the plugin host did not start\n", scenario_name);
         return 1;

@@ -299,3 +299,11 @@ The core still checks each login password unless a plugin denies the attempt fir
 A denied login does not count as a password attempt. No event carries a password.
 Without subscribers, the inherited rules stay the same.
 See the plugin event and game API pages for the record layouts and kick list methods.
+
+## Replies to authorized players
+
+A player without the admin flag can run a core command when N56 allows it.
+The core sends that command's admin replies privately to the player as normal message events.
+Other connections receive a placeholder. Administrators keep the inherited admin broadcast.
+Explicit broadcasts, such as the message command, keep their normal audience.
+The game API test checks both packet routes. It also checks the inherited admin route with a default decision.

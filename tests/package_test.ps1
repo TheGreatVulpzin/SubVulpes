@@ -39,7 +39,7 @@ try {
     $launcher = [IO.File]::ReadAllText((Join-Path $repo 'tools\launcher\Launcher.cs'))
     $list = [regex]::Match($launcher, '(?s)string\[\] UpdateFiles\s*=\s*\{(.*?)\}').Groups[1].Value
     $names = @([regex]::Matches($list, '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
-    Assert ($archive.Entries.Count -eq 15) 'Expected ten root and plugin files and five data files.'
+    Assert ($archive.Entries.Count -eq ($names.Count + 6)) 'Expected the update files, the newspaper and five data files.'
     Assert ($null -eq $archive.GetEntry("${prefix}config.txt")) 'The package must not include config.txt.'
     $executables = @($archive.Entries | Where-Object { $_.Name.EndsWith('.exe') } | ForEach-Object Name | Sort-Object)
     $expectedExecutables = @('subvulpes_server.exe', 'subvulpes_launcher.exe') | Sort-Object

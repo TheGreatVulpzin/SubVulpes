@@ -295,6 +295,7 @@ namespace SubVulpes
         static readonly string[] UpdateFiles = {
             "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt",
             "plugins/plugins.ini", "plugins/native-approvals.ini", "plugins/sv.status/plugin.ini", "plugins/sv.status/status.dll",
+            "plugins/sv.permissions/plugin.ini", "plugins/sv.permissions/permissions.dll",
             "install_plugin.ps1"
         };
 

@@ -5,7 +5,7 @@ Work order: Part 1, permissions, admin commands, bans, chat additions, welcome a
 | Step | State | Evidence |
 | --- | --- | --- |
 | Part 1: N56, N57 and N51 | Done | Normal build, 25 test groups, nine removal proofs and restored tests passed. |
-| 2.1: sv.permissions | Open | Follows the Part 1 checks. |
+| 2.1: sv.permissions | Done | Normal build, all 27 test groups, 49 removal proofs and repository checks passed. |
 | 2.2: sv.admcmd | Open | Follows permissions. |
 | 2.3: sv.bans | Open | Follows admin commands. |
 | 2.4: sv.chatadd | Open | Follows bans. |
@@ -34,6 +34,53 @@ Local evidence is in `build/planning/part1-full-ctest.log`, `part1-retry-ctest.l
 Storage generation, native dependencies and repository privacy checks passed.
 The added prose scored 1.20 per 100 words before this evidence update. The evidence update scored 0.57 per 100 words.
 
-Next step: implement `sv.permissions` (2.1).
 Original client and manual launcher checks remain open.
 External changes in `docs/ideas.md` remain outside these commits.
+
+## Permission implementation evidence
+
+The unit test and SDK scenarios passed before the full run.
+The SDK loads the production DLL and a separate consumer through the public plugin service.
+It tests account persistence across a fresh host, temporary and saved password groups, first-owner recovery and a bot without an account.
+
+All 49 removal proofs failed their focused test as required.
+They cover assignment nodes, group nodes, core nodes, levels, parent authority, owner protection and login refusal.
+They also cover group and node quotas, names, node text, prefixes, record sizes, list strides and list capacity.
+The remaining proofs cover parent depth, group indices, tokens, numeric ranges, message bytes, storage values and API prefixes.
+The final proof covers private core replies to an allowed player without the admin flag.
+The restored unit, SDK and game API tests passed.
+
+Local logs: `build/planning/permissions-removals.log`, `permissions-extra-removals.log` and `permissions-reply-removal.log`.
+Each proof has a separate build and test log in that folder. No build failure counted as a proof.
+The prose page scored 1.69 per 100 words. The reply notes scored 1.82.
+
+Core replies keep the inherited admin audience for administrators.
+An allowed player without that flag receives a private normal message instead.
+The packet test checks the recipient, another connection and the inherited admin route.
+No original client playtest or manual launcher session ran.
+
+## Disk space stop and repeat
+
+The first full CTest run stopped during the SDK checks on 2026-10-31.
+`plugin-inspect` failed with `OSError: [Errno 28] No space left on device` while it made an oversized test file.
+About 62 MiB remained after that failure. The test process and its child processes were stopped.
+No user files were deleted to make space. The owner freed disk space before the repeat run.
+About 6.6 GiB was free at the start of that run.
+
+The normal build passed again. All 27 CTest groups passed in 934.16 seconds.
+The oversized-file case in `plugin-inspect` passed too.
+Storage generation checked 138 objects and 499799832 bytes.
+The native check passed for 91 sources. The repository check found no problems.
+The earlier disk failure is resolved for this run.
+The SDK and server package tests include the permission DLL and manifest.
+
+Local logs: `build/planning/permissions-final-build.log`, `permissions-full-ctest.log`, `permissions-storage.log`,
+`permissions-native.log` and `permissions-repo.log`.
+The closure draft scored 1.08 per 100 words.
+No original client playtest or manual launcher session ran.
+External changes in `docs/ideas.md` remain outside these commits.
+
+Next step: `sv.admcmd` (2.2).
+The catalog describes `/arm N` as a uniform change with two bandages.
+The inherited core command gives a gun and magazines.
+The intended behavior needs a choice before implementation.

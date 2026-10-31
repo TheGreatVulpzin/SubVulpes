@@ -69,3 +69,10 @@ Your plugin must not use the command name `probe`.
 `tests/scenario_test.py` (group `plugin-scenarios`) runs the scenario of the status plugin twice and compares the output. It runs 5 scenarios that pass and 16 that must fail, one for each kind of wrong step, and one plugin with a bad manifest that must not reach the runner.
 `tests/sdk_package_test.ps1` runs the scenario of the template with the runner from the unpacked SDK.
 Removal proof on 2026-10-28: without the limit of 63 characters for a chat text, the test fails, because the long text overflows the buffer of the runner. The restored runner passes.
+
+## Session and login fixtures
+
+
+The runner accepts `leave PLAYER`. A later `spawn player NAME` with the same name reuses that fixture account.
+The public fixture password is `svtest`. It exists only in the runner and never changes a server profile.
+These steps test session expiry and password hooks without game data or a client.

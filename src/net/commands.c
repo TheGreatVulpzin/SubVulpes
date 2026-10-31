@@ -2,10 +2,11 @@
  *
  * server_playermessage runs for each chat text of a player. It returns 1 when the text is a
  * command (or the player is muted) and the text must not go to the chat. A text that starts
- * with "/" is a command. A command other than /admin works only for an admin.
+ * with "/" is a command. A core command needs the admin flag or an allow decision.
  *
- * Every message of a command goes to everybody as a type 4 message, through the global text
- * buffer of the game (msgbuf). The prefix tests are plain strncmp: "/arm" also starts "/army".
+ * Administrators receive type 4 replies through the global text buffer (msgbuf).
+ * A player that a plugin allows without the admin flag receives private replies.
+ * The prefix tests use plain strncmp: "/army" also matches "/arm".
  */
 #include <ctype.h>
 #include <stdio.h>
@@ -27,9 +28,12 @@
 #define MAX_ADMIN_TRIES 5
 #define PHONE_ID 0x1a0a /* phone_id of the phones of an admin (/phone) */
 
-static void say(const char *text)
+static void say(int recipient, const char *text)
 {
-    sr_createevent_message(4, text, -1, 0);
+    if (recipient >= 0)
+        createevent_message_to(0, text, recipient);
+    else
+        sr_createevent_message(4, text, -1, 0);
 }
 
 /* The admin password check. The connection and the player both get the flag. */
@@ -58,7 +62,7 @@ static void admin_login(int player, const char *text)
     event.base.kind = SV_EVENT_ADMIN_SUCCESS;
     sv_events_post_record(&event.base);
     sprintf(msgbuf, "%s admin", p->name);
-    say(msgbuf);
+    say(-1, msgbuf);
 }
 
 /* Match the inherited prefix rules, including prefixes that need a trailing space. */
@@ -103,14 +107,14 @@ static uint32_t core_decision(SvEntity player, const char *text)
 }
 
 /* List the connections from first to last (exclusive): the name and the account. */
-static void list_connections(int first, int last)
+static void list_connections(int first, int last, int recipient)
 {
     int c;
     for (c = first; c < sr_numofconnections; c++) {
         int pid = sr_connections[c].player_id;
         if (c < last && pid != -1) {
             sprintf(msgbuf, "%s  %d", sr_players[pid].name, sr_players[pid].account);
-            say(msgbuf);
+            say(recipient, msgbuf);
         }
     }
 }
@@ -203,7 +207,7 @@ static void kick_player(const char *name)
 }
 
 /* /give ACCOUNT CASH. The sscanf variables start at -1 and 0, so an input with no number does nothing. */
-static void give_cash(const char *args)
+static void give_cash(const char *args, int recipient)
 {
     int a = -1, b = 0, i;
     strcpy(msgbuf, args);
@@ -215,12 +219,12 @@ static void give_cash(const char *args)
             sr_players[i].money += b;
     }
     sprintf(msgbuf, "%s(%d) %d cash", sr_accounts[a].name, a, b);
-    say(msgbuf);
+    say(recipient, msgbuf);
 }
 
 /* The commands of an admin. n is the loop counter of the word filter: /bany uses it as the ban
  * time when the text has no number. */
-static void admin_commands(int player, const char *text, int n)
+static void admin_commands(int player, const char *text, int n, int recipient)
 {
     Player *p = &sr_players[player];
     int i, a;
@@ -233,19 +237,19 @@ static void admin_commands(int player, const char *text, int n)
                     sprintf(msgbuf, "%d:%d", i, -1);
                 else
                     sprintf(msgbuf, "%d:%d %s", i, h->player_id, sr_players[h->player_id].name);
-                say(msgbuf);
+                say(recipient, msgbuf);
             }
         }
     }
     if (strncmp(text, "/list1", 6) == 0)
-        list_connections(0, 10);
+        list_connections(0, 10, recipient);
     if (strncmp(text, "/list2", 6) == 0 && 10 < sr_numofconnections)
-        list_connections(10, 20);
+        list_connections(10, 20, recipient);
     if (strncmp(text, "/list3", 6) == 0 && 20 < sr_numofconnections)
-        list_connections(20, 0x7fffffff);
+        list_connections(20, 0x7fffffff, recipient);
     if (strncmp(text, "/godmode", 8) == 0) {
         p->godmode ^= 1;
-        say(p->godmode == 0 ? "godmode off" : "godmode on");
+        say(recipient, p->godmode == 0 ? "godmode off" : "godmode on");
     }
     if (strncmp(text, "/heli", 5) == 0 && p->human_id != -1)
         make_heli(p->human_id);
@@ -263,11 +267,11 @@ static void admin_commands(int player, const char *text, int n)
         if (msgbuf[0] != '\0' && sscanf(msgbuf, "%d", &a) != -1 && a >= 0 && a < sr_numofaccounts) {
             sr_serverinfo.ban_candidate = a;
             sprintf(msgbuf, "%s %d ban?", sr_accounts[a].name, a);
-            say(msgbuf);
+            say(recipient, msgbuf);
         }
     }
     if (strncmp(text, "/give ", 6) == 0)
-        give_cash(text + 6);
+        give_cash(text + 6, recipient);
     if (strncmp(text, "/bany ", 6) == 0) {
         strcpy(msgbuf, text + 6);
         if (msgbuf[0] != '\0' && sscanf(msgbuf, "%d", &n) != -1) {
@@ -275,7 +279,7 @@ static void admin_commands(int player, const char *text, int n)
             if (a >= 0 && a < sr_numofaccounts) {
                 sr_accounts[a].ban_time = n;
                 sprintf(msgbuf, "%s %d banned %d", sr_accounts[a].name, a, n);
-                say(msgbuf);
+                say(recipient, msgbuf);
                 sr_serverinfo.ban_candidate = -1;
             }
         }
@@ -333,6 +337,6 @@ int server_playermessage(int player, char *text)
         return 1;
     admin_login(player, text);
     if (p->is_admin != 0 || decision == SV_COMMAND_ALLOW)
-        admin_commands(player, text, n);
+        admin_commands(player, text, n, p->is_admin ? -1 : player);
     return 1;
 }
