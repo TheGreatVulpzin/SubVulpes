@@ -278,3 +278,113 @@ int jb_keypad_octaves(const JbInstruments *instruments, const JbSong *song, cons
     }
     return chosen;
 }
+
+
+int jb_sound_index(const JbSounds *sounds, const char *name, int *id)
+{
+    int i;
+    double value;
+    if (number(name, 0, 46, 1, &value)) {
+        *id = (int)value;
+        return 1;
+    }
+    for (i = 0; i < 47; ++i)
+        if (!_stricmp(name, sounds->sounds[i].name)) {
+            *id = i;
+            return 1;
+        }
+    return 0;
+}
+
+int jb_sounds_parse(const char *data, size_t size, JbSounds *out, char *error, size_t capacity)
+{
+    JbSounds next = {0};
+    unsigned char seen[47] = {0};
+    size_t at = 0, i;
+    int version = 0, section = 0;
+    if (!size || size > 16384) /* SOUND_BOUND: size */
+        return error_text(error, capacity, "Sound table needs 1 to 16384 bytes.");
+    while (at < size) {
+        char line[192], *text, *equal, *parts[5], *comma;
+        size_t start = at, length;
+        double value;
+        int id, field;
+        while (at < size && data[at] != '\n') {
+            unsigned char c = (unsigned char)data[at++];
+            if ((c < 32 && c != '\r' && c != '\t') || c > 126) /* SOUND_BOUND: ascii */
+                return error_text(error, capacity, "Sound table needs plain ASCII text.");
+        }
+        length = at - start;
+        if (at < size) ++at;
+        if (length >= sizeof line) /* SOUND_BOUND: line */
+            return error_text(error, capacity, "Sound table line is too long.");
+        memcpy(line, data + start, length);
+        line[length] = 0;
+        text = trim(line);
+        if (!*text || *text == '#' || *text == ';') continue;
+        if (!strcmp(text, "[jukebox]")) { section = 1; continue; }
+        equal = strchr(text, '=');
+        if (!section || !equal)
+            return error_text(error, capacity, "Sound table needs a jukebox section and key=value rows.");
+        *equal++ = 0;
+        text = trim(text);
+        equal = trim(equal);
+        if (!strcmp(text, "version")) {
+            if (version || strcmp(equal, "1"))
+                return error_text(error, capacity, "Sound table version must be 1, once.");
+            version = 1;
+            continue;
+        }
+        if (!number(text, 0, 46, 1, &value)) /* SOUND_BOUND: id */
+            return error_text(error, capacity, "Sound table ID needs 0 to 46.");
+        id = (int)value;
+        if (seen[id]) return error_text(error, capacity, "Sound table ID is repeated.");
+        parts[0] = equal;
+        for (field = 1; field < 5; ++field) {
+            comma = strchr(parts[field - 1], ',');
+            if (!comma) return error_text(error, capacity, "Sound row needs name,kind,tail,root,gain.");
+            *comma = 0;
+            parts[field] = comma + 1;
+        }
+        for (field = 0; field < 5; ++field) parts[field] = trim(parts[field]);
+        length = strlen(parts[0]);
+        if (!length || length >= sizeof next.sounds[id].name) /* SOUND_BOUND: name */
+            return error_text(error, capacity, "Sound name needs 1 to 23 characters.");
+        for (i = 0; i < length; ++i)
+            if (!((parts[0][i] >= 'a' && parts[0][i] <= 'z') ||
+                (parts[0][i] >= '0' && parts[0][i] <= '9') || parts[0][i] == '_'))
+                return error_text(error, capacity, "Sound name needs lowercase letters, digits or underscores.");
+        if (strcmp(parts[1], "tonal") && strcmp(parts[1], "noise") && strcmp(parts[1], "silent"))
+            return error_text(error, capacity, "Sound kind needs tonal, noise or silent.");
+        strcpy(next.sounds[id].name, parts[0]);
+        strcpy(next.sounds[id].kind, parts[1]);
+        if (!number(parts[2], 0, 36000, 1, &value)) /* SOUND_BOUND: tail */
+            return error_text(error, capacity, "Sound tail needs 0 to 36000 ticks.");
+        next.sounds[id].tail = (int)value;
+        if (!number(parts[3], 0, 127, 1, &value)) /* SOUND_BOUND: root */
+            return error_text(error, capacity, "Sound root needs 0 to 127.");
+        next.sounds[id].root = (int)value;
+        if (!number(parts[4], 0.05, 1.0, 0, &value)) /* SOUND_BOUND: gain */
+            return error_text(error, capacity, "Sound gain needs 0.05 to 1.0.");
+        next.sounds[id].gain = (float)value;
+        seen[id] = 1;
+    }
+    if (!version) return error_text(error, capacity, "Sound table version must be 1, once.");
+    for (i = 0; i < 47; ++i) {
+        size_t j;
+        if (!seen[i]) return error_text(error, capacity, "Sound table needs every ID from 0 to 46.");
+        for (j = 0; j < i; ++j)
+            if (!strcmp(next.sounds[i].name, next.sounds[j].name))
+                return error_text(error, capacity, "Sound names must be unique.");
+    }
+    *out = next;
+    return 1;
+}
+
+JbTone jb_voice(int sound, int root, int key)
+{
+    JbTone tone = {0};
+    tone.sound = (uint32_t)sound;
+    tone.pitch = (float)fold(pow(2.0, (key - root) / 12.0), &tone.octaves);
+    return tone;
+}

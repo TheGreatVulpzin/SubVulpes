@@ -2,7 +2,9 @@
 #include <windows.h>
 #include "files.h"
 #include "jukebox_defaults.h"
+#include "jukebox_sounds.h"
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -67,7 +69,8 @@ static unsigned char *read_file(const char *path, size_t maximum, size_t *length
         problem(error, capacity, "Jukebox input must be a normal file, not a link.");
     } else if (!GetFileSizeEx(file, &size) || size.QuadPart < 0 || (uint64_t)size.QuadPart > maximum) {
         problem(error, capacity, maximum == JB_FILE_MAX ? "MIDI file exceeds 1 MB." :
-            "Instrument file exceeds 16384 bytes. File unchanged.");
+            maximum == 4096 ? "Preset exceeds 4096 bytes. File unchanged." :
+            "Sound table exceeds 16384 bytes. File unchanged.");
     } else {
         *length = (size_t)size.QuadPart;
         data = malloc(*length + 1);
@@ -85,31 +88,47 @@ static unsigned char *read_file(const char *path, size_t maximum, size_t *length
     return data;
 }
 
-int jb_load_instruments(JbInstruments *instruments, char *error, size_t capacity)
+static unsigned char *load_table(const char *path, const char *defaults, size_t length, size_t *size, char *error, size_t capacity)
 {
-    const char *path = "user/jukebox/instruments.ini";
     HANDLE file;
-    unsigned char *data;
-    size_t size;
     DWORD written;
     int ok;
     if (!folder(1, error, capacity))
-        return 0;
+        return NULL;
     /* CREATE_NEW fails when any file exists. Never replace owner edits, including old versions. */
     file = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
     if (file != INVALID_HANDLE_VALUE) {
-        ok = WriteFile(file, jb_default_instruments, (DWORD)(sizeof jb_default_instruments - 1), &written, NULL) &&
-            written == sizeof jb_default_instruments - 1 && FlushFileBuffers(file);
+        ok = WriteFile(file, defaults, (DWORD)length, &written, NULL) &&
+            written == length && FlushFileBuffers(file);
         CloseHandle(file);
         if (!ok)
-            return problem(error, capacity, "Cannot create instruments.ini. Check disk space and write access.");
+            return (problem(error, capacity, "Cannot create sound table. Check disk space and write access."), NULL);
     } else if (GetLastError() != ERROR_FILE_EXISTS && GetLastError() != ERROR_ALREADY_EXISTS) {
-        return problem(error, capacity, "Cannot create instruments.ini. Existing files stay unchanged.");
+        return (problem(error, capacity, "Cannot create sound table. Existing files stay unchanged."), NULL);
     }
-    data = read_file(path, 16384, &size, error, capacity);
-    if (!data)
-        return 0;
-    ok = jb_instruments_parse((const char *)data, size, instruments, error, capacity);
+    return read_file(path, 16384, size, error, capacity);
+}
+
+int jb_load_instruments(JbInstruments *out, char *error, size_t capacity)
+{
+    size_t size;
+    unsigned char *data = load_table("user/jukebox/instruments.ini", jb_default_instruments,
+        sizeof jb_default_instruments - 1, &size, error, capacity);
+    int ok;
+    if (!data) return 0;
+    ok = jb_instruments_parse((const char *)data, size, out, error, capacity);
+    free(data);
+    return ok;
+}
+
+int jb_load_sounds(JbSounds *out, char *error, size_t capacity)
+{
+    size_t size;
+    unsigned char *data = load_table("user/jukebox/sounds.ini", jb_default_sounds,
+        sizeof jb_default_sounds - 1, &size, error, capacity);
+    int ok;
+    if (!data) return 0;
+    ok = jb_sounds_parse((const char *)data, size, out, error, capacity);
     free(data);
     return ok;
 }
@@ -169,4 +188,189 @@ int jb_list_songs(char names[JB_LIST_MAX][JB_NAME_MAX + 1], size_t *count, int *
     FindClose(search);
     qsort(names, *count, sizeof names[0], name_compare);
     return 1;
+}
+
+static int mix_number(char **cursor, long low, long high, int *value)
+{
+    char *end, *start = *cursor;
+    long n;
+    errno = 0;
+    n = strtol(start, &end, 10);
+    if (end == start || errno || n < low || n > high || (*end && *end != ' ' && *end != '\n'))
+        return 0;
+    *value = (int)n;
+    *cursor = end;
+    if (**cursor == ' ') ++*cursor;
+    return 1;
+}
+
+int jb_mix_parse(char *text, size_t size, JbMix *mix, char *error, size_t capacity)
+{
+    JbMix next = {0};
+    char *at = text;
+    size_t i;
+    int version, channel;
+    if (!size || size > 4096) /* MIX_BOUND: size */
+        return problem(error, capacity, "Preset needs 1 to 4096 bytes.");
+    for (i = 0; i < size; ++i)
+        if ((text[i] < 32 && text[i] != '\n' && !(text[i] == '\r' && i + 1 < size && text[i + 1] == '\n')) || (unsigned char)text[i] > 126) /* MIX_BOUND: ascii */
+            return problem(error, capacity, "Preset needs plain ASCII text.");
+    {
+        size_t used = 0;
+        for (i = 0; i < size; ++i) if (text[i] != '\r') text[used++] = text[i];
+        text[used] = 0;
+    }
+    if (strncmp(at, "jukebox-mix ", 12)) return problem(error, capacity, "Preset header is invalid.");
+    at += 12;
+    if (!mix_number(&at, 2, 2, &version) || *at++ != '\n') /* MIX_BOUND: version */
+        return problem(error, capacity, "Preset version must be 2. Old presets are ignored.");
+    if (!mix_number(&at, JB_FIXED, JB_MEMBERS - 1, &next.bank)) /* MIX_BOUND: mode */
+        return problem(error, capacity, "Preset mode is invalid.");
+    if (!mix_number(&at, 0, 46, &next.fixed_sound)) /* MIX_BOUND: fixed */
+        return problem(error, capacity, "Preset fixed sound needs 0 to 46.");
+    if (!mix_number(&at, 0, 300, &next.bpm) || (next.bpm && next.bpm < 20)) /* MIX_BOUND: bpm */
+        return problem(error, capacity, "Preset BPM needs 0 or 20 to 300.");
+    if (!mix_number(&at, 25, 400, &next.speed)) /* MIX_BOUND: speed */
+        return problem(error, capacity, "Preset speed needs 25 to 400.");
+    if (!mix_number(&at, -48, 48, &next.key)) /* MIX_BOUND: key */
+        return problem(error, capacity, "Preset key needs -48 to 48.");
+    if (!mix_number(&at, 0, 200, &next.master) || *at++ != '\n') /* MIX_BOUND: master */
+        return problem(error, capacity, "Preset master needs 0 to 200.");
+    for (i = 0; i < 16; ++i) {
+        JbRoute *r = &next.routes[i];
+        if (!mix_number(&at, 1, 16, &channel) || channel != (int)i + 1) /* MIX_BOUND: channel */
+            return problem(error, capacity, "Preset needs channels 1 to 16 in order.");
+        if (!mix_number(&at, JB_OFF, JB_DRUMS, &r->output)) /* MIX_BOUND: output */
+            return problem(error, capacity, "Preset output needs 0 to 2.");
+        if (!mix_number(&at, JB_SYNTH, JB_DRUMS, &next.resume[i])) /* MIX_BOUND: resume */
+            return problem(error, capacity, "Preset resume output needs 1 or 2.");
+        if (!mix_number(&at, 0, 1, &r->muted)) /* MIX_BOUND: muted */
+            return problem(error, capacity, "Preset mute needs 0 or 1.");
+        if (!mix_number(&at, -1, 46, &r->voice)) /* MIX_BOUND: voice */
+            return problem(error, capacity, "Preset voice needs -1 to 46.");
+        if (!mix_number(&at, 0, 127, &r->root)) /* MIX_BOUND: root */
+            return problem(error, capacity, "Preset root needs 0 to 127.");
+        if (!mix_number(&at, -36, 36, &r->transpose)) /* MIX_BOUND: transpose */
+            return problem(error, capacity, "Preset transpose needs -36 to 36.");
+        if (!mix_number(&at, 0, 1, &r->mono)) /* MIX_BOUND: mono */
+            return problem(error, capacity, "Preset mono needs 0 or 1.");
+        if (!mix_number(&at, 0, 1, &r->automatic)) /* MIX_BOUND: automatic */
+            return problem(error, capacity, "Preset automatic mute needs 0 or 1.");
+        if (!mix_number(&at, 0, 200, &r->volume) || *at++ != '\n') /* MIX_BOUND: volume */
+            return problem(error, capacity, "Preset volume needs 0 to 200.");
+    }
+    if (*at) /* MIX_BOUND: trailing */
+        return problem(error, capacity, "Preset has extra data.");
+    *mix = next;
+    return 1;
+}
+
+int jb_load_mix(const char *input, JbMix *mix, char *error, size_t capacity)
+{
+    char name[JB_NAME_MAX + 1], path[96];
+    unsigned char *data;
+    size_t size;
+    int ok;
+    DWORD attributes;
+    if (!jb_song_name(input, name) || !folder(0, error, capacity)) return -1;
+    snprintf(path, sizeof path, "user/jukebox/%s.mix", name);
+    attributes = GetFileAttributesA(path);
+    if (attributes == INVALID_FILE_ATTRIBUTES && GetLastError() == ERROR_FILE_NOT_FOUND) return 0;
+    data = read_file(path, 4096, &size, error, capacity);
+    if (!data) return -1;
+    ok = jb_mix_parse((char *)data, size, mix, error, capacity);
+    free(data);
+    return ok ? 1 : -1;
+}
+
+int jb_save_mix(const char *input, const JbMix *mix, char *error, size_t capacity)
+{
+    char name[JB_NAME_MAX + 1], path[96], temporary[100], text[4096];
+    size_t used;
+    int i, ok;
+    HANDLE file;
+    DWORD attributes, written;
+    if (!jb_song_name(input, name) || !folder(0, error, capacity))
+        return problem(error, capacity, "Load a file song before saving a preset.");
+    snprintf(path, sizeof path, "user/jukebox/%s.mix", name);
+    snprintf(temporary, sizeof temporary, "%s.tmp", path);
+    attributes = GetFileAttributesA(path);
+    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)))
+        return problem(error, capacity, "Preset must be a normal file.");
+    used = (size_t)snprintf(text, sizeof text, "jukebox-mix 2\n%d %d %d %d %d %d\n",
+        mix->bank, mix->fixed_sound, mix->bpm, mix->speed, mix->key, mix->master);
+    for (i = 0; i < 16; ++i) {
+        const JbRoute *r = &mix->routes[i];
+        used += (size_t)snprintf(text + used, sizeof text - used, "%d %d %d %d %d %d %d %d %d %d\n",
+            i + 1, r->output, mix->resume[i], r->muted, r->voice, r->root, r->transpose, r->mono, r->automatic, r->volume);
+    }
+    file = CreateFileA(temporary, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE)
+        return problem(error, capacity, "Cannot create preset temporary file. Check access or a stale .mix.tmp file.");
+    ok = WriteFile(file, text, (DWORD)used, &written, NULL) && written == used && FlushFileBuffers(file);
+    CloseHandle(file);
+    if (ok) ok = MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    if (!ok) {
+        DeleteFileA(temporary);
+        return problem(error, capacity, "Cannot save preset. Check disk space and write access.");
+    }
+    return 1;
+}
+
+int jb_resolve_song(const char *input, char name[JB_NAME_MAX + 1],
+    char matches[8][JB_NAME_MAX + 1], size_t *count, char *error, size_t capacity)
+{
+    char query[JB_NAME_MAX + 1];
+    int pass;
+    *count = 0;
+    if (!jb_song_name(input, query))
+        return problem(error, capacity, "Song name needs 1 to 48 letters, digits, underscores or hyphens.") - 1;
+    if (!folder(0, error, capacity)) return -1;
+    for (pass = 0; pass < 3; ++pass) {
+        WIN32_FIND_DATAA entry;
+        HANDLE search = FindFirstFileA("user/jukebox/*.mid", &entry);
+        if (search == INVALID_HANDLE_VALUE) {
+            if (GetLastError() == ERROR_FILE_NOT_FOUND) return 0;
+            problem(error, capacity, "Cannot list user/jukebox files.");
+            return -1;
+        }
+        do {
+            char candidate[JB_NAME_MAX + 1];
+            size_t i, used;
+            int match = 0;
+            if ((entry.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
+                !jb_song_name(entry.cFileName, candidate)) continue;
+            if (!pass) match = !_stricmp(candidate, query);
+            else if (pass == 1) match = !_strnicmp(candidate, query, strlen(query));
+            else {
+                size_t length = strlen(candidate), query_length = strlen(query);
+                for (i = 0; i + query_length <= length; ++i)
+                    if (!_strnicmp(candidate + i, query, query_length)) { match = 1; break; }
+            }
+            if (!match) continue;
+            ++*count;
+            used = *count < 8 ? *count : 8;
+            /* Retain only the first eight sorted names, but count every match. */
+            for (i = 0; i < used; ++i)
+                if (i == *count - 1 || name_compare(candidate, matches[i]) < 0) break;
+            if (i < 8) {
+                size_t j;
+                for (j = used - 1; j > i; --j) strcpy(matches[j], matches[j - 1]);
+                strcpy(matches[i], candidate);
+            }
+        } while (FindNextFileA(search, &entry));
+        {
+            DWORD last = GetLastError();
+            FindClose(search);
+            if (last != ERROR_NO_MORE_FILES) {
+                problem(error, capacity, "Cannot finish listing user/jukebox files.");
+                return -1;
+            }
+        }
+        if (*count) {
+            if (*count == 1) { strcpy(name, matches[0]); return 1; }
+            return 2;
+        }
+    }
+    return 0;
 }
