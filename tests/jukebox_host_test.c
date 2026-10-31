@@ -12,10 +12,10 @@
 #define CHECK(x) do { if (!(x)) { fprintf(stderr, "CHECK line %d: %s\n", __LINE__, #x); exit(1); } } while (0)
 static SvCommandFn command_fn;
 static SvEventFn event_fn;
-static char bank[64] = "nearest", logs[65536];
+static char bank[64] = "nearest", logs[1048576];
 static int32_t everyone, maximum = 8, trace = 1;
 static unsigned tick_number, player_count = 1;
-static int gone;
+static int gone, modern, automatic;
 static struct { unsigned tick, sound; float pitch, volume; SvVector position; } calls[4096];
 static size_t call_count;
 
@@ -98,6 +98,9 @@ static SvResult SV_CALL get_int(SvOwner owner, const char *key, int32_t *out)
     if (!strcmp(key, "everyone")) *out = everyone;
     else if (!strcmp(key, "max_per_tick")) *out = maximum;
     else if (!strcmp(key, "trace")) *out = trace;
+    else if (!strcmp(key, "auto_channels")) *out = automatic;
+    else if (!strcmp(key, "default_bpm") || !strcmp(key, "default_key")) *out = 0;
+    else if ((!strcmp(key, "default_speed") || !strcmp(key, "default_master"))) *out = 100;
     else return SV_NOT_FOUND;
     return SV_OK;
 }
@@ -105,8 +108,9 @@ static SvResult SV_CALL get_int(SvOwner owner, const char *key, int32_t *out)
 static SvResult SV_CALL get_text(SvOwner owner, const char *key, char *out, uint32_t capacity)
 {
     CHECK(owner == 1 && capacity >= 64);
-    if (strcmp(key, "bank")) return SV_NOT_FOUND;
-    strcpy(out, bank);
+    if (!strcmp(key, "mode")) strcpy(out, "voices");
+    else if (!strcmp(key, "bank")) strcpy(out, bank);
+    else return SV_NOT_FOUND;
     return SV_OK;
 }
 
@@ -125,7 +129,7 @@ static SvResult SV_CALL get_api(SvOwner owner, uint32_t capability, uint32_t ver
 
 static SvResult SV_CALL register_command(SvOwner owner, const char *name, uint32_t permission, SvCommandFn callback)
 {
-    CHECK(owner == 1 && !strcmp(name, "jukebox") && permission == SV_COMMAND_ADMIN);
+    CHECK(owner == 1 && (!strcmp(name, "jukebox") || !strcmp(name, "jb")) && permission == SV_COMMAND_ADMIN);
     command_fn = callback;
     return SV_OK;
 }
@@ -140,6 +144,14 @@ static SvResult SV_CALL subscribe(SvOwner owner, uint64_t mask, SvEventFn callba
 static void send(const char *text)
 {
     CHECK(command_fn && command_fn(1, 1, text) == SV_OK);
+    if (!modern && (!strcmp(text, "demo") || !strncmp(text, "play ", 5))) {
+        int ch;
+        for (ch = 1; ch <= 16; ++ch) {
+            char change[24];
+            snprintf(change, sizeof change, "mono %d 0", ch);
+            CHECK(command_fn(1, 1, change) == SV_OK);
+        }
+    }
 }
 
 static void ticks(unsigned count)
@@ -160,8 +172,8 @@ static void settings(void)
 static void test_demo(void)
 {
     const unsigned expected_ticks[] = {1, 1, 16, 31, 31, 46};
-    const unsigned expected_sounds[] = {29, 21, 29, 29, 21, 29};
-    const double expected_pitches[] = {0.375359491, 0.25, 0.472923323, 0.562403782, 2.0, 0.750718983};
+    const unsigned expected_sounds[] = {39, 21, 39, 39, 21, 39};
+    const double expected_pitches[] = {1, 0.25, 1.25992105, 1.49830708, 2.0, 2};
     size_t i;
     send("demo");
     ticks(46);
@@ -179,9 +191,9 @@ static void test_channels(void)
     settings();
     send("play fifteen");
     send("channels");
-    CHECK(strstr(logs, "Channel 1: notes=3 program=1 Acoustic Grand Piano range=60..64 out=synth"));
-    CHECK(strstr(logs, "Channel 10: notes=3 program=10 Glockenspiel range=69..73 out=drums"));
-    CHECK(strstr(logs, "Channel 15: notes=3 program=15 Tubular Bells range=74..78 out=synth"));
+    CHECK(strstr(logs, "[x] 1 Acoustic Grand 3 notes -> phone"));
+    CHECK(strstr(logs, "[x] 10 Glockenspiel 3 notes -> drums"));
+    CHECK(strstr(logs, "[x] 15 Tubular Bells 3 notes -> phone"));
     send("solo 1 3 5");
     ticks(1);
     CHECK(call_count == 3);
@@ -204,10 +216,10 @@ static void test_channels(void)
     ticks(1);
     CHECK(call_count == 21);
     send("channels");
-    CHECK(strstr(logs, "transpose=12."));
+    CHECK(strstr(logs, "Channel settings apply now."));
     send("play other");
     send("channels");
-    CHECK(strstr(logs, "Channel 1: notes=1 program=1 Acoustic Grand Piano range=60..60 out=synth transpose=0."));
+    CHECK(strstr(logs, "[x] 1 Acoustic Grand 1 notes -> phone"));
 }
 
 static void test_budget(void)
@@ -215,21 +227,23 @@ static void test_budget(void)
     maximum = 3;
     settings();
     send("play burst");
+    send("mono 1 0");
     ticks(1);
     CHECK(call_count == 3);
-    CHECK(fabs(calls[0].volume - 19.0 / 127) < 0.000001);
-    CHECK(fabs(calls[1].volume - 20.0 / 127) < 0.000001);
-    CHECK(fabs(calls[2].volume - 21.0 / 127) < 0.000001);
+    CHECK(fabs(calls[0].volume - 19.0 / 127 * 0.4) < 0.000001);
+    CHECK(fabs(calls[1].volume - 20.0 / 127 * 0.4) < 0.000001);
+    CHECK(fabs(calls[2].volume - 21.0 / 127 * 0.4) < 0.000001);
     send("status");
     CHECK(strstr(logs, "dropped_notes=9 dropped_calls=9"));
     everyone = 1;
     player_count = 4;
     settings();
     send("play burst");
+    send("mono 1 0");
     ticks(1);
     CHECK(call_count == 6);
-    CHECK(fabs(calls[3].volume - 20.0 / 127) < 0.000001);
-    CHECK(fabs(calls[4].volume - 21.0 / 127) < 0.000001 && fabs(calls[5].volume - 21.0 / 127) < 0.000001);
+    CHECK(fabs(calls[3].volume - 20.0 / 127 * 0.4) < 0.000001);
+    CHECK(fabs(calls[4].volume - 21.0 / 127 * 0.4) < 0.000001 && fabs(calls[5].volume - 21.0 / 127 * 0.4) < 0.000001);
     CHECK(calls[3].position.x == 10 && calls[4].position.x == 10 && calls[5].position.x == 20);
     send("status");
     CHECK(strstr(logs, "dropped_notes=10 dropped_calls=21"));
@@ -250,7 +264,7 @@ static void test_keypad(void)
     send("play keypad"); ticks(1);
     CHECK(call_count == 5 && calls[4].sound == 27 && fabs(calls[4].pitch - 0.131009297) < 0.000002);
     strcpy(bank, "nearest"); settings();
-    send("play extreme"); ticks(1);
+    send("play extreme"); send("mono 1 0"); ticks(1);
     CHECK(call_count == 7 && calls[5].pitch >= 0.125 && calls[6].pitch <= 2);
     send("status");
     CHECK(strstr(logs, "moved=2"));
@@ -298,8 +312,183 @@ static void test_stop(void)
     send("play ../secret"); send("play CON"); send("play name.mid:stream");
     CHECK(strstr(logs, "Song name needs 1 to 48"));
     send("play missing");
-    CHECK(strstr(logs, "Cannot open the jukebox file."));
+    CHECK(strstr(logs, "No song matches. Use /jb list."));
 }
+
+/* Exercise the v2 controls through the public DLL entry point and sound API. */
+static void near_pitch(size_t index, double expected)
+{
+    CHECK(index < call_count && fabs(calls[index].pitch - expected) < 0.000002);
+}
+
+static void melody(void)
+{
+    send("mono 1 0");
+    send("voice 1 ping 60");
+}
+
+static void test_v2(const char *mode)
+{
+    if (!strcmp(mode, "v2-voices")) {
+        unsigned id;
+        send("play timeline"); ticks(1);
+        CHECK(call_count == 2 && calls[0].sound == 39 && calls[1].sound == 21);
+        near_pitch(0, pow(2.0, -25.0 / 12));
+        send("voice 0 thud"); send("voice 17 thud"); send("voice text thud");
+        send("voice 1 47"); send("voice 1 -1"); send("voice 1 no-sound");
+        send("voice 1 ping 128"); send("voice 1 ping -1");
+        CHECK(strstr(logs, "Channel must be") && strstr(logs, "Sound needs") && strstr(logs, "Root must be"));
+        for (id = 0; id <= 46; ++id) {
+            char text[40];
+            size_t first = call_count;
+            snprintf(text, sizeof text, "try %u 60", id);
+            send(text); ticks(166);
+            CHECK(call_count == first + 12 && calls[first].sound == id);
+            near_pitch(first, 1);
+            near_pitch(first + 11, pow(2.0, 11.0 / 12));
+            CHECK(calls[first + 11].tick - calls[first].tick == 165);
+        }
+        send("play timeline"); melody(); send("voice 1 thud 60"); send("mode keypad"); ticks(1);
+        CHECK(calls[call_count - 2].sound == 21 && calls[call_count - 2].pitch == 1);
+        send("voice 1 default"); send("mode fixed glass"); ticks(30);
+        CHECK(calls[call_count - 2].sound == 25);
+        send("mode phone"); send("mode"); ticks(30);
+        CHECK(calls[call_count - 2].sound == 29 && strstr(logs, "Active: phone"));
+        send("sounds"); CHECK(strstr(logs, "46 silent46 silent root=60"));
+    } else if (!strcmp(mode, "v2-mono")) {
+        send("play mono"); ticks(11);
+        CHECK(call_count == 1);
+        send("status"); CHECK(strstr(logs, "skipped_mono=1"));
+        send("play mono"); send("mono 1 0"); ticks(11);
+        CHECK(call_count == 3);
+        send("play low"); ticks(57);
+        CHECK(call_count == 5 && calls[4].tick - calls[3].tick == 56);
+        ticks(56);
+        send("play high"); ticks(8);
+        CHECK(call_count == 7 && calls[6].tick - calls[5].tick == 7);
+    } else if (!strcmp(mode, "v2-restart")) {
+        send("play mono"); ticks(1); CHECK(call_count == 1);
+        send("stop"); ticks(5); send("play mono"); ticks(1);
+        CHECK(call_count == 1);
+        ticks(10); CHECK(call_count == 2 && calls[1].tick == 17);
+        send("status"); CHECK(strstr(logs, "skipped_mono=1"));
+    } else if (!strcmp(mode, "v2-transaction")) {
+        char text[4096], *row;
+        const char *old = "39=ping,tonal,14,109,0.79";
+        FILE *file;
+        size_t size;
+        send("play timeline"); send("mono 1 0"); ticks(1);
+        file = fopen("user/jukebox/sounds.ini", "rb"); CHECK(file);
+        size = fread(text, 1, sizeof text - 1, file); fclose(file); text[size] = 0;
+        row = strstr(text, old); CHECK(row);
+        file = fopen("user/jukebox/sounds.ini", "wb"); CHECK(file);
+        CHECK(fwrite(text, 1, (size_t)(row - text), file) == (size_t)(row - text));
+        fputs("39=ping,tonal,14,60,0.05", file); fputs(row + strlen(old), file); fclose(file);
+        send("play broken"); ticks(30);
+        CHECK(call_count == 4 && fabs(calls[2].volume - 0.79) < 0.000002);
+        near_pitch(2, pow(2.0, -25.0 / 12));
+        send("play timeline"); send("mono 1 0"); ticks(1);
+        CHECK(call_count == 6 && fabs(calls[4].volume - 0.05) < 0.000002);
+        near_pitch(4, 1);
+    } else if (!strcmp(mode, "v2-channels")) {
+        send("play six"); send("channels"); ticks(1);
+        CHECK(call_count == 3 && strstr(logs, "[ ] 1 Acoustic Grand 1 notes -> ping auto"));
+        send("all"); send("off 4 5 6"); send("t 1 2 3");
+        send("on 1 2 3"); send("solo 1 2"); ticks(30);
+        CHECK(call_count == 4);
+        send("on 0 3"); send("off 17"); send("t text");
+        CHECK(strstr(logs, "Channel must be a number from 1 to 16."));
+        send("all"); ticks(14); send("play six"); ticks(1); CHECK(call_count == 10);
+    } else if (!strcmp(mode, "v2-mix")) {
+        send("play mixsong"); send("off 2 3"); send("voice 1 glass 60");
+        send("transpose 1 5"); send("mono 1 0"); send("mode fixed thud");
+        send("bpm 60"); send("key 7"); send("vol 1 50"); send("master 80"); send("save");
+        send("play other"); send("mode voices");
+        send("play MIXS"); send("status"); ticks(1);
+        CHECK(strstr(logs, "Loaded preset for mixsong.") && strstr(logs, "mode=fixed"));
+        CHECK(strstr(logs, "BPM=60 speed=100% key=7") && strstr(logs, "Master=80%"));
+        CHECK(call_count == 2 && calls[0].sound == 25 && calls[1].sound == 21);
+        near_pitch(0, 2);
+        CHECK(fabs(calls[0].volume - 0.53 * 0.5 * 0.8) < 0.000002);
+        send("save");
+    } else if (!strcmp(mode, "v2-tempo")) {
+        size_t first;
+        unsigned anchor;
+        send("play timeline"); melody(); send("bpm 60"); ticks(121);
+        CHECK(call_count == 6 && calls[2].tick - calls[0].tick == 60 && calls[4].tick - calls[2].tick == 60);
+        first = call_count;
+        send("play timeline"); melody(); send("speed 50"); ticks(121);
+        CHECK(call_count == first + 6 && calls[first + 2].tick - calls[first].tick == 60);
+        first = call_count;
+        send("play timeline"); melody(); send("bpm 60"); send("bpm file"); ticks(61);
+        CHECK(call_count == first + 6 && calls[first + 2].tick - calls[first].tick == 30);
+        first = call_count;
+        send("play timeline"); melody(); ticks(15); anchor = tick_number;
+        send("bpm 60"); ticks(91);
+        CHECK(call_count == first + 6 && calls[first + 2].tick == anchor + 31 && calls[first + 4].tick == anchor + 91);
+        /* The last event needs 105 ticks in total: 15 at normal speed and 90 at half speed. */
+        send("play mapped"); melody(); first = call_count; send("speed 50"); ticks(181);
+        CHECK(call_count == first + 3 && calls[first + 1].tick - calls[first].tick == 60 && calls[first + 2].tick - calls[first + 1].tick == 120);
+        send("play mapped"); melody(); send("bpm 300"); ticks(12);
+        send("bpm file"); send("status"); CHECK(strstr(logs, "BPM=60 speed=100% key=0"));
+        first = call_count; ticks(61); CHECK(call_count == first + 2);
+        send("bpm 0"); send("bpm 301"); send("bpm text");
+        send("speed 24"); send("speed 401"); send("speed text");
+        send("status"); CHECK(strstr(logs, "BPM must be") && strstr(logs, "Speed must be"));
+    } else if (!strcmp(mode, "v2-key")) {
+        send("play timeline"); melody(); ticks(1);
+        near_pitch(0, 1); near_pitch(1, 0.25);
+        send("key 12"); ticks(30);
+        near_pitch(2, 2); near_pitch(3, 0.25);
+        send("key 7"); send("transpose 1 5"); ticks(30);
+        near_pitch(4, 2); near_pitch(5, 0.25);
+        send("key -49"); send("key 49"); send("key text"); send("status");
+        CHECK(strstr(logs, "Key must be -48 to 48") && strstr(logs, "key=7"));
+        send("play timeline"); send("out 1 drums"); send("key 48"); ticks(1);
+        CHECK(calls[6].sound == 21);
+    } else if (!strcmp(mode, "v2-names")) {
+        send("play MOON.mid"); CHECK(strstr(logs, "Playing moonlight-sonata:"));
+        send("play sonata"); CHECK(strstr(logs, "Playing moonlight-sonata:"));
+        send("play cirno"); CHECK(strstr(logs, "Playing cirno:"));
+        send("play cirno1"); CHECK(strstr(logs, "Playing cirno1:"));
+        CHECK(DeleteFileA("user/jukebox/cirno.mid"));
+        send("play cirno"); CHECK(strstr(logs, "More than one song matches"));
+        send("play alpha"); CHECK(strstr(logs, "Playing alphabeta:"));
+        send("play zz-last"); CHECK(strstr(logs, "Playing zz-last:"));
+        send("play many"); CHECK(strstr(logs, "More than one song matches") && strstr(logs, "More matches exist"));
+        send("play unknown"); CHECK(strstr(logs, "No song matches. Use /jb list."));
+        send("play a/b"); send("play a.b"); send("play bad name");
+        CHECK(strstr(logs, "Song name needs 1 to 48"));
+        send("stop"); ticks(200); CHECK(!call_count);
+    } else if (!strcmp(mode, "v2-volume")) {
+        send("play timeline"); melody(); send("vol 1 50"); send("master 80"); ticks(1);
+        CHECK(fabs(calls[0].volume - 0.79 * 0.5 * 0.8) < 0.000002);
+        CHECK(fabs(calls[1].volume - 0.58 * 0.8) < 0.000002);
+        send("vol 1 200"); send("master 200"); ticks(30);
+        CHECK(calls[2].volume == 1 && calls[3].volume == 1);
+        send("vol 1 -1"); send("vol 1 201"); send("vol 1 text");
+        send("master -1"); send("master 201"); send("master text");
+        CHECK(strstr(logs, "Volume must be") && strstr(logs, "Master must be"));
+        send("master 0"); ticks(30); CHECK(call_count == 4);
+    } else if (!strcmp(mode, "v2-control-bad")) {
+        FILE *file = fopen("control.txt", "r");
+        char text[128], error[128];
+        CHECK(file && fgets(text, sizeof text, file) && fgets(error, sizeof error, file));
+        fclose(file);
+        text[strcspn(text, "\r\n")] = 0;
+        error[strcspn(error, "\r\n")] = 0;
+        send("play timeline"); melody(); send(text); send("status");
+        CHECK(strstr(logs, error));
+        CHECK(strstr(logs, "BPM=120 speed=100% key=0") && strstr(logs, "Master=100%"));
+        ticks(1); CHECK(call_count == 2 && fabs(calls[0].volume - 0.79) < 0.000002);
+    } else if (!strcmp(mode, "v2-mix-bad")) {
+        send("play timeline"); send("status");
+        CHECK(strstr(logs, "Preset ignored:") && strstr(logs, "mode=voices"));
+        CHECK(strstr(logs, "speed=100% key=0") && strstr(logs, "Master=100%"));
+        ticks(1); CHECK(call_count == 2 && calls[0].sound == 39);
+    } else { CHECK(0); }
+}
+
 
 int main(int argc, char **argv)
 {
@@ -312,13 +501,15 @@ int main(int argc, char **argv)
     SetErrorMode(SEM_NOGPFAULTERRORBOX | SEM_FAILCRITICALERRORS);
     CHECK(argc == 3);
     mode = argv[2];
+    modern = !strncmp(mode, "v2", 2);
+    if (modern) { bank[0] = 0; automatic = 3; maximum = 32; }
     library = LoadLibraryA(argv[1]);
     CHECK(library);
     symbol = GetProcAddress(library, "sv_plugin_entry");
     CHECK(symbol && sizeof symbol == sizeof entry);
     memcpy(&entry, &symbol, sizeof entry);
     CHECK(entry(2, &plugin) == SV_INCOMPATIBLE);
-    CHECK(entry(1, &plugin) == SV_OK && !strcmp(plugin.id, "sv.jukebox") && !strcmp(plugin.version, "0.1.0"));
+    CHECK(entry(1, &plugin) == SV_OK && !strcmp(plugin.id, "sv.jukebox") && !strcmp(plugin.version, "0.2.0"));
     read_api.size = sizeof read_api; read_api.version = 1;
     read_api.player = player; read_api.human = human; read_api.entities = entities;
     write_api.size = sizeof write_api; write_api.version = 1;
@@ -339,7 +530,8 @@ int main(int argc, char **argv)
         else if (!strcmp(mode, "keypad")) test_keypad();
         else if (!strcmp(mode, "scale")) test_scale();
         else if (!strcmp(mode, "stop")) test_stop();
-        else if (!strcmp(mode, "preserve")) { send("demo"); ticks(1); CHECK(call_count == 2 && fabs(calls[0].pitch - 0.3737508076) < 0.000002); plugin.disable(1); CHECK(plugin.enable(&h, 1) == SV_OK); }
+        else if (!strcmp(mode, "preserve")) { send("scale"); ticks(1); CHECK(call_count == 1 && fabs(calls[0].pitch - 0.1376976659) < 0.000002); plugin.disable(1); CHECK(plugin.enable(&h, 1) == SV_OK); }
+        else if (modern) test_v2(mode);
         else if (!strcmp(mode, "bad-midi")) { send("play bad"); CHECK(strstr(logs, "MIDI ")); ticks(1); CHECK(!call_count); }
         else { CHECK(0); }
         plugin.disable(1);

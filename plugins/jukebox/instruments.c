@@ -246,24 +246,24 @@ JbTone jb_drum(const JbInstruments *instruments, unsigned key, int transpose)
 
 int jb_keypad_octaves(const JbInstruments *instruments, const JbSong *song, const JbRoute routes[16])
 {
-    uint32_t histogram[200] = {0};
+    uint32_t histogram[296] = {0};
     double best = DBL_MAX;
     int shift, chosen = 0, key, member;
     size_t i;
     for (i = 0; i < song->count; ++i) {
         const JbNote *note = &song->notes[i];
         const JbRoute *route = &routes[note->channel];
-        if (route->output == JB_SYNTH && !route->muted)
-            ++histogram[note->key + route->transpose + 36];
+        if (note->channel != 9 && route->output == JB_SYNTH && !route->muted && route->voice < 0)
+            ++histogram[note->key + route->transpose + 84];
     }
     /* MIDI notes plus the allowed transposition and base frequencies need at most 16 octaves. */
     for (shift = -16; shift <= 16; ++shift) {
         double cost = 0;
-        for (key = 0; key < 200; ++key) {
+        for (key = 0; key < 296; ++key) {
             double nearest = DBL_MAX, hz;
             if (!histogram[key])
                 continue;
-            hz = frequency(key - 36) * pow(2.0, shift);
+            hz = frequency(key - 84) * pow(2.0, shift);
             for (member = 1; member < JB_MEMBERS; ++member) {
                 double distance = fabs(log(hz / instruments->members[member].base_hz) / log(2.0));
                 if (distance < nearest)
@@ -278,7 +278,6 @@ int jb_keypad_octaves(const JbInstruments *instruments, const JbSong *song, cons
     }
     return chosen;
 }
-
 
 int jb_sound_index(const JbSounds *sounds, const char *name, int *id)
 {

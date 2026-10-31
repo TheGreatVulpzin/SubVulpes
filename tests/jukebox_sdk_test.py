@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix='jukebox-sdk-', dir=BUILD / 'tests') as 
     assert Path(include_line.split('=', 1)[1]).resolve() == (sdk / 'include').resolve(), 'The build did not use SDK headers.'
     plugin = target / 'plugins/sv.jukebox'
     assert sorted(p.name for p in plugin.iterdir()) == ['jukebox.dll', 'plugin.ini']
-    package = target / 'packages/sv.jukebox-0.1.0-native.svplugin'
+    package = target / 'packages/sv.jukebox-0.2.0-native.svplugin'
     with zipfile.ZipFile(package) as zipped:
         assert sorted(zipped.namelist()) == ['jukebox.dll', 'plugin.ini']
     inspection = subprocess.run([str(BUILD / 'subvulpes_server.exe'), '--plugin-inspect', str(package)],

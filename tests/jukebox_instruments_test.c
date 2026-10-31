@@ -51,10 +51,20 @@ int main(int argc, char **argv)
             tone = jb_drum(&instruments, (unsigned)key, transpose);
             CHECK(tone.sound == 21 && isfinite(tone.pitch) && tone.pitch >= 0.125 && tone.pitch <= 2);
         }
+    for (bank = 0; bank <= 46; ++bank)
+        for (key = -84; key <= 211; ++key) {
+            tone = jb_voice(bank, 60, key);
+            CHECK(tone.sound == (unsigned)bank && tone.pitch >= 0.125 && tone.pitch <= 2);
+        }
+    CHECK(jb_voice(39, 109, 109).pitch == 1);
+    CHECK(jb_voice(21, 60, 72).pitch == 2);
+    CHECK(jb_voice(0, 60, 24).pitch == 0.125);
+    CHECK(jb_voice(0, 60, 12).pitch == 0.125 && jb_voice(0, 60, 12).octaves == 1);
+    CHECK(jb_voice(46, 60, 84).pitch == 2 && jb_voice(46, 60, 84).octaves == -1);
     song.notes = notes;
     song.count = sizeof notes / sizeof notes[0];
     for (i = 0; i < 16; ++i)
-        routes[i].output = i == 9 ? JB_DRUMS : JB_SYNTH;
+        routes[i].output = i == 9 ? JB_DRUMS : JB_SYNTH, routes[i].voice = -1;
     CHECK(jb_keypad_octaves(&instruments, &song, routes) == 1);
     routes[0].transpose = 12;
     CHECK(jb_keypad_octaves(&instruments, &song, routes) == 0);

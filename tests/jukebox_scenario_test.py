@@ -14,9 +14,9 @@ probe = tools / 'probe' if (tools / 'probe/probe.dll').exists() else BUILD / 'pl
 command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(tools / 'run_plugin_test.ps1'),
            '-Plugin', str(plugin), '-Scenario', str(ROOT / 'tests/scenarios/jukebox-demo.svtest'),
            '-ServerExe', str(BUILD / 'subvulpes_server.exe'), '-Runner', str(runner), '-Probe', str(probe)]
-expected = [(0, 0, 1, 60, 29, 0.375359491), (0, 0, 10, 36, 21, 0.25),
-            (0, 15, 1, 64, 29, 0.472923323), (0, 30, 1, 67, 29, 0.562403782),
-            (0, 30, 10, 42, 21, 2.0), (0, 45, 1, 72, 29, 0.750718983)]
+expected = [(0, 0, 1, 60, 39, 1.0), (0, 0, 10, 36, 21, 0.25),
+            (0, 15, 1, 64, 39, 1.25992105), (0, 30, 1, 67, 39, 1.49830708),
+            (0, 30, 10, 42, 21, 2.0), (0, 45, 1, 72, 39, 2.0)]
 pattern = re.compile(r'^\[sv\.jukebox\] JUKEBOX_SOUND tick=(\d+) at=(\d+) ch=(\d+) note=(\d+) sound=(\d+) pitch=([0-9.]+)', re.M)
 previous = None
 for _ in range(2):
