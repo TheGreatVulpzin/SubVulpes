@@ -1,6 +1,6 @@
 # Admin Commands
 
-Working ID: `sv.admcmd`. Version: `0.1.0`. This native plugin ships disabled.
+Working ID: `sv.admcmd`. Version: `0.1.0`. This native plugin starts enabled.
 The manifest holds the ID, display name and version. The host uses that ID for its storage namespace.
 The plugin needs read, write, properties, configuration and plugin services.
 It uses only the public API. It needs no game assets or internal record layouts.

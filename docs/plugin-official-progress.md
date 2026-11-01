@@ -14,7 +14,7 @@ Work order: Part 1, permissions, admin commands, bans, chat additions, welcome a
 | Packaging and final checks | Open | Follow all six plugins. |
 
 Build and tests use `build/fresh` after `vcvars32`.
-The server package must carry all six plugins. Only permissions starts enabled.
+The server package must carry all six plugins. Permissions and admin commands start enabled.
 No client playtest or launcher window check ran for this work.
 
 # Part 1 evidence
@@ -105,7 +105,7 @@ It sets the cached root position that a normal simulation tick supplies.
 The public service lookup adds borrow at the end of SvPlugins version 1.
 The existing find method keeps its dependency rules.
 
-The plugin ships disabled. Its DLL and manifest are in the server package and the launcher update list.
+The plugin starts enabled. Its DLL and manifest are in the server package and the launcher update list.
 The original client and manual launcher checks remain open.
 The prose page scored 1.64 per 100 words. The API notes scored 0.44. The closure prose scored 0.30.
 
