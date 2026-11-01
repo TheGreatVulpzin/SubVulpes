@@ -53,7 +53,7 @@ No client playtest or launcher Start/Stop test ran.
 
 The timing run uses QueryPerformanceCounter and the same game sources as the server.
 The combined hooks take a mean of 1.910 microseconds for 256 bots on the recorded host.
-The [Cost section](plugin-abi.md#cost) records each hook, one cold idle tick and dense and sparse spatial queries.
+The [Cost section](dev-notes/plugin-abi.md#cost) records each hook, one cold idle tick and dense and sparse spatial queries.
 The digit poll already skips its scan when no digit waits. No further performance change is needed.
 
 The normal build and all 10 CTest groups pass.

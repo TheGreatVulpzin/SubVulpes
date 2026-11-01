@@ -1,6 +1,6 @@
 # Plugin manifest
 
-Status: built on 2026-10-28. The file `plugin.ini` describes a plugin. The server, the installer and the launcher read the same rules.
+The file `plugin.ini` describes a plugin. The server, the installer and the launcher read the same rules.
 The server holds the rules. The installer and the script `validate_plugin.ps1` ask the server, so no tool copies them.
 
 ## Keys
@@ -14,7 +14,7 @@ All keys sit in the section `[plugin]`. A key is lower case. A key that appears 
 | `library` | yes | The file of the plugin. It must be in the same folder. |
 | `api` | yes | The ABI number. It is `1`. |
 | `live` | yes | `1` when the plugin can start and stop with the server running. `0` when it needs a restart. |
-| `runtime` | no | `native` (the default), `lua` or `wasm`. Lower case only. Only `native` has an adapter today. |
+| `runtime` | no | `native` (the default), `lua` or `wasm`. Lower case only. Only `native` is supported. |
 | `capabilities` | no | The tables that the plugin may open. See the list below. No key means no table. |
 | `dependencies`, `conflicts`, `role`, `unsafe_events` | no | See [the SDK page](plugin-sdk.md) and [plugin libraries](plugin-libraries.md). |
 | `name` | no | A display name of 1 to 48 printable ASCII characters, such as `Health Commands`. |
@@ -64,13 +64,7 @@ A good plugin gives one line that starts with `MANIFEST` and exit code 0.
 A bad plugin gives one line `INVALID`, a tab, the key and a fixed message, for every problem, and exit code 1. The message never repeats the value.
 
 The installer `tools\plugins\install_plugin.ps1` runs the same check on its staging folder before it copies any file.
-It carries native code only, so `runtime=lua` and `runtime=wasm` are refused until the script adapters exist.
-
-## Tests
-
-`tests/test_manifest.py` (group `manifest-rules`) covers the valid and invalid values of each new key, the report for several problems at once, the script with a good package, a bad package and an unsafe entry, and the installer.
-`tests/test_plugins.py` covers the capability wall in the mode `wall`.
-Removal proofs on 2026-10-28: without the capability check in `get_api`, without the unsafe-name check of the script, and without the server check in the installer, a test fails each time. The restored source passes.
+It carries native code only, so `runtime=lua` and `runtime=wasm` are refused. Only native plugins are supported.
 
 ## Inspect a plugin for approval
 
@@ -109,7 +103,7 @@ The `unsafe_events` flag always adds its own `high` record.
 
 Package inspection needs Windows PowerShell and the shipped `install_plugin.ps1` beside the server executable.
 The installer reuses its ZIP entry checks, size bounds and payload checks.
-It stages the checked bytes and asks the server to read the manifest with the WP1 reader.
+It stages the checked bytes and asks the server to read the manifest with the manifest reader.
 The internal `--plugin-inspect-folder FOLDER` command serves this step.
 The server also calls the existing folder validator before it prints review records.
 Files stay locked against writes and replacement while the server hashes and reads them.
@@ -118,10 +112,7 @@ The installer removes its temporary folder after the review.
 A failed command returns a nonzero exit code.
 A caller must require exit code 0 and the full record set before it uses a review.
 A partial report does not grant approval.
-Only native packages have an adapter today.
-
-The focused CTest group is `plugin-inspect`.
-It checks metadata, all three hashes, changed metadata, changed payloads, risk lines, invalid packages and read-only behavior.
+Only native packages are supported.
 
 ## Network capability and connection identifiers
 
@@ -134,6 +125,4 @@ The address hash uses all four IPv4 bytes. The network hash uses the first three
 The host makes a 16-byte salt with `BCryptGenRandom` once and saves it in `user/connection-salt.bin`.
 The host reuses that file at each start. A missing salt creates new identifiers. A malformed file prevents startup.
 Keep the salt private and preserve it to preserve the identifiers. The host never logs its contents or a real address.
-The test room declares `network` and sends the address directly to private chat, without its usual chat log.
 The capability does not isolate native code. A native plugin can read server memory, including the salt.
-Tests cover both permissions, stable identifiers, distinct addresses, a shared /24, salt reuse and the capability removal proof.

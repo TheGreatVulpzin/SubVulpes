@@ -1,0 +1,40 @@
+# Development notes for the plugin-events page
+
+These sections describe how the host implements this API, the checks that proved it and the open work.
+They are not part of the SDK reference.
+
+## Order of work
+
+1. Done. The event mechanism: `SvGameEvent` (`sv_game_events.h`), the queue (`plugin_events.c`) and the delivery before the tick event. The core calls `sv_events_post(kind, tick, player, human, actor)`.
+   The post does nothing when no active plugin asked for the kind, when the kind is not one that the core posts, or when the call is not on the server thread. The queue holds 1,024 records.
+   Tests: the order, a human that is gone at delivery, a flood of 1,100 posts (1,024 kept, a lost record with 76 that comes first), a bad mask, and no record after the stop.
+   Removing the queue limit, the kind filter, the ring index and the mask check made `game-api` fail each time (`build/logs/mutation16.log`).
+2. Done. The first notices: spawn, death and leave (`plugin_game_events.c`).
+   - Spawn is posted at the end of `createhuman` for a human that has a player. It also posts for a bot that a plugin makes with `npc_create`, and for the bodies that the game makes when the world starts.
+   - Death is posted in the despawn step of `humansimulation`, once, on the first tick of the death, for a human that still has a player. The despawn timer is 3600 until that tick. A human with no player gives no death event. A plugin that revives a body with `human.health` and the body dies again gives a new event.
+   - The killer is the human of the player that owns the last bullet that hit the victim, when that player is still active and has a human. Other causes of death (a crash, bleeding, a fall) give no killer. The game has no field for the killer, so the core keeps a table of the last bullet owner for each human, and the spawn of a body clears its entry.
+   - Leave is posted when a player slot is released (`deleteplayer`): a connection that ended, a bot that went, or a rollback of a failed `npc_create`. The player reference no longer resolves at delivery. A plugin matches it with the reference that it saved at the spawn.
+   - The tests make real players and humans, run `humansimulation`, and read the queue. They also call each hook with indexes out of range. The bounds on the index of the last-bullet table are not proven by removal, because an out-of-range write has no visible effect in the test world.
+3. Done. The decision at a safe point: `sv_plugins_decide` in the host, and the events chat and join.
+   - The callback answers `SV_OK` (pass) or `SV_DENIED` (drop). The plugins answer in load order and the first `SV_DENIED` ends the call. Any other answer is a failure, and the plugin is disabled.
+   - `sv_plugins_decide` passes (`SV_OK`) with no callback when it is not on the server thread, when the host is stopping or failed, when the event is null, or when it comes from inside a plugin callback.
+   - Chat (`SV_EVENT_CHAT`, record `SvChatEvent`): `server_playermessage` asks after the word filter, for a text that does not start with a slash. The record has a second text, `replacement`, that starts equal to the text. A plugin writes a new text there and answers `SV_OK`. The host uses it when it has 1 to 63 printable ASCII bytes. The host forces the last byte of the record to zero before it checks. Any other content is ignored. A replacement that starts with a slash is chat and not a command, because the command test comes first. A plugin sees the replacement of the plugin before it in `replacement` and the original in `text`. A muted player never reaches it. A player with no reference gives no event, as for the commands. The text is cut to 63 bytes.
+   - Join (`SV_EVENT_JOIN`, record `SvGameEvent` with the player and the account): the join code in `server.c` asks after the account ban check. `SV_DENIED` releases the player at once, as a ban does, and the release posts a leave event. The test calls `sv_game_join_denied`, which is the function that the join code calls. The call site in `server.c` has no test, because the join function needs a socket.
+   - The bits `SV_EVENT_PHONE_DIGIT` and `SV_EVENT_PHONE_CALL` are reserved for the phone area. Nothing posts them yet.
+   - Removing the text bound, the no-reference guard, the thread guard and the null guard made `game-api` fail each time (`build/logs/mutation17.log`). The guard against a call from inside a plugin callback has no proof, because a plugin has no way to start a chat text.
+4. Done. The safe route for damage: the rows `human.damage_taken_scale`, `human.damage_dealt_scale` and `object.damage_taken_scale`, kept in a table beside the records (`plugin_damage.c`), and a call at each damage site: a bullet on a human, a hit by a vehicle on a human, the health of an object, a wheel and a window. The damage stays the same number while the scale is 1. The rules are in [the property table](../plugin-game-api.md#damage-scales). The test calls the damage function of the core for an object, and the functions that the bullet code calls. The bullet code itself has no test, because its function is private and needs a full world. The rounding, the cap and the index checks are proven by removal (`mutation18.log`).
+5. Done. Kind 3: `SV_EVENT_DAMAGE` and the record `SvDamageEvent`.
+   - A plugin needs `unsafe_events=1` in its `plugin.ini`. Without it `subscribe` returns `SV_DENIED`. The plugin list (`PLUGIN` lines and a notice) and the approval command (`--plugin-approve` and `--plugin-hash`) print a notice for such a plugin.
+   - The host asks after the scales of the property table, at the three damage sites: a bullet on a human (`SV_DAMAGE_BULLET`), a hit by a vehicle on a human (`SV_DAMAGE_VEHICLE`) and the health of an object, including a wheel (`SV_DAMAGE_OBJECT`). The record has the attacker, the human, the object, the source and the amount. A call with an amount of 0 or less asks nobody. A window of a vehicle takes a decimal amount and is not asked.
+   - The callback answers `SV_OK`, `SV_DENIED` (the amount becomes 0) or writes `new_amount`. A `new_amount` below 0 or above 100000 is ignored. The next plugin sees the amount that the previous plugin chose. The first `SV_DENIED` ends the call.
+   - While the callback runs, every call that changes the game or the host returns `SV_STATE`: the whole write table, `set` and `add` of the property table, `command` and `subscribe`. The reads, `get_api` and `log` work. The host closes this with one flag, `in_simulation`, and one function, `sv_plugins_write_context`.
+   - The host measures each decision. A decision slower than 200 microseconds is slow. More than 10 slow decisions in 60 seconds, or one failure, mark the plugin. The host does not run the disable callback in the middle of a calculation. The next tick disables the plugin, and the log says why. A marked plugin gets no more decisions.
+   - Tests: the game test runs the decisions (deny, change, two bad answers, an object, a vehicle hit with a shooter, the write guard, another thread, a null record). The lifecycle test runs the refusal without the flag, the budget (10 slow answers pass and the 11th marks the plugin), a failure, and the notice in the list.
+   - Removing the subscribe gate, the two host guards, the write context, the answer range, the slow measure, the slow limit and the guard in the property table made the tests fail each time (`build/logs/mutation19.log`).
+   - Not tested: the three damage sites inside the real bullet and vehicle code (the test calls the functions that they call), the callback of a plugin that crashes (that is a crash of the server), and the cost of many decisions in one tick.
+
+Each step has tests, a removal proof for each check that guards memory or a limit, and a note here. The original client sees no change: the core sends the same packets.
+
+## Test evidence removed from the reference page
+
+The game API test covers default, allow, deny, conflicting subscribers in both orders, prefix matching and password privacy.

@@ -1,6 +1,6 @@
 # Plugin test runner
 
-Status: built on 2026-10-28 (work package WP4). It runs native plugins. Lua and WASM plugins use the same scenarios once their adapters exist.
+The runner runs native plugins.
 
 The runner tests a plugin without a game client and without game data. It links the same game sources as the server, builds a small world with the real constructors, loads your plugin, and runs a scenario file.
 
@@ -64,14 +64,7 @@ Your plugin must not use the command name `probe`.
 - It tests native plugins. A plugin with `dependencies` needs its libraries in the same root, and the script does not copy them yet.
 - It does not show what the original client shows. Use the test room in the game for that.
 
-## Tests
-
-`tests/scenario_test.py` (group `plugin-scenarios`) runs the scenario of the status plugin twice and compares the output. It runs 5 scenarios that pass and 16 that must fail, one for each kind of wrong step, and one plugin with a bad manifest that must not reach the runner.
-`tests/sdk_package_test.ps1` runs the scenario of the template with the runner from the unpacked SDK.
-Removal proof on 2026-10-28: without the limit of 63 characters for a chat text, the test fails, because the long text overflows the buffer of the runner. The restored runner passes.
-
 ## Session and login fixtures
-
 
 The runner accepts `leave PLAYER`. A later `spawn player NAME` with the same name reuses that fixture account.
 The public fixture password is `svtest`. It exists only in the runner and never changes a server profile.

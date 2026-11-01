@@ -2,7 +2,7 @@
 
 Use a Windows test server and MSVC Build Tools with the C++ x86 tools and a Windows SDK.
 No game client or game data is needed for the scenario test.
-Use a server that matches the SDK version. Rebuild old DLLs after the ABI reset.
+Use a server that matches the SDK version. Rebuild your DLLs when the SDK version changes.
 
 1. Extract `SubVulpes-sdk-VERSION.zip` into an empty folder. Keep its folders together.
    Open Windows PowerShell in the folder that holds `README.txt`.

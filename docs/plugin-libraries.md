@@ -1,7 +1,6 @@
 # Plugin libraries, conflicts and owned things
 
-This page describes four host rules: the API that a plugin offers to other plugins (N35), the `conflicts=` key and the reason of a refusal (N36), the cleanup of what a plugin made (N37), and library plugins (N38).
-The host tests prove all four with real DLLs. No game test shows them in a client, because they do not change the game.
+This page describes four host rules: the API that a plugin offers to other plugins, the `conflicts=` key and the reason of a refusal, the cleanup of what a plugin made, and library plugins.
 See [the plugin SDK](plugin-sdk.md) for the manifest and [the game API](plugin-game-api.md) for the write table.
 
 ## Manifest keys

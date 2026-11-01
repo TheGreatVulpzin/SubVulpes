@@ -1,6 +1,6 @@
 # Plugin packaging
 
-Status: built on 2026-10-28 (work package WP2). It covers a native plugin. Lua and WASM packages use the same name and the same script.
+This page covers the package of a native plugin: a `.svplugin` file.
 
 Start with [the first steps](sdk-first-steps.md) to build, test, install and approve the template plugin.
 
@@ -44,9 +44,8 @@ These pieces read the list:
 
 - `tools/plugins/write_official_approvals.ps1` writes the approval file with the SHA-256 of each official DLL.
 - `tools/release/make_package.ps1` takes the files, checks the approval file, and checks that `plugins/plugins.ini` matches the list.
-- `tests/package_test.ps1` checks the package.
 
-The test room is not in the list. It is the example of a plugin built with the function, and the server package does not carry it.
+It is the example of a plugin built with the function, and the server package does not carry it.
 
 ## The SDK package
 
@@ -63,20 +62,3 @@ The target `sdk-package` runs `tools/sdk/make_sdk.ps1`. It makes `SubVulpes-sdk-
 The package has a fixed order and a fixed time stamp, so the same sources give the same hash.
 The script stops when the count of public headers is not 15. A new public header must be a decision.
 The SDK does not carry the server program. The scripts ask for `-ServerExe`, because the server holds the manifest rules and the author knows which server runs the plugin.
-
-## Tests
-
-`tests/test_manifest.py` (group `manifest-rules`) runs the pack script on the status plugin. It checks the name, the entries, the same bytes in two runs, the validate script and the installer. It checks that the script refuses a folder with an extra file, a bad manifest and a missing library.
-Removal proof on 2026-10-28: without the check for an extra file, the test fails. The restored script passes.
-
-`tests/sdk_package_test.ps1` (group `sdk-package`) builds the SDK, unpacks it in a clean folder and uses only what it holds.
-It compiles every public header alone and all together, builds the template with `build.bat` and with CMake, packs the result, checks it with the validate script and installs it on a test server.
-It checks that the package is the same in two runs and that no internal header is in it.
-Removal proof on 2026-10-28: with an internal header added to `include/`, the test fails. The restored script passes.
-
-`tests/sdk_clean_test.ps1` (group `sdk-clean`) tests an empty folder outside the repository.
-It copies only the SDK ZIP and the server executable before it clears compiler state and replaces `PATH` with Windows paths.
-The test builds the template with MSVC discovery, packs it and installs it in a temporary server folder.
-It checks the hash, approval, enable and load commands, then runs the template scenario with the runner from the ZIP.
-The test restores the environment and removes its temporary folder at the end.
-Pass `-SdkZip FILE` to test an exact release ZIP instead of a new test package.

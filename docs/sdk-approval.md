@@ -72,13 +72,6 @@ This is an explicit operator action.
 `--allow-unapproved-native` keeps its content-approval bypass.
 Neither command skips manifest, API, path or dependency checks.
 
-## Evidence
-
-The CTest group `plugin-trust` checks the real loader and a minimal DLL fixture.
-It checks rejection before DLL execution, malformed records, metadata changes, both legacy files and both legacy commands.
-Separate removal probes isolate the payload hash, manifest hash, runtime and capability comparisons.
-Each rejection probe fails with its comparison removed and passes after restoration.
-
 ## Launcher install and update
 
 The launcher reads `--plugin-inspect` before it opens the review dialog.
@@ -102,9 +95,6 @@ A refused review does not replace installed files or the previous approval.
 New plugins stay disabled until the operator enables them.
 Updates keep private plugin data and the previous enabled state.
 
-`tests/sdk_approval_install_test.py` tests this path without the GUI.
-It covers first installation, reviewed updates, private data, missing native consent and changed review inputs.
-The launcher tests read real server output and check the real dialog controls, risk colors and review mode.
 Removing the native consent guard makes the real dialog test fail.
 The restored guard passes.
 No live launcher visual check or Start/Stop check ran.
@@ -137,5 +127,4 @@ It refuses persistent CLI actions and cannot combine with `--allow-unapproved-na
 The old native bypass still works by itself.
 
 The `plugin-development` group checks 14 cases, file locks and the real minute warning.
-Separate removal probes cover the persistent-command guard, outside-folder approval and the folder boundary.
 Each probe fails with its guard removed and passes after restoration.

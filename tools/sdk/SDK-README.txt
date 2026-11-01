@@ -46,4 +46,4 @@ Legacy native approval CLI
 Rules
   - List each API table that the plugin opens in capabilities. An unlisted table gives SV_DENIED.
   - Native code has full access to the server process. Approve only plugins that you trust.
-  - Read docs\plugin-abi.md before you add a field to a table. Rebuild old plugins after the ABI reset.
+  - Read docs\plugin-abi.md before you add a field to a table. Rebuild your plugins when the SDK version changes.

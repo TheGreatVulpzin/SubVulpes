@@ -1,17 +1,15 @@
-# Native plugin SDK v1
+# Native plugin API
 
-The native contract targets Windows x86 DLLs.
-It supplies logs, commands, events and 12 capability tables, including game reads and writes.
-The public headers live in `src/plugins/`. A separate SDK package and script hosts remain planned work.
-See [the SDK plan](sdk-plan.md) for their order and acceptance checks.
+A native plugin is a Windows x86 DLL. The server loads it and calls its entry point.
+The API gives a plugin logs, commands, events and 13 capability tables for game reads and writes.
+The public headers are in the `include/` folder of the SDK.
 
-The [game API](plugin-game-api.md) describes copied snapshots, opaque entity references, mutations and property rows.
-The coverage page lists open operations and client limits. S3 remains open.
-See [platform scope](plugins.md), [API coverage](plugin-coverage.md) and [S3 evidence](s3.md).
+Start with [the first plugin guide](sdk-first-steps.md). The [game API](plugin-game-api.md) describes copied snapshots,
+entity references, writes and property rows. The [manifest page](plugin-manifest.md) lists the keys of `plugin.ini`.
 
 ## Build and ABI
 
-Use `src/plugins/sv_plugin.h`. Build C code, or use C linkage from C++.
+Use `include/sv_plugin.h`. Build C code, or use C linkage from C++.
 `SV_PLUGIN_ABI` is `1`. `SV_CALL` is `__cdecl`, and public records use 8-byte packing.
 Export the exact symbol `sv_plugin_entry`:
 
@@ -19,7 +17,7 @@ Export the exact symbol `sv_plugin_entry`:
 SV_EXPORT SvResult SV_CALL sv_plugin_entry(uint32_t abi, SvPlugin *plugin);
 ```
 
-Use `/EXPORT:sv_plugin_entry` with MSVC, as the existing targets do.
+Use `/EXPORT:sv_plugin_entry` with MSVC.
 The host owns the descriptor buffer and initializes its `size`.
 The entry must return `SV_OK` and fill `size`, `abi`, `id`, `version`, `flags` and `enable`.
 The descriptor must match the manifest. The `disable` callback is optional.
@@ -31,10 +29,10 @@ Check `host->size` before accessing that field. Earlier hosts can omit it.
 The [game read API](plugin-game-api.md) documents capability lookup, readiness, copied records, reference lifetime and raw-field meanings.
 Entity pages scan at most 256 physical slots and return at most the requested capacity, which cannot exceed 256.
 Empty pages can precede active entities. Continue to the documented pool capacity rather than stopping at an empty page.
-Historical item links and linked-object indices remain outside this contract until generation-safe associations exist.
+Item links and linked-object indices are not part of this contract.
 
-`plugins/status/status.c` is the buildable example. The normal `tools\build_hook.bat` build compiles it.
-It registers `status`. Its output goes to the server console.
+`examples/status/status.c` is a small example. It registers the command `status` and writes to the server console.
+The `template/` folder holds a plugin that you can copy.
 
 ## Files and activation
 
@@ -69,7 +67,6 @@ sv.status=enabled
 
 `required` prevents startup if activation fails and prevents disabling.
 `enabled` selects a default-enabled module. `disabled` leaves an optional module inactive.
-The first status module is default-enabled and non-required. No required production catalog exists yet.
 Private overrides use `[plugins]` in `user/plugins/state.ini`.
 The host lock is `user/plugins/host.lock`.
 
@@ -86,7 +83,7 @@ Worker-thread calls return `SV_STATE`.
 
 The limits are 32 modules and 128 commands across the host.
 Command callbacks receive the owner, actor and arguments. Actor zero is the local operator.
-Commands accept at most 300 bytes overall and 255 argument bytes. Nonlocal admin authorization currently denies access.
+Commands accept at most 300 bytes overall and 255 argument bytes. A command with admin permission denies a non-local actor.
 Event callbacks receive `size`, `kind` and `tick`.
 Return `SvResult` codes from the header. Failed enable/event callbacks disable the module and remove registrations.
 Required-service failure requests a controlled stop.
@@ -119,9 +116,8 @@ Offline commands use `subvulpes_server.exe`:
 Approvals use `[native]` entries with `ID=SHA256` in `plugins/native-approvals.ini` or `user/plugins/native-approvals.ini`.
 The approval command writes the private file. Changed bytes require new approval.
 A hash proves identity, not security. Native DLLs have full process access and can block, corrupt memory or crash.
-The user-requested `--allow-unapproved-native` flag defaults off. It prints a warning and skips approval only, including during checks.
+The `--allow-unapproved-native` flag is off by default. It prints a warning and skips approval only, including during checks.
 It preserves ABI and dependency checks. Metadata inspection does not prove safe execution or client compatibility.
-
 
 ## Module ZIP installation and launcher management
 
@@ -147,9 +143,7 @@ Updates save the previous manifest and DLL in `backup/plugins/<unique>.zip`.
 Use that ZIP as `-Package` to restore the previous module. Approve exact DLL content separately when needed.
 A compatible module update needs no core rebuild.
 
-The launcher's Plugins page offers Refresh, Enable, Disable, Approve native DLL and Install / update plugin zip.
-Live controls send local commands. Offline controls save next-start state.
-The installation action inspects the ZIP, shows its identity, requests confirmation, stops the server and installs the same package bytes.
-The native bypass checkbox applies to the next Start and defaults off.
-These controls exist in the implementation. Their presence does not establish a completed visual or manual flow test.
-See [recorded evidence and limits](s3.md).
+The launcher's Plugins page offers Refresh, Enable, Disable, Approve native DLL and Install / update plugin package.
+Live controls send local commands. Offline controls save the state for the next start.
+The install action inspects the package, shows its identity, asks for confirmation, stops the server and installs the same bytes.
+The native bypass checkbox applies to the next Start and is off by default.

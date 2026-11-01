@@ -1,9 +1,7 @@
 # Game read API
 
-Status: first read slice implemented. The build, fixture and real server checks passed within the limits below.
-This first game API adds reads, and a small [write capability](#write-capability-version-1) follows. It does not complete the [mapped API](plugin-api-map.md) or close S3.
-Most mutation and gameplay hook capabilities remain future work.
-The user ordered framework tests, then the full mapped API, then production plugins.
+The game API gives a plugin copied snapshots of game records, a small set of checked writes and a table of named properties.
+See [the write capability](#write-capability-version-1) for the writes.
 
 ## Capability lookup and compatibility
 
@@ -22,12 +20,12 @@ For the current header, a lookup inside a valid callback can use:
 const void *table = NULL;
 const SvGameRead *read;
 if (host->size < offsetof(SvHost, get_api) + sizeof host->get_api || !host->get_api)
-    return SV_INCOMPATIBLE;
+return SV_INCOMPATIBLE;
 if (host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) != SV_OK)
-    return SV_INCOMPATIBLE;
+return SV_INCOMPATIBLE;
 read = (const SvGameRead *)table;
 if (read->size < sizeof(*read) || read->version != SV_GAME_READ_VERSION)
-    return SV_INCOMPATIBLE;
+return SV_INCOMPATIBLE;
 ```
 
 Lookup needs the current callback's owner on the server thread, with no stop transition in progress.
@@ -115,7 +113,7 @@ the fraction of the line before the hit and the length of that part. The nearest
 A wheel counts as a hit on its vehicle. The game tests share one scratch record for their answers. The query saves it before the tests and puts it back after them,
 so a plugin callback does not change what the game wrote there.
 The cost is one pass over the active vehicles and the active humans. Call it a few times for each tick, not once for each body.
-The head direction is the one that the legacy tool used. It is read from the body and it is not a client value.
+The head direction comes from the body. It is not a client value.
 
 ## Association and raw-field meanings
 
@@ -134,7 +132,7 @@ A vehicle with no seats (`seat_count` is 0) has no occupants.
 
 The API omits `SvItemState.vehicle`, `SvItemState.linked_item` and `SvObjectState.linked_object`.
 Those historical raw indices can target a different entity after slot reuse.
-Future support needs generation-safe associations, not a conversion of the current raw index into a fresh reference.
+A raw index cannot become a safe reference, so the API does not expose it.
 
 `SvHumanState.despawn_counter` reports raw engine state. It is not a remaining-duration promise.
 `SvWorldState.spawn_sizes` copies the three raw spawn sizes. They do not define symmetric extents around the spawn position.
@@ -150,61 +148,6 @@ An account reference identifies only a live API record.
 This contract does not assign invented time units or RGB meaning to raw values.
 The world type counts currently report 27 item types and 14 object types.
 Those counts do not establish arbitrary new client type support.
-
-## Validation and remaining limits
-
-The fixture command is:
-
-```powershell
-ctest --test-dir build/server -R game-api --output-on-failure
-```
-
-The implementation is committed as `92854b1`.
-The normal build exited with code 0. All six CTest groups passed in 34.71 seconds.
-A focused `game-api` rerun after the build completed passed in 0.79 seconds.
-Its local evidence is `build/server/Testing/Temporary/LastTest.log`.
-The fixture reported `PUBLIC_READ_API_PASS` and `STOP_READ_DENIED`, and exercised real constructors and entity retirement paths.
-
-The native dependency check passed with 74 sources.
-Storage validation passed for 138 independent objects and 499799832 declared bytes.
-The repository privacy check found zero problems in 262 files.
-These checks describe this read slice, not later API work.
-
-### Real server runs
-
-Two real server cycles used the previous public framework package for data and its original status DLL.
-The test setup used the current server executable and added the `test.read` fixture.
-This was an isolated runtime check, not a new release package.
-Both cycles reported `PUBLIC_READ_RUNTIME_PASS` and `STOP_READ_DENIED`, exercised live disable/enable and exited cleanly with code 0.
-
-| Cycle | PID | Duration | Tick sample |
-| --- | --- | --- | --- |
-| First | 16928 | 64.53 seconds | 62.3 ticks/s, one sample |
-| Second | 16076 | 3.54 seconds | No periodic sample |
-
-The single tick sample is not a performance comparison or proof of sustained loaded-server behavior.
-The result record is `build/game-read-review/94cd5dbd49d647ee816e5121ed4afbd3/result.json`.
-The same directory contains `cycle-1.log` and `cycle-2.log`.
-Its base package is `SubVulpes-server-v0.0.0-s3-framework.1.zip`.
-The result records these exact SHA-256 identities:
-
-| Component | SHA-256 |
-| --- | --- |
-| Current server | `6191ea5849e8662dd46c1721c8176b94cdef7075459ce77777670e5862ac77f8` |
-| Read probe | `b6ac3f5927fbc608ca168850feee3094008cadd09fb944c0bc229e1b261d5a74` |
-| Previous package's status DLL | `e5f2171160988276c6fa7994bd3be1f116dfbcc0c0972e110dc5932370242b11` |
-
-The older status DLL remained usable with its original ABI prefix during these runs.
-This does not establish compatibility for every third-party module.
-
-### Remaining limits
-
-The read slice introduces no public game mutation operations or original-client behavior changes.
-The write capability below is a separate slice with its own limits.
-Original-client gameplay and manual launcher acceptance remain pending.
-The full mapped API and S3 remain open. Production gameplay and administration plugins follow the complete mapped API proof.
-These results do not establish client gameplay parity, broader hook coverage, Lua or WASM support.
-See [native SDK](plugin-sdk.md) and [S3 evidence](s3.md) for the framework contract and earlier package evidence.
 
 ## Write capability (version 1)
 
@@ -250,31 +193,17 @@ The host ends the items, vehicles and bots that a plugin made with `item_create`
 The newspaper of the game has up to 1,024 lines of 256 bytes. The server loads them from `readme.txt` at each round, adds "Top 10 list" and the ten richest accounts, and sends each line to the clients as two events of kind 3. The first event holds the characters 0 to 62 and the second holds the rest, from character 63. A line can hold 124 characters, which is the length that the loader reads.
 The events of kind 3 are the only text events that a client gets whole when it joins late. The game turns other old text events into placeholders after 600 ticks. The event list restarts at each round, so a client that joins later replays the lines, including the ones that a plugin changed.
 A change lasts for the current round. The next round loads `readme.txt` again, so a plugin that wants a line in every round writes it again at each round start.
-A line that the plugin replaces sends two new events with the same index. The user tested both cases on 2026-10-27 with the original client, on a server that was running. A replaced line changed in the open newspaper at once, and a new line at the end appeared as the last line. The client shows the server name as the header above the lines, so line 0 is the first line under the header. A graphics setting of that client drew the first lines of the newspaper black, which hid the text until the setting was changed.
+A line that the plugin replaces sends two new events with the same index. In the original client, on a running server, a replaced line changed in the open newspaper at once, and a new line at the end appeared as the last line. The client shows the server name as the header above the lines, so line 0 is the first line under the header. A graphics setting of that client drew the first lines of the newspaper black, which hid the text until the setting was changed.
 The server reads the lines only to send them. A change affects only what the clients show.
-The test starts with three lines. It checks each error code, a refused call that changes nothing, a replaced line, a line of 100 characters that splits into 63 and 37, an empty line, the fill of all 1,024 lines and the refusal of the next one. It also reads the events and the storage, and it checks that a client that is 1,000 ticks late gets a headline whole and a message as a placeholder.
-Removing one check at a time made `game-api` fail each time (`build/logs/mutation22.log`): the gap in the index, the limit of 1,024 lines, the text length, the line count on read, the buffer capacity on read, the null buffer and the null text, the printable-text check, and the context checks of both methods.
 
-The tests call every method from a real plugin callback against records that real constructors made.
-For the move of a vehicle and of an item, the seat, the name and the speech, removing one check at a time made `game-api` fail each time: the train piece, the particle, wheel and wheel body bounds, the free slot, the held item, the position limit, the seat range, the seat taken, the human on foot, the name length and characters, the range and the dead human of a speech (`build/logs/mutation23.log`, `mutation23b.log` and `mutation24.log`). The seat count guard (a count above 7 gives `SV_FAILED`) has no test, because the fixture cannot break a seat count.
-For the restore of the type rows, the radius query and the two visual events, removing one check at a time made `game-api` fail each time: the host call at the stop, the first value, the owner match, the bounds of a restore row, the kind, capacity, radius, center and room guard of `within`, and the type, speed, weapon, kind and normal of the events (`build/logs/mutation25.log`, `mutation25b.log`, `mutation26.log` and `mutation26b.log`). One bound of the restore code is redundant with the slot check of the table, and the test cannot reach it.
-For the chat replacement, removing the character check, the empty check, the forced zero byte or the starting copy made `game-api` fail each time (`build/logs/mutation27.log` and `mutation27b.log`). The length bound of 63 is redundant with the forced zero byte, and the test cannot reach it.
-For the notice events (see [plugin events](plugin-events.md)), removing one check at a time made `game-api` fail each time: the index bounds of the five posts, the first look of the round, and the hooks for the exit of a vehicle, an item that goes in or out, a vehicle that goes and the seat of `vehicle_enter` (`build/logs/mutation28.log`). Two hooks have no test: the use button that seats a human (`human_entervehicle`) and the gun shot (`gun_shot`). The test calls the post function for the shot. It does not fire a gun.
-They check each error code and a wrong-thread call. The test program then reads the game records.
-It checks the two message events, the balances, the flag, the health, the bone offsets, the kick list and the idle counter.
-Removing one check at a time (message bytes, money range, flag range, health range, finite position, position limit, vehicle) made `game-api` fail each time.
-For the item methods, removing the slot bound, the type bound, the check for a second parent item or the newspaper refusal made `game-api` fail each time (`build/logs/mutation10.log`).
-For the object methods, removing the type bound, the color bound, the refusal to remove a train piece and the angle check made `game-api` fail each time (`build/logs/mutation11.log`).
 Keys keep the index of their vehicle after the vehicle goes. This is the same as when the game removes a vehicle by itself.
-The exit method has a test of every error code. The test program seats two humans in one car. One leaves with `stop` 1 and one with `stop` 0, and the program checks the idle drive state, the bone speeds and a bone under the ground that the exit lifts to the ground.
+The exit method has a test of every error code. One leaves with `stop` 1 and one with `stop` 0, and the program checks the idle drive state, the bone speeds and a bone under the ground that the exit lifts to the ground.
 The line queries have a test of every error code, of a hit on a vehicle face, on the ground and on a human, of the ignore rule, of the nearest of three kinds and of the aim. The ground is flat at height 0 in this test, so it does not prove the shapes of the real level. A second test sets a mark in the shared record and checks that a query gives it back.
-The flags, health, stun, protection, team and admin numbers moved to the property table. Their tests moved with them. The earlier removal proofs of the range checks of the old methods (`mutation4.log`) were for code that no longer exists, and the table has its own proofs above.
+The flags, health, stun, protection, team and admin numbers moved to the property table. Their tests moved with them.
 The upper bound of 3,600 ticks (one minute) is a choice of this API. The game itself sets the timer to 3 or 6 times the damage of a hit.
-For the bots, removing the cleanup after a failed human and the bot check made `game-api` fail each time (`build/logs/mutation12.log`). A local command of the fixture leaves too few bonds for a human and checks that no player stays behind.
 `createhuman` of the game does not set the position of a human until its first tick. `npc_create` sets it at once, so a read right after the call shows the place.
 The game keeps no check of a loop of parent items, and the types of the tests cannot make one. That check has no test.
-For the checks that guard rights or privacy, the same removal made `game-api` fail too: the private-message filter, the stale-target test, the bot check and the connection admin flag of `set_admin`.
-The packet writer clamps the sent health to the range -10 to 117 and leaves the server value as written. So a client sees the same value for -100 and -10, and for 100 and 117. See [network limits](game/network.md#representation-limits).
+The packet writer clamps the sent health to the range -10 to 117 and leaves the server value as written. So a client sees the same value for -100 and -10, and for 100 and 117.
 
 Not covered: a full kick list (41,368 addresses), more than one connection for a player, a message when the event ring is full, and a client check of a teleport or a health value.
 The original client was not run. A teleport reaches the client only through the normal human state updates.
@@ -295,7 +224,7 @@ The checks run in this order, and a row may add its own after them:
 | `SV_INVALID` | A world property with an entity (the entity must be 0), a slot out of range, a null pointer, or a value out of range or not finite |
 | `SV_DENIED` | The property does not offer the operation (`set` on a velocity, `add` on a flag) |
 
-Rows of the first version. The range is the range that a `set` or an `add` may leave in the field:
+Rows. The range is the range that a `set` or an `add` may leave in the field:
 
 | Name | Entity | Type and slots | Operations | Range | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -333,13 +262,13 @@ Rows of the first version. The range is the range that a `set` or an `add` may l
 | `world.round_time` | world | int | get, set | 600 to 216000 | The ticks of the playing state of the next round (the option `roundtime` is in minutes times 3600) |
 | `world.wait_time` | world | int | get, set | 60 to 216000 | The ticks of the waiting state of the next round |
 | `world.end_time` | world | int | get, set | 60 to 216000 | The ticks of the end state, before the game resets the round |
-| `account.ban_time` | account | int | get, set, add | 0 to 1000000 | Above 0 the game drops the player of the account at the join and during play. The count falls by 1 for each 36,000 ticks. The value is not saved on disk (see [bans](legacy-modules.md#bans)) |
+| `account.ban_time` | account | int | get, set, add | 0 to 1000000 | Above 0 the game drops the player of the account at the join and during play. The count falls by 1 for each 36,000 ticks. The value is not saved on disk |
 
 ### Type rows
 
 The rows `item_type.*` and `bullet_type.*` change the tables that the game fills when the server starts. A change reaches every item of the type that fires after it, so one row changes a weapon for all players. A new item takes the new price, mass and ammunition. The game does not set them again at each round.
 The host keeps the first value of each slot that a plugin changes. When that plugin stops, or fails, the host puts the first value back. If two plugins change the same slot, the last one owns it, and the first value stays the one of the game.
-The original client was not tested with these rows. The server decides damage and hits, but the client may use the speed, the delay and the spread for its own prediction and its sounds. Mark each of them "client effect unknown". The name of an item type is not a row, because no packet carries it.
+The server decides damage and hits, but the original client may use the speed, the delay and the spread for its own prediction and its sounds, so a change to these rows can have an effect that the server does not control. The name of an item type is not a row, because no packet carries it.
 A plugin area that adds rows can set the `restore` member of a row for a table of its own, with at most 32 slots and no vector.
 
 ### Damage scales
@@ -359,10 +288,7 @@ The table refuses a row with no name, a name that is too long or repeated, no fi
 The kind `SV_ENTITY_WORLD` (0) is for a number of the world that belongs to no record. The entity argument is then 0.
 A world property for each type of a list (for example each object type) uses the slot for the type.
 
-Tests: the fixture calls every row and every code, and the test program checks the records and the events after the tick. A group added by the test program shows the world kind, and the refusal of each bad row.
-Removing one check at a time made `game-api` fail each time (`build/logs/mutation14.log`, `mutation14b.log`, `mutation15.log`, `mutation15b.log`): the slot bound, the range of a set, the range of an add, the length and the finite check of a push, the bot check of the admin flag, the refusal of a train piece, the entity kind, the name length, the field function, the vector rules, the repeated name and the world entity rule.
-The damage scales: removing the cap of the result, the index checks of the human, the shooter and the object tables, and the upper range of a float made `game-api` fail each time (`build/logs/mutation18.log`).
-Not proven by removal: the bounds on the particle list of an object (the test world has no object with a bad list), and the choice of the order of the two scales.
+A group added by the test program shows the world kind, and the refusal of each bad row.
 
 ## Chat commands
 
@@ -377,28 +303,21 @@ Actor zero is the local operator on the server console. The chat never sends it.
 | `SV_COMMAND_LOCAL` | Nobody. Only the server console runs it |
 
 The host refuses a denied command and logs `Plugin command permission denied`. The host reserves the names `plugins` and `admin`.
-The tests run the chat function against a real player record. They check the three levels, an unknown command, and a player with no reference.
-Removing the routing, the admin flag check, the zero-actor guard or the `admin` reservation made `game-api` fail each time.
-A plugin answers one player with `message_to`. The server filters that event for each connection, so the original client gets a normal message. The [legacy module list](legacy-modules.md) names this as N1.
+A plugin answers one player with `message_to`. The server filters that event for each connection, so the original client gets a normal message.
 
-## Bone mass (R4)
+## Bone mass
 
 `human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 50000000, inclusive.
 Writes change the live bone mass. Invalid slots, nonfinite values and results outside the range fail without a write.
-The game API fixture checks all slots, both endpoints, addition and failed writes. No client playtest ran.
 
-Removal proofs for the slot bound and both range checks fail the game API test. The source is restored before final checks.
-
-## Connection read (R1)
+## Connection read
 
 `SvGameRead.connection` copies an IPv4 address, port, idle ticks and spectate value into `SvConnectionState`.
 The IP bytes use dotted address order. The port uses host order. The spectate value keeps the game encoding, including -1.
 Bots and players without a connection return `SV_NOT_FOUND`. Invalid connection counts return `SV_STATE`. Failed calls leave the output unchanged.
-Plugins must restrict address disclosure to administrators. The fixture checks copies, bounds, bots and missing connections. No client playtest ran.
+Plugins must restrict address disclosure to administrators.
 
-Removal proofs for the snapshot size and connection count fail the game API test. The source is restored before final checks.
-
-## Account save notice (R6)
+## Account save notice
 
 `SV_EVENT_ACCOUNT_SAVE` is `SV_EVENT_EXT(0)`. Subscribe with `SV_EVENT_EXT_BIT(0)` and read `SvAccountSaveEvent.account` and its final field, `reason`.
 Reason 0 (`SV_ACCOUNT_SAVE_DISK`) follows the bulk disk save after every write and the file close succeed.
@@ -407,25 +326,21 @@ A plugin that needs a disk write must use reason 0.
 Reason 1 (`SV_ACCOUNT_SAVE_DISCONNECT`) follows the existing money update at disconnect in `deleteplayer`. It saves to memory only.
 There is no single-account disk save in this core. A disconnect notice does not promise disk persistence.
 Notices enter the normal queue and run at a safe point. An account reference can be stale at delivery.
-The fixture checks the closed file, failed writes, failed opens and the disconnect update. No client playtest ran.
 No short test room case exists because the write API does not request an account save.
 
 An account read at delivery returns the current state, which can include later changes.
 
 The disk notice covers all accounts, including an empty account list. Disconnect notices carry one account reference.
-`os_fclose` forwards `fclose` and returns 0 on success. The `!= 0` check rejects a failed close.
-The flood test saves 2,000 accounts and checks one disk notice, with an earlier queued event intact and no loss notice.
+The `!= 0` check rejects a failed close.
 
 ## Connection byte order from the network code
 
 The game stores `Connection.ip` and the low 16 bits of `Connection.port` in host order.
-The join handler calls `add_connection` in [server.c](../src/net/server.c). It stores the results of `sender_ip()` and `sender_port()`.
 Those helpers read network bytes from `BsdSocket.addr` and convert them with `_byteswap_ulong` and `_byteswap_ushort`.
 For `127.0.0.1`, the stored IP number is `0x7f000001`. `read_connection` splits it with shifts 24, 16, 8 and 0.
 The snapshot port stays in host order. The existing split needs no change.
-The game API test sends a real UDP join over loopback through `serverrecv` and `add_connection`.
-It checks the stored values and the public snapshot against the socket endpoint. The port has unequal bytes to expose a missing swap.
-The original client playtest remains open. The network permission below controls address visibility.
+The port has unequal bytes to expose a missing swap.
+The network permission below controls address visibility.
 
 ## Network capability and connection identifiers
 
@@ -438,21 +353,15 @@ The address hash uses all four IPv4 bytes. The network hash uses the first three
 The host makes a 16-byte salt with `BCryptGenRandom` once and saves it in `user/connection-salt.bin`.
 The host reuses that file at each start. A missing salt creates new identifiers. A malformed file prevents startup.
 Keep the salt private and preserve it to preserve the identifiers. The host never logs its contents or a real address.
-The test room declares `network` and sends the address directly to private chat, without its usual chat log.
 The capability does not isolate native code. A native plugin can read server memory, including the salt.
-Tests cover both permissions, stable identifiers, distinct addresses, a shared /24, salt reuse and the capability removal proof.
 
-## Round reset request (R5)
+## Round reset request
 
 `SvGameWrite.world_reset` requests one reset at the start of the next server tick. It requires the normal write context and a ready world.
 The main loop consumes the flag before control requests, plugin callbacks and simulation. Two requests before that point cause one call to `resetgame()`.
-A normal core reset or host stop also clears the flag. The fixture checks deferred requests, coalescing, context rejection and flag cleanup.
-The focused test exercises the reset hook and flag consumption. It does not run map creation or a client playtest.
-Test room case 67 requests a reset. The client playtest remains open.
+A normal core reset or host stop also clears the flag.
 
-Removal of the write context check fails the game API test. The source is restored before final checks.
-
-## Tick timers and plugin random (R9)
+## Tick timers and plugin random
 
 `SvHost.after(owner, ticks, id)` schedules one notice. `every` schedules a repeating notice. Delays are 1 to `UINT32_MAX` ticks.
 Subscribe with `SV_EVENT_EXT_BIT(1)` and read `SvTimerEvent.id` from `SV_EVENT_TIMER`, which is `SV_EVENT_EXT(1)`.
@@ -466,8 +375,6 @@ The core supplies its existing game seed before the first world tick. Random cal
 Replay requires the same seed, plugin IDs, calls and ticks. A native plugin that reads a clock, file or network is outside this contract.
 Only a sandboxed host can enforce the replay contract. No client playtest or replay recording ran.
 
-Removal proofs cover timer capacity, delay bounds and owner checks. The source is restored before final checks.
-
 ## Core kick list
 
 `SvGameWrite` appends `kicked_count`, `kicked_remove` and `kicked_clear` after `world_reset`.
@@ -479,4 +386,3 @@ No method lists addresses.
 `kicked_clear` empties the list. A null output or address returns `SV_INVALID`.
 An internal count outside 0 to `SR_MAX_KICKEDIP` returns `SV_FAILED` and changes nothing.
 Without `network`, all three methods return `SV_DENIED` and leave outputs unchanged.
-The game API test covers both capability states, byte order, middle removal, a missing address and malformed counts.
