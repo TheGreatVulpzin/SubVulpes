@@ -46,7 +46,7 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | --- | --- | --- |
 | N8 | Delete the body of a real player | Kill with `human.health` meanwhile. |
 | N10, N39 | Material at a hit, block cell | Same query family as `line`. |
-| N19 | Bone masses, done | `human.bone_mass`: 15 float slots, GET, SET and ADD, range 0.5 to 500. |
+| N19 | Bone masses, done | `human.bone_mass`: 15 float slots, GET, SET and ADD, range 0.5 to 50000000. |
 | N26 | Round reset, done | `world_reset` defers and merges reset requests. State and timer rows also exist. |
 | N27 | Road graph query | The data is `g_city.intersections` and `g_city.roads`. |
 | N29 | Human health above 100 | The packet clamps the sent health to 117. |
@@ -110,7 +110,7 @@ The rules of the ABI are in [plugin ABI rules](plugin-abi.md). A request for a t
 
 ## Bone mass (R4)
 
-`human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 500, inclusive.
+`human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 50000000, inclusive.
 Writes change the live bone mass. Invalid slots, nonfinite values and results outside the range fail without a write.
 The game API fixture checks all slots, both endpoints, addition and failed writes. No client playtest ran.
 

@@ -76,3 +76,6 @@ Removal proof on 2026-10-28: without the limit of 63 characters for a chat text,
 The runner accepts `leave PLAYER`. A later `spawn player NAME` with the same name reuses that fixture account.
 The public fixture password is `svtest`. It exists only in the runner and never changes a server profile.
 These steps test session expiry and password hooks without game data or a client.
+
+The normal item and bullet setup runs in the fixture, so magazines fit the real weapon types.
+The fixture also runs normal body setup and sets the cached root position that a normal simulation tick supplies.

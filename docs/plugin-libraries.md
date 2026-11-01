@@ -62,6 +62,15 @@ A function of the table runs on the stack of the caller, with the owner of the c
 
 The version of an API is a number for the contract. Change it when you change the layout of the table or the meaning of a function. A caller that asks for an old number gets `SV_INCOMPATIBLE`, and it can show a clear message. Keep the old table in the library if old callers must still work.
 
+## Optional services
+
+`SvPlugins.borrow` is appended to version 1 of the public table. Check its size before the call.
+The caller needs no dependency. Only an active provider can supply the pointer.
+The pointer lasts until the current callback ends. Ask again in each callback and do not cache it.
+`SV_NOT_FOUND` permits an explicit fallback. `SV_INCOMPATIBLE` and other errors must refuse access.
+The host runs callbacks on one server thread. Plugin state changes occur outside a callback that borrows a service.
+The existing `find` method keeps its dependency and lifetime rules.
+
 ## Library plugins
 
 A manifest with `role=library` marks a plugin that only offers an API. The host enforces this:

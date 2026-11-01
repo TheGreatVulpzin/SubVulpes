@@ -166,3 +166,12 @@ The other functions of these files are `static`. They are parts of `humansimulat
 A bullet on a human and a hit by a vehicle (120 points of health) give a damage that the plugin API can scale: `human.damage_taken_scale` of the victim, and `human.damage_dealt_scale` of the human of the shooter for a bullet.
 Each scale is 1 by default, and then the damage is the number that the game made. A scale of 0 cancels the damage. The stun, the bleeding chance, the team kill tax and the killer credit follow the scaled number.
 The scales live in a table beside the records (`plugin_damage.c`), and a new human starts at 1. See [the plugin API](../plugin-game-api.md#damage-scales).
+
+## Admin body changes
+
+The `human.bone_velocity` row now supports SET as well as GET and ADD.
+SET gives the exact velocity of one bone. Its finite length must be at most 64.
+The `human.bone_mass` range is 0.5 to 50000000.
+This permits the heavy command to multiply a starting mass of at most 500 by 100000.
+The core keeps the same slot, type and finite-value checks.
+See [Admin Commands](../plugin-admcmd.md) for the commands, targets and effect lifetime.

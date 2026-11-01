@@ -296,6 +296,7 @@ namespace SubVulpes
             "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt",
             "plugins/plugins.ini", "plugins/native-approvals.ini", "plugins/sv.status/plugin.ini", "plugins/sv.status/status.dll",
             "plugins/sv.permissions/plugin.ini", "plugins/sv.permissions/permissions.dll",
+            "plugins/sv.admcmd/plugin.ini", "plugins/sv.admcmd/admcmd.dll",
             "install_plugin.ps1"
         };
 

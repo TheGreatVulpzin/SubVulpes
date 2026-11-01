@@ -182,7 +182,7 @@ static SvResult SV_CALL plugins_provide(SvOwner owner, const char *name, uint32_
     return SV_OK;
 }
 
-static SvResult SV_CALL plugins_find(SvOwner owner, const char *name, uint32_t version, const void **table)
+static SvResult plugins_lookup(SvOwner owner, const char *name, uint32_t version, const void **table, int optional)
 {
     uint32_t i;
     if (!sv_plugins_context(owner))
@@ -195,10 +195,10 @@ static SvResult SV_CALL plugins_find(SvOwner owner, const char *name, uint32_t v
         if (!offers[i].owner || strcmp(offers[i].name, name))
             continue;
         provider = &modules[offers[i].owner - 1];
-        if (provider->state != SV_MODULE_ACTIVE && !provider->enabling)
+        if (provider->state != SV_MODULE_ACTIVE && (optional || !provider->enabling))
             return SV_NOT_FOUND;
         /* A dependency makes the offering plugin load first and stop last, so the table stays valid. */
-        if (offers[i].owner != owner && !needs(&modules[owner - 1], provider->id))
+        if (!optional && offers[i].owner != owner && !needs(&modules[owner - 1], provider->id))
             return SV_DEPENDENCY;
         if (offers[i].version != version)
             return SV_INCOMPATIBLE;
@@ -208,8 +208,18 @@ static SvResult SV_CALL plugins_find(SvOwner owner, const char *name, uint32_t v
     return SV_NOT_FOUND;
 }
 
+static SvResult SV_CALL plugins_find(SvOwner owner, const char *name, uint32_t version, const void **table)
+{
+    return plugins_lookup(owner, name, version, table, 0);
+}
+
+static SvResult SV_CALL plugins_borrow(SvOwner owner, const char *name, uint32_t version, const void **table)
+{
+    return plugins_lookup(owner, name, version, table, 1);
+}
+
 static const SvPlugins plugins_api = {
-    sizeof(SvPlugins), SV_PLUGINS_VERSION, plugins_refuse, plugins_provide, plugins_find
+    sizeof(SvPlugins), SV_PLUGINS_VERSION, plugins_refuse, plugins_provide, plugins_find, plugins_borrow
 };
 
 static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_t version, const void **api)

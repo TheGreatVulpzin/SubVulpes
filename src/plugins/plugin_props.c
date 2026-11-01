@@ -109,6 +109,12 @@ static SvResult bone_add(int32_t index, uint32_t slot, SvVector change)
     return SV_OK;
 }
 
+static SvResult bone_set(int32_t index, uint32_t slot, SvVector value)
+{
+    sr_humans[index].bones[slot].vel = (vec3){ value.x, value.y, value.z };
+    return SV_OK;
+}
+
 /* A push on an object moves every particle of it. A piece of the train belongs to the track system. */
 static SvResult object_add(int32_t index, uint32_t slot, SvVector change)
 {
@@ -252,7 +258,7 @@ static const Prop props[] = {
     { "human.bleeding", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, human_bleeding, NULL, NULL, NULL },
     { "human.stun", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 3600, human_stun, NULL, NULL, NULL },
     { "human.protect", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 21600, human_protect, NULL, NULL, NULL },
-    { "human.bone_velocity", SV_ENTITY_HUMAN, SV_PROP_VECTOR, 15, SV_PROP_GET | SV_PROP_ADD, 0, PUSH_MAX, human_bone_velocity, NULL, NULL, bone_add },
+    { "human.bone_velocity", SV_ENTITY_HUMAN, SV_PROP_VECTOR, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, human_bone_velocity, NULL, NULL, bone_add, 0, bone_set },
     { "object.velocity", SV_ENTITY_OBJECT, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_ADD, 0, PUSH_MAX, object_velocity, NULL, NULL, object_add },
     { "human.damage_taken_scale", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, human_damage_taken, NULL, NULL, NULL },
     { "human.damage_dealt_scale", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 100, human_damage_dealt, NULL, NULL, NULL },
@@ -280,7 +286,7 @@ static const Prop props[] = {
     { "item.velocity", SV_ENTITY_ITEM, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, item_velocity, NULL, NULL, item_velocity_add, 0, item_velocity_set },
     { "item.angular_velocity", SV_ENTITY_ITEM, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, item_angular_velocity, NULL, NULL, item_spin_add, 0, item_spin_set },
     { "item.frozen", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, item_frozen, frozen_check, frozen_after, NULL },
-    { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 500, human_bone_mass, NULL, NULL, NULL },
+    { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 50000000, human_bone_mass, NULL, NULL, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };

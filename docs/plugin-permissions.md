@@ -94,6 +94,7 @@ The list commands use `core.list`. The inherited ban commands use `core.ban`.
 ## Public service
 
 Include `plugins/permissions/sv_permissions.h` and declare a dependency on `sv.permissions@0.1.0`.
+For an optional service, use `SvPlugins.borrow` and its callback lifetime rules in [plugin libraries](plugin-libraries.md#optional-services).
 Find `SV_PERMISSIONS_API` through `SvPlugins.find`, with `SV_PERMISSIONS_VERSION` (1).
 Check the table and record sizes before calls.
 

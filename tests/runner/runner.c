@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "humans.h"
+#include "bullets.h"
 #include "items.h"
 #include "logic.h"
 #include "objects.h"
@@ -148,6 +149,8 @@ static void spawn_player(char *name, int team, int admin)
     human = createhuman(pos, rot, p);
     if (human < 0)
         fail("the game could not make a body");
+    /* The runner skips human_finish, which copies this position in a normal tick. */
+    sr_humans[human].pos = sr_humans[human].bones[0].pos;
     sr_players[p].human_id = human;
     sr_humans[human].account = account;
     sr_players[p].team = team;
@@ -332,7 +335,9 @@ int main(int argc, char **argv)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     x87_init();
     sv_test_log_hook = capture;
-    sr_itemtypes[0].inv_inertia = (vec3){ 1, 1, 1 };
+    setupbullettypes();
+    setupitemtypes();
+    setupbody();
     memset(&sr_data_objecttype[0], 0, sizeof sr_data_objecttype[0]);
     sr_data_server.max_players = 128;
     sr_data_soundlist.num_sounds = 47;

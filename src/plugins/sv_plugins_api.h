@@ -33,6 +33,9 @@ typedef struct {
      * A function of the table runs with the owner of the caller. Give the owner of the caller as the first argument of every
      * function that needs the host, and use only that owner for host calls. */
     SvResult (SV_CALL *find)(SvOwner owner, const char *name, uint32_t version, const void **table);
+    /* Finds an active optional service without a dependency. The pointer is valid only until this callback ends.
+     * Ask again in each callback. SV_NOT_FOUND permits a fallback. Other errors do not mean the service is absent. */
+    SvResult (SV_CALL *borrow)(SvOwner owner, const char *name, uint32_t version, const void **table);
 } SvPlugins;
 #pragma pack(pop)
 

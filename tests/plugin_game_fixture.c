@@ -1081,7 +1081,7 @@ static int bone_mass_checks(SvOwner owner)
     SvBoneState bone = { sizeof bone };
     STEP(props->find(owner, "human.bone_mass", &id) == SV_OK);
     STEP(props->info(owner, id, &info) == SV_OK && info.type == SV_PROP_FLOAT && info.count == 15 &&
-        info.min == 0.5 && info.max == 500 && info.ops == (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD));
+        info.min == 0.5 && info.max == 50000000 && info.ops == (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD));
     for (slot = 0; slot < 15; ++slot) {
         value.f = slot ? 500.0f : 0.5f;
         STEP(props->set(owner, id, human, slot, value) == SV_OK);
@@ -1090,12 +1090,17 @@ static int bone_mass_checks(SvOwner owner)
     }
     value.f = 0.25f;
     STEP(props->set(owner, id, human, 0, value) == SV_INVALID);
-    value.f = 501.0f;
+    value.f = 50000004.0f;
     STEP(props->set(owner, id, human, 0, value) == SV_INVALID);
     value.f = -0.25f;
     STEP(props->add(owner, id, human, 0, value) == SV_INVALID);
-    value.f = 1.0f;
+    value.f = 50000000.0f;
+    STEP(props->set(owner, id, human, 14, value) == SV_OK);
+    value.f = 4.0f;
     STEP(props->add(owner, id, human, 14, value) == SV_INVALID);
+    value.f = 500.0f;
+    STEP(props->set(owner, id, human, 14, value) == SV_OK);
+    value.f = 1.0f;
     STEP(props->add(owner, id, human, 0, value) == SV_OK);
     STEP(props->get(owner, id, human, 0, &out) == SV_OK && out.f == 1.5f);
     value.f = NAN;
@@ -1141,9 +1146,14 @@ static int props_checks(SvOwner owner)
     STEP(props->get(owner + 1, pid_health, human, 0, &v) == SV_STATE);
     STEP(props->get(owner, pid_bone_velocity, human, 14, &vel) == SV_OK && props->get(owner, pid_bone_velocity, human, 15, &vel) == SV_INVALID);
     STEP(props->get(owner, pid_object_velocity, object, 0, &vel) == SV_OK);
-    /* An operation that the row does not offer. */
-    v.i = 1;
-    STEP(props->set(owner, pid_bone_velocity, human, 0, v) == SV_DENIED && props->set(owner, pid_object_velocity, object, 0, v) == SV_DENIED);
+    /* A bone velocity accepts SET with the same slot and length bounds. */
+    v.v = (SvVector){ 0, 0, 0 };
+    STEP(props->set(owner, pid_bone_velocity, human, 0, v) == SV_OK);
+    STEP(props->get(owner, pid_bone_velocity, human, 0, &vel) == SV_OK && vel.v.x == 0 && vel.v.y == 0 && vel.v.z == 0);
+    v.v.x = 65;
+    STEP(props->set(owner, pid_bone_velocity, human, 0, v) == SV_INVALID);
+    STEP(props->set(owner, pid_bone_velocity, human, 15, v) == SV_INVALID);
+    STEP(props->set(owner, pid_object_velocity, object, 0, v) == SV_DENIED);
     STEP(props->add(owner, pid_godmode, player, 0, v) == SV_DENIED && props->add(owner, pid_bleeding, human, 0, v) == SV_DENIED);
     /* Add to a number: the sum must stay in the range, and an error changes nothing. */
     v.i = 5;

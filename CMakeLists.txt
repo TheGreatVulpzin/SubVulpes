@@ -42,9 +42,17 @@ sv_add_plugin(sv-status ID sv.status MANIFEST "${CMAKE_SOURCE_DIR}/plugins/statu
     SOURCES plugins/status/status.c OFFICIAL)
 sv_add_plugin(sv-permissions ID sv.permissions MANIFEST "${CMAKE_SOURCE_DIR}/plugins/permissions/plugin.ini"
     SOURCES plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c OFFICIAL)
+sv_add_plugin(sv-admcmd ID sv.admcmd MANIFEST "${CMAKE_SOURCE_DIR}/plugins/admcmd/plugin.ini"
+    SOURCES plugins/admcmd/admcmd.c plugins/common/official.c plugins/common/permissions.c OFFICIAL)
 set_property(SOURCE plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c
     tests/official/permission_groups_test.c tests/official/permission_probe.c APPEND PROPERTY OBJECT_DEPENDS
     "${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h;${CMAKE_SOURCE_DIR}/plugins/permissions/groups.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h")
+set_property(SOURCE plugins/admcmd/admcmd.c plugins/common/permissions.c plugins/common/official.c
+    plugins/permissions/permissions.c tests/official/admcmd_probe.c tests/official/admcmd_unit_test.c
+    APPEND PROPERTY OBJECT_DEPENDS
+    "${SV_PLUGIN_HEADERS};${CMAKE_SOURCE_DIR}/plugins/common/permissions.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h;${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h")
+set_property(SOURCE tests/official/admcmd_unit_test.c APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_SOURCE_DIR}/plugins/admcmd/admcmd.c")
 # Package inspection uses the installer shipped beside the server.
 configure_file(tools/plugins/install_plugin.ps1 "${CMAKE_BINARY_DIR}/install_plugin.ps1" COPYONLY)
 configure_file(plugins/plugins.ini "${CMAKE_BINARY_DIR}/plugins/plugins.ini" COPYONLY)
@@ -165,6 +173,18 @@ if(BUILD_TESTING)
         SOURCES tests/official/permission_probe.c plugins/common/official.c)
     add_test(NAME permissions-sdk COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/official/permissions_test.py" "${CMAKE_BINARY_DIR}")
+    sv_add_plugin(sv-admcmd-probe ID test.admcmd MANIFEST "${CMAKE_SOURCE_DIR}/tests/official/admcmd_probe/plugin.ini"
+        SOURCES tests/official/admcmd_probe.c plugins/common/official.c)
+    add_test(NAME admcmd-sdk COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/tests/official/admcmd_test.py" "${CMAKE_BINARY_DIR}")
+    add_executable(admcmd-unit-test tests/official/admcmd_unit_test.c plugins/common/official.c plugins/common/permissions.c)
+    target_include_directories(admcmd-unit-test PRIVATE src/plugins)
+    target_compile_definitions(admcmd-unit-test PRIVATE _CRT_SECURE_NO_WARNINGS
+        SV_OFFICIAL_ID="sv.admcmd" SV_OFFICIAL_VERSION="0.1.0")
+    target_compile_options(admcmd-unit-test PRIVATE /W4 /WX /utf-8)
+    set_target_properties(admcmd-unit-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME admcmd-contracts COMMAND admcmd-unit-test)
+    set_tests_properties(admcmd-contracts PROPERTIES TIMEOUT 10)
     add_executable(jukebox-instruments-test tests/jukebox_instruments_test.c plugins/jukebox/instruments.c)
     target_include_directories(jukebox-instruments-test PRIVATE plugins/jukebox)
     target_compile_definitions(jukebox-instruments-test PRIVATE _CRT_SECURE_NO_WARNINGS)

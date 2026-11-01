@@ -306,7 +306,7 @@ Rows of the first version. The range is the range that a `set` or an `add` may l
 | `human.bleeding` | human | int | get, set | 0 to 1 | A bleeding body loses health over time |
 | `human.stun` | human | int | get, set, add | 0 to 3600 | Ticks. The torso is weak while it runs, so the body staggers. The game counts it down by 1 each tick. The upper bound is a choice of this API |
 | `human.protect` | human | int | get, set, add | 0 to 21600 | The spawn protection counter in ticks. 21600 is the longest value that the game gives (6 times 3600) |
-| `human.bone_velocity` | human | vector, 15 slots | get, add | change of at most 64 | The slot is the bone. An add changes the velocity of that bone |
+| `human.bone_velocity` | human | vector, 15 slots | get, set, add | length of at most 64 | The slot is the bone. A set gives its exact velocity. An add changes its velocity |
 | `object.velocity` | object | vector | get, add | change of at most 64 | An add changes every particle of the object. A piece of the train gives `SV_DENIED` |
 | `human.damage_taken_scale` | human | float | get, set, add | 0 to 100 | Multiplies each damage that the human takes. See "Damage scales" |
 | `human.damage_dealt_scale` | human | float | get, set, add | 0 to 100 | Multiplies each bullet damage that the human deals to another human |
@@ -383,7 +383,7 @@ A plugin answers one player with `message_to`. The server filters that event for
 
 ## Bone mass (R4)
 
-`human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 500, inclusive.
+`human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 50000000, inclusive.
 Writes change the live bone mass. Invalid slots, nonfinite values and results outside the range fail without a write.
 The game API fixture checks all slots, both endpoints, addition and failed writes. No client playtest ran.
 

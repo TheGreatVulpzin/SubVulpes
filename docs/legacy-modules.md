@@ -1,6 +1,7 @@
 # Legacy module catalog
 
-Status: requirements list. No module here is implemented yet.
+Status: requirements list. [Admin Commands](plugin-admcmd.md) implements the supported administration commands.
+Other modules remain planned.
 It guides the plugin API work in [system coverage](plugin-api-map.md) and the production plugins in [the milestones](plano.md).
 
 ## Source and use
@@ -28,7 +29,8 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | `/kill` | Kill the own body: health -5 and `bleeding` 1. | Now (the properties `human.health` and `human.bleeding`) |
 | `/item N` | Make item type 0 to 26 and put it in a free hand. A knife (24) starts in attack state. Fail without cost when there is no free hand or item. | N6 |
 | `/vehicle N` | Make vehicle type 0 to 13 four units in front of the head, color 0. Do not seat the player. | N7 |
-| `/arm N` | Uniform 1 to 6, clothes variant 4, two bandages in slot 6. The inherited `/arm` stays until then. | N4, N6 |
+| `/arm N [PLAYER]` | Select one of six weapons and give it in a free hand. | N6 |
+| `/kit N [PLAYER]` | Give the selected weapon, four magazines and two bandages. | N6 |
 | `/heavydude` | Multiply the 15 physical values of the body by 100000, once. A joke command. | N19 |
 | `/delh` | Delete the nearest human on the aim line, up to 100 units, never the caller. | N10, N8 |
 | `/team N` | Set team 0 to 5 and send the update. | N3 |
@@ -42,6 +44,10 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | `/tp` | Teleport to the surface on the aim line, up to 2000 units, 1 unit above it. Fail if the aim hits nothing. | N10, `teleport` now |
 | `/gobase N` | Teleport to base N (0 to 4: Goldmen, Monsota, OXS, Nexaco, Pentacom). The tool uses fixed positions of the original map, height 25. Read them from the level data when it has them. Do not change the team. | Level read, `teleport` now |
 | `/sound N` | Play sound 0 to 47 at the aim point, volume 1, pitch 0.15. | N10, N11 |
+
+The owner changed the arm requirement on 2026-10-31. Weapon numbers are 1 to 6.
+Commands that affect a player accept an optional target after their values.
+See [Admin Commands](plugin-admcmd.md) for the supported forms.
 
 The tool lists `/nick` in a table but never runs it. Do not build it.
 
