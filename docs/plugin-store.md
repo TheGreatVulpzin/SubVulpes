@@ -130,7 +130,7 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 ## Answers of 2026-11-03
 
 - **License.** The repository and the official content use GPL-3.0, as the project does. A community item declares its license in the manifest (`license=`). The CI refuses an item without one.
-- **Game files.** The Workshop may hold game data and assets in packages and mods, as the server zip already does. It never holds a game executable. The owner accepts this. Content that is not yours needs the permission of its owner.
+- **Game files.** The Workshop may hold game data and assets in packages and mods, as the server zip already does. It never holds the original game executable. The owner accepts this, and `CLAUDE.md` says the same. Content that is not yours needs the permission of its owner.
 - **Server zip.** It keeps `sv.status`, `sv.permissions` and `sv.admcmd`. `sv.jukebox` and `sv.testroom` move to the Workshop as Official. This replaces decision 10 of the plan.
 - **Install while the server runs.** No restart by the launcher. See decision 9 above.
 - **Community rules.** The owner or Murilo approves each pull request. The CI checks the manifest, the license, the size and a build from source. A native plugin of the community enters only after a person reads its C code. A Lua plugin is the easy way.

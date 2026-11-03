@@ -39,11 +39,12 @@ Official plugins use the public API and separate versions/packages so compatible
 
 ## Privacy and ownership
 
-- Never commit game executables, assets, accounts, passwords, tokens, `config.txt`, logs, dumps or recordings.
+- Never commit the original game executable, accounts, passwords, tokens, `config.txt`, logs, dumps or recordings.
+- Only the original game executable is a problem. Game assets and data may be committed when a package or a mod needs them.
 - Keep test data and build outputs in ignored `build/` folders. Do not copy private settings into reports.
 - Keep `original/` and `third_party/` out of this repository.
 - Public initial values may remain as typed C initializers in `src/server/storage.c` and their checked metadata.
   Do not embed executable sections or game binaries.
 - Download approved game data from the upstream data release. Use only the public default config template.
 - Check logs and screenshots for private data before sharing them.
-- The GPL covers project code. Game assets and binaries belong to Cryptic Sea.
+- The GPL covers project code. The game and its assets belong to Cryptic Sea.
