@@ -1,26 +1,38 @@
 # Launcher redesign: port from the mockup
 
 The mockup is `tools/launcher-mockup/Mockup.cs`. It uses fake data and shows the new look.
-The real launcher is `tools/launcher/Launcher.cs`. The controls of the new look are in `tools/launcher/LauncherUi.cs`.
-Move the pages one at a time. After each step, build the launcher, run the launcher tests and open the window.
+The real launcher has the same look and uses real data.
 
-## Done
+## Files
 
-- `LauncherUi.cs` holds the theme, the Lucide icons and the flat controls (button, switch, dropdown, text field, search box, segmented option, badge, tab label, state pill).
-- The tab bar at the top of the window draws the tabs. The headers of the `TabControl` stay hidden, so `ShowPage` and `SetDebugMode` work as before.
-- The Server page has the state pill, the Start and Stop buttons with icons, the four numbers, the speed graph and the console.
-- Past Logs moved to Launcher Settings. Each log has its notes, the Save Notes button, Open Folder and Pack. A finished log appears in the list.
-- The Mark This Moment button, its hotkey and the marks file are removed.
-- The Debug tab keeps the capture options, the preset and the memory dump button.
+- `Launcher.cs`: the window, the server process, the log, updates, the plugin tools and the approval dialog.
+- `LauncherUi.cs`: the theme, the Lucide icons and the flat controls.
+- `LauncherUiMore.cs`: more controls (avatar, list entry, number list) and `Skin`, which paints a theme on the window.
+- `LauncherServer.cs`: the Server page (buttons, numbers, graph, console, command box).
+- `LauncherSettings.cs`: Settings with three sub-tabs, the Save bar and Past Logs.
+- `LauncherPlugins.cs`: the plugin table, the detail panel (Summary, Info, Settings) and the Catalog tab.
+- `LauncherHelp.cs`: the Help page. The topics are built into the program.
 
-## Next, in this order
+`LauncherForm` is one `partial` class. Add a file to `tools/launcher/build.bat` and to `CMakeLists.txt`.
 
-1. Server page: the console filter (level and text), the icon buttons in the console corner, and the stats list with the gear (the four numbers stay as a row until then).
-2. Settings: one page with sub-tabs (Server, Launcher, Advanced), the text fields and dropdowns of the new look, and one bar with Save, Revert changes and Reset to defaults. The `dirty` logic stays.
-3. Plugins: a table with the state dot, the risk pill and the switch in the list, a detail panel with a fixed header and the tabs Summary, Info and Settings, and the Catalog tab.
-4. Help: topics from `docs/*.md`, drawn in the launcher.
-5. Theme and accent color: a dark theme and a choice of accent color in the launcher settings.
+## Where things moved
 
-## Open questions
+- Past Logs, their notes, Open Folder and Pack are in Settings, Launcher Settings.
+- The Mark This Moment button, its hotkey and the marks file are gone.
+- Capture options, the preset and the memory dump are in Settings, Advanced Settings. That tab shows only in Debug Mode (Ctrl+Shift+D).
+- Theme and accent color are in Launcher Settings. They apply at once and the launcher remembers them.
 
-- Windows style of the standard controls (`Button`, `TextBox`, `ComboBox`) stays on the pages that are not ported yet.
+## Differences from the mockup
+
+- The Save bar (Save, Revert changes, Reset to defaults) belongs to Server Settings only. Launcher and Advanced settings apply at once, as before.
+- Revert changes loads the saved values again. Reset to defaults resets the port, the upload limit, the mode, the player limit and the round time. It does not touch the name, the welcome text or the password.
+- The Catalog tab has no online source yet. It says so and offers Install from File.
+- The plugin table has no Source column. The launcher does not know where a plugin came from.
+- A plugin risk comes from its runtime and capabilities: native is highest, any capability besides read, storage and config is high, the rest is low.
+- The plugin approval dialog keeps the standard look. Its tests and its security checks did not change.
+- The Help text is built into the program, not read from `docs/*.md`.
+
+## Test aids
+
+- `--page Plugins` or `--page Settings:1` opens a page when the window shows. The number is the sub-tab.
+- `--start` starts the server when the window shows.

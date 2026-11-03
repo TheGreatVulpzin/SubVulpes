@@ -248,52 +248,12 @@ namespace SubVulpes
         public override string ToString() { return Name; }
     }
 
-    // The dashed line marks normal speed (62 ticks/s).
-    class SpeedGraph : Panel
-    {
-        public readonly List<double> Points = new List<double>();
-
-        public SpeedGraph()
-        {
-            DoubleBuffered = true;
-            BackColor = SystemColors.Window;
-            BorderStyle = BorderStyle.FixedSingle;
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            int w = ClientSize.Width - 40, h = ClientSize.Height - 16;
-            Func<double, float> y = v => 8 + (float)(h * (1 - Math.Min(v, 70) / 70));
-            using (var pen = new Pen(SystemColors.ControlDark) { DashStyle = DashStyle.Dash })
-                g.DrawLine(pen, 32, y(62), 32 + w, y(62));
-            using (var brush = new SolidBrush(SystemColors.ControlText)) {
-                g.DrawString("62", Font, brush, 4, y(62) - 7);
-                g.DrawString("0", Font, brush, 4, y(0) - 7);
-            }
-            if (Points.Count == 0) {
-                return;
-            }
-            int n = Math.Max(Points.Count, 10);
-            var pts = new PointF[Points.Count];
-            for (int i = 0; i < Points.Count; i++)
-                pts[i] = new PointF(32 + w * (i + 1) / (float)n, y(Points[i]));
-            for (int i = 1; i < pts.Length; i++)
-                using (var pen = new Pen(Points[i] < 55 || Points[i - 1] < 55 ? Color.Red : SystemColors.Highlight, 2))
-                    g.DrawLine(pen, pts[i - 1], pts[i]);
-            for (int i = 0; i < pts.Length; i++)
-                using (var b = new SolidBrush(Points[i] < 55 ? Color.Red : SystemColors.Highlight))
-                    g.FillEllipse(b, pts[i].X - 3, pts[i].Y - 3, 6, 6);
-        }
-    }
-
-    class LauncherForm : Form
+    partial class LauncherForm : Form
     {
         static readonly Regex TicksLine = new Regex(@"^Server status: ([0-9.]+) ticks/s, (\d+) players, (\d+) bots$");
         const int FreezeSeconds = 150;
         const string AppTitle = "SubVulpes Server Launcher";
-        const string SettingsPageName = "Server Settings";
+        const string SettingsPageName = "Settings";
         const string IncompleteReviewText = "The plugin review is incomplete. Please try again.";
         const string InvalidReviewText = "The saved review is not valid. Review the plugin again.";
         const string StoppedUnexpectedly = "Stopped unexpectedly";
@@ -371,47 +331,12 @@ namespace SubVulpes
         readonly Dictionary<string, TabPage> pages = new Dictionary<string, TabPage>();
         readonly Dictionary<string, TabLabel> tabLabels = new Dictionary<string, TabLabel>();
         Panel tabBar;
+        ServerName serverName;
         StateLabel stateLabel;
         string serverState = "Stopped", speedStatus = NoSpeedText, playersStatus = NoPlayersText;
-        Label message, serverStatus, missingText;
-        ComboBox presetBox;
+        Label message, missingText;
         FlatButton startStop, stopButton;
-        Button browseButton, checkUpdate;
-        TextBox folderBox;
-        CheckBox previewsBox, debugModeBox;
-
-
-        // Server page statistics
-        Label lastTicks, lowTicks, playersText, uptimeText;
-        SpeedGraph graph;
-
-        // Debug page
-        Label presetText;
-
-        // Console
-        TextBox console;
-
-        // Plugins
-        ListView pluginList;
-        CheckBox nativeBypass;
-        TextBox pluginCommand;
         bool pluginBusy;
-
-        // Captures page
-        CheckBox profileBox, timersBox, packetsBox, freezeBox;
-        RadioButton dumpNone, dumpSmall, dumpFull;
-
-        // Past tests
-        ListView testsList;
-        TextBox testNotes;
-
-        // Settings
-        TextBox nameBox, passwordBox, welcomeBox;
-        ComboBox modeBox;
-        NumericUpDown playersBox, roundBox, portBox, bytesBox;
-        Label dirtyText;
-        Button saveButton, undoButton;
-        bool loading, dirty;
 
         // The running test
         Process server;
@@ -442,21 +367,27 @@ namespace SubVulpes
             BackColor = UI.T.Win;
             // The tab headers of the control stay hidden. The bar at the top of the window draws the tabs.
             mainTabs = new TabControl { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(0, 1), Padding = new Point(0, 0) };
-            message = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(8, 4, 8, 4) };
+            message = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(8, 4, 8, 4), Tag = "muted" };
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(4) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.Controls.Add(mainTabs, 0, 0);
+            // The tab control draws a frame of its own. It sits a little outside its holder, so that the holder clips the frame.
+            var tabHolder = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+            mainTabs.Dock = DockStyle.None;
+            tabHolder.Controls.Add(mainTabs);
+            tabHolder.Resize += delegate { mainTabs.SetBounds(-4, -8, tabHolder.Width + 8, tabHolder.Height + 12); };
+            layout.Controls.Add(tabHolder, 0, 0);
             layout.Controls.Add(message, 0, 1);
             AddPage("Server", ServerPage());
-            AddPage("Plugins", PluginsPage());
-            AddPage(SettingsPageName, SettingsPage());
-            AddPage("Launcher Settings", LauncherSettingsPage());
-            AddPage("Debug", DeveloperPage());
+            AddPage("Plugins", PluginsHost());
+            AddPage(SettingsPageName, SettingsHost());
+            AddPage("Help", HelpPage());
             Controls.Add(layout);
-            tabBar = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8, 0, 8, 0), BackColor = UI.T.Bar };
-            string[] tabOrder = { "Server", "Plugins", SettingsPageName, "Launcher Settings", "Debug" };
+            tabBar = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8, 0, 8, 0), BackColor = UI.T.Bar, Tag = "bar" };
+            serverName = new ServerName("SubVulpes");
+            tabBar.Controls.Add(serverName);
+            string[] tabOrder = { "Server", "Plugins", SettingsPageName, "Help" };
             for (int i = tabOrder.Length - 1; i >= 0; i--) {
                 string tabName = tabOrder[i];
                 var label = new TabLabel(tabName);
@@ -466,21 +397,24 @@ namespace SubVulpes
             }
             mainTabs.SelectedIndexChanged += delegate {
                 SyncTabs();
-                if (mainTabs.SelectedTab == pages["Launcher Settings"]) LoadTests();
+                // The list fills the first time the page opens.
+                if (mainTabs.SelectedTab == pages["Plugins"] && plugins.Count == 0 && server == null && !pluginBusy) { var read = RefreshPlugins(); }
             };
             Controls.Add(tabBar);
-            SetTextColors(this);
-            SetDebugMode(debugModeBox.Checked);
-
+            SetDebugMode(debugModeBox.On);
 
             LoadSettings();
+            serverName.SetText(nameBox.Text.Length == 0 ? "SubVulpes" : nameBox.Text);
             string saved = settings.Get("preset", Presets[0].Name);
             presetBox.SelectedItem = Presets.FirstOrDefault(p => p.Name == saved) ?? Presets[0];
             if (presetBox.SelectedItem == Presets[Presets.Length - 1])
                 captures = ReadCustomCaptures();
             ShowCaptures();
             SetState("Stopped");
+            ResetStats();
             ShowPage("Server");
+            ApplyLook();
+            HandleCreated += delegate { Skin.Window(this, UI.T); };
             clock.Tick += delegate { OnClock(); };
             clock.Start();
             FormClosing += OnClosing;
@@ -492,15 +426,6 @@ namespace SubVulpes
             string v = Path.Combine(folder, "version.txt");
             return File.Exists(v) ? " - " + File.ReadLines(v).FirstOrDefault() : "";
         }
-
-        void SetTextColors(Control control)
-        {
-            if (control == console) return;
-            control.ForeColor = SystemColors.ControlText;
-            foreach (Control child in control.Controls) SetTextColors(child);
-        }
-
-
 
         void SetFolder(string path)
         {
@@ -525,14 +450,14 @@ namespace SubVulpes
         {
             if (server != null || updating || pluginBusy) return;
             SetFolder(path);
-            pluginList.Items.Clear();
+            ClearPlugins();
             folderBox.Text = folder;
             settings.Set("server_folder", folder);
             settings.Save();
             LoadSettings();
             logOffset = 0;
             pendingLog = "";
-            console.Clear();
+            ClearConsole();
             Text = AppTitle + Version();
         }
 
@@ -558,102 +483,9 @@ namespace SubVulpes
             }
         }
 
-        Control ServerPage()
-        {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5 };
-            page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
-            page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var bar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
-            stateLabel = new StateLabel { Margin = new Padding(0, 0, 16, 0) };
-            startStop = new FlatButton("Start") { Kind = "primary", Glyph = "play" };
-            stopButton = new FlatButton("Stop") { Glyph = "stop", Enabled = false };
-            startStop.Click += delegate { StartServer(); };
-            stopButton.Click += async delegate { await StopServer(); };
-            serverStatus = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(12, 9, 3, 3) };
-            bar.Controls.AddRange(new Control[] { stateLabel, startStop, stopButton, serverStatus });
-            page.Controls.Add(bar, 0, 0);
-            missingText = new Label { AutoSize = true, Margin = new Padding(3, 0, 3, 8) };
-            ShowMissing(configCreated);
-            page.Controls.Add(missingText, 0, 1);
-            page.Controls.Add(StatsRow(), 0, 2);
-            Control log = ConsolePage();
-            log.Dock = DockStyle.Fill;
-            page.Controls.Add(log, 0, 3);
-            var save = new Button { Text = "Save Log", AutoSize = true, Margin = new Padding(3, 8, 3, 3) };
-            save.Click += async delegate { await SaveLog(); };
-            page.Controls.Add(save, 0, 4);
-            return page;
-        }
-
-        Control LauncherSettingsPage()
-        {
-            var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
-            var folderRow = new TableLayoutPanel { ColumnCount = 3, AutoSize = true, Margin = new Padding(0, 0, 0, 8) };
-            folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-            folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 460));
-            folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            folderRow.Controls.Add(new Label { Text = "Server Folder", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
-            folderBox = new TextBox { Text = folder, ReadOnly = true, Dock = DockStyle.Fill };
-            browseButton = new Button { Text = "Browse", AutoSize = true };
-            browseButton.Click += delegate { ChooseFolder(); };
-            folderRow.Controls.Add(folderBox, 1, 0);
-            folderRow.Controls.Add(browseButton, 2, 0);
-            page.Controls.Add(folderRow);
-            var updates = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 0, 0, 8) };
-            checkUpdate = new Button { Text = "Check for Updates", AutoSize = true };
-            checkUpdate.Click += async delegate { await CheckForUpdates(); };
-            tips.SetToolTip(checkUpdate, "Looks for a newer version on GitHub.");
-            var update = new Button { Text = "Update from .ZIP", AutoSize = true };
-            update.Click += async delegate { await ChooseUpdate(); };
-            tips.SetToolTip(update, "Installs a server/launcher update from a .ZIP.");
-            updates.Controls.AddRange(new Control[] { checkUpdate, update });
-            page.Controls.Add(updates);
-            previewsBox = new CheckBox { Text = "Include Beta Versions", AutoSize = true, Checked = settings.Get("pre_releases", "0") == "1" };
-            tips.SetToolTip(previewsBox, "Includes beta versions. They can still contain bugs.");
-            previewsBox.CheckedChanged += delegate { settings.Set("pre_releases", previewsBox.Checked ? "1" : "0"); settings.Save(); };
-            page.Controls.Add(previewsBox);
-            debugModeBox = new CheckBox { Text = "Debug Mode", AutoSize = true, Checked = settings.Get("developer", "0") == "1" };
-            tips.SetToolTip(debugModeBox, "Shows the Debug tab and some advanced log capture options.");
-            debugModeBox.CheckedChanged += delegate { SetDebugMode(debugModeBox.Checked); settings.Set("developer", debugModeBox.Checked ? "1" : "0"); settings.Save(); };
-            page.Controls.Add(debugModeBox);
-            page.Controls.Add(new Label { Text = "Past Logs", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(3, 16, 3, 4) });
-            Control logs = TestsPage();
-            logs.Size = new Size(780, 320);
-            page.Controls.Add(logs);
-            return page;
-        }
-
-        Control DeveloperPage()
-        {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3 };
-            page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            presetBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Margin = new Padding(3, 3, 3, 8) };
-            presetBox.Items.AddRange(Presets);
-            presetBox.SelectedIndexChanged += delegate { OnPreset(); };
-            page.Controls.Add(presetBox, 0, 0);
-            Control view = CapturesPage();
-            view.Dock = DockStyle.Fill;
-            page.Controls.Add(view, 0, 1);
-            var bar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
-            var dump = new Button { Text = "Save Memory Dump Now", AutoSize = true };
-            dump.Click += delegate { DumpNow("dump"); };
-            tips.SetToolTip(dump, "Writes server memory to a file.");
-            presetText = new Label { AutoSize = true, ForeColor = SystemColors.ControlText, Anchor = AnchorStyles.Left, Margin = new Padding(12, 8, 3, 3) };
-            bar.Controls.AddRange(new Control[] { dump, presetText });
-            page.Controls.Add(bar, 0, 2);
-            return page;
-        }
-
         void AddPage(string name, Control view)
         {
-            var page = new TabPage(name) { Padding = new Padding(8), UseVisualStyleBackColor = false, BackColor = UI.T.Win };
+            var page = new TabPage(name) { Padding = Padding.Empty, UseVisualStyleBackColor = false, BackColor = UI.T.Win };
             view.Dock = DockStyle.Fill;
             page.Controls.Add(view);
             pages[name] = page;
@@ -666,6 +498,16 @@ namespace SubVulpes
             SyncTabs();
         }
 
+        // For a picture of one page: --page Plugins, --page Settings:2 (the number is the sub-tab).
+        internal void OpenPage(string spec)
+        {
+            string[] part = spec.Split(':');
+            ShowPage(part[0]);
+            int sub = part.Length > 1 ? int.Parse(part[1]) : 0;
+            if (part[0] == SettingsPageName) { if (sub == 2) SetDebug(true); ShowSub(sub); }
+            if (part[0] == "Plugins") ShowPluginSub(sub);
+        }
+
         // The bar shows which page is open.
         void SyncTabs()
         {
@@ -675,22 +517,13 @@ namespace SubVulpes
             }
         }
 
-        void SetDebugMode(bool enabled)
-        {
-            tabLabels["Debug"].Visible = enabled;
-            if (enabled) {
-                if (!mainTabs.TabPages.Contains(pages["Debug"])) mainTabs.TabPages.Add(pages["Debug"]);
-            } else {
-                if (mainTabs.SelectedTab == pages["Debug"]) ShowPage("Server");
-                mainTabs.TabPages.Remove(pages["Debug"]);
-            }
-        }
-
         void SetState(string text)
         {
             serverState = text;
             startStop.Enabled = server == null && !updating && !pluginBusy;
             stopButton.Enabled = server != null && !stopping;
+            restartButton.Enabled = server != null && !stopping && !updating && !pluginBusy;
+            killButton.Enabled = server != null;
             browseButton.Enabled = server == null && !updating && !pluginBusy;
             presetBox.Enabled = server == null && !updating && !pluginBusy;
             nativeBypass.Enabled = server == null && !updating && !pluginBusy;
@@ -701,117 +534,18 @@ namespace SubVulpes
         {
             string tone = serverState == "Running" ? "ok" : serverState == "Stopped" ? "muted" : (serverState == "Crashed" || serverState == StoppedUnexpectedly) ? "bad" : "warn";
             stateLabel.Set(serverState, tone);
-            serverStatus.Text = playersStatus + " | " + speedStatus;
-        }
-
-        // ------------------------------------------------------------ statistics
-
-        Control StatsRow()
-        {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
-            page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var cards = new TableLayoutPanel { Dock = DockStyle.Fill, Height = 32, ColumnCount = 4, Margin = new Padding(0, 0, 0, 4) };
-            for (int i = 0; i < 4; i++)
-                cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            lastTicks = Card(cards, 0, "Last Minute");
-            lowTicks = Card(cards, 1, "Lowest Minute");
-            playersText = Card(cards, 2, "Players");
-            uptimeText = Card(cards, 3, "Running for");
-            page.Controls.Add(cards, 0, 0);
-            page.Controls.Add(new Label { Text = "Server Speed per Minute (ticks/s)", AutoSize = true, Margin = new Padding(3, 4, 3, 2) }, 0, 1);
-            graph = new SpeedGraph { Dock = DockStyle.Fill, MinimumSize = new Size(0, 80) };
-            page.Controls.Add(graph, 0, 2);
-            ResetCards();
-            return page;
-        }
-
-        Label Card(TableLayoutPanel cards, int column, string title)
-        {
-            var value = new Label { AutoSize = true, Tag = title, Anchor = AnchorStyles.Left, Margin = new Padding(4) };
-            cards.Controls.Add(value, column, 0);
-            return value;
-        }
-
-        static void SetCard(Label label, string value)
-        {
-            label.Text = label.Tag + ": " + value;
-        }
-
-        void ResetCards()
-        {
-            foreach (var l in new[] { lastTicks, lowTicks, playersText, uptimeText })
-                SetCard(l, "-");
-            lastTicks.ForeColor = SystemColors.ControlText;
-            speedStatus = NoSpeedText;
-            playersStatus = NoPlayersText;
-        }
-
-        // ------------------------------------------------------------ console
-
-        Control ConsolePage()
-        {
-            console = new TextBox {
-                Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false,
-                Font = new Font("Consolas", Font.Size), BackColor = Color.FromArgb(24, 24, 24), ForeColor = Color.Gainsboro
-            };
-            return console;
         }
 
         // ------------------------------------------------------------ captures
 
-        Control CapturesPage()
-        {
-            var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
-
-            profileBox = Option("Speed Profile", "Profile the server code to locate slow functions.");
-            timersBox = Option("Game Timers", "Writes how long each part of the game takes, once each minute, in the log.");
-            packetsBox = Option("Network Packet Capture", "Records network traffic, including player names and chat.");
-            freezeBox = Option("Freeze Dump", "Automatically dump when the server freezes for " + FreezeSeconds + " s.");
-            page.Controls.Add(Group("Speed", profileBox, timersBox));
-            page.Controls.Add(Group("Session", packetsBox));
-
-            dumpNone = new RadioButton { Text = "None", AutoSize = true };
-            dumpSmall = new RadioButton { Text = "Small: Thread Stack (~1MB)", AutoSize = true };
-            dumpFull = new RadioButton { Text = "Full: Whole Memory (~600MB)", AutoSize = true };
-            foreach (var r in new[] { dumpNone, dumpSmall, dumpFull })
-                r.CheckedChanged += delegate { OnCaptureChanged(); };
-            var crash = Group("On Crash or Freeze", new Label { Text = "Memory Dump Type:", AutoSize = true }, dumpNone, dumpSmall, dumpFull, freezeBox);
-            page.Controls.Add(crash);
-            return page;
-        }
-
-        CheckBox Option(string text, string hint)
-        {
-            var box = new CheckBox { Text = text, AutoSize = true };
-            tips.SetToolTip(box, hint);
-            box.CheckedChanged += delegate { OnCaptureChanged(); };
-            return box;
-        }
-
-        GroupBox Group(string title, params Control[] rows)
-        {
-            var box = new GroupBox { Text = title, AutoSize = true, MinimumSize = new Size(560, 0), Padding = new Padding(8, 6, 8, 4) };
-            var list = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            foreach (Control r in rows) {
-                list.Controls.Add(r);
-            }
-            box.Controls.Add(list);
-            return box;
-        }
-
         void ShowCaptures()
         {
             settingCaptures = true;
-            profileBox.Checked = captures.Profile;
-            timersBox.Checked = captures.Timers;
-            packetsBox.Checked = captures.Packets;
-            freezeBox.Checked = captures.FreezeDump;
-            dumpNone.Checked = captures.CrashDump == "none";
-            dumpSmall.Checked = captures.CrashDump == "small";
-            dumpFull.Checked = captures.CrashDump == "full";
+            profileBox.On = captures.Profile;
+            timersBox.On = captures.Timers;
+            packetsBox.On = captures.Packets;
+            freezeBox.On = captures.FreezeDump;
+            dumpType.SelectedIndex = captures.CrashDump == "full" ? 2 : captures.CrashDump == "small" ? 1 : 0;
             settingCaptures = false;
             var preset = (Preset)presetBox.SelectedItem;
             presetText.Text = captures.Summary();
@@ -832,8 +566,8 @@ namespace SubVulpes
             if (settingCaptures)
                 return;
             captures = new Captures {
-                Profile = profileBox.Checked, Timers = timersBox.Checked, Packets = packetsBox.Checked, FreezeDump = freezeBox.Checked,
-                CrashDump = dumpFull.Checked ? "full" : dumpSmall.Checked ? "small" : "none"
+                Profile = profileBox.On, Timers = timersBox.On, Packets = packetsBox.On, FreezeDump = freezeBox.On,
+                CrashDump = dumpType.SelectedIndex == 2 ? "full" : dumpType.SelectedIndex == 1 ? "small" : "none"
             };
             var match = Presets.FirstOrDefault(p => p.Captures != null && p.Captures.Same(captures)) ?? Presets[Presets.Length - 1];
             settingCaptures = true;
@@ -867,62 +601,6 @@ namespace SubVulpes
             settings.Save();
         }
 
-        Control PluginsPage()
-        {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 4, Dock = DockStyle.Fill, Padding = new Padding(8) };
-            page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
-            var refresh = new Button { Text = "Refresh", AutoSize = true };
-            refresh.Click += async delegate { await RefreshPlugins(); };
-            var enable = new Button { Text = "Enable", AutoSize = true };
-            enable.Click += async delegate { await ChangePlugin(true); };
-            var disable = new Button { Text = "Disable", AutoSize = true };
-            disable.Click += async delegate { await ChangePlugin(false); };
-            var approve = new Button { Text = "Review Approval...", AutoSize = true };
-            approve.Click += async delegate { await ApprovePlugin(); };
-            var install = new Button { Text = "Install/Update", AutoSize = true };
-            install.Click += async delegate { await InstallPlugin(); };
-            var pluginSettingsButton = new Button { Text = "Settings...", AutoSize = true };
-            pluginSettingsButton.Click += async delegate { await EditPluginSettings(); };
-            buttons.Controls.AddRange(new Control[] { refresh, enable, disable, approve, install, pluginSettingsButton });
-            page.Controls.Add(buttons, 0, 0);
-            pluginList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false };
-            pluginList.Columns.Add("Plugin", 190);
-            pluginList.Columns.Add("ID", 160);
-            pluginList.Columns.Add("Version", 85);
-            pluginList.Columns.Add("State", 90);
-            pluginList.Columns.Add("Required", 70);
-            pluginList.Columns.Add("Details", 490);
-            page.Controls.Add(pluginList, 0, 1);
-            nativeBypass = new CheckBox {
-                Text = "Allow unapproved DLLs temporarily",
-                AutoSize = true, Margin = new Padding(3, 10, 3, 10)
-            };
-            nativeBypass.CheckedChanged += delegate {
-                if (nativeBypass.Checked && MessageBox.Show(this,
-                    "Danger!!! This will skip the content approval process. A DLL plugin has full access to the server and your system. Only use this for plugins that you trust completely.\r\n\r\n" +
-                    "Are you sure you want to allow unapproved DLL plugins for this launcher session?",
-                    "NATIVE PLUGIN BYPASS", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                    nativeBypass.Checked = false;
-            };
-            page.Controls.Add(nativeBypass, 0, 2);
-            var commandRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
-            commandRow.Controls.Add(new Label { Text = "Server Command", AutoSize = true, Margin = new Padding(3, 8, 3, 3) });
-            pluginCommand = new TextBox { Width = 400, MaxLength = 300 };
-            var send = new Button { Text = "Send", AutoSize = true };
-            send.Click += delegate { SendPluginCommand(pluginCommand.Text); };
-            pluginCommand.KeyDown += (sender, e) => {
-                if (e.KeyCode == Keys.Enter) { SendPluginCommand(pluginCommand.Text); e.SuppressKeyPress = true; }
-            };
-            commandRow.Controls.AddRange(new Control[] { pluginCommand, send });
-            page.Controls.Add(commandRow, 0, 3);
-            return page;
-        }
-
         internal sealed class PluginMetadata
         {
             internal string Id, Version, Hash, PackageHash, State, Required, Reason, ManifestHash;
@@ -930,14 +608,6 @@ namespace SubVulpes
             internal string Runtime = "native", Capabilities = "", Name = "", Description = "", Author = "", Homepage = "";
             internal string DisplayName { get { return Name.Length == 0 ? Id : Name; } }
         }
-
-        internal sealed class PluginListItem : ListViewItem
-        {
-            internal PluginMetadata Metadata;
-        }
-
-        static readonly Font PluginIdFont = new Font(SystemFonts.MessageBoxFont.FontFamily,
-            Math.Max(6f, SystemFonts.MessageBoxFont.Size - 1f));
 
         static bool PluginText(string text, int maximum)
         {
@@ -986,52 +656,6 @@ namespace SubVulpes
                     (homepage.Scheme != "http" && homepage.Scheme != "https") || metadata.Homepage.Any(char.IsWhiteSpace)) return null;
             }
             return metadata;
-        }
-
-        internal static string PluginActionId(ListViewItem item)
-        {
-            return item != null && PluginId(item.Name) ? item.Name : null;
-        }
-
-        internal static PluginListItem MakePluginItem(PluginMetadata metadata)
-        {
-            var item = new PluginListItem();
-            item.UseItemStyleForSubItems = false;
-            item.SubItems.AddRange(new[] { "", "", "", "", "" });
-            SetPluginItem(item, metadata);
-            item.SubItems[1].Font = PluginIdFont;
-            return item;
-        }
-
-        static void SetPluginItem(PluginListItem item, PluginMetadata metadata)
-        {
-            item.Metadata = metadata;
-            item.Name = metadata.Id;
-            item.Text = metadata.DisplayName;
-            item.SubItems[1].Text = metadata.Id;
-            item.SubItems[2].Text = metadata.Version;
-            item.SubItems[3].Text = metadata.State;
-            item.SubItems[4].Text = metadata.Required == "1" ? "Yes" : "No";
-            item.SubItems[5].Text = metadata.Reason;
-            item.Tag = metadata.Hash;
-        }
-
-        string SelectedPlugin()
-        {
-            if (pluginList.SelectedItems.Count != 1) {
-                message.Text = "Select a plugin in the list first.";
-                return null;
-            }
-            return PluginActionId(pluginList.SelectedItems[0]);
-        }
-
-        void ReadPluginLine(string line)
-        {
-            PluginMetadata metadata = ParsePluginRow(line, false);
-            if (metadata == null) return;
-            var item = pluginList.Items[metadata.Id] as PluginListItem;
-            if (item == null) pluginList.Items.Add(MakePluginItem(metadata));
-            else SetPluginItem(item, metadata);
         }
 
         internal static string PluginReviewDetails(PluginMetadata metadata, string question, bool nativeApproval)
@@ -1235,7 +859,7 @@ namespace SubVulpes
         {
             if (pluginBusy || updating) return;
             if (server != null) {
-                pluginList.Items.Clear();
+                ClearPlugins();
                 SendPluginCommand("plugins list");
                 return;
             }
@@ -1245,7 +869,7 @@ namespace SubVulpes
             try {
                 string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugins-list"));
                 if (selectedFolder != folder || server != null) return;
-                pluginList.Items.Clear();
+                ClearPlugins();
                 foreach (string line in output.Replace("\r", "").Split('\n')) ReadPluginLine(line);
                 message.Text = "Plugin metadata read.";
             } catch (Exception ex) {
@@ -1265,11 +889,9 @@ namespace SubVulpes
             } catch (Exception ex) { message.Text = "Cannot send the command: " + ex.Message; }
         }
 
-        async Task ChangePlugin(bool enabled)
+        async Task ChangePlugin(string id, bool enabled)
         {
             if (pluginBusy || updating) return;
-            string id = SelectedPlugin();
-            if (id == null) return;
             if (server != null) {
                 SendPluginCommand("plugins " + (enabled ? "enable " : "disable ") + id);
                 return;
@@ -1286,167 +908,9 @@ namespace SubVulpes
             await RefreshPlugins();
         }
 
-        // One setting of a plugin, as the server lists it. The server checks every value again, so this form only helps.
-        sealed class PluginSetting
-        {
-            public string Key, Type, Value, Default, Min, Max, Label, Help;
-            public bool Live, Admin, Pending, Reset;
-            public Control Editor;
-        }
-
-        // The listing of the server: SETTING, id, key, type, value, default, min, max (or choices), live, admin, pending, label, help.
-        static List<PluginSetting> ParsePluginSettings(string id, string output)
-        {
-            var result = new List<PluginSetting>();
-            foreach (string line in output.Replace("\r", "").Split('\n')) {
-                if (!line.StartsWith("SETTING\t", StringComparison.Ordinal)) continue;
-                string[] f = line.Split('\t');
-                if (f.Length != 13 || f[1] != id || !Regex.IsMatch(f[2], @"\A[a-z][a-z0-9_]{0,31}\z")) continue;
-                if (Array.IndexOf(new[] { "flag", "int", "float", "text", "choice", "secret" }, f[3]) < 0) continue;
-                result.Add(new PluginSetting {
-                    Key = f[2], Type = f[3], Value = f[4], Default = f[5], Min = f[6], Max = f[7],
-                    Live = f[8] == "1", Admin = f[9] == "1", Pending = f[10] == "1", Label = f[11], Help = f[12]
-                });
-            }
-            return result;
-        }
-
-        static Control SettingEditor(PluginSetting s)
-        {
-            int number;
-            decimal low, high;
-            switch (s.Type) {
-            case "flag":
-                return new CheckBox { Checked = s.Value == "1", AutoSize = true };
-            case "int":
-                if (int.TryParse(s.Min, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out number)) low = number; else low = int.MinValue;
-                if (int.TryParse(s.Max, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out number)) high = number; else high = int.MaxValue;
-                decimal start;
-                if (!decimal.TryParse(s.Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out start)) start = low;
-                return new NumericUpDown { Minimum = low, Maximum = high, Value = Math.Min(high, Math.Max(low, start)), Width = 140 };
-            case "choice":
-                var box = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
-                foreach (string name in s.Max.Split(',')) box.Items.Add(name);
-                box.SelectedItem = s.Value;
-                return box;
-            case "secret":
-                // A secret shows no value. The field stays empty until the administrator types a new one.
-                return new TextBox { UseSystemPasswordChar = true, Width = 240, MaxLength = 63 };
-            default:
-                int most;
-                if (!int.TryParse(s.Max, out most) || most < 1 || most > 63) most = 63;
-                return new TextBox { Text = s.Value, Width = 240, MaxLength = most };
-            }
-        }
-
-        static string SettingEditorValue(PluginSetting s)
-        {
-            if (s.Type == "flag") return ((CheckBox)s.Editor).Checked ? "1" : "0";
-            if (s.Type == "int") return ((NumericUpDown)s.Editor).Value.ToString(CultureInfo.InvariantCulture);
-            if (s.Type == "choice") return ((ComboBox)s.Editor).SelectedItem as string ?? s.Value;
-            return ((TextBox)s.Editor).Text.Trim();
-        }
-
-        // The form of the settings of the selected plugin. It reads the listing of the server tool (no DLL runs). It saves each
-        // changed value with the file command when the server is stopped, and with a local command when the server runs.
-        async Task EditPluginSettings()
+        async Task ApprovePlugin(string id)
         {
             if (pluginBusy || updating) return;
-            string id = SelectedPlugin();
-            if (id == null) return;
-            pluginBusy = true;
-            SetState(serverState);
-            string selectedFolder = folder;
-            List<PluginSetting> rows;
-            try {
-                string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-config " + id));
-                rows = ParsePluginSettings(id, output);
-            } catch (Exception ex) {
-                message.Text = "Cannot read the settings: " + ex.Message;
-                return;
-            } finally { pluginBusy = false; SetState(serverState); }
-            if (rows.Count == 0) { message.Text = "This plugin has no settings."; return; }
-            var changes = new List<PluginSetting>();
-            using (var dialog = new Form {
-                Text = "Settings: " + id, StartPosition = FormStartPosition.CenterParent, Width = 760, Height = 520,
-                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false
-            })
-            using (var tips = new ToolTip()) {
-                var table = new TableLayoutPanel { ColumnCount = 3, AutoScroll = true, Dock = DockStyle.Fill, Padding = new Padding(8) };
-                table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250));
-                table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                foreach (PluginSetting s in rows) {
-                    var caption = s.Label + (s.Live ? "" : " (Restart Needed)") + (s.Pending ? " *" : "");
-                    var label = new Label { Text = caption, AutoSize = false, Width = 240, Height = 24, TextAlign = ContentAlignment.MiddleLeft };
-                    s.Editor = SettingEditor(s);
-                    var reset = new Button { Text = "Default", AutoSize = true };
-                    PluginSetting current = s;
-                    reset.Click += delegate {
-                        current.Reset = true;
-                        if (current.Type == "flag") ((CheckBox)current.Editor).Checked = current.Default == "1";
-                        else if (current.Type == "secret") ((TextBox)current.Editor).Text = "";
-                        else if (current.Type == "choice") ((ComboBox)current.Editor).SelectedItem = current.Default;
-                        else if (current.Type == "int") {
-                            decimal d;
-                            if (decimal.TryParse(current.Default, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out d))
-                                ((NumericUpDown)current.Editor).Value = Math.Min(((NumericUpDown)current.Editor).Maximum, Math.Max(((NumericUpDown)current.Editor).Minimum, d));
-                        } else ((TextBox)current.Editor).Text = current.Default;
-                    };
-                    if (s.Help.Length > 0) { tips.SetToolTip(label, s.Help); tips.SetToolTip(s.Editor, s.Help); }
-                    table.Controls.Add(label);
-                    table.Controls.Add(s.Editor);
-                    table.Controls.Add(reset);
-                }
-                var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 44, Padding = new Padding(8) };
-                var save = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
-                var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-                footer.Controls.AddRange(new Control[] { save, cancel });
-                dialog.Controls.Add(table);
-                dialog.Controls.Add(footer);
-                dialog.AcceptButton = save;
-                dialog.CancelButton = cancel;
-                if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                foreach (PluginSetting s in rows) {
-                    string now = SettingEditorValue(s);
-                    bool secret = s.Type == "secret";
-                    // A secret changes only when the administrator typed something, or asked for the default.
-                    if (s.Reset || (secret ? now.Length > 0 : now != s.Value)) {
-                        s.Value = now;
-                        changes.Add(s);
-                    }
-                }
-            }
-            if (changes.Count == 0) { message.Text = "No changes."; return; }
-            int saved = 0;
-            var failures = new List<string>();
-            foreach (PluginSetting s in changes) {
-                // No value means the default. Text cannot be empty, so an empty text asks for the default too.
-                bool useDefault = s.Reset || s.Value.Length == 0;
-                if (!Regex.IsMatch(s.Value, @"\A[\x20-\x7e]*\z") || s.Value.IndexOf('"') >= 0 || s.Value.IndexOf(';') >= 0) {
-                    failures.Add(s.Key);
-                    continue;
-                }
-                if (server != null) {
-                    SendPluginCommand("plugins config " + id + " " + s.Key + (useDefault ? "" : " " + s.Value));
-                    saved++;
-                    continue;
-                }
-                try {
-                    string arguments = "--plugin-config " + id + " " + s.Key + (useDefault ? "" : " " + QuoteProcessArgument(s.Value));
-                    await Task.Run(() => RunPluginTool(selectedFolder, arguments));
-                    saved++;
-                } catch (Exception ex) { failures.Add(s.Key + ": " + ex.Message); }
-            }
-            message.Text = saved + " setting(s) sent." + (server != null ? " Check the console for the result." : " Changes apply at the next server start.") +
-                (failures.Count > 0 ? " Refused: " + string.Join(", ", failures.ToArray()) : "");
-        }
-
-        async Task ApprovePlugin()
-        {
-            if (pluginBusy || updating) return;
-            string id = SelectedPlugin();
-            if (id == null) return;
             if (server != null) { message.Text = "Stop the server before reviewing installed content."; return; }
             pluginBusy = true; SetState(serverState);
             string selectedFolder = folder;
@@ -1548,10 +1012,10 @@ namespace SubVulpes
 
         // ------------------------------------------------------------ the server
 
-        void StartServer()
+        internal void StartServer()
         {
             if (server != null || updating || pluginBusy) return;
-            developerRun = debugModeBox.Checked;
+            developerRun = debugModeBox.On;
             activeCaptures = developerRun ? captures.Copy() : new Captures { CrashDump = "none" };
             string exe = Path.Combine(folder, "subvulpes_server.exe");
             if (!Directory.Exists(Path.Combine(folder, "data"))) {
@@ -1565,9 +1029,10 @@ namespace SubVulpes
             if (MissingAdminPassword(passwordBox.Text)) {
                 message.Text = "Set an admin password in Server Settings before you start the server.";
                 dirtyText.Text = message.Text;
-                dirtyText.ForeColor = Color.Red;
+                dirtyText.ForeColor = UI.T.Bad;
                 ShowPage(SettingsPageName);
-                passwordBox.Focus();
+                ShowSub(0);
+                passwordBox.Box.Focus();
                 return;
             }
             try {
@@ -1582,7 +1047,7 @@ namespace SubVulpes
                 var start = new ProcessStartInfo(exe) {
                     WorkingDirectory = folder, UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
-                    Arguments = nativeBypass.Checked ? "--allow-unapproved-native" : ""
+                    Arguments = nativeBypass.On ? "--allow-unapproved-native" : ""
                 };
                 var env = start.EnvironmentVariables;
                 foreach (string key in new[] { "SV_SAMPLE", "SV_TIMERS", "SV_PACKETS", "SV_DUMP", "SV_DUMP_TYPE", "SV_TEST_CRASH", "SV_RECORD_DIR", "SV_SNAPSHOT_AFTER" })
@@ -1613,11 +1078,9 @@ namespace SubVulpes
                 stopping = crashed = frozen = false;
                 maxPlayers = 0;
                 speeds.Clear();
-                graph.Points.Clear();
-                graph.Invalidate();
-                console.Clear();
-                pluginList.Items.Clear();
-                ResetCards();
+                ClearConsole();
+                ClearPlugins();
+                ResetStats();
                 logOffset = 0;
                 pendingLog = "";
                 // Remove the previous session before the server opens SV_LOG.
@@ -1626,6 +1089,7 @@ namespace SubVulpes
                 server.BeginOutputReadLine();
                 server.BeginErrorReadLine();
                 started = lastSpeedLine = DateTime.Now;
+                stats.Set("Started at", started.ToString("HH:mm"));
                 SetState("Starting");
                 message.Text = developerRun ? "This test: logs\\" + stamp : "";
             } catch (Exception ex) {
@@ -1690,30 +1154,22 @@ namespace SubVulpes
         void AddLine(string line)
         {
             ReadPluginLine(line);
-            // A long test makes many lines. Keep the last part only: the log file has all.
-            if (console.TextLength > 200000)
-                console.Text = console.Text.Substring(100000);
-            console.AppendText(RedactLog(line, config.Get("serverpassword", "")) + "\r\n");
+            AddConsoleLine(line);
 
             Match m = TicksLine.Match(line);
             if (m.Success) {
                 double ticks = double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
                 speeds.Add(ticks);
-                graph.Points.Add(ticks);
-                graph.Invalidate();
                 lastSpeedLine = DateTime.Now;
                 frozen = false;
-                SetCard(lastTicks, m.Groups[1].Value);
-                lastTicks.ForeColor = SystemColors.ControlText;
                 speedStatus = m.Groups[1].Value + " ticks/s";
-                SetCard(lowTicks, speeds.Min().ToString("0.0", CultureInfo.InvariantCulture));
                 if (m.Groups[2].Success) {
                     int players = int.Parse(m.Groups[2].Value);
                     maxPlayers = Math.Max(maxPlayers, players);
-                    SetCard(playersText, players + (m.Groups[3].Value != "0" ? " (+" + m.Groups[3].Value + " bots)" : ""));
                     playersStatus = players + (players == 1 ? " player" : " players") +
                                          (m.Groups[3].Value != "0" ? ", " + m.Groups[3].Value + " bots" : "");
                 }
+                ShowSpeed(ticks, m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : -1, m.Groups[3].Value);
                 if (serverState == "Running" || serverState == "Frozen?")
                     SetState("Running");
             } else if (Regex.IsMatch(line, @"^Server started on port \d+\.$")) {
@@ -1731,7 +1187,7 @@ namespace SubVulpes
             if (server == null) return;
             ReadLog();
             TimeSpan t = DateTime.Now - started;
-            SetCard(uptimeText, ((int)t.TotalHours).ToString("00") + ":" + t.Minutes.ToString("00") + ":" + t.Seconds.ToString("00"));
+            stats.Set("Uptime", ((int)t.TotalHours).ToString("00") + ":" + t.Minutes.ToString("00") + ":" + t.Seconds.ToString("00"));
             if (server == null || frozen || (DateTime.Now - lastSpeedLine).TotalSeconds < FreezeSeconds)
                 return;
             // The status line comes each minute. No line for a long time: the main loop stops.
@@ -1807,74 +1263,6 @@ namespace SubVulpes
         }
 
         // ------------------------------------------------------------ past tests
-
-        Control TestsPage()
-        {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5 };
-            page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-            testsList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false };
-            foreach (var c in new[] { "Start", "Preset", "Minutes", "Speed (min/avg)", "Players", "Result", "Size" })
-                testsList.Columns.Add(c, c == "Preset" ? 190 : c == "Start" ? 140 : c.StartsWith("Speed") ? 130 : 90);
-            testsList.SelectedIndexChanged += delegate { ShowTestNotes(); };
-            page.Controls.Add(testsList, 0, 1);
-            page.Controls.Add(new Label { Text = "Notes of the selected log", AutoSize = true, Margin = new Padding(3, 8, 3, 2) }, 0, 2);
-            testNotes = new TextBox { Multiline = true, Height = 60, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical };
-            page.Controls.Add(testNotes, 0, 3);
-            var bar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
-            var pack = new Button { Text = "Pack the Selected Log", AutoSize = true };
-            var open = new Button { Text = "Open Folder", AutoSize = true };
-            var save = new Button { Text = "Save Notes", AutoSize = true };
-            pack.Click += delegate { string d = SelectedTest(); if (d != null) { SaveNotes(d, testNotes.Text); PackTest(d); } };
-            open.Click += delegate { string d = SelectedTest(); if (d != null) Process.Start("explorer.exe", "\"" + d + "\""); };
-            save.Click += delegate { string d = SelectedTest(); if (d != null) SaveNotes(d, testNotes.Text); };
-            bar.Controls.AddRange(new Control[] { pack, open, save });
-            page.Controls.Add(bar, 0, 4);
-            return page;
-        }
-
-        void LoadTests()
-        {
-            testsList.Items.Clear();
-            if (!Directory.Exists(logsRoot))
-                return;
-            foreach (string dir in Directory.GetDirectories(logsRoot).OrderByDescending(d => d)) {
-                var s = new KeyFile(Path.Combine(dir, "session.ini"));
-                if (!s.Exists)
-                    continue;
-                var item = new ListViewItem(new[] {
-                    s.Get("start", Path.GetFileName(dir)), s.Get("preset", "?"), s.Get("minutes", "running"),
-                    s.Get("speed_min", "-") + " / " + s.Get("speed_avg", "-"), s.Get("max_players", "-"),
-                    s.Get("result", server != null && dir == testDir ? "running" : "?"), FolderSize(dir)
-                }) { Tag = dir };
-                testsList.Items.Add(item);
-            }
-            if (testsList.Items.Count > 0)
-                testsList.Items[0].Selected = true;
-        }
-
-        string SelectedTest()
-        {
-            return testsList.SelectedItems.Count == 0 ? null : (string)testsList.SelectedItems[0].Tag;
-        }
-
-        void ShowTestNotes()
-        {
-            string d = SelectedTest();
-            string notes = d == null ? null : Path.Combine(d, "notes.txt");
-            testNotes.Text = notes != null && File.Exists(notes) ? File.ReadAllText(notes) : "";
-        }
-
-        static void SaveNotes(string dir, string text)
-        {
-            if (dir != null && text.Trim() != "")
-                File.WriteAllText(Path.Combine(dir, "notes.txt"), text);
-        }
 
         static List<string> Files(string dir)
         {
@@ -1997,7 +1385,7 @@ namespace SubVulpes
                 string file = Path.Combine(folder, "version.txt");
                 if (!File.Exists(file)) throw new InvalidDataException("version.txt is missing.");
                 string version = File.ReadLines(file).FirstOrDefault();
-                bool previews = previewsBox.Checked;
+                bool previews = previewsBox.On;
                 var release = await Task.Run(() => ReleaseUpdate.Find((version ?? "").Trim(), previews));
                 if (release == null) {
                     message.Text = "No newer release.";
@@ -2137,166 +1525,6 @@ namespace SubVulpes
 
         // ------------------------------------------------------------ settings
 
-        Control SettingsPage()
-        {
-            var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
-
-            nameBox = new TextBox { Width = 300, MaxLength = 49 };
-            passwordBox = new TextBox { Width = 220, MaxLength = 49, UseSystemPasswordChar = true };
-            var password = new FlowLayoutPanel { AutoSize = true, Margin = Padding.Empty };
-            password.Controls.Add(passwordBox);
-            var show = new CheckBox { Text = "Show", AutoSize = true, Anchor = AnchorStyles.Left };
-            show.CheckedChanged += delegate { passwordBox.UseSystemPasswordChar = !show.Checked; };
-            password.Controls.Add(show);
-            welcomeBox = new TextBox { Width = 300, Height = 54, Multiline = true, ScrollBars = ScrollBars.Vertical };
-            page.Controls.Add(SettingsGroup("Server", new[] {
-                Row("Name", nameBox, null),
-                Row("Admin Password", password, "Use this in game, typing /admin (PASSWORD) in the chat."),
-                Row("Welcome Text", welcomeBox, "The text on the Newspaper (readme.txt)"),
-            }));
-
-            modeBox = new ComboBox { Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
-            playersBox = new NumericUpDown { Width = 80, Minimum = 2, Maximum = 128 };
-            roundBox = new NumericUpDown { Width = 80, Minimum = 1, Maximum = 30 };
-            modeBox.SelectedIndexChanged += delegate { var m = modeBox.SelectedItem as Mode; roundBox.Enabled = m != null && m.Value == "3"; };
-            page.Controls.Add(SettingsGroup("Game", new[] {
-                Row("Mode", modeBox, null),
-                Row("Max Players", playersBox, null),
-                Row("Round Time", roundBox, "The length of a Round on Round Mode."),
-            }));
-
-            portBox = new NumericUpDown { Width = 100, Minimum = 1, Maximum = 65535 };
-            bytesBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 100000000, Increment = 100000, ThousandsSeparator = true };
-            page.Controls.Add(SettingsGroup("Network", new[] {
-                Row("Port", portBox, "Portforward this UDP port if you want to connect through the interweb. (Default: 27584)"),
-                Row("Upload Limit ", bytesBox, "Bytes/s shared along all the players."),
-            }));
-
-            var bar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
-            saveButton = new Button { Text = "Save", AutoSize = true };
-            undoButton = new Button { Text = "Undo", AutoSize = true };
-            dirtyText = new Label { AutoSize = true, Anchor = AnchorStyles.Left };
-            saveButton.Click += delegate { SaveSettings(); };
-            undoButton.Click += delegate { config.Load(); LoadSettings(); };
-            bar.Controls.AddRange(new Control[] { saveButton, undoButton, dirtyText });
-            page.Controls.Add(bar);
-
-
-            foreach (Control c in new Control[] { nameBox, passwordBox, welcomeBox, modeBox, playersBox, roundBox, portBox, bytesBox }) {
-                c.TextChanged += delegate { SetDirty(true); };
-                var n = c as NumericUpDown;
-                if (n != null)
-                    n.ValueChanged += delegate { SetDirty(true); };
-            }
-            modeBox.SelectedIndexChanged += delegate { SetDirty(true); };
-            return page;
-        }
-
-        GroupBox SettingsGroup(string title, Control[] rows)
-        {
-            var box = new GroupBox { Text = title, AutoSize = true, MinimumSize = new Size(560, 0), Padding = new Padding(8, 6, 8, 4) };
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1 };
-            foreach (Control r in rows)
-                grid.Controls.Add(r);
-            box.Controls.Add(grid);
-            return box;
-        }
-
-        // A label column of fixed width and the field. The hint is a tooltip on both.
-        Control Row(string label, Control field, string hint)
-        {
-            var row = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 4) };
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            var name = new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(3, 6, 3, 3) };
-            row.Controls.Add(name, 0, 0);
-            row.Controls.Add(field, 1, 0);
-            if (hint != null) {
-                Tip(name, hint);
-                Tip(field, hint);
-            }
-            return row;
-        }
-
-        // A tooltip on a panel does not show over its children, so each child gets it too.
-        void Tip(Control c, string text)
-        {
-            tips.SetToolTip(c, text);
-            foreach (Control child in c.Controls)
-                Tip(child, text);
-        }
-
-        static decimal Number(string text, decimal fallback, NumericUpDown box)
-        {
-            decimal v;
-            if (!decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out v))
-                v = fallback;
-            return Math.Max(box.Minimum, Math.Min(box.Maximum, Math.Round(v)));
-        }
-
-        void LoadSettings()
-        {
-            loading = true;
-            nameBox.Text = config.Get("servername", "");
-            passwordBox.Text = config.Get("serverpassword", "");
-            if (MissingAdminPassword(passwordBox.Text)) {
-                passwordBox.Text = NewAdminPassword();
-                config.Set("serverpassword", passwordBox.Text);
-                config.Save();
-            }
-            string readme = Path.Combine(folder, "readme.txt");
-            welcomeBox.Text = File.Exists(readme) ? File.ReadAllText(readme, Encoding.Default).TrimEnd() : "";
-
-            string type = config.Get("gametype", "3");
-            modeBox.Items.Clear();
-            modeBox.Items.Add(new Mode("3", "Round"));
-            modeBox.Items.Add(new Mode("4", "World"));
-            if (type != "3" && type != "4")
-                modeBox.Items.Add(new Mode(type, "Gamemode " + type));
-            foreach (Mode m in modeBox.Items)
-                if (m.Value == type)
-                    modeBox.SelectedItem = m;
-
-            playersBox.Value = Number(config.Get("maxnumofplayers", "16"), 16, playersBox);
-            roundBox.Value = Number(config.Get("roundtime", "7"), 7, roundBox);
-            portBox.Value = Number(config.Get("port", "27584"), 27584, portBox);
-            bytesBox.Value = Number(config.Get("servermaxbytespersecond", "100000"), 100000, bytesBox);
-            loading = false;
-            SetDirty(false);
-        }
-
-        void SaveSettings()
-        {
-            // Only the server keys change. The client keys (voice and others) stay as they are.
-            config.Set("servername", nameBox.Text);
-            config.Set("serverpassword", passwordBox.Text);
-            config.Set("gametype", ((Mode)modeBox.SelectedItem).Value);
-            config.Set("maxnumofplayers", playersBox.Value.ToString(CultureInfo.InvariantCulture));
-            config.Set("roundtime", roundBox.Value.ToString(CultureInfo.InvariantCulture));
-            config.Set("port", portBox.Value.ToString(CultureInfo.InvariantCulture));
-            config.Set("servermaxbytespersecond", bytesBox.Value.ToString(CultureInfo.InvariantCulture));
-            config.Save();
-            File.WriteAllText(Path.Combine(folder, "readme.txt"), welcomeBox.Text, Encoding.Default);
-            SetDirty(false);
-            dirtyText.Text = server == null ? "Saved." : "Settings Saved. Restart the server to apply them.";
-            dirtyText.ForeColor = SystemColors.ControlText;
-        }
-
-        void SetDirty(bool value)
-        {
-            if (loading)
-                return;
-            dirty = value;
-            saveButton.Enabled = value;
-            undoButton.Enabled = value;
-            pages[SettingsPageName].Text = value ? SettingsPageName + " *" : SettingsPageName;
-            tabLabels[SettingsPageName].SetText(pages[SettingsPageName].Text);
-            dirtyText.Text = value ? "Unsaved Changes." : "";
-            dirtyText.ForeColor = SystemColors.ControlText;
-        }
-
-
-
         // ------------------------------------------------------------ close
 
         async void OnClosing(object sender, FormClosingEventArgs e)
@@ -2319,8 +1547,9 @@ namespace SubVulpes
         protected override bool ProcessCmdKey(ref Message message, Keys keyData)
         {
             if (keyData == (Keys.Control | Keys.Shift | Keys.D)) {
-                debugModeBox.Checked = !debugModeBox.Checked;
-                ShowPage(debugModeBox.Checked ? "Debug" : "Server");
+                SetDebug(!debugModeBox.On);
+                ShowPage(SettingsPageName);
+                ShowSub(debugModeBox.On ? 2 : 1);
 
                 return true;
             }
@@ -2340,6 +1569,10 @@ namespace SubVulpes
             // A zip dropped on the exe icon: install it when the window shows.
             if (args.Length == 1 && args[0].EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 form.Shown += async delegate { await form.InstallUpdate(args[0]); };
+            // For a test of the real server: start it when the window shows.
+            if (Array.IndexOf(args, "--start") >= 0) form.Shown += delegate { form.StartServer(); };
+            int at = Array.IndexOf(args, "--page");
+            if (at >= 0 && at + 1 < args.Length) form.Shown += delegate { form.OpenPage(args[at + 1]); };
             Application.Run(form);
         }
     }

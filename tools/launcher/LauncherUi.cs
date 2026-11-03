@@ -249,6 +249,12 @@ namespace SubVulpes.Ui
             get { return sel; }
             set { if (sel == value) return; sel = value; Invalidate(); if (SelectedIndexChanged != null) SelectedIndexChanged(this, EventArgs.Empty); }
         }
+        public object SelectedItem
+        {
+            get { return sel >= 0 && sel < Items.Count ? Items[sel] : null; }
+            set { SelectedIndex = Items.IndexOf(value); }
+        }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
         public static ContextMenuStrip Menu()
         {
             return new ContextMenuStrip { ShowImageMargin = false, Font = UI.F(9.5f, FontStyle.Regular), BackColor = UI.T.Panel, Renderer = new ToolStripProfessionalRenderer(new DropColors()) { RoundedEdges = false } };
@@ -274,9 +280,9 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, 6)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(hot || open ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(r, 6)) using (var b = new SolidBrush(Enabled ? UI.T.Panel : UI.T.Chip)) using (var p = new Pen(Enabled && (hot || open) ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
             string text = sel >= 0 && sel < Items.Count ? Items[sel].ToString() : "";
-            TextRenderer.DrawText(g, text, Font, new Rectangle(10, 0, Width - 32, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, text, Font, new Rectangle(10, 0, Width - 32, Height), Enabled ? UI.T.Fg : UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             using (var pen = new Pen(UI.T.Muted, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                 g.DrawLines(pen, new[] { new Point(Width - 20, Height / 2 - 2), new Point(Width - 15, Height / 2 + 3), new Point(Width - 10, Height / 2 - 2) });
         }
@@ -319,10 +325,34 @@ namespace SubVulpes.Ui
             else Box.Location = new Point(10, (Height - Box.Height) / 2);
         }
         protected override void OnResize(EventArgs e) { base.OnResize(e); if (Box != null) Place(); }
+        protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); if (Box != null) { Box.Enabled = Enabled; Box.BackColor = Enabled ? UI.T.Panel : UI.T.Chip; } Invalidate(); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 6)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 6)) using (var b = new SolidBrush(Enabled ? UI.T.Panel : UI.T.Chip)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+        }
+    }
+
+    // A text field for whole numbers. It keeps the value between Minimum and Maximum.
+    class NumberField : TextField
+    {
+        public decimal Minimum = 0, Maximum = 100;
+        public event EventHandler ValueChanged;
+        public NumberField(int width) : base(width, false)
+        {
+            Box.KeyPress += delegate (object s, KeyPressEventArgs k) { if (!char.IsControl(k.KeyChar) && !char.IsDigit(k.KeyChar) && !(k.KeyChar == '-' && Minimum < 0)) k.Handled = true; };
+            Box.Leave += delegate { Value = Value; };
+            Box.TextChanged += delegate { if (ValueChanged != null) ValueChanged(this, EventArgs.Empty); };
+        }
+        public decimal Value
+        {
+            get
+            {
+                decimal v;
+                if (!decimal.TryParse(Box.Text, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out v)) v = Minimum;
+                return Math.Max(Minimum, Math.Min(Maximum, v));
+            }
+            set { Box.Text = Math.Max(Minimum, Math.Min(Maximum, value)).ToString(System.Globalization.CultureInfo.InvariantCulture); }
         }
     }
 
@@ -354,6 +384,11 @@ namespace SubVulpes.Ui
     {
         public string[] Options; int sel; int[] widths;
         public event EventHandler Changed;
+        public int SelectedIndex
+        {
+            get { return sel; }
+            set { if (sel == value) return; sel = value; Invalidate(); if (Changed != null) Changed(this, EventArgs.Empty); }
+        }
         public Segmented(params string[] options)
         {
             Options = options; Height = 32; Cursor = Cursors.Hand; Margin = new Padding(0); SetStyle(UI.Paint, true);
@@ -517,7 +552,7 @@ namespace SubVulpes.Ui
 
     class AreaChart : Card
     {
-        public double[] Values = new double[] { 61.8, 60.9, 61.2, 60.2, 59.7, 60.5, 61.0, 60.1, 59.9, 60.6, 60.4, 59.8, 60.9, 61.2, 60.3, 59.6, 59.9, 60.2, 59.8, 59.6 };
+        public double[] Values = new double[0];
         public AreaChart() : base("Tick rate", "", "") { Margin = new Padding(0); }
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -525,15 +560,19 @@ namespace SubVulpes.Ui
             TextRenderer.DrawText(g, Title, UI.F(8.5f, FontStyle.Regular), new Point(14, 12), UI.T.Muted, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, "ticks/s", UI.F(8.5f, FontStyle.Regular), new Point(Width - 56, 12), UI.T.Muted, TextFormatFlags.NoPadding);
             int left = 46, right = Width - 20, top = 40, bottom = Height - 34; double lo = 58, hi = 63;
+            foreach (double v in Values) { lo = Math.Min(lo, Math.Floor(v)); hi = Math.Max(hi, Math.Ceiling(v)); }
             if (right - left < 40 || bottom - top < 20) return;
             double[] marks = { 63, 61, 59 };
             foreach (var m in marks)
             {
+                if (m < lo || m > hi) continue;
                 int y = bottom - (int)((m - lo) / (hi - lo) * (bottom - top));
                 using (var pen = new Pen(Color.FromArgb(m == 61 ? 140 : 70, UI.T.Line)) { DashStyle = m == 61 ? DashStyle.Dash : DashStyle.Solid }) g.DrawLine(pen, left, y, right, y);
                 TextRenderer.DrawText(g, m.ToString(), UI.F(8f, FontStyle.Regular), new Rectangle(8, y - 8, left - 14, 16), UI.T.Muted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
-            int n = Values.Length; var pts = new PointF[n];
+            int n = Values.Length;
+            if (n < 2) return;
+            var pts = new PointF[n];
             for (int i = 0; i < n; i++) pts[i] = new PointF(left + i * (right - left) / (float)(n - 1), bottom - (float)((Values[i] - lo) / (hi - lo)) * (bottom - top));
             using (var fill = new GraphicsPath())
             {
