@@ -13,4 +13,4 @@ if "%~1"=="test" (
 "%NET%\csc.exe" /nologo %LAUNCHER_TARGET% /optimize+ ^
     /platform:x86 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /r:System.Web.Extensions.dll ^
     /r:"%NET%\System.IO.Compression.dll" /r:"%NET%\System.IO.Compression.FileSystem.dll" ^
-    /resource:tools\release\default-config.ini,SubVulpes.DefaultConfig tools\launcher\Launcher.cs %LAUNCHER_TEST_SOURCE%
+    /resource:tools\release\default-config.ini,SubVulpes.DefaultConfig tools\launcher\Launcher.cs tools\launcher\LauncherUi.cs %LAUNCHER_TEST_SOURCE%
