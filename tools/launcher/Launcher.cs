@@ -22,6 +22,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using SubVulpes.Ui;
 
 namespace SubVulpes
 {
@@ -369,10 +370,14 @@ namespace SubVulpes
         // Frame
         TabControl mainTabs;
         readonly Dictionary<string, TabPage> pages = new Dictionary<string, TabPage>();
+        readonly Dictionary<string, TabLabel> tabLabels = new Dictionary<string, TabLabel>();
+        Panel tabBar;
+        StateLabel stateLabel;
         string serverState = "Stopped", speedStatus = NoSpeedText, playersStatus = NoPlayersText;
         Label message, serverStatus, missingText;
         ComboBox presetBox;
-        Button startStop, stopButton, browseButton, checkUpdate;
+        FlatButton startStop, stopButton;
+        Button browseButton, checkUpdate;
         TextBox folderBox;
         CheckBox previewsBox, debugModeBox;
 
@@ -435,7 +440,9 @@ namespace SubVulpes
             DragEnter += (s, e) => { if (ZipOf(e) != null) e.Effect = DragDropEffects.Copy; };
             DragDrop += async (s, e) => { string zip = ZipOf(e); if (zip != null) await InstallUpdate(zip); };
 
-            mainTabs = new TabControl { Dock = DockStyle.Fill };
+            BackColor = UI.T.Win;
+            // The tab headers of the control stay hidden. The bar at the top of the window draws the tabs.
+            mainTabs = new TabControl { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(0, 1), Padding = new Point(0, 0) };
             message = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(8, 4, 8, 4) };
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(4) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -444,11 +451,22 @@ namespace SubVulpes
             layout.Controls.Add(mainTabs, 0, 0);
             layout.Controls.Add(message, 0, 1);
             AddPage("Server", ServerPage());
-            AddPage(SettingsPageName, SettingsPage());
             AddPage("Plugins", PluginsPage());
+            AddPage(SettingsPageName, SettingsPage());
             AddPage("Launcher Settings", LauncherSettingsPage());
             AddPage("Debug", DeveloperPage());
             Controls.Add(layout);
+            tabBar = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8, 0, 8, 0), BackColor = UI.T.Bar };
+            string[] tabOrder = { "Server", "Plugins", SettingsPageName, "Launcher Settings", "Debug" };
+            for (int i = tabOrder.Length - 1; i >= 0; i--) {
+                string tabName = tabOrder[i];
+                var label = new TabLabel(tabName);
+                label.Click += delegate { ShowPage(tabName); };
+                tabLabels[tabName] = label;
+                tabBar.Controls.Add(label);
+            }
+            mainTabs.SelectedIndexChanged += delegate { SyncTabs(); };
+            Controls.Add(tabBar);
             SetTextColors(this);
             SetDebugMode(debugModeBox.Checked);
 
@@ -551,12 +569,13 @@ namespace SubVulpes
             page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var bar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
-            startStop = new Button { Text = "Start", AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
-            stopButton = new Button { Text = "Stop", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Enabled = false };
+            stateLabel = new StateLabel { Margin = new Padding(0, 0, 16, 0) };
+            startStop = new FlatButton("Start") { Kind = "primary", Glyph = "play" };
+            stopButton = new FlatButton("Stop") { Glyph = "stop", Enabled = false };
             startStop.Click += delegate { StartServer(); };
             stopButton.Click += async delegate { await StopServer(); };
-            serverStatus = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(12, 7, 3, 3) };
-            bar.Controls.AddRange(new Control[] { startStop, stopButton, serverStatus });
+            serverStatus = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(12, 9, 3, 3) };
+            bar.Controls.AddRange(new Control[] { stateLabel, startStop, stopButton, serverStatus });
             page.Controls.Add(bar, 0, 0);
             missingText = new Label { AutoSize = true, Margin = new Padding(3, 0, 3, 8) };
             ShowMissing(configCreated);
@@ -630,7 +649,7 @@ namespace SubVulpes
 
         void AddPage(string name, Control view)
         {
-            var page = new TabPage(name) { Padding = new Padding(8), UseVisualStyleBackColor = true };
+            var page = new TabPage(name) { Padding = new Padding(8), UseVisualStyleBackColor = false, BackColor = UI.T.Win };
             view.Dock = DockStyle.Fill;
             page.Controls.Add(view);
             pages[name] = page;
@@ -640,10 +659,21 @@ namespace SubVulpes
         void ShowPage(string name)
         {
             if (mainTabs.TabPages.Contains(pages[name])) mainTabs.SelectedTab = pages[name];
+            SyncTabs();
+        }
+
+        // The bar shows which page is open.
+        void SyncTabs()
+        {
+            foreach (var pair in tabLabels) {
+                pair.Value.Selected = mainTabs.SelectedTab == pages[pair.Key];
+                pair.Value.Invalidate();
+            }
         }
 
         void SetDebugMode(bool enabled)
         {
+            tabLabels["Debug"].Visible = enabled;
             if (enabled) {
                 if (!mainTabs.TabPages.Contains(pages["Debug"])) mainTabs.TabPages.Add(pages["Debug"]);
             } else {
@@ -665,7 +695,9 @@ namespace SubVulpes
 
         void RefreshStatus()
         {
-            serverStatus.Text = serverState + " | " + playersStatus + " | " + speedStatus;
+            string tone = serverState == "Running" ? "ok" : serverState == "Stopped" ? "muted" : (serverState == "Crashed" || serverState == StoppedUnexpectedly) ? "bad" : "warn";
+            stateLabel.Set(serverState, tone);
+            serverStatus.Text = playersStatus + " | " + speedStatus;
         }
 
         // ------------------------------------------------------------ overview
@@ -2323,6 +2355,7 @@ namespace SubVulpes
             saveButton.Enabled = value;
             undoButton.Enabled = value;
             pages[SettingsPageName].Text = value ? SettingsPageName + " *" : SettingsPageName;
+            tabLabels[SettingsPageName].SetText(pages[SettingsPageName].Text);
             dirtyText.Text = value ? "Unsaved Changes." : "";
             dirtyText.ForeColor = SystemColors.ControlText;
         }

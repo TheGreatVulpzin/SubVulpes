@@ -408,6 +408,10 @@ namespace SubVulpes.Ui
             Text = text; Font = UI.F(10f, FontStyle.Regular); Cursor = Cursors.Hand; Dock = DockStyle.Left;
             Width = TextRenderer.MeasureText(text, UI.F(10f, FontStyle.Bold)).Width + 40; SetStyle(UI.Paint, true);
         }
+        public void SetText(string text)
+        {
+            Text = text; Width = TextRenderer.MeasureText(text, UI.F(10f, FontStyle.Bold)).Width + 40; Invalidate();
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.Clear(Parent.BackColor);
@@ -420,15 +424,19 @@ namespace SubVulpes.Ui
 
     class StateLabel : Control
     {
-        public string Word = "Running";
-        public StateLabel() { Height = 34; Width = 30 + TextRenderer.MeasureText("Running", UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 14; SetStyle(UI.Paint, true); }
+        string word = "Running", tone = "ok";
+        public StateLabel() { Height = 34; Fit(); SetStyle(UI.Paint, true); }
+        // Tone is ok (green), warn (orange), bad (red) or muted (gray).
+        public void Set(string text, string toneName) { word = text; tone = toneName; Fit(); Invalidate(); }
+        void Fit() { Width = 30 + TextRenderer.MeasureText(word, UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 14; }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            Color c = tone == "ok" ? UI.T.Ok : tone == "warn" ? UI.T.Warn : tone == "bad" ? UI.T.Bad : UI.T.Muted;
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(Color.FromArgb(38, UI.T.Ok))) g.FillPath(b, path);
-            using (var b = new SolidBrush(UI.T.Ok)) g.FillEllipse(b, 13, r.Height / 2 - 5, 10, 10);
-            TextRenderer.DrawText(g, Word, UI.F(10.5f, FontStyle.Bold), new Rectangle(30, 0, r.Width - 30, r.Height), UI.T.Ok, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(Color.FromArgb(38, c))) g.FillPath(b, path);
+            using (var b = new SolidBrush(c)) g.FillEllipse(b, 13, r.Height / 2 - 5, 10, 10);
+            TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(30, 0, r.Width - 30, r.Height), c, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
