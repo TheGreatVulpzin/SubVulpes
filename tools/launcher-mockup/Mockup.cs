@@ -53,21 +53,133 @@ namespace SubVulpesMockup
         // Draws a small icon in a 16 by 16 box at x, y.
         public static void Draw(Graphics g, string name, int x, int y, Color c)
         {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var pen = new Pen(c, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round }) using (var b = new SolidBrush(c))
+            Svg.Draw(g, name, new RectangleF(x, y, 16, 16), c);
+        }
+    }
+
+    // Draws the icons of Lucide (https://lucide.dev, ISC license, Copyright (c) Lucide Icons and Contributors).
+    // Each icon is a list of shapes in a 24 by 24 box: "p:" path data, "c:" circle (cx,cy,r), "r:" rectangle (x,y,width,height,radius).
+    static class Svg
+    {
+        static readonly Dictionary<string, string[]> Shapes = new Dictionary<string, string[]> {
+            { "play", new[] { "p:M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" } },
+            { "stop", new[] { "r:3,3,18,18,2" } },
+            { "restart", new[] { "p:M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8", "p:M21 3v5h-5" } },
+            { "bolt", new[] { "p:M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" } },
+            { "download", new[] { "p:M12 15V3", "p:M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "p:m7 10 5 5 5-5" } },
+            { "trash", new[] { "p:M10 11v6", "p:M14 11v6", "p:M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "p:M3 6h18", "p:M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" } },
+            { "copy", new[] { "r:8,8,14,14,2", "p:M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" } },
+            { "expand", new[] { "p:M15 3h6v6", "p:m21 3-7 7", "p:m3 21 7-7", "p:M9 21H3v-6" } },
+            { "collapse", new[] { "p:m14 10 7-7", "p:M20 10h-6V4", "p:m3 21 7-7", "p:M4 14h6v6" } },
+            { "sliders", new[] { "p:M10 5H3", "p:M12 19H3", "p:M14 3v4", "p:M16 17v4", "p:M21 12h-9", "p:M21 19h-5", "p:M21 5h-7", "p:M8 10v4", "p:M8 12H3" } },
+            { "search", new[] { "p:m21 21-4.34-4.34", "c:11,11,8" } },
+            { "info", new[] { "c:12,12,10", "p:M12 16v-4", "p:M12 8h.01" } } };
+        static readonly Dictionary<string, string> Alias = new Dictionary<string, string> { { "refresh", "restart" }, { "save", "download" }, { "clear", "trash" }, { "bolt", "bolt" } };
+
+        public static void Draw(Graphics g, string name, RectangleF box, Color color)
+        {
+            string key; if (!Alias.TryGetValue(name, out key)) key = name;
+            string[] shapes; if (!Shapes.TryGetValue(key, out shapes)) return;
+            var old = g.Transform; var oldSmooth = g.SmoothingMode; g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TranslateTransform(box.X, box.Y); g.ScaleTransform(box.Width / 24f, box.Height / 24f);
+            using (var pen = new Pen(color, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                foreach (string s in shapes)
+                    using (var path = Build(s)) g.DrawPath(pen, path);
+            g.Transform = old; g.SmoothingMode = oldSmooth;
+        }
+
+        static GraphicsPath Build(string shape)
+        {
+            string kind = shape.Substring(0, 2), body = shape.Substring(2);
+            if (kind == "p:") return Parse(body);
+            var path = new GraphicsPath(); var n = body.Split(',');
+            if (kind == "c:") path.AddEllipse(float.Parse(n[0]) - float.Parse(n[2]), float.Parse(n[1]) - float.Parse(n[2]), 2 * float.Parse(n[2]), 2 * float.Parse(n[2]));
+            else
             {
-                switch (name)
+                float x = float.Parse(n[0]), y = float.Parse(n[1]), w = float.Parse(n[2]), h = float.Parse(n[3]), r = float.Parse(n[4]), d = 2 * r;
+                path.AddArc(x, y, d, d, 180, 90); path.AddArc(x + w - d, y, d, d, 270, 90); path.AddArc(x + w - d, y + h - d, d, d, 0, 90); path.AddArc(x, y + h - d, d, d, 90, 90); path.CloseFigure();
+            }
+            return path;
+        }
+
+        static void Skip(string d, ref int i) { while (i < d.Length && (d[i] == ' ' || d[i] == ',' || d[i] == '\n' || d[i] == '\t')) i++; }
+
+        static float Num(string d, ref int i)
+        {
+            Skip(d, ref i); int start = i;
+            if (i < d.Length && (d[i] == '-' || d[i] == '+')) i++;
+            while (i < d.Length && char.IsDigit(d[i])) i++;
+            if (i < d.Length && d[i] == '.') { i++; while (i < d.Length && char.IsDigit(d[i])) i++; }
+            return float.Parse(d.Substring(start, i - start), System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        static bool Flag(string d, ref int i) { Skip(d, ref i); bool f = d[i] == '1'; i++; return f; }
+
+        static GraphicsPath Parse(string d)
+        {
+            var path = new GraphicsPath(); int i = 0; PointF cur = new PointF(), start = new PointF(), ctrl = new PointF(); char cmd = ' ', prev = ' ';
+            while (true)
+            {
+                Skip(d, ref i); if (i >= d.Length) break;
+                if (char.IsLetter(d[i]))
                 {
-                    case "play": g.FillPolygon(b, new[] { new Point(x + 4, y + 2), new Point(x + 4, y + 14), new Point(x + 14, y + 8) }); break;
-                    case "stop": using (var path = UI.Round(new Rectangle(x + 3, y + 3, 10, 10), 2)) g.FillPath(b, path); break;
-                    case "bolt": g.FillPolygon(b, new[] { new PointF(x + 9, y + 1), new PointF(x + 3, y + 9), new PointF(x + 7.5f, y + 9), new PointF(x + 6.5f, y + 15), new PointF(x + 13, y + 6.5f), new PointF(x + 8.5f, y + 6.5f) }); break;
-                    case "restart": case "refresh":
-                        g.DrawArc(pen, x + 3, y + 3, 10, 10, -40, 290);
-                        g.DrawLines(pen, new[] { new Point(x + 12, y + 1), new Point(x + 12, y + 5), new Point(x + 8, y + 5) }); break;
-                    case "download":
-                        g.DrawLine(pen, x + 8, y + 2, x + 8, y + 10); g.DrawLines(pen, new[] { new Point(x + 4, y + 7), new Point(x + 8, y + 11), new Point(x + 12, y + 7) });
-                        g.DrawLines(pen, new[] { new Point(x + 3, y + 11), new Point(x + 3, y + 14), new Point(x + 13, y + 14), new Point(x + 13, y + 11) }); break;
+                    cmd = d[i++];
+                    if (cmd == 'Z' || cmd == 'z') { path.CloseFigure(); cur = start; prev = 'Z'; continue; }
                 }
+                bool rel = char.IsLower(cmd); char op = char.ToUpper(cmd); float ox = rel ? cur.X : 0, oy = rel ? cur.Y : 0;
+                if (op == 'M') { cur = new PointF(ox + Num(d, ref i), oy + Num(d, ref i)); start = cur; path.StartFigure(); cmd = rel ? 'l' : 'L'; }
+                else if (op == 'L') { var p = new PointF(ox + Num(d, ref i), oy + Num(d, ref i)); path.AddLine(cur, p); cur = p; }
+                else if (op == 'H') { var p = new PointF(ox + Num(d, ref i), cur.Y); path.AddLine(cur, p); cur = p; }
+                else if (op == 'V') { var p = new PointF(cur.X, oy + Num(d, ref i)); path.AddLine(cur, p); cur = p; }
+                else if (op == 'C' || op == 'S')
+                {
+                    PointF p1;
+                    if (op == 'C') p1 = new PointF(ox + Num(d, ref i), oy + Num(d, ref i));
+                    else p1 = (prev == 'C') ? new PointF(2 * cur.X - ctrl.X, 2 * cur.Y - ctrl.Y) : cur;
+                    var p2 = new PointF(ox + Num(d, ref i), oy + Num(d, ref i)); var p3 = new PointF(ox + Num(d, ref i), oy + Num(d, ref i));
+                    path.AddBezier(cur, p1, p2, p3); ctrl = p2; cur = p3;
+                }
+                else if (op == 'A')
+                {
+                    float rx = Num(d, ref i), ry = Num(d, ref i), rot = Num(d, ref i); bool large = Flag(d, ref i), sweep = Flag(d, ref i);
+                    var p = new PointF(ox + Num(d, ref i), oy + Num(d, ref i)); Arc(path, cur, rx, ry, rot, large, sweep, p); cur = p;
+                }
+                else break;
+                prev = op == 'S' ? 'C' : op;
+            }
+            return path;
+        }
+
+        static PointF OnEllipse(double cx, double cy, double rx, double ry, double cos, double sin, double ux, double uy)
+        {
+            return new PointF((float)(cx + rx * cos * ux - ry * sin * uy), (float)(cy + rx * sin * ux + ry * cos * uy));
+        }
+
+        // Turns an SVG arc into curves (the formulas of the SVG specification, appendix F.6).
+        static void Arc(GraphicsPath path, PointF a, double rx, double ry, double phiDeg, bool large, bool sweep, PointF b)
+        {
+            if (a.X == b.X && a.Y == b.Y) return;
+            rx = Math.Abs(rx); ry = Math.Abs(ry);
+            if (rx == 0 || ry == 0) { path.AddLine(a, b); return; }
+            double phi = phiDeg * Math.PI / 180, cos = Math.Cos(phi), sin = Math.Sin(phi);
+            double dx = (a.X - b.X) / 2.0, dy = (a.Y - b.Y) / 2.0, x1 = cos * dx + sin * dy, y1 = -sin * dx + cos * dy;
+            double lambda = x1 * x1 / (rx * rx) + y1 * y1 / (ry * ry);
+            if (lambda > 1) { double s = Math.Sqrt(lambda); rx *= s; ry *= s; }
+            double num = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1, den = rx * rx * y1 * y1 + ry * ry * x1 * x1;
+            double co = Math.Sqrt(Math.Max(0, num / den)); if (large == sweep) co = -co;
+            double cxp = co * rx * y1 / ry, cyp = -co * ry * x1 / rx;
+            double cx = cos * cxp - sin * cyp + (a.X + b.X) / 2.0, cy = sin * cxp + cos * cyp + (a.Y + b.Y) / 2.0;
+            double th1 = Math.Atan2((y1 - cyp) / ry, (x1 - cxp) / rx), th2 = Math.Atan2((-y1 - cyp) / ry, (-x1 - cxp) / rx), dth = th2 - th1;
+            if (sweep && dth < 0) dth += 2 * Math.PI; else if (!sweep && dth > 0) dth -= 2 * Math.PI;
+            int n = (int)Math.Ceiling(Math.Abs(dth) / (Math.PI / 2) - 1e-9); if (n < 1) n = 1;
+            double step = dth / n, t = 4.0 / 3.0 * Math.Tan(step / 4); PointF cur = a;
+            for (int k = 0; k < n; k++)
+            {
+                double a1 = th1 + k * step, a2 = a1 + step, c1 = Math.Cos(a1), s1 = Math.Sin(a1), c2 = Math.Cos(a2), s2 = Math.Sin(a2);
+                var p1 = OnEllipse(cx, cy, rx, ry, cos, sin, c1 - t * s1, s1 + t * c1);
+                var p2 = OnEllipse(cx, cy, rx, ry, cos, sin, c2 + t * s2, s2 - t * c2);
+                var p3 = k == n - 1 ? b : OnEllipse(cx, cy, rx, ry, cos, sin, c2, s2);
+                path.AddBezier(cur, p1, p2, p3); cur = p3;
             }
         }
     }
@@ -80,7 +192,7 @@ namespace SubVulpesMockup
         {
             Options = options; Height = 32; Cursor = Cursors.Hand; Margin = new Padding(0); SetStyle(UI.Paint, true);
             widths = new int[options.Length]; int total = 0;
-            for (int i = 0; i < options.Length; i++) { widths[i] = TextRenderer.MeasureText(options[i], UI.F(9.5f, FontStyle.Bold)).Width + 20; total += widths[i]; }
+            for (int i = 0; i < options.Length; i++) { widths[i] = TextRenderer.MeasureText(options[i], UI.F(9.5f, FontStyle.Regular)).Width + 24; total += widths[i]; }
             Width = total + 4; sel = 1 < options.Length ? 1 : 0;
         }
         protected override void OnMouseClick(MouseEventArgs e)
@@ -98,7 +210,7 @@ namespace SubVulpesMockup
             {
                 var r = new Rectangle(x, 2, widths[i], Height - 5);
                 if (i == sel) using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
-                TextRenderer.DrawText(g, Options[i], i == sel ? UI.F(9.5f, FontStyle.Bold) : UI.F(9.5f, FontStyle.Regular), r, i == sel ? UI.T.Accent : UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                TextRenderer.DrawText(g, Options[i], UI.F(9.5f, FontStyle.Regular), r, i == sel ? UI.T.Accent : UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 x += widths[i];
             }
         }
@@ -218,12 +330,7 @@ namespace SubVulpesMockup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Panel);
-            Color c = hot ? UI.T.Accent : UI.T.Muted;
-            using (var pen = new Pen(c, 1.6f)) using (var fill = new SolidBrush(UI.T.Panel))
-            {
-                int[] ys = { 6, 12, 18 }; int[] xs = { 8, 15, 10 };
-                for (int i = 0; i < 3; i++) { g.DrawLine(pen, 4, ys[i], 20, ys[i]); g.FillEllipse(fill, xs[i] - 2.5f, ys[i] - 2.5f, 5, 5); g.DrawEllipse(pen, xs[i] - 2.5f, ys[i] - 2.5f, 5, 5); }
-            }
+            Svg.Draw(g, "sliders", new RectangleF(3, 3, 18, 18), hot ? UI.T.Accent : UI.T.Muted);
         }
     }
 
@@ -352,9 +459,7 @@ namespace SubVulpesMockup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var p = new Pen(UI.T.Muted, 1.4f)) g.DrawEllipse(p, 2, 2, Width - 5, Height - 5);
-            using (var f = new Font("Georgia", 9f, FontStyle.Bold | FontStyle.Italic, GraphicsUnit.Point))
-                TextRenderer.DrawText(g, "i", f, new Rectangle(0, 0, Width, Height), UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            Svg.Draw(g, "info", new RectangleF(2, 2, Width - 4, Height - 4), UI.T.Muted);
         }
     }
 
@@ -405,32 +510,7 @@ namespace SubVulpesMockup
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Console);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(Color.FromArgb(hot ? 55 : 20, 255, 255, 255))) using (var p = new Pen(Color.FromArgb(hot ? 110 : 40, 255, 255, 255))) { g.FillPath(b, path); g.DrawPath(p, path); }
-            using (var pen = new Pen(Color.FromArgb(hot ? 255 : 120, UI.T.ConsoleFg), 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
-            {
-                if (Glyph == "save")
-                {
-                    g.DrawLine(pen, 14, 7, 14, 17); g.DrawLines(pen, new[] { new Point(10, 13), new Point(14, 17), new Point(18, 13) });
-                    g.DrawLines(pen, new[] { new Point(8, 18), new Point(8, 21), new Point(20, 21), new Point(20, 18) });
-                }
-                else if (Glyph == "expand" || Glyph == "collapse")
-                {
-                    bool o = Glyph == "expand";
-                    g.DrawLines(pen, o ? new[] { new Point(8, 13), new Point(8, 8), new Point(13, 8) } : new[] { new Point(8, 13), new Point(13, 13), new Point(13, 8) });
-                    g.DrawLines(pen, o ? new[] { new Point(15, 8), new Point(20, 8), new Point(20, 13) } : new[] { new Point(15, 8), new Point(15, 13), new Point(20, 13) });
-                    g.DrawLines(pen, o ? new[] { new Point(8, 15), new Point(8, 20), new Point(13, 20) } : new[] { new Point(8, 15), new Point(13, 15), new Point(13, 20) });
-                    g.DrawLines(pen, o ? new[] { new Point(20, 15), new Point(20, 20), new Point(15, 20) } : new[] { new Point(15, 20), new Point(15, 15), new Point(20, 15) });
-                }
-                else if (Glyph == "clear")
-                {
-                    g.DrawLine(pen, 8, 9, 20, 9); g.DrawLine(pen, 12, 9, 12, 7); g.DrawLine(pen, 12, 7, 16, 7); g.DrawLine(pen, 16, 7, 16, 9);
-                    g.DrawLines(pen, new[] { new Point(10, 11), new Point(11, 21), new Point(17, 21), new Point(18, 11) });
-                }
-                else
-                {
-                    g.DrawLines(pen, new[] { new Point(8, 17), new Point(8, 7), new Point(17, 7), new Point(17, 10) });
-                    g.DrawRectangle(pen, 11, 11, 9, 10);
-                }
-            }
+            Svg.Draw(g, Glyph, new RectangleF(6, 6, 16, 16), Color.FromArgb(hot ? 255 : 130, UI.T.ConsoleFg));
         }
     }
 
@@ -796,7 +876,7 @@ namespace SubVulpesMockup
         {
             int row = t.RowCount++; t.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
             var p = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            var l = L(title, true, false); l.Font = UI.F(11.5f, FontStyle.Bold); l.Location = new Point(0, 12);
+            var l = L(title, true, false); l.Font = UI.F(12f, FontStyle.Regular); l.Location = new Point(0, 12);
             var line = new Panel { Dock = DockStyle.Bottom, Height = 1, Tag = "line" };
             p.Controls.Add(l); p.Controls.Add(line);
             t.Controls.Add(p, 0, row); t.SetColumnSpan(p, 4);
@@ -854,13 +934,12 @@ namespace SubVulpesMockup
             return SettingsPage(delegate (TableLayoutPanel t)
             {
                 Section(t, "Diagnostics");
-                AddRow(t, "Diagnostics mode", "Records the tick rate. Saves a minidump if the server crashes or hangs.", Combo(180, "Normal", "Performance", "Network", "Custom"), null, true);
+                AddRow(t, "Diagnostics mode", "Records the tick rate while the server runs.", Combo(180, "Normal", "Performance", "Custom"), null, true);
                 Section(t, "Tools");
                 AddRow(t, "Profiler", "Finds slow code.", new Switch { On = true }, null, true);
                 AddRow(t, "Timing Log", "Logs how long each part of the game takes, once a minute.", new Switch(), null, true);
-                AddRow(t, "Packet Capture", "Records network traffic, including player names and chat.", new Switch(), null, true);
-                Section(t, "Crash handling");
-                AddRow(t, "If the server crashes or hangs", null, new Segmented("None", "Minidump (about 1 MB)", "Full dump (about 600 MB)"), null, true);
+                Section(t, "Crash reports");
+                AddRow(t, "Crash dump", "Saved when the server crashes or hangs. Send it to the developers.", new Segmented("Off", "Minidump (about 1 MB)", "Full dump (about 600 MB)"), null, true);
                 AddRow(t, "Memory dump", "A copy of the server memory. Send it to the developers to help find a problem.", new FlatButton("Save Memory Dump Now") { Margin = new Padding(0) }, null, false);
             });
         }
@@ -999,7 +1078,7 @@ namespace SubVulpesMockup
                     }
                     else
                     {
-                        Color rc = pl.Risk == "low" ? UI.T.Ok : pl.Risk == "high" ? UI.T.Warn : UI.T.Bad; var rf = UI.F(9f, FontStyle.Bold);
+                        Color rc = pl.Risk == "low" ? UI.T.Ok : pl.Risk == "high" ? UI.T.Warn : UI.T.Bad; var rf = UI.F(9f, FontStyle.Regular);
                         int rw = TextRenderer.MeasureText(g, pl.Risk, rf, new Size(999, 30), TextFormatFlags.NoPadding).Width + 20; var pill = new Rectangle(e.CellBounds.X + 6, my - 11, rw, 22);
                         using (var path = UI.Round(pill, 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, rc, 0.16))) g.FillPath(b, path);
                         TextRenderer.DrawText(g, pl.Risk, rf, pill, rc, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
@@ -1038,20 +1117,43 @@ namespace SubVulpesMockup
             var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Width = 340, Tag = "panel" };
             var title = L(p.Name, true, false); title.Font = UI.F(13f, FontStyle.Bold); title.Margin = new Padding(0, 0, 0, 2); flow.Controls.Add(title);
             var sub = L(p.Version + " · " + p.By, false, true); sub.Margin = new Padding(0, 0, 0, 10); flow.Controls.Add(sub);
-            var d = L(p.Desc, false, false); d.MaximumSize = new Size(330, 0); d.Margin = new Padding(0, 0, 0, 12); flow.Controls.Add(d);
-            if (p.Needs != null) { var nl = L("Needs", true, true); nl.Margin = new Padding(0, 0, 0, 4); flow.Controls.Add(nl); var c = Chip(p.Needs); c.Margin = new Padding(0, 0, 0, 12); flow.Controls.Add(c); }
-            var cl = L("Capabilities", true, true); cl.Margin = new Padding(0, 0, 0, 4); flow.Controls.Add(cl);
-            var caps = new FlowLayoutPanel { AutoSize = true, MaximumSize = new Size(334, 0), Tag = "panel", Margin = new Padding(0, 0, 0, 12) };
-            foreach (var c in p.Caps) caps.Controls.Add(Chip(c));
-            flow.Controls.Add(caps);
-            if (p.Risk == "highest")
+            if (detailTab == 0)
             {
-                var n = L("This plugin has full access to the server. It can read private data, freeze it or crash it.", false, false);
-                n.MaximumSize = new Size(330, 0); n.Tag = "warn"; n.Margin = new Padding(0, 0, 0, 12); flow.Controls.Add(n);
+                var d = L(p.Desc, false, false); d.MaximumSize = new Size(330, 0); d.Margin = new Padding(0, 0, 0, 12); flow.Controls.Add(d);
+                if (p.Risk == "highest")
+                {
+                    var n = L("This plugin has full access to the server. It can read private data, freeze it or crash it.", false, false);
+                    n.MaximumSize = new Size(330, 0); n.Tag = "warn"; n.Margin = new Padding(0, 0, 0, 12); flow.Controls.Add(n);
+                }
+                var acts = new FlowLayoutPanel { AutoSize = true, Tag = "panel", Margin = new Padding(0, 4, 0, 0) };
+                acts.Controls.Add(new FlatButton("Update…")); acts.Controls.Add(new FlatButton("Remove") { Kind = "danger", Margin = new Padding(0) });
+                flow.Controls.Add(acts);
             }
-            if (p.Settings.Length > 0)
+            else if (detailTab == 1)
             {
-                var sl = L("Settings", true, true); sl.Margin = new Padding(0, 0, 0, 4); flow.Controls.Add(sl);
+                var tbl = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Tag = "panel", Margin = new Padding(0, 0, 0, 12) };
+                tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100)); tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
+                string[][] info = { new[] { "ID", p.Id }, new[] { "Version", p.Version }, new[] { "Author", p.By }, new[] { "Source", p.Source }, new[] { "Risk", p.Risk }, new[] { "Requires", p.Needs ?? "Nothing" } };
+                foreach (var kv in info)
+                {
+                    int row = tbl.RowCount++; tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+                    var k = L(kv[0], false, true); k.Anchor = AnchorStyles.Left; tbl.Controls.Add(k, 0, row);
+                    var v = L(kv[1], false, false); v.Anchor = AnchorStyles.Left; tbl.Controls.Add(v, 1, row);
+                }
+                flow.Controls.Add(tbl);
+                var cl = L("This plugin can", true, false); cl.Margin = new Padding(0, 4, 0, 6); flow.Controls.Add(cl);
+                foreach (var c in p.Caps)
+                {
+                    string what; if (!CapText.TryGetValue(c, out what)) what = c;
+                    var line = L("•  " + what, false, true); line.MaximumSize = new Size(330, 0); line.Margin = new Padding(0, 0, 0, 3); flow.Controls.Add(line);
+                }
+            }
+            else if (p.Settings.Length == 0)
+            {
+                var none = L("This plugin has no settings.", false, true); flow.Controls.Add(none);
+            }
+            else
+            {
                 var tbl = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Tag = "panel", Margin = new Padding(0, 0, 0, 12) };
                 tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
                 foreach (var s in p.Settings)
@@ -1062,13 +1164,28 @@ namespace SubVulpesMockup
                 }
                 flow.Controls.Add(tbl);
             }
-            var acts = new FlowLayoutPanel { AutoSize = true, Tag = "panel", Margin = new Padding(0, 4, 0, 0) };
-            acts.Controls.Add(new FlatButton("Update…")); acts.Controls.Add(new FlatButton("Remove") { Kind = "danger", Margin = new Padding(0) });
-            flow.Controls.Add(acts);
             detail.Controls.Add(flow);
+            var strip = new Panel { Dock = DockStyle.Top, Height = 38, Tag = "panel" };
+            string[] tabNames = { "Summary", "Info", "Settings" };
+            var tabItems = new List<TabLabel>();
+            for (int i = tabNames.Length - 1; i >= 0; i--)
+            {
+                var tab = new TabLabel(tabNames[i]) { Sub = true, Selected = i == detailTab }; int index = i;
+                tab.Click += delegate { detailTab = index; RenderDetail(); };
+                strip.Controls.Add(tab);
+            }
+            detail.Controls.Add(strip);
             Apply(detail);
             detail.ResumeLayout();
         }
+
+        int detailTab;
+
+        static readonly Dictionary<string, string> CapText = new Dictionary<string, string> {
+            { "read", "Read game data" }, { "write", "Change the game" }, { "storage", "Save its own files" }, { "props", "Change props and objects" },
+            { "config", "Read and change server settings" }, { "plugins", "Control other plugins" }, { "ai", "Control the AI characters" },
+            { "economy", "Change money" }, { "mission", "Control missions" }, { "settings", "Change the game rules" }, { "engine", "Change engine behavior" },
+            { "shop", "Change the shops" }, { "network", "Send and receive network data" } };
 
         static Label Chip(string text)
         {
