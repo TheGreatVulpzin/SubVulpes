@@ -334,7 +334,7 @@ namespace SubVulpes
         {
             stats.Set("Tick rate", ticks.ToString("0.0", CultureInfo.InvariantCulture) + " ticks/s");
             stats.Set("Lowest minute", speeds.Min().ToString("0.0", CultureInfo.InvariantCulture));
-            chart.Values = speeds.Skip(Math.Max(0, speeds.Count - 20)).ToArray();
+            chart.Values = speeds.Skip(Math.Max(0, speeds.Count - AreaChart.Slots)).ToArray();
             chart.Invalidate();
             if (players < 0) return;
             stats.Set("Players", players.ToString() + (bots != "0" ? " (+" + bots + " bots)" : ""));

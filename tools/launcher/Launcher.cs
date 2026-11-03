@@ -395,8 +395,8 @@ namespace SubVulpes
             }
             mainTabs.SelectedIndexChanged += delegate {
                 SyncTabs();
-                // The list fills the first time the page opens.
-                if (mainTabs.SelectedTab == pages["Plugins"] && plugins.Count == 0 && server == null && !pluginBusy) { var read = RefreshPlugins(); }
+                // The list reads again each time the page opens. A server that runs answers with its own list.
+                if (mainTabs.SelectedTab == pages["Plugins"] && !pluginBusy) { var read = RefreshPlugins(); }
             };
             Controls.Add(tabBar);
             SetDebugMode(debugModeBox.On);

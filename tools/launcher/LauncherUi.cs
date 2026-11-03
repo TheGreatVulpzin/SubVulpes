@@ -552,6 +552,7 @@ namespace SubVulpes.Ui
 
     class AreaChart : Card
     {
+        public const int Slots = 20;
         public double[] Values = new double[0];
         public AreaChart() : base("Tick rate", "", "") { Margin = new Padding(0); }
         protected override void OnPaint(PaintEventArgs e)
@@ -561,7 +562,9 @@ namespace SubVulpes.Ui
             int left = 46, right = Width - 20, top = 40, bottom = Height - 34; double lo = 58, hi = 63;
             foreach (double v in Values) { lo = Math.Min(lo, Math.Floor(v)); hi = Math.Max(hi, Math.Ceiling(v)); }
             if (right - left < 40 || bottom - top < 20) return;
-            double[] marks = { 63, 61, 59 };
+            // The nominal lines stay. The lowest and highest lines show a wide range, when no other line is near.
+            var marks = new List<double> { 63, 61, 59 };
+            foreach (double edge in new[] { lo, hi }) if (!marks.Exists(m => Math.Abs(m - edge) * (bottom - top) / (hi - lo) < 14)) marks.Add(edge);
             foreach (var m in marks)
             {
                 if (m < lo || m > hi) continue;
@@ -571,19 +574,23 @@ namespace SubVulpes.Ui
             }
             int n = Values.Length;
             if (n < 2) return;
+            // One slot for each minute, newest on the right. A short history grows from the right and does not stretch.
             var pts = new PointF[n];
-            for (int i = 0; i < n; i++) pts[i] = new PointF(left + i * (right - left) / (float)(n - 1), bottom - (float)((Values[i] - lo) / (hi - lo)) * (bottom - top));
+            for (int i = 0; i < n; i++) pts[i] = new PointF(right - (n - 1 - i) * (right - left) / (float)(Slots - 1), bottom - (float)((Values[i] - lo) / (hi - lo)) * (bottom - top));
+            // The curve may overshoot between points. The clip keeps it inside the plot.
+            g.SetClip(new Rectangle(left - 4, top - 3, right - left + 8, bottom - top + 6));
             using (var fill = new GraphicsPath())
             {
                 fill.AddCurve(pts, 0.4f); fill.AddLine(pts[n - 1].X, pts[n - 1].Y, pts[n - 1].X, bottom); fill.AddLine(pts[n - 1].X, bottom, pts[0].X, bottom); fill.CloseFigure();
                 using (var br = new LinearGradientBrush(new Rectangle(left, top - 1, right - left, bottom - top + 2), Color.FromArgb(120, UI.T.Accent), Color.FromArgb(0, UI.T.Accent), 90f)) g.FillPath(br, fill);
             }
             using (var pen = new Pen(UI.T.Accent, 2.5f) { LineJoin = LineJoin.Round }) g.DrawCurve(pen, pts, 0.4f);
+            g.ResetClip();
             var last = pts[n - 1];
             using (var b = new SolidBrush(UI.T.Panel)) g.FillEllipse(b, last.X - 6, last.Y - 6, 12, 12);
             using (var b = new SolidBrush(UI.T.Accent)) g.FillEllipse(b, last.X - 4, last.Y - 4, 8, 8);
             string label = Values[n - 1].ToString("0.0");
-            var lr = new Rectangle((int)last.X - 40, (int)last.Y - 30, 34, 20);
+            var lr = new Rectangle((int)last.X - 40, Math.Max(4, (int)last.Y - 30), 34, 20);
             using (var path = UI.Round(lr, 5)) using (var b = new SolidBrush(UI.T.Fg)) g.FillPath(b, path);
             TextRenderer.DrawText(g, label, UI.F(8.5f, FontStyle.Bold), lr, UI.T.Panel, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, "20 min ago", UI.F(8f, FontStyle.Regular), new Point(left, bottom + 10), UI.T.Muted, TextFormatFlags.NoPadding);
