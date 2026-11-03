@@ -229,12 +229,20 @@ namespace SubVulpes
             pluginGrid.Columns[3].FillWeight = 80;
             pluginGrid.Columns[4].FillWeight = 50;
             foreach (DataGridViewColumn col in pluginGrid.Columns) col.SortMode = DataGridViewColumnSortMode.Programmatic;
+            // The columns the user hid stay hidden. The setting holds the names of the hidden columns.
+            string hidden = "," + settings.Get("plugin_hidden", "") + ",";
+            for (int i = 1; i <= 3; i++) pluginGrid.Columns[i].Visible = !hidden.Contains("," + i + ",");
             pluginGrid.ColumnHeaderMouseClick += delegate (object s, DataGridViewCellMouseEventArgs e)
             {
-                if (e.ColumnIndex > 3) return;
-                sortAscending = sortColumn == e.ColumnIndex ? !sortAscending : true;
-                sortColumn = e.ColumnIndex;
-                RebuildPlugins();
+                if (e.Button == MouseButtons.Left)
+                {
+                    if (e.ColumnIndex > 3) return;
+                    sortAscending = sortColumn == e.ColumnIndex ? !sortAscending : true;
+                    sortColumn = e.ColumnIndex;
+                    RebuildPlugins();
+                    return;
+                }
+                PluginColumnMenu(e.ColumnIndex);
             };
             pluginGrid.CellPainting += PaintPluginCell;
             pluginGrid.CellClick += delegate (object s, DataGridViewCellEventArgs e)
@@ -260,6 +268,36 @@ namespace SubVulpes
             bar.SendToBack();
             pluginGrid.BringToFront();
             return page;
+        }
+
+        // Right click on a header: choose the columns and the order, like in Windows Explorer.
+        void PluginColumnMenu(int clicked)
+        {
+            var menu = Dropdown.Menu();
+            menu.ShowCheckMargin = true;
+            for (int i = 1; i <= 3; i++) {
+                var col = pluginGrid.Columns[i];
+                var item = new ToolStripMenuItem(col.HeaderText) { Checked = col.Visible, ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+                item.Click += delegate
+                {
+                    col.Visible = !col.Visible;
+                    var hiddenNow = new List<string>();
+                    for (int k = 1; k <= 3; k++) if (!pluginGrid.Columns[k].Visible) hiddenNow.Add(k.ToString());
+                    settings.Set("plugin_hidden", string.Join(",", hiddenNow.ToArray()));
+                    settings.Save();
+                };
+                menu.Items.Add(item);
+            }
+            if (clicked >= 0 && clicked <= 3) {
+                menu.Items.Add(new ToolStripSeparator());
+                var up = new ToolStripMenuItem("Sort ascending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+                var down = new ToolStripMenuItem("Sort descending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+                up.Click += delegate { sortColumn = clicked; sortAscending = true; RebuildPlugins(); };
+                down.Click += delegate { sortColumn = clicked; sortAscending = false; RebuildPlugins(); };
+                menu.Items.Add(up);
+                menu.Items.Add(down);
+            }
+            menu.Show(Cursor.Position);
         }
 
         void ToggleFromTable(PluginMetadata p)
