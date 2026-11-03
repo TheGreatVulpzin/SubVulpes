@@ -116,19 +116,120 @@ namespace SubVulpesMockup
 
     class StatsList : Card
     {
-        public string[][] Items = { new[] { "Uptime", "00:05:39" }, new[] { "Speed", "59.6 ticks/s" }, new[] { "Players", "1" }, new[] { "Plugins", "5 active" }, new[] { "Memory", "96 MB" } };
+        public string[][] All = {
+            new[] { "Uptime", "00:05:39" }, new[] { "Speed", "59.6 ticks/s" }, new[] { "Players", "1" }, new[] { "Peak players today", "3" },
+            new[] { "Round", "3 · 4:12 left" }, new[] { "Network out", "18 KB/s" }, new[] { "Problems (last hour)", "1 error, 2 warnings" },
+            new[] { "Last crash", "None" }, new[] { "Started at", "20:50" }, new[] { "Address", "192.168.0.10:27584" } };
+        public bool[] On = { true, true, true, false, true, false, true, false, false, false };
         public StatsList() : base("", "", "") { }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; Frame(g, Width, Height, Parent);
-            int rowH = (Height - 8) / Items.Length;
-            for (int i = 0; i < Items.Length; i++)
+            var items = new List<string[]>(); for (int i = 0; i < All.Length; i++) if (On[i]) items.Add(All[i]);
+            if (items.Count == 0) return;
+            int rowH = (Height - 8) / items.Count;
+            for (int i = 0; i < items.Count; i++)
             {
                 int y = 4 + i * rowH;
-                TextRenderer.DrawText(g, Items[i][0], UI.F(9.5f, FontStyle.Regular), new Rectangle(16, y, Width / 2, rowH), UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(g, Items[i][1], UI.F(13f, FontStyle.Bold), new Rectangle(Width / 2 - 16, y, Width / 2, rowH), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                if (i < Items.Length - 1) using (var pen = new Pen(Color.FromArgb(110, UI.T.Line))) g.DrawLine(pen, 14, y + rowH, Width - 16, y + rowH);
+                TextRenderer.DrawText(g, items[i][0], UI.F(9.5f, FontStyle.Regular), new Rectangle(16, y, Width - 32, rowH), UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, items[i][1], UI.F(12f, FontStyle.Bold), new Rectangle(16, y, Width - 44, rowH), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                if (i < items.Count - 1) using (var pen = new Pen(Color.FromArgb(110, UI.T.Line))) g.DrawLine(pen, 14, y + rowH, Width - 16, y + rowH);
             }
+        }
+    }
+
+    class GearButton : Control
+    {
+        bool hot;
+        public GearButton() { Size = new Size(24, 24); Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        protected override void OnMouseEnter(EventArgs e) { hot = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hot = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Panel);
+            Color c = hot ? UI.T.Accent : UI.T.Muted;
+            using (var pen = new Pen(c, 1.6f)) using (var fill = new SolidBrush(UI.T.Panel))
+            {
+                int[] ys = { 6, 12, 18 }; int[] xs = { 8, 15, 10 };
+                for (int i = 0; i < 3; i++) { g.DrawLine(pen, 4, ys[i], 20, ys[i]); g.FillEllipse(fill, xs[i] - 2.5f, ys[i] - 2.5f, 5, 5); g.DrawEllipse(pen, xs[i] - 2.5f, ys[i] - 2.5f, 5, 5); }
+            }
+        }
+    }
+
+    class DropColors : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground { get { return UI.T.Panel; } }
+        public override Color ImageMarginGradientBegin { get { return UI.T.Panel; } }
+        public override Color ImageMarginGradientMiddle { get { return UI.T.Panel; } }
+        public override Color ImageMarginGradientEnd { get { return UI.T.Panel; } }
+        public override Color MenuBorder { get { return UI.T.Line; } }
+        public override Color MenuItemBorder { get { return UI.T.Chip; } }
+        public override Color MenuItemSelected { get { return UI.T.Chip; } }
+        public override Color MenuItemSelectedGradientBegin { get { return UI.T.Chip; } }
+        public override Color MenuItemSelectedGradientEnd { get { return UI.T.Chip; } }
+        public override Color CheckBackground { get { return UI.T.Chip; } }
+        public override Color CheckSelectedBackground { get { return UI.T.Chip; } }
+        public override Color CheckPressedBackground { get { return UI.T.Chip; } }
+        public override Color ButtonSelectedBorder { get { return UI.T.Chip; } }
+    }
+
+    class Dropdown : Control
+    {
+        public readonly List<object> Items = new List<object>();
+        int sel = -1; bool hot, open;
+        public event EventHandler SelectedIndexChanged;
+        public Dropdown(int width) { Width = width; Height = 28; Margin = new Padding(0); Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular); SetStyle(UI.Paint, true); }
+        public int SelectedIndex
+        {
+            get { return sel; }
+            set { if (sel == value) return; sel = value; Invalidate(); if (SelectedIndexChanged != null) SelectedIndexChanged(this, EventArgs.Empty); }
+        }
+        public static ContextMenuStrip Menu()
+        {
+            return new ContextMenuStrip { ShowImageMargin = false, Font = UI.F(9.5f, FontStyle.Regular), BackColor = UI.T.Panel, Renderer = new ToolStripProfessionalRenderer(new DropColors()) { RoundedEdges = false } };
+        }
+        protected override void OnMouseEnter(EventArgs e) { hot = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hot = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnClick(EventArgs e)
+        {
+            var menu = Menu(); menu.MinimumSize = new Size(Width, 0);
+            for (int i = 0; i < Items.Count; i++)
+            {
+                int idx = i;
+                var it = new ToolStripMenuItem(Items[i].ToString()) { ForeColor = i == sel ? UI.T.Accent : UI.T.Fg, Padding = new Padding(2, 5, 2, 5) };
+                if (i == sel) it.Font = UI.F(9.5f, FontStyle.Bold);
+                it.Click += delegate { SelectedIndex = idx; };
+                menu.Items.Add(it);
+            }
+            menu.Closed += delegate { open = false; Invalidate(); };
+            open = true; Invalidate(); menu.Show(this, new Point(0, Height + 2));
+            base.OnClick(e);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            var r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var path = UI.Round(r, 6)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(hot || open ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            string text = sel >= 0 && sel < Items.Count ? Items[sel].ToString() : "";
+            TextRenderer.DrawText(g, text, Font, new Rectangle(10, 0, Width - 32, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            using (var pen = new Pen(UI.T.Muted, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                g.DrawLines(pen, new[] { new Point(Width - 20, Height / 2 - 2), new Point(Width - 15, Height / 2 + 3), new Point(Width - 10, Height / 2 - 2) });
+        }
+    }
+
+    class NavItem : Control
+    {
+        public bool Selected;
+        public NavItem(string text) { Text = text; Height = 36; Dock = DockStyle.Top; Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            if (Selected)
+            {
+                using (var path = UI.Round(new Rectangle(0, 2, Width - 1, Height - 5), 6)) using (var b = new SolidBrush(UI.T.Chip)) g.FillPath(b, path);
+                using (var b = new SolidBrush(UI.T.Accent)) g.FillRectangle(b, 0, 9, 3, Height - 18);
+            }
+            TextRenderer.DrawText(g, Text, Selected ? UI.F(9.5f, FontStyle.Bold) : UI.F(9.5f, FontStyle.Regular), new Rectangle(14, 0, Width - 20, Height), Selected ? UI.T.Fg : UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -180,8 +281,8 @@ namespace SubVulpesMockup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var p = new Pen(UI.T.Muted)) g.DrawEllipse(p, 1, 1, Width - 3, Height - 3);
-            TextRenderer.DrawText(g, "?", UI.F(8.5f, FontStyle.Bold), new Rectangle(0, 0, Width, Height), UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var b = new SolidBrush(UI.T.Muted)) g.FillEllipse(b, 2, 2, Width - 5, Height - 5);
+            using (var b = new SolidBrush(UI.T.Panel)) { g.FillEllipse(b, Width / 2f - 1.5f, 5.5f, 3, 3); g.FillRectangle(b, Width / 2f - 1.25f, 10, 2.5f, 6); }
         }
     }
 
@@ -252,14 +353,14 @@ namespace SubVulpesMockup
     class StateLabel : Control
     {
         public string Word = "Running";
-        public StateLabel() { Height = 34; Width = 32 + TextRenderer.MeasureText("Running", UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 16; SetStyle(UI.Paint, true); }
+        public StateLabel() { Height = 34; Width = 30 + TextRenderer.MeasureText("Running", UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 14; SetStyle(UI.Paint, true); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(Color.FromArgb(38, UI.T.Ok))) g.FillPath(b, path);
-            using (var b = new SolidBrush(UI.T.Ok)) g.FillEllipse(b, 15, r.Height / 2 - 5, 10, 10);
-            TextRenderer.DrawText(g, Word, UI.F(10.5f, FontStyle.Bold), new Rectangle(32, 0, r.Width - 32, r.Height), UI.T.Ok, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var b = new SolidBrush(UI.T.Ok)) g.FillEllipse(b, 13, r.Height / 2 - 5, 10, 10);
+            TextRenderer.DrawText(g, Word, UI.F(10.5f, FontStyle.Bold), new Rectangle(30, 0, r.Width - 30, r.Height), UI.T.Ok, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -305,9 +406,9 @@ namespace SubVulpesMockup
                 t.Click += delegate { ShowPage(index); };
                 tabs.Insert(0, t); tabBar.Controls.Add(t);
             }
-            pages.Add(ServerPage()); pages.Add(PluginsPage()); pages.Add(SettingsHost()); pages.Add(HelpPage());
+            pages.Add(ServerPage()); pages.Add(PluginsHost()); pages.Add(SettingsHost()); pages.Add(HelpPage());
             foreach (var p in pages) { p.Dock = DockStyle.Fill; p.Padding = new Padding(16, 12, 16, 10); Controls.Add(p); }
-            pages[2].Padding = Padding.Empty; pages[0].Padding = new Padding(16, 12, 16, 12);
+            pages[1].Padding = Padding.Empty; pages[2].Padding = Padding.Empty; pages[0].Padding = new Padding(16, 12, 16, 12);
             Controls.Add(tabBar);
             tabBar.SendToBack(); foreach (var p in pages) p.BringToFront();
             ShowPage(0); SetTheme(Theme.Light);
@@ -338,7 +439,7 @@ namespace SubVulpesMockup
             UI.T = t; BackColor = t.Win;
             if (IsHandleCreated) { int dark = t == Theme.Dark ? 1 : 0; if (DwmSetWindowAttribute(Handle, 20, ref dark, 4) != 0) DwmSetWindowAttribute(Handle, 19, ref dark, 4); Size = new Size(Width + 1, Height); Size = new Size(Width - 1, Height); }
             tabBar.BackColor = t.Bar;
-            Apply(this); FillConsole(); RenderDetail(); Invalidate(true);
+            Apply(this); FillConsole(); RenderDetail(); RenderHelp(); Invalidate(true);
         }
 
         void Apply(Control c)
@@ -347,15 +448,28 @@ namespace SubVulpesMockup
             if ((c.Tag as string) == "subbar") { c.BackColor = UI.T.SubBar; foreach (Control k in c.Controls) k.Invalidate(); return; }
             if ((c.Tag as string) == "line") { c.BackColor = UI.T.Line; return; }
             if (c is TextBox) { c.BackColor = UI.T.Panel; c.ForeColor = (c.Tag as string) == "hint" && c.Text == "Search…" ? UI.T.Muted : UI.T.Fg; }
+            else if (c is RichTextBox && (c.Tag as string) == "doc") { c.BackColor = UI.T.Panel; c.ForeColor = UI.T.Fg; }
             else if (c is RichTextBox) { c.BackColor = UI.T.Console; c.ForeColor = UI.T.ConsoleFg; }
-            else if (c is ComboBox) { c.BackColor = UI.T.Panel; c.ForeColor = UI.T.Fg; }
             else if (c is DataGridView) StyleGrid((DataGridView)c);
             else if (c is Label && (c.Tag as string) == "chip") { c.BackColor = UI.T.Chip; c.ForeColor = UI.T.Fg; }
             else if (c is Label) { c.BackColor = Color.Transparent; c.ForeColor = (c.Tag as string) == "muted" ? UI.T.Muted : (c.Tag as string) == "ok" ? UI.T.Ok : (c.Tag as string) == "warn" ? UI.T.Warn : UI.T.Fg; }
             else if (c is FlowLayoutPanel || c is Panel || c is TableLayoutPanel) c.BackColor = (c.Tag as string) == "panel" ? UI.T.Panel : UI.T.Win;
             else if (c is RadioButton) { c.BackColor = Color.Transparent; c.ForeColor = UI.T.Fg; }
+            ThemeScroll(c);
             foreach (Control k in c.Controls) Apply(k);
             c.Invalidate();
+        }
+
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr hwnd, string app, string idlist);
+        readonly HashSet<Control> scrollHooked = new HashSet<Control>();
+
+        // Thin modern scrollbars of Windows 10, in dark mode too.
+        void ThemeScroll(Control c)
+        {
+            bool scrolls = c is RichTextBox || c is DataGridView || (c is Panel && ((Panel)c).AutoScroll);
+            if (!scrolls) return;
+            if (scrollHooked.Add(c)) c.HandleCreated += delegate { SetWindowTheme(c.Handle, UI.T == Theme.Dark ? "DarkMode_Explorer" : "Explorer", null); };
+            if (c.IsHandleCreated) SetWindowTheme(c.Handle, UI.T == Theme.Dark ? "DarkMode_Explorer" : "Explorer", null);
         }
 
         void StyleGrid(DataGridView g)
@@ -411,7 +525,7 @@ namespace SubVulpesMockup
                 timer.Tick += delegate { saved.Visible = false; timer.Stop(); };
                 EventHandler show = delegate { saved.Visible = true; timer.Stop(); timer.Start(); };
                 if (input is TextBox) ((TextBox)input).TextChanged += show;
-                else if (input is ComboBox) ((ComboBox)input).SelectedIndexChanged += show;
+                else if (input is Dropdown) ((Dropdown)input).SelectedIndexChanged += show;
                 else if (input is Switch) ((Switch)input).Changed += show;
             }
         }
@@ -431,9 +545,9 @@ namespace SubVulpesMockup
             return f;
         }
 
-        static ComboBox Combo(int width, params object[] items)
+        static Dropdown Combo(int width, params object[] items)
         {
-            var c = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = width, Margin = new Padding(0) }; c.Items.AddRange(items); c.SelectedIndex = 0; return c;
+            var c = new Dropdown(width); c.Items.AddRange(items); c.SelectedIndex = 0; return c;
         }
 
         // ---- server page
@@ -457,12 +571,34 @@ namespace SubVulpesMockup
             toolbar.Controls.Add(rightFlow); toolbar.Controls.Add(stateHolder);
             page.Controls.Add(toolbar, 0, 0);
 
-            var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" }; statsRow = stats;
+            var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" };
             stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-            var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Uptime is the time since the server started. Speed is how many game steps (ticks) the server runs each second. About 60 is normal. Players does not count bots. Plugins is how many plugins are active. Memory is how much memory the server uses.");
+            var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Uptime is the time since the server started. Speed is how many game steps (ticks) the server runs each second. About 60 is normal. Players does not count bots.");
+            var gear = new GearButton(); list.Controls.Add(gear);
+            list.Resize += delegate { gear.Location = new Point(list.Width - 32, 8); };
+            UI.Tips.SetToolTip(gear, "Choose what this list shows.");
+            gear.Click += delegate
+            {
+                var menu = Dropdown.Menu(); menu.ShowCheckMargin = true;
+                for (int i = 0; i < list.All.Length; i++)
+                {
+                    int idx = i;
+                    var it = new ToolStripMenuItem(list.All[i][0]) { Checked = list.On[i], ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+                    it.Click += delegate
+                    {
+                        bool others = false; for (int k = 0; k < list.On.Length; k++) if (k != idx && list.On[k]) others = true;
+                        if (others || !list.On[idx]) list.On[idx] = !list.On[idx];
+                        list.Invalidate();
+                    };
+                    menu.Items.Add(it);
+                }
+                menu.Show(gear, new Point(0, gear.Height));
+            };
             stats.Controls.Add(list, 0, 0);
             var chart = new AreaChart { Flat = true }; UI.Tips.SetToolTip(chart, "The speed of the server in each of the last 20 minutes."); stats.Controls.Add(chart, 1, 0);
-            page.Controls.Add(stats, 0, 1);
+            var dash = new Panel { Dock = DockStyle.Fill, Tag = "panel" }; statsRow = dash;
+            dash.Controls.Add(stats); dash.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, Tag = "line" });
+            page.Controls.Add(dash, 0, 1);
 
             var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 6, 0, 4), Tag = "panel" };
             bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -621,12 +757,65 @@ namespace SubVulpesMockup
         }
 
         // ---- plugins
+        readonly List<Control> pluginSubPages = new List<Control>();
+        readonly List<TabLabel> pluginSubTabs = new List<TabLabel>();
+
+        Control PluginsHost()
+        {
+            var host = new TableLayoutPanel { ColumnCount = 1, RowCount = 2 };
+            host.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
+            var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
+            string[] names = { "Installed", "Browse" };
+            Control[] subs = { PluginsPage(), BrowsePage() };
+            for (int i = names.Length - 1; i >= 0; i--)
+            {
+                var tab = new TabLabel(names[i]) { Selected = i == 0, Sub = true }; int index = i;
+                tab.Click += delegate { for (int k = 0; k < pluginSubPages.Count; k++) { pluginSubPages[k].Visible = k == index; pluginSubTabs[k].Selected = k == index; pluginSubTabs[k].Invalidate(); } };
+                pluginSubTabs.Insert(0, tab); strip.Controls.Add(tab);
+                subs[i].Dock = DockStyle.Fill; subs[i].Visible = i == 0; area.Controls.Add(subs[i]); pluginSubPages.Insert(0, subs[i]);
+            }
+            host.Controls.Add(strip, 0, 0); host.Controls.Add(area, 0, 1);
+            return host;
+        }
+
+        Control BrowsePage()
+        {
+            var page = new Panel();
+            var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
+            var search = HintBox(260); search.Location = new Point(0, 9);
+            bar.Controls.Add(search);
+            var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Tag = "panel" };
+            string[][] catalog = {
+                new[] { "Bans", "Ban players by account or address, with an end date.", "Official", "0.1.0", "Install" },
+                new[] { "Message of the Day", "Shows a message to each player who joins.", "Official", "0.1.0", "Install" },
+                new[] { "Audit Log", "Writes who used which admin command, and when.", "Official", "0.1.0", "Install" },
+                new[] { "MIDI Jukebox", "Play MIDI music with any game sound.", "Official", "0.2.0", "Installed" },
+                new[] { "Flight", "Lets players fly with a key.", "Community", "0.3.1", "Install" } };
+            for (int i = catalog.Length - 1; i >= 0; i--)
+            {
+                var c = catalog[i];
+                var row = new Panel { Dock = DockStyle.Top, Height = 78, Tag = "panel" };
+                var name = L(c[0], true, false); name.Location = new Point(16, 14);
+                var chip = Chip(c[2]); chip.Location = new Point(name.PreferredWidth + 28, 12);
+                var desc = L(c[1], false, true); desc.Location = new Point(16, 42);
+                var ver = L("v" + c[3], false, true); ver.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                var btn = new FlatButton(c[4]) { Anchor = AnchorStyles.Top | AnchorStyles.Right, Enabled = c[4] == "Install" };
+                btn.Location = new Point(row.Width - btn.Width - 16, 22); row.Resize += delegate { btn.Location = new Point(row.Width - btn.Width - 16, 22); ver.Location = new Point(btn.Left - ver.Width - 16, 30); };
+                row.Controls.AddRange(new Control[] { name, chip, desc, ver, btn, new Panel { Dock = DockStyle.Bottom, Height = 1, Tag = "line" } });
+                scroll.Controls.Add(row);
+            }
+            page.Controls.Add(scroll); page.Controls.Add(bar); bar.SendToBack(); scroll.BringToFront();
+            return page;
+        }
+
         Control PluginsPage()
         {
             var page = new Panel();
             var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
             var barButtons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
-            barButtons.Controls.Add(new FlatButton("Refresh") { Margin = new Padding(0) }); barButtons.Controls.Add(new FlatButton("Install plugin…"));
+            barButtons.Controls.Add(new FlatButton("Refresh") { Margin = new Padding(0) }); barButtons.Controls.Add(new FlatButton("Install from File…"));
+            var columnsBtn = new FlatButton("Columns"); barButtons.Controls.Add(columnsBtn);
             var pluginSearch = HintBox(260); pluginSearch.Location = new Point(0, 9);
             bar.Controls.Add(barButtons); bar.Controls.Add(pluginSearch);
             detail = new Panel { Dock = DockStyle.Right, Width = 380, Padding = new Padding(16), Tag = "panel", AutoScroll = true };
@@ -665,6 +854,19 @@ namespace SubVulpesMockup
             };
             grid.SelectionChanged += delegate { if (grid.CurrentRow != null) { sel = grid.CurrentRow.Index; RenderDetail(); } };
             grid.CurrentCell = grid.Rows[sel].Cells[0];
+            grid.Columns[3].Visible = false; grid.Columns[4].Visible = false;
+            columnsBtn.Click += delegate
+            {
+                var menu = Dropdown.Menu(); menu.ShowCheckMargin = true;
+                for (int i = 1; i <= 4; i++)
+                {
+                    var col = grid.Columns[i];
+                    var it = new ToolStripMenuItem(col.HeaderText) { Checked = col.Visible, ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+                    it.Click += delegate { col.Visible = !col.Visible; };
+                    menu.Items.Add(it);
+                }
+                menu.Show(columnsBtn, new Point(0, columnsBtn.Height + 2));
+            };
             page.Controls.Add(grid); page.Controls.Add(drop); page.Controls.Add(sp); page.Controls.Add(detail); page.Controls.Add(bar);
             bar.SendToBack(); grid.BringToFront();
             return page;
@@ -719,27 +921,89 @@ namespace SubVulpesMockup
         // ---- help
         Control HelpPage()
         {
-            var page = new Panel { AutoScroll = true };
-            var t = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
-            string[][] topics = {
-                new[] { "Speed (ticks/s)", "How many game steps (ticks) the server runs each second. About 60 is normal. A lower number means that the server is slow." },
-                new[] { "Stop and Kill", "Stop asks the server to save and close. Kill ends the server at once. Use Kill only if Stop does not work." },
-                new[] { "Applies at the next start", "The setting is saved. The server uses it only after the next start." },
-                new[] { "Events and Console", "The console shows every line that the server writes. Events show the main things that happened, such as a start, a plugin that needs a restart, or a slow minute." },
-                new[] { "Capture mode", "Chooses what the launcher records while the server runs. Normal records the speed and saves a small memory dump if the server crashes or freezes." },
-                new[] { "Memory dump", "A file with a copy of the server memory. Send it to the developers to find the cause of a crash or a freeze." },
-                new[] { "Plugin risk", "Low: reads data. High: changes the game. Highest: runs inside the server with full access to it. Only turn on plugins that you trust." },
-                new[] { "Logs", "Each time that you start the server, the launcher saves a log folder. You can find old logs in the Server tab, under Past Logs." } };
-            foreach (var topic in topics)
+            // The real launcher would read these pages from the .md files in the docs folder of the server. They are built in here for the mockup.
+            var page = new Panel { Tag = "panel" };
+            var nav = new Panel { Dock = DockStyle.Left, Width = 240, Padding = new Padding(12, 12, 12, 12), Tag = "panel" };
+            var docHolder = new Panel { Dock = DockStyle.Fill, Padding = new Padding(36, 24, 36, 16), Tag = "panel" };
+            helpDoc = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Tag = "doc", Cursor = Cursors.Default };
+            docHolder.Controls.Add(helpDoc);
+            var search = HintBox(214); search.Dock = DockStyle.Top;
+            var navList = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
+            for (int i = HelpDocs.Length - 1; i >= 0; i--)
             {
-                var card = new Panel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(14, 10, 14, 10), Margin = new Padding(0, 0, 0, 10), Tag = "panel", MinimumSize = new Size(0, 60) };
-                var inner = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Tag = "panel" };
-                var h = L(topic[0], true, false); h.Margin = new Padding(0, 0, 0, 4); inner.Controls.Add(h);
-                var b = L(topic[1], false, true); b.MaximumSize = new Size(820, 0); inner.Controls.Add(b);
-                card.Controls.Add(inner); t.Controls.Add(card);
+                int idx = i; var item = new NavItem(HelpDocs[i][0]); helpNav.Insert(0, item);
+                item.Click += delegate { helpIndex = idx; RenderHelp(); };
+                navList.Controls.Add(item);
             }
-            page.Controls.Add(t);
+            search.TextChanged += delegate
+            {
+                string term = search.Text == "Search…" ? "" : search.Text.Trim().ToLowerInvariant();
+                for (int i = 0; i < helpNav.Count; i++) helpNav[i].Visible = term.Length == 0 || HelpDocs[i][0].ToLowerInvariant().Contains(term) || HelpDocs[i][1].ToLowerInvariant().Contains(term);
+            };
+            var gap = new Panel { Dock = DockStyle.Top, Height = 10, Tag = "panel" };
+            nav.Controls.Add(navList); nav.Controls.Add(gap); nav.Controls.Add(search);
+            var divider = new Panel { Dock = DockStyle.Left, Width = 1, Tag = "line" };
+            page.Controls.Add(docHolder); page.Controls.Add(divider); page.Controls.Add(nav);
+            docHolder.BringToFront();
+            RenderHelp();
             return page;
+        }
+
+        RichTextBox helpDoc; int helpIndex; readonly List<NavItem> helpNav = new List<NavItem>();
+
+        static readonly string[][] HelpDocs = {
+            new[] { "Getting Started", "# Getting Started\nThis launcher starts and watches your SubVulpes server.\n## First start\n- Open **Settings** and pick a server folder.\n- Set a name and an admin password.\n- Go to **Server** and press **Start**.\n## Join the game\nPlayers join with the address of your computer and the port in **Settings**. Open the UDP port in your router.\n" },
+            new[] { "The Server Page", "# The Server Page\nThe top row shows the state of the server and the buttons.\n- **Start** starts the server.\n- **Stop** asks the server to save and close.\n- **Restart** stops the server and starts it again.\n- **Kill** ends the server at once. Use it only if Stop does not work.\n## Speed\nThe server runs about 60 steps (ticks) each second. A much lower number means that the server is slow.\n## The list on the left\nPress the sliders icon to choose what the list shows.\n" },
+            new[] { "Plugins", "# Plugins\nPlugins add features to the server.\n## Risk\n- **low**: reads data.\n- **high**: changes the game.\n- **highest**: runs inside the server with full access to it.\nTurn on only plugins that you trust.\n## Install\nOpen **Browse** to find plugins, or use `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.\n" },
+            new[] { "Settings", "# Settings\nThe launcher saves each change at once.\n## Applies at the next start\nThe setting is saved. The server uses it only after the next start.\n## Capture mode\nChooses what the launcher records while the server runs. **Normal** records the speed.\n## Memory dump\nA file with a copy of the server memory. Send it to the developers to find the cause of a crash or a freeze.\n" },
+            new[] { "Problems", "# Problems\n## The server does not start\nRead the last lines in the console. Make sure that no other server uses the same port.\n## The server crashes\nThe launcher saves a small memory dump in the log folder. Send it with the log.\n## Logs\nEach start of the server makes a new log folder. Old logs are in the Server tab.\n```\nlogs\\2026-11-02_20-50\n```\n" } };
+
+        void RenderHelp()
+        {
+            for (int i = 0; i < helpNav.Count; i++) { helpNav[i].Selected = i == helpIndex; helpNav[i].Invalidate(); }
+            var box = helpDoc; box.Clear(); bool code = false;
+            foreach (string raw in HelpDocs[helpIndex][1].Split('\n'))
+            {
+                string line = raw.TrimEnd();
+                if (line.StartsWith("```")) { code = !code; continue; }
+                if (line.Length == 0) continue;
+                if (code) { Put(box, "    " + line + "\n", "Consolas", 10f, FontStyle.Regular, UI.T.Fg, UI.T.Chip, 0); continue; }
+                if (line.StartsWith("# ")) Put(box, line.Substring(2) + "\n", "Segoe UI", 20f, FontStyle.Bold, UI.T.Fg, Color.Empty, 8);
+                else if (line.StartsWith("## ")) { Put(box, "\n", "Segoe UI", 6f, FontStyle.Regular, UI.T.Fg, Color.Empty, 0); Put(box, line.Substring(3) + "\n", "Segoe UI", 13f, FontStyle.Bold, UI.T.Fg, Color.Empty, 4); }
+                else if (line.StartsWith("- ")) Inline(box, "•  " + line.Substring(2) + "\n", 6, 16);
+                else Inline(box, line + "\n", 6, 0);
+            }
+            box.SelectionStart = 0; box.SelectionLength = 0;
+        }
+
+        static void Put(RichTextBox box, string text, string font, float size, FontStyle style, Color fg, Color bg, int after)
+        {
+            box.SelectionStart = box.TextLength; box.SelectionLength = 0;
+            box.SelectionFont = new Font(font, size, style, GraphicsUnit.Point); box.SelectionColor = fg;
+            box.SelectionBackColor = bg.IsEmpty ? box.BackColor : bg; box.SelectionIndent = 0; box.SelectionHangingIndent = 0;
+            box.AppendText(text);
+            if (after > 0) { box.SelectionStart = box.TextLength; box.SelectionFont = new Font(font, after, FontStyle.Regular, GraphicsUnit.Point); box.AppendText("\n"); }
+        }
+
+        // Writes text with **bold** and `code` marks.
+        static void Inline(RichTextBox box, string text, int after, int indent)
+        {
+            bool bold = false, code = false; var part = new System.Text.StringBuilder();
+            Action flush = delegate
+            {
+                if (part.Length == 0) return;
+                box.SelectionStart = box.TextLength; box.SelectionLength = 0; box.SelectionIndent = indent; box.SelectionHangingIndent = indent > 0 ? 14 : 0;
+                box.SelectionFont = code ? new Font("Consolas", 9.5f, FontStyle.Regular) : UI.F(10.5f, bold ? FontStyle.Bold : FontStyle.Regular);
+                box.SelectionColor = UI.T.Fg; box.SelectionBackColor = code ? UI.T.Chip : box.BackColor;
+                box.AppendText(part.ToString()); part.Length = 0;
+            };
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (text[i] == '*' && i + 1 < text.Length && text[i + 1] == '*') { flush(); bold = !bold; i++; }
+                else if (text[i] == '`') { flush(); code = !code; }
+                else part.Append(text[i]);
+            }
+            flush();
         }
     }
 
