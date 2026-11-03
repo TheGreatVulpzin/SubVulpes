@@ -1,11 +1,11 @@
 # Plugin store plan
 
-This page plans the plugin store: the `SubVulpes-Plugins` repository, the catalog index and the launcher client.
+This page plans the plugin store: the `SubVulpes-Workshop` repository, the catalog index and the launcher client. The Workshop holds three kinds of content: plugins (server), packages (game data) and mods (client, OverRosa).
 Status on 2026-11-03: planned, not started. The launcher already has the Catalog tab and reads a local `catalog.json`.
 
 ## Decisions of the owner
 
-1. The repository is `SubVulpes-Plugins`. It holds plugins only. The source of the host and the SDK stays in `SubVulpes`.
+1. The repository is `SubVulpes-Workshop`. It holds content (plugins, packages and mods), never the host or the SDK. Their source stays in `SubVulpes`.
 2. GitHub builds the packages. A person never uploads a `.svplugin` or a hash by hand.
 3. The launcher gets the catalog from the repository. It shows thumbnails from the repository and keeps a cache.
 4. The icons of the official plugins ship inside the launcher. Other icons come from the repository.
@@ -13,16 +13,23 @@ Status on 2026-11-03: planned, not started. The launcher already has the Catalog
 6. A plugin from the repository installs with one click. An official plugin gets no review window. A plugin of the community gets a short card with its capabilities and an Install button.
 7. A file that the owner loads from outside the repository keeps the full review window. That window gets the new look.
 8. The server keeps checking approvals. The launcher writes the approval by itself when the hash of the package matches the index.
+9. The launcher never restarts the server by itself. An install while the server runs waits, and it applies at the next start that the owner makes by hand.
+10. Two seals: `official/` holds the work of the owner and Murilo, and `community/` holds the work of everyone else.
 
 ## Repository layout
 
 ```
-SubVulpes-Plugins/
-  plugins/<id>/            source, plugin.ini, icon.png, screenshots/, README.md
-  tools/                   the build script and the index generator
-  .github/workflows/       the Action that builds and publishes
-  CONTRIBUTING.md          how to add a plugin by a pull request
+SubVulpes-Workshop/
+  official/plugins/<id>/     official/packages/<id>/     official/mods/<id>/
+  community/plugins/<id>/    community/packages/<id>/    community/mods/<id>/
+  tools/                     the build script and the index generator
+  .github/workflows/         the Action that builds and publishes
+  .github/CODEOWNERS         only the owner and Murilo approve changes in official/
+  CONTRIBUTING.md            how to add content by a pull request
 ```
+
+Each folder of content holds its manifest, its source or files, `icon.png`, `screenshots/` and `README.md`.
+The seal (Official or Community) comes from the top folder. It never comes from the id.
 
 The Action publishes the result to the branch `dist`. It replaces that branch at each build, so the history does not grow with binaries.
 
@@ -50,7 +57,9 @@ The Action reads `plugins/<id>/plugin.ini`, builds the package, computes the SHA
       "description": "Bans players by account or by address.",
       "author": "Vulpzin",
       "version": "0.1.0",
+      "kind": "plugin",
       "source": "Official",
+      "license": "GPL-3.0",
       "runtime": "native",
       "capabilities": ["read", "write", "storage"],
       "min_api": 1,
@@ -68,11 +77,13 @@ The Action reads `plugins/<id>/plugin.ini`, builds the package, computes the SHA
 | --- | --- |
 | `format` | The number of this format. The launcher refuses a number that it does not know. |
 | `id`, `name`, `description`, `author`, `version` | As in `plugin.ini`. `author` may be empty. |
-| `source` | `Official` or `Community`. The Action sets it from the folder of the plugin, never from the id. |
-| `runtime` | `native`, `lua` or `wasm`. |
-| `capabilities` | The capabilities that the plugin asks for. The launcher shows them as chips. |
-| `min_api` | The lowest plugin API version that the plugin needs. The launcher hides a plugin that the server cannot run. |
-| `needs` | Ids of plugins that must be installed first. |
+| `kind` | `plugin`, `package` or `mod`. The launcher filters the Catalog tab by it. |
+| `source` | `Official` or `Community`. The Action sets it from the top folder. |
+| `license` | The license of the content. The CI refuses content without one. |
+| `runtime` | For a plugin only: `native`, `lua` or `wasm`. |
+| `capabilities` | For a plugin: the capabilities that it asks for. The launcher shows them as chips. |
+| `min_api` | The lowest API version that the content needs. The launcher hides content that the server or the client cannot use. |
+| `needs` | Ids of content that must be installed first. |
 | `package` | The file, its SHA-256 and its size. The launcher checks both after the download. |
 | `icon`, `thumbs`, `images` | Paths in `dist`. A thumbnail is small and light. An image loads only when the user opens the plugin page. |
 
@@ -83,7 +94,7 @@ The local `catalog.json` of today is the same list without the new fields. The l
 1. At start, and when the user opens the Catalog tab, it downloads `index.json` from `dist`. It keeps the last good copy in a cache folder. Without a network, it shows the cache.
 2. The list shows the icon and the thumbnails from the cache. It downloads a missing thumbnail once.
 3. The plugin page loads the full images when the user opens it, and caches them.
-4. Install downloads the package, checks the size and the SHA-256, and runs the installer script. The approval is written when the hash matches the index.
+4. Install downloads the package and checks the size and the SHA-256. With the server stopped, it runs the installer script and writes the approval, because the hash matches the index. With the server running, it keeps the package as a pending install and tells the user that the plugin applies at the next start. The launcher runs the pending installs just before the next start. It never restarts the server.
 5. The Catalog tab marks a plugin that has a newer version than the installed one, and offers Update.
 6. The launcher reuses the update code that exists (`ReleaseUpdate`: the request, the download and the checksum).
 
@@ -103,8 +114,8 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 
 - The Action builds each package from the source in the repository. The hash comes from that build.
 - The launcher downloads only over HTTPS from the one address of the repository.
-- The main branch needs a pull request and the owner approves it. The owners use two-factor sign-in.
-- Open decision: sign `index.json` with a key whose public part is built into the launcher. This also protects the catalog if the repository is taken over. Decide before the first public release of the catalog.
+- The main branch needs a pull request. The owner and Murilo approve it, and both use two-factor sign-in.
+- The index is signed. The Action seals `index.json` with a secret key and writes `index.json.sig`. The launcher holds the public part of the key. If the file changes, the seal does not match and the launcher refuses the catalog. If the key is lost, a new launcher version brings a new public key. Decided on 2026-11-03: the index is signed from format 1.
 
 ## Order of work
 
@@ -116,10 +127,17 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 6. Give the review window the new look. Keep it for files from outside the repository.
 7. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
 
+## Answers of 2026-11-03
+
+- **License.** The repository and the official content use GPL-3.0, as the project does. A community item declares its license in the manifest (`license=`). The CI refuses an item without one.
+- **Game files.** The Workshop may hold game data and assets in packages and mods, as the server zip already does. It never holds a game executable. The owner accepts this. Content that is not yours needs the permission of its owner.
+- **Server zip.** It keeps `sv.status`, `sv.permissions` and `sv.admcmd`. `sv.jukebox` and `sv.testroom` move to the Workshop as Official. This replaces decision 10 of the plan.
+- **Install while the server runs.** No restart by the launcher. See decision 9 above.
+- **Community rules.** The owner or Murilo approves each pull request. The CI checks the manifest, the license, the size and a build from source. A native plugin of the community enters only after a person reads its C code. A Lua plugin is the easy way.
+- **Name.** `SubVulpes-Workshop`.
+- **Signature.** The index is signed from format 1 (`index.json.sig`, ed25519). The secret key lives in the secrets of the GitHub repository. The public key is built into the launcher.
+
 ## Open questions
 
-- The license of the plugins repository, and the license of each plugin.
-- Does `sv.status` stay in the server zip? Do `sv.jukebox` and `sv.testroom` move to the store?
-- Do we sign the index? See the integrity part above.
-- Does a plugin install while the server runs? Today the launcher stops the server first (see the idea in `docs/ideas.md`).
-- Rules for a community plugin: who reviews the pull request, and what the CI checks (the manifest, the capabilities, a build from source).
+- The manifest of a package and of a mod: what they list. Decide when the first package or mod comes.
+- How the launcher installs a package and a mod. A plugin goes to `plugins/`. A package and a mod need their own folders and rules.
