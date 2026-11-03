@@ -116,7 +116,7 @@ namespace SubVulpesMockup
 
     class StatsList : Card
     {
-        public string[][] Items = { new[] { "Uptime", "00:05:39" }, new[] { "Speed", "59.6 ticks/s" }, new[] { "Players", "1" } };
+        public string[][] Items = { new[] { "Uptime", "00:05:39" }, new[] { "Speed", "59.6 ticks/s" }, new[] { "Players", "1" }, new[] { "Plugins", "5 active" }, new[] { "Memory", "96 MB" } };
         public StatsList() : base("", "", "") { }
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -203,27 +203,56 @@ namespace SubVulpesMockup
         }
     }
 
-    class PillTab : Control
+    class IconButton : Control
     {
-        public bool Selected;
-        public PillTab(string text)
-        {
-            Text = text; Cursor = Cursors.Hand; Height = 30; Margin = new Padding(0, 0, 6, 0); SetStyle(UI.Paint, true);
-            Width = TextRenderer.MeasureText(text, UI.F(9.5f, FontStyle.Bold)).Width + 28;
-        }
+        public string Glyph; bool hot;
+        public IconButton(string glyph) { Glyph = glyph; Size = new Size(28, 28); Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        protected override void OnMouseEnter(EventArgs e) { hot = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hot = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnPaint(PaintEventArgs e)
         {
-            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Console);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            if (Selected) using (var path = UI.Round(r, 14)) using (var b = new SolidBrush(Color.FromArgb(44, UI.T.Accent))) g.FillPath(b, path);
-            TextRenderer.DrawText(g, Text, Selected ? UI.F(9.5f, FontStyle.Bold) : UI.F(9.5f, FontStyle.Regular), r, Selected ? UI.T.Accent : UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(Color.FromArgb(hot ? 70 : 38, 255, 255, 255))) using (var p = new Pen(Color.FromArgb(60, 255, 255, 255))) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var pen = new Pen(UI.T.ConsoleFg, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+            {
+                if (Glyph == "expand" || Glyph == "collapse")
+                {
+                    bool o = Glyph == "expand";
+                    g.DrawLines(pen, o ? new[] { new Point(8, 13), new Point(8, 8), new Point(13, 8) } : new[] { new Point(8, 13), new Point(13, 13), new Point(13, 8) });
+                    g.DrawLines(pen, o ? new[] { new Point(15, 8), new Point(20, 8), new Point(20, 13) } : new[] { new Point(15, 8), new Point(15, 13), new Point(20, 13) });
+                    g.DrawLines(pen, o ? new[] { new Point(8, 15), new Point(8, 20), new Point(13, 20) } : new[] { new Point(8, 15), new Point(13, 15), new Point(13, 20) });
+                    g.DrawLines(pen, o ? new[] { new Point(20, 15), new Point(20, 20), new Point(15, 20) } : new[] { new Point(15, 20), new Point(15, 15), new Point(20, 15) });
+                }
+                else if (Glyph == "clear")
+                {
+                    g.DrawLine(pen, 8, 9, 20, 9); g.DrawLine(pen, 12, 9, 12, 7); g.DrawLine(pen, 12, 7, 16, 7); g.DrawLine(pen, 16, 7, 16, 9);
+                    g.DrawLines(pen, new[] { new Point(10, 11), new Point(11, 21), new Point(17, 21), new Point(18, 11) });
+                }
+                else
+                {
+                    g.DrawRectangle(pen, 8, 7, 9, 11);
+                    using (var b = new SolidBrush(Color.FromArgb(70, 70, 70))) g.FillRectangle(b, 11, 10, 10, 12);
+                    g.DrawRectangle(pen, 11, 10, 9, 11);
+                }
+            }
+        }
+    }
+
+    class ServerName : Control
+    {
+        public ServerName(string text) { Text = text; Dock = DockStyle.Right; Width = TextRenderer.MeasureText(text, UI.F(10f, FontStyle.Bold)).Width + 28; SetStyle(UI.Paint, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.Clear(Parent.BackColor);
+            TextRenderer.DrawText(g, Text, UI.F(10f, FontStyle.Bold), new Rectangle(0, 0, Width - 8, Height), UI.T.BarMuted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
         }
     }
 
     class StateLabel : Control
     {
         public string Word = "Running";
-        public StateLabel() { Height = 34; Width = TextRenderer.MeasureText("Running", UI.F(10.5f, FontStyle.Bold)).Width + 50; SetStyle(UI.Paint, true); }
+        public StateLabel() { Height = 34; Width = 32 + TextRenderer.MeasureText("Running", UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 16; SetStyle(UI.Paint, true); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
@@ -259,7 +288,7 @@ namespace SubVulpesMockup
         readonly List<Plugin> plugins = new List<Plugin>();
         Panel tabBar; RichTextBox console; DataGridView grid; Panel detail; int sel = 2;
         string levelFilter = "all"; TextBox searchBox; bool expanded; TableLayoutPanel serverPage; Control statsRow;
-        readonly List<PillTab> filterTabs = new List<PillTab>();
+        const int StatsHeight = 184;
 
         public MainForm()
         {
@@ -269,6 +298,7 @@ namespace SubVulpesMockup
             LoadData();
             tabBar = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8, 0, 8, 0), Tag = "bar" };
             string[] names = { "Server", "Plugins", "Settings", "Help" };
+            tabBar.Controls.Add(new ServerName("SubVulpes test"));
             for (int i = names.Length - 1; i >= 0; i--)
             {
                 var t = new TabLabel(names[i]); int index = i;
@@ -386,6 +416,14 @@ namespace SubVulpesMockup
             }
         }
 
+        static TextBox HintBox(int width)
+        {
+            var box = new TextBox { Text = "Search…", BorderStyle = BorderStyle.FixedSingle, Width = width, Anchor = AnchorStyles.Left, Tag = "hint" };
+            box.GotFocus += delegate { if (box.Text == "Search…") { box.Text = ""; box.ForeColor = UI.T.Fg; } };
+            box.LostFocus += delegate { if (box.Text.Length == 0) { box.Text = "Search…"; box.ForeColor = UI.T.Muted; } };
+            return box;
+        }
+
         static FlowLayoutPanel Inline(params Control[] items)
         {
             var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
@@ -402,7 +440,7 @@ namespace SubVulpesMockup
         Control ServerPage()
         {
             var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5, Dock = DockStyle.Fill, Tag = "panel" }; serverPage = page;
-            page.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); page.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
+            page.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); page.RowStyles.Add(new RowStyle(SizeType.Absolute, StatsHeight));
             page.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); page.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); page.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
             var toolbar = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
@@ -421,37 +459,39 @@ namespace SubVulpesMockup
 
             var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" }; statsRow = stats;
             stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-            var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Uptime is the time since the server started. Speed is how many game steps (ticks) the server runs each second. About 60 is normal. Players does not count bots.");
+            var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Uptime is the time since the server started. Speed is how many game steps (ticks) the server runs each second. About 60 is normal. Players does not count bots. Plugins is how many plugins are active. Memory is how much memory the server uses.");
             stats.Controls.Add(list, 0, 0);
             var chart = new AreaChart { Flat = true }; UI.Tips.SetToolTip(chart, "The speed of the server in each of the last 20 minutes."); stats.Controls.Add(chart, 1, 0);
             page.Controls.Add(stats, 0, 1);
 
-            var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Padding = new Padding(0, 6, 0, 4), Tag = "panel" };
-            bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            var pills = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0), Tag = "panel" };
-            string[] fn = { "All", "Info", "Warnings", "Errors" }; string[] fk = { "all", "i", "w", "e" };
-            for (int i = 0; i < 4; i++)
-            {
-                var f = new PillTab(fn[i]) { Selected = i == 0, Height = 28 }; string key = fk[i];
-                f.Click += delegate { levelFilter = key; foreach (var x in filterTabs) { x.Selected = x == f; x.Invalidate(); } FillConsole(); };
-                filterTabs.Add(f); pills.Controls.Add(f);
-            }
-            searchBox = new TextBox { Text = "Search…", BorderStyle = BorderStyle.FixedSingle, Width = 220, Anchor = AnchorStyles.Left, Margin = new Padding(12, 0, 0, 0), Tag = "hint" };
-            searchBox.GotFocus += delegate { if (searchBox.Text == "Search…") { searchBox.Text = ""; searchBox.ForeColor = UI.T.Fg; } };
-            searchBox.LostFocus += delegate { if (searchBox.Text.Length == 0) { searchBox.Text = "Search…"; searchBox.ForeColor = UI.T.Muted; } };
+            var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 6, 0, 4), Tag = "panel" };
+            bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            var level = Combo(138, "All messages", "Info", "Warnings", "Errors"); level.Anchor = AnchorStyles.Left;
+            string[] fk = { "all", "i", "w", "e" };
+            level.SelectedIndexChanged += delegate { levelFilter = fk[level.SelectedIndex]; FillConsole(); };
+            UI.Tips.SetToolTip(level, "Show only one kind of message.");
+            searchBox = HintBox(240); searchBox.Margin = new Padding(0);
             UI.Tips.SetToolTip(searchBox, "Type a word to show only the lines that have it.");
             searchBox.TextChanged += delegate { FillConsole(); };
-            var expand = new FlatButton("Expand console") { Anchor = AnchorStyles.Right, Margin = new Padding(0), Height = 28 };
-            expand.Click += delegate
-            {
-                expanded = !expanded; statsRow.Visible = !expanded; page.RowStyles[1].Height = expanded ? 0 : 168;
-                expand.Text = expanded ? "Collapse console" : "Expand console"; expand.Width = TextRenderer.MeasureText(expand.Text, expand.Font).Width + 32; expand.Invalidate();
-            };
-            bar.Controls.Add(pills, 0, 0); bar.Controls.Add(searchBox, 1, 0); bar.Controls.Add(expand, 3, 0);
+            bar.Controls.Add(level, 0, 0); bar.Controls.Add(searchBox, 1, 0);
             page.Controls.Add(bar, 0, 2);
 
             console = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f), Padding = new Padding(8) };
-            page.Controls.Add(console, 0, 3);
+            var holder = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
+            holder.Controls.Add(console);
+            var expandBtn = new IconButton("expand"); var clearBtn = new IconButton("clear"); var copyBtn = new IconButton("copy");
+            UI.Tips.SetToolTip(expandBtn, "Make the console bigger or smaller."); UI.Tips.SetToolTip(clearBtn, "Clear the console."); UI.Tips.SetToolTip(copyBtn, "Copy the console text.");
+            clearBtn.Click += delegate { console.Clear(); };
+            copyBtn.Click += delegate { if (console.TextLength > 0) Clipboard.SetText(console.Text); };
+            expandBtn.Click += delegate
+            {
+                expanded = !expanded; statsRow.Visible = !expanded; page.RowStyles[1].Height = expanded ? 0 : StatsHeight;
+                expandBtn.Glyph = expanded ? "collapse" : "expand"; expandBtn.Invalidate();
+            };
+            IconButton[] icons = { copyBtn, clearBtn, expandBtn };
+            foreach (var ic in icons) { holder.Controls.Add(ic); ic.BringToFront(); }
+            holder.Resize += delegate { for (int i = 0; i < icons.Length; i++) icons[i].Location = new Point(holder.Width - 24 - (i + 1) * 32, 6); };
+            page.Controls.Add(holder, 0, 3);
 
             var cmd = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0), Tag = "panel" };
             cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
@@ -584,8 +624,11 @@ namespace SubVulpesMockup
         Control PluginsPage()
         {
             var page = new Panel();
-            var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 44, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
-            bar.Controls.Add(new FlatButton("Refresh") { Margin = new Padding(0) }); bar.Controls.Add(new FlatButton("Install plugin…"));
+            var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
+            var barButtons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
+            barButtons.Controls.Add(new FlatButton("Refresh") { Margin = new Padding(0) }); barButtons.Controls.Add(new FlatButton("Install plugin…"));
+            var pluginSearch = HintBox(260); pluginSearch.Location = new Point(0, 9);
+            bar.Controls.Add(barButtons); bar.Controls.Add(pluginSearch);
             detail = new Panel { Dock = DockStyle.Right, Width = 380, Padding = new Padding(16), Tag = "panel", AutoScroll = true };
             var sp = new Panel { Dock = DockStyle.Right, Width = 12 };
             var drop = new Label { Dock = DockStyle.Bottom, Height = 54, Text = "Drop a .svplugin file here to install it", TextAlign = ContentAlignment.MiddleCenter, Tag = "muted" };
