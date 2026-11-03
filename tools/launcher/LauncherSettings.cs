@@ -424,7 +424,7 @@ namespace SubVulpes
                 AddRow(t, "Theme", null, themeBox, null);
                 AddRow(t, "Accent color", "Used for the active tab, the graph and the highlights.", accentBox, null);
                 Section(t, "About");
-                AddRow(t, "Version", "The version of the server in this folder. The name belongs to the minor version.", L(AboutVersion(), false, false), null);
+                AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab. Each run then saves its own log folder.", debugModeBox, null);
             });

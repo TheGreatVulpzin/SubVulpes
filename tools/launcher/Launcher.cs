@@ -447,19 +447,26 @@ namespace SubVulpes
             return found;
         }
 
-        string AboutVersion()
+        // The version of the server in this folder with its name, such as "v0.2.0 Kit". Empty when version.txt is missing.
+        string VersionWithName()
         {
             string v = Path.Combine(folder, "version.txt");
             string number = File.Exists(v) ? (File.ReadLines(v).FirstOrDefault() ?? "").Trim() : "";
-            if (number.Length == 0) return "Unknown";
+            if (number.Length == 0) return "";
             string name = VersionName(number);
             return name.Length > 0 ? number + " " + name : number;
         }
 
+        string AboutVersion()
+        {
+            string text = VersionWithName();
+            return text.Length > 0 ? text : "Unknown";
+        }
+
         string Version()
         {
-            string v = Path.Combine(folder, "version.txt");
-            return File.Exists(v) ? " - " + File.ReadLines(v).FirstOrDefault() : "";
+            string text = VersionWithName();
+            return text.Length > 0 ? " - " + text : "";
         }
 
         void SetFolder(string path)
