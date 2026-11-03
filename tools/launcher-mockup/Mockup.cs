@@ -314,8 +314,8 @@ namespace SubVulpesMockup
                 int y = 4 + i * rowH;
                 // The label gives way to the value: it is cut with "..." when the two would touch.
                 var vf = UI.F(12f, FontStyle.Bold); int vw = TextRenderer.MeasureText(g, items[i][1], vf, new Size(999, 40), TextFormatFlags.NoPadding).Width;
-                TextRenderer.DrawText(g, items[i][0], UI.F(9.5f, FontStyle.Regular), new Rectangle(16, y, Math.Max(20, Width - 52 - vw - 12), rowH), UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(g, items[i][1], vf, new Rectangle(16, y, Width - 52, rowH), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, items[i][0], UI.F(9.5f, FontStyle.Regular), new Rectangle(16, y, Math.Max(20, Width - 32 - vw - 12), rowH), UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, items[i][1], vf, new Rectangle(16, y, Width - 32, rowH), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
                 if (i < items.Count - 1) using (var pen = new Pen(Color.FromArgb(110, UI.T.Line))) g.DrawLine(pen, 14, y + rowH, Width - 16, y + rowH);
             }
         }
@@ -563,7 +563,7 @@ namespace SubVulpesMockup
         readonly List<Plugin> plugins = new List<Plugin>();
         Panel tabBar; RichTextBox console; DataGridView grid; Panel detail; int sel = 2;
         string levelFilter = "all"; TextBox searchBox; bool expanded; TableLayoutPanel serverPage; Control statsRow;
-        const int StatsHeight = 184; int dashHeight = StatsHeight;
+        const int StatsHeight = 214; int dashHeight = StatsHeight;
 
         public MainForm()
         {
@@ -755,8 +755,11 @@ namespace SubVulpesMockup
             stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
             var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Tick rate is how many updates the server runs each second. About 60 is normal. Players does not include bots.");
             var chart = new AreaChart { Flat = true }; UI.Tips.SetToolTip(chart, "Average tick rate for each of the last 20 minutes.");
-            var gear = new GearButton(); list.Controls.Add(gear);
-            list.Resize += delegate { gear.Location = new Point(list.Width - 34, 6); };
+            // The customize icon sits in a small header row, at the right edge of the panel.
+            var head = new Panel { Dock = DockStyle.Top, Height = 30, Tag = "panel" };
+            var gear = new GearButton { Dock = DockStyle.Right };
+            var headTitle = L("Overview", false, true); headTitle.Location = new Point(2, 6);
+            head.Controls.Add(gear); head.Controls.Add(headTitle);
             UI.Tips.SetToolTip(gear, "Customize this panel.");
             gear.Click += delegate
             {
@@ -787,7 +790,7 @@ namespace SubVulpesMockup
             var dash = new Panel { Dock = DockStyle.Fill, Tag = "panel" }; statsRow = dash;
             var grip = new Grip(); UI.Tips.SetToolTip(grip, "Drag to resize.");
             grip.Dragged += delegate (int dy) { if (!expanded) { dashHeight = Math.Max(90, Math.Min(dashHeight + dy, page.Height - 240)); page.RowStyles[1].Height = dashHeight; } };
-            dash.Controls.Add(stats); dash.Controls.Add(grip);
+            dash.Controls.Add(stats); dash.Controls.Add(head); dash.Controls.Add(grip);
             page.Controls.Add(dash, 0, 1);
 
             var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 6, 0, 4), Tag = "panel" };
