@@ -21,6 +21,18 @@ Status on 2026-11-03: planned, not started. The launcher already has the Catalog
 Only plugins exist now. The format and the code reserve `mod` and `bundle` so that they do not change later. The launcher lists the `plugin` kind only, until the first mod exists.
 A mod changes the client, and the client lives on the computer of each player. So the launcher cannot install a mod on the server. The card of a mod will offer Download. OverRosa will support downloading mods to the computer of the player.
 
+## Custom mods and delivery to players (future)
+
+This part waits for OverRosa. The original client cannot load mods, so nothing here works with it.
+
+1. **Custom mod.** The owner adds a mod that is not in the Workshop. The launcher has a button for it. The owner chooses the files. The launcher makes a `.svmod` with a small manifest (id, version, the list of files with their SHA-256) and keeps it in the folder `mods/` of the server.
+2. **Mod list of the server.** The server keeps a list of the mods that it uses. Each entry has the id, the version, the SHA-256, the size and a mark: `required` or `optional`. An entry from the Workshop also has its address.
+3. **At join.** The server sends the list to OverRosa. The client checks its own cache by SHA-256. It downloads only what is missing.
+4. **Where the client downloads from.** First from the address of the Workshop (or any address in the entry, such as GitHub). If the entry has no address, the client downloads from the server.
+5. **Download from the server.** It uses its own channel, in chunks, with a limit of speed and a limit of size. It must not use the shared upload limit of the game (`servermaxbytespersecond`), or one new player slows the game for everyone. The launcher setting says the limit. A side port with HTTP is the simple way. The protocol of the game is the hard way.
+6. **Checks.** The client verifies the SHA-256 of each file. A mod holds data only (models, maps, sounds, textures), never code. The client refuses other file types and files over a size limit. A required mod that the player refuses means that the player cannot join. A big download asks the player first.
+7. **Open questions.** The limits of size and type. Whether a mod can replace a file of the base game or only add files. How a mod that changes the map affects the saved world of the server.
+
 ## Kinds
 
 | Kind | What it is |
