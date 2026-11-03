@@ -432,9 +432,12 @@ namespace SubVulpes
                 } else {
                     var done = L("✓ Installed", false, false);
                     done.Tag = "ok";
-                    done.Location = new Point(0, (uninstall.Height - done.PreferredHeight) / 2);
+                    // The label has its own width with some room, so that a larger font or screen scale never cuts the text.
+                    done.AutoSize = false;
+                    done.Size = new Size(done.PreferredWidth + 14, done.PreferredHeight + 2);
+                    done.Location = new Point(0, (uninstall.Height - done.Height) / 2 + 1);
                     row.Controls.Add(done);
-                    left = done.PreferredWidth;
+                    left = done.Width;
                 }
                 uninstall.Location = new Point(left + 12, 0);
                 row.Controls.Add(uninstall);
@@ -479,7 +482,7 @@ namespace SubVulpes
             var parts = new List<Control> { avatar, name, desc, meta };
             if (c.Source.Length > 0) {
                 var chip = new Label { Text = c.Source, AutoSize = true, Padding = new Padding(8, 3, 8, 3), Font = UI.F(9f, FontStyle.Regular), Tag = "chip" };
-                chip.Location = new Point(76 + name.PreferredWidth + 10, 12);
+                chip.Location = new Point(76 + name.PreferredWidth + 10, name.Top + (name.PreferredHeight - chip.PreferredSize.Height) / 2);
                 parts.Add(chip);
             }
             card.Controls.AddRange(parts.ToArray());
