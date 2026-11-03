@@ -13,14 +13,14 @@ namespace SubVulpesMockup
 {
     class Theme
     {
-        public Color Violet, Bg, Win, Panel, Line, Fg, Muted, Accent, Ok, Warn, Bad, Chip, Console, ConsoleFg, Bar, BarFg, BarMuted, SubBar;
-        public static readonly Theme Light = new Theme { Violet = Color.FromArgb(112, 82, 196),
+        public Color Bg, Win, Panel, Line, Fg, Muted, Accent, Ok, Warn, Bad, Chip, Console, ConsoleFg, Bar, BarFg, BarMuted, SubBar;
+        public static readonly Theme Light = new Theme {
             Bg = Color.FromArgb(238, 240, 243), Win = Color.FromArgb(246, 247, 249), Panel = Color.White, Line = Color.FromArgb(217, 220, 225),
             Fg = Color.FromArgb(27, 29, 33), Muted = Color.FromArgb(106, 112, 122), Accent = Color.FromArgb(217, 99, 30),
             Ok = Color.FromArgb(42, 138, 74), Warn = Color.FromArgb(183, 121, 31), Bad = Color.FromArgb(194, 54, 43),
             Chip = Color.FromArgb(236, 239, 243), Console = Color.Black, ConsoleFg = Color.FromArgb(212, 215, 220),
             Bar = Color.FromArgb(222, 226, 232), SubBar = Color.FromArgb(238, 240, 244), BarFg = Color.White, BarMuted = Color.FromArgb(96, 103, 115) };
-        public static readonly Theme Dark = new Theme { Violet = Color.FromArgb(176, 158, 240),
+        public static readonly Theme Dark = new Theme {
             Bg = Color.FromArgb(15, 17, 20), Win = Color.FromArgb(26, 29, 34), Panel = Color.FromArgb(33, 37, 43), Line = Color.FromArgb(50, 56, 65),
             Fg = Color.FromArgb(232, 234, 238), Muted = Color.FromArgb(154, 161, 172), Accent = Color.FromArgb(240, 138, 75),
             Ok = Color.FromArgb(94, 194, 125), Warn = Color.FromArgb(224, 176, 80), Bad = Color.FromArgb(239, 111, 100),
@@ -235,21 +235,21 @@ namespace SubVulpesMockup
         }
     }
 
-    // A small violet pill with the restart icon. It tells that a setting needs a restart of the server.
+    // A small accent colored pill with the restart icon. It tells that a setting needs a restart of the server.
     class Badge : Control
     {
         readonly string text;
         public Badge(string text)
         {
-            this.text = text.ToUpperInvariant(); Height = 22; SetStyle(UI.Paint, true);
-            Width = 9 + 12 + 6 + TextRenderer.MeasureText(this.text, UI.F(8f, FontStyle.Bold), new Size(999, 30), TextFormatFlags.NoPadding).Width + 11;
+            this.text = text; Height = 22; SetStyle(UI.Paint, true);
+            Width = 9 + 12 + 6 + TextRenderer.MeasureText(this.text, UI.F(9f, FontStyle.Regular), new Size(999, 30), TextFormatFlags.NoPadding).Width + 11;
         }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Win, UI.T.Violet, 0.14))) g.FillPath(b, path);
-            Svg.Draw(g, "restart", new RectangleF(9, (Height - 12) / 2f, 12, 12), UI.T.Violet);
-            TextRenderer.DrawText(g, text, UI.F(8f, FontStyle.Bold), new Rectangle(27, 0, Width - 27, Height), UI.T.Violet, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Win, UI.T.Accent, 0.14))) g.FillPath(b, path);
+            Svg.Draw(g, "restart", new RectangleF(9, (Height - 12) / 2f, 12, 12), UI.T.Accent);
+            TextRenderer.DrawText(g, text, UI.F(9f, FontStyle.Regular), new Rectangle(27, 0, Width - 27, Height), UI.T.Accent, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -1045,6 +1045,17 @@ namespace SubVulpesMockup
                 Section(t, "Appearance");
                 var theme = Combo(160, "Light", "Dark"); theme.SelectedIndexChanged += delegate { SetTheme(theme.SelectedIndex == 1 ? Theme.Dark : Theme.Light); };
                 AddRow(t, "Theme", null, theme, null, true);
+                // The accent color is the orange of the tabs, the badges and the graph. The user picks it here.
+                var accent = Combo(160, "Orange", "Blue", "Green", "Pink", "Violet");
+                accent.SelectedIndexChanged += delegate
+                {
+                    Color[][] pick = {
+                        new[] { Color.FromArgb(217, 99, 30), Color.FromArgb(240, 138, 75) }, new[] { Color.FromArgb(37, 99, 235), Color.FromArgb(96, 165, 250) },
+                        new[] { Color.FromArgb(22, 163, 74), Color.FromArgb(74, 222, 128) }, new[] { Color.FromArgb(219, 39, 119), Color.FromArgb(244, 114, 182) },
+                        new[] { Color.FromArgb(112, 82, 196), Color.FromArgb(176, 158, 240) } };
+                    Theme.Light.Accent = pick[accent.SelectedIndex][0]; Theme.Dark.Accent = pick[accent.SelectedIndex][1]; SetTheme(UI.T);
+                };
+                AddRow(t, "Accent color", "Used for the active tab, the graph and the highlights.", accent, null, true);
             });
         }
 
