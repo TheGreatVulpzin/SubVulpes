@@ -52,8 +52,15 @@ A mod may carry Lua scripts for advanced things. A server owner is a stranger to
 
 ### Map mods
 
-A map is a rule of the world. The server simulates the level, so a map that only the client knows would not match the server. Mods of v1 do not change the map. A map comes as a bundle: a plugin or a server file with the same level, and the mod for the client.
-Research first: does the client build the level from a shared seed, or does it read its own map files? (See the idea "Random cities" in `docs/ideas.md`.) The answer decides if a map mod is possible. A different map also needs a different saved world, so a server treats it as a new world.
+What the server code shows (2026-11-03, from `docs/game/level.md`, `docs/game/network.md` and `src/game/level.c`):
+
+- The level has two sources. The terrain and the track come from a **seed**. The server sends the seed to the client in the state packet (type 5). The city comes from the **editor data**: tiles, streets, intersections and building entries, stored in `data/city.sbc` (version 6).
+- So the client does not receive the map. It builds the same level from the seed and from its own copy of the data files.
+
+This means that a map mod is possible. It replaces the data files (`city.sbc` and the building files) on the client, for the session, with the same files that the server uses. The SHA-256 in the mod list of the server proves that both sides have the same files. A map mod is always `required`.
+
+Not verified: the client side. This list comes from the server code. We must confirm that the client reads `city.sbc` the same way and builds the level in the same order. OverRosa work will confirm it.
+Open: how the saved world of the server reacts to a different map. A different map needs a different saved world, so a server treats it as a new world.
 
 ## Kinds
 
