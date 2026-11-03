@@ -117,10 +117,10 @@ namespace SubVulpesMockup
     class StatsList : Card
     {
         public string[][] All = {
-            new[] { "Uptime", "00:05:39" }, new[] { "Speed", "59.6 ticks/s" }, new[] { "Players", "1" }, new[] { "Peak players today", "3" },
-            new[] { "Round", "3 · 4:12 left" }, new[] { "Network out", "18 KB/s" }, new[] { "Problems (last hour)", "1 error, 2 warnings" },
-            new[] { "Last crash", "None" }, new[] { "Started at", "20:50" }, new[] { "Address", "192.168.0.10:27584" } };
-        public bool[] On = { true, true, true, false, true, false, true, false, false, false };
+            new[] { "Uptime", "00:05:39" }, new[] { "Tick rate", "59.6 ticks/s" }, new[] { "Players", "1" }, new[] { "Peak players today", "3" },
+            new[] { "Round", "3 · 4:12 left" }, new[] { "Network out", "18 KB/s" }, new[] { "Errors (last hour)", "1" }, new[] { "Warnings (last hour)", "2" },
+            new[] { "Last crash", "None" }, new[] { "Started at", "20:50" }, new[] { "Server address", "192.168.0.10:27584" } };
+        public bool[] On = { true, true, true, false, true, false, true, false, false, false, false };
         public StatsList() : base("", "", "") { }
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -131,8 +131,10 @@ namespace SubVulpesMockup
             for (int i = 0; i < items.Count; i++)
             {
                 int y = 4 + i * rowH;
-                TextRenderer.DrawText(g, items[i][0], UI.F(9.5f, FontStyle.Regular), new Rectangle(16, y, Width - 32, rowH), UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(g, items[i][1], UI.F(12f, FontStyle.Bold), new Rectangle(16, y, Width - 44, rowH), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                // The label gives way to the value: it is cut with "..." when the two would touch.
+                var vf = UI.F(12f, FontStyle.Bold); int vw = TextRenderer.MeasureText(g, items[i][1], vf, new Size(999, 40), TextFormatFlags.NoPadding).Width;
+                TextRenderer.DrawText(g, items[i][0], UI.F(9.5f, FontStyle.Regular), new Rectangle(16, y, Math.Max(20, Width - 52 - vw - 12), rowH), UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(g, items[i][1], vf, new Rectangle(16, y, Width - 52, rowH), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
                 if (i < items.Count - 1) using (var pen = new Pen(Color.FromArgb(110, UI.T.Line))) g.DrawLine(pen, 14, y + rowH, Width - 16, y + rowH);
             }
         }
@@ -236,7 +238,7 @@ namespace SubVulpesMockup
     class AreaChart : Card
     {
         public double[] Values = new double[] { 61.8, 60.9, 61.2, 60.2, 59.7, 60.5, 61.0, 60.1, 59.9, 60.6, 60.4, 59.8, 60.9, 61.2, 60.3, 59.6, 59.9, 60.2, 59.8, 59.6 };
-        public AreaChart() : base("Speed per minute", "", "") { Margin = new Padding(0); }
+        public AreaChart() : base("Tick rate", "", "") { Margin = new Padding(0); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; Frame(g, Width, Height, Parent);
@@ -304,6 +306,24 @@ namespace SubVulpesMockup
         }
     }
 
+    class Grip : Control
+    {
+        public event Action<int> Dragged; int startY; bool down;
+        public Grip() { Height = 9; Dock = DockStyle.Bottom; Cursor = Cursors.SizeNS; SetStyle(UI.Paint, true); }
+        protected override void OnMouseDown(MouseEventArgs e) { down = true; startY = Cursor.Position.Y; base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { down = false; base.OnMouseUp(e); }
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (down && Dragged != null) { int y = Cursor.Position.Y; Dragged(y - startY); startY = y; }
+            base.OnMouseMove(e);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(Parent.BackColor);
+            using (var p = new Pen(UI.T.Line)) e.Graphics.DrawLine(p, 0, Height - 1, Width, Height - 1);
+        }
+    }
+
     class IconButton : Control
     {
         public string Glyph; bool hot;
@@ -314,10 +334,15 @@ namespace SubVulpesMockup
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Console);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(Color.FromArgb(hot ? 70 : 38, 255, 255, 255))) using (var p = new Pen(Color.FromArgb(60, 255, 255, 255))) { g.FillPath(b, path); g.DrawPath(p, path); }
-            using (var pen = new Pen(UI.T.ConsoleFg, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+            using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(Color.FromArgb(hot ? 55 : 20, 255, 255, 255))) using (var p = new Pen(Color.FromArgb(hot ? 110 : 40, 255, 255, 255))) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var pen = new Pen(Color.FromArgb(hot ? 255 : 120, UI.T.ConsoleFg), 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
             {
-                if (Glyph == "expand" || Glyph == "collapse")
+                if (Glyph == "save")
+                {
+                    g.DrawLine(pen, 14, 7, 14, 17); g.DrawLines(pen, new[] { new Point(10, 13), new Point(14, 17), new Point(18, 13) });
+                    g.DrawLines(pen, new[] { new Point(8, 18), new Point(8, 21), new Point(20, 21), new Point(20, 18) });
+                }
+                else if (Glyph == "expand" || Glyph == "collapse")
                 {
                     bool o = Glyph == "expand";
                     g.DrawLines(pen, o ? new[] { new Point(8, 13), new Point(8, 8), new Point(13, 8) } : new[] { new Point(8, 13), new Point(13, 13), new Point(13, 8) });
@@ -333,7 +358,7 @@ namespace SubVulpesMockup
                 else
                 {
                     g.DrawRectangle(pen, 8, 7, 9, 11);
-                    using (var b = new SolidBrush(Color.FromArgb(70, 70, 70))) g.FillRectangle(b, 11, 10, 10, 12);
+                    using (var b = new SolidBrush(UI.T.Console)) g.FillRectangle(b, 11, 10, 10, 12);
                     g.DrawRectangle(pen, 11, 10, 9, 11);
                 }
             }
@@ -389,7 +414,7 @@ namespace SubVulpesMockup
         readonly List<Plugin> plugins = new List<Plugin>();
         Panel tabBar; RichTextBox console; DataGridView grid; Panel detail; int sel = 2;
         string levelFilter = "all"; TextBox searchBox; bool expanded; TableLayoutPanel serverPage; Control statsRow;
-        const int StatsHeight = 184;
+        const int StatsHeight = 184; int dashHeight = StatsHeight;
 
         public MainForm()
         {
@@ -453,6 +478,7 @@ namespace SubVulpesMockup
             else if (c is DataGridView) StyleGrid((DataGridView)c);
             else if (c is Label && (c.Tag as string) == "chip") { c.BackColor = UI.T.Chip; c.ForeColor = UI.T.Fg; }
             else if (c is Label) { c.BackColor = Color.Transparent; c.ForeColor = (c.Tag as string) == "muted" ? UI.T.Muted : (c.Tag as string) == "ok" ? UI.T.Ok : (c.Tag as string) == "warn" ? UI.T.Warn : UI.T.Fg; }
+            else if (c is Panel && (c.Tag as string) == "consolebg") c.BackColor = UI.T.Console;
             else if (c is FlowLayoutPanel || c is Panel || c is TableLayoutPanel) c.BackColor = (c.Tag as string) == "panel" ? UI.T.Panel : UI.T.Win;
             else if (c is RadioButton) { c.BackColor = Color.Transparent; c.ForeColor = UI.T.Fg; }
             ThemeScroll(c);
@@ -559,12 +585,11 @@ namespace SubVulpesMockup
 
             var toolbar = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
             var rightFlow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
-            var save = new FlatButton("Save Log") { Margin = new Padding(8, 0, 0, 0) };
-            var kill = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 18, 0) };
+            var kill = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0) };
             var restart = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0) };
             var stop = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0) };
             var start = new FlatButton("Start") { Kind = "primary", Enabled = false, Margin = new Padding(8, 0, 0, 0) };
-            rightFlow.Controls.AddRange(new Control[] { save, kill, restart, stop, start });
+            rightFlow.Controls.AddRange(new Control[] { kill, restart, stop, start });
             var state = new StateLabel { Dock = DockStyle.Left };
             var stateHolder = new Panel { Dock = DockStyle.Left, Width = state.Width, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
             stateHolder.Controls.Add(state); state.Dock = DockStyle.Fill;
@@ -573,13 +598,21 @@ namespace SubVulpesMockup
 
             var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" };
             stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-            var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Uptime is the time since the server started. Speed is how many game steps (ticks) the server runs each second. About 60 is normal. Players does not count bots.");
+            var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Tick rate is how many updates the server runs each second. About 60 is normal. Players does not include bots.");
+            var chart = new AreaChart { Flat = true }; UI.Tips.SetToolTip(chart, "Average tick rate for each of the last 20 minutes.");
             var gear = new GearButton(); list.Controls.Add(gear);
-            list.Resize += delegate { gear.Location = new Point(list.Width - 32, 8); };
-            UI.Tips.SetToolTip(gear, "Choose what this list shows.");
+            list.Resize += delegate { gear.Location = new Point(list.Width - 34, 6); };
+            UI.Tips.SetToolTip(gear, "Customize this panel.");
             gear.Click += delegate
             {
                 var menu = Dropdown.Menu(); menu.ShowCheckMargin = true;
+                var graphItem = new ToolStripMenuItem("Tick rate graph") { Checked = chart.Visible, ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+                graphItem.Click += delegate
+                {
+                    chart.Visible = !chart.Visible;
+                    stats.ColumnStyles[0].Width = chart.Visible ? 30 : 100; stats.ColumnStyles[1].Width = chart.Visible ? 70 : 0;
+                };
+                menu.Items.Add(graphItem); menu.Items.Add(new ToolStripSeparator());
                 for (int i = 0; i < list.All.Length; i++)
                 {
                     int idx = i;
@@ -595,38 +628,40 @@ namespace SubVulpesMockup
                 menu.Show(gear, new Point(0, gear.Height));
             };
             stats.Controls.Add(list, 0, 0);
-            var chart = new AreaChart { Flat = true }; UI.Tips.SetToolTip(chart, "The speed of the server in each of the last 20 minutes."); stats.Controls.Add(chart, 1, 0);
+            stats.Controls.Add(chart, 1, 0);
             var dash = new Panel { Dock = DockStyle.Fill, Tag = "panel" }; statsRow = dash;
-            dash.Controls.Add(stats); dash.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, Tag = "line" });
+            var grip = new Grip(); UI.Tips.SetToolTip(grip, "Drag to resize.");
+            grip.Dragged += delegate (int dy) { if (!expanded) { dashHeight = Math.Max(90, Math.Min(dashHeight + dy, page.Height - 240)); page.RowStyles[1].Height = dashHeight; } };
+            dash.Controls.Add(stats); dash.Controls.Add(grip);
             page.Controls.Add(dash, 0, 1);
 
             var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 6, 0, 4), Tag = "panel" };
             bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            var level = Combo(138, "All messages", "Info", "Warnings", "Errors"); level.Anchor = AnchorStyles.Left;
+            var level = Combo(138, "All levels", "Info", "Warnings", "Errors"); level.Anchor = AnchorStyles.Left;
             string[] fk = { "all", "i", "w", "e" };
             level.SelectedIndexChanged += delegate { levelFilter = fk[level.SelectedIndex]; FillConsole(); };
-            UI.Tips.SetToolTip(level, "Show only one kind of message.");
+            UI.Tips.SetToolTip(level, "Filter by log level.");
             searchBox = HintBox(240); searchBox.Margin = new Padding(0);
-            UI.Tips.SetToolTip(searchBox, "Type a word to show only the lines that have it.");
+            UI.Tips.SetToolTip(searchBox, "Filter the log by text.");
             searchBox.TextChanged += delegate { FillConsole(); };
             bar.Controls.Add(level, 0, 0); bar.Controls.Add(searchBox, 1, 0);
             page.Controls.Add(bar, 0, 2);
 
             console = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f), Padding = new Padding(8) };
-            var holder = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            holder.Controls.Add(console);
-            var expandBtn = new IconButton("expand"); var clearBtn = new IconButton("clear"); var copyBtn = new IconButton("copy");
-            UI.Tips.SetToolTip(expandBtn, "Make the console bigger or smaller."); UI.Tips.SetToolTip(clearBtn, "Clear the console."); UI.Tips.SetToolTip(copyBtn, "Copy the console text.");
+            var holder = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), Tag = "consolebg" };
+            var gutter = new Panel { Dock = DockStyle.Left, Width = 44, Tag = "consolebg" };
+            holder.Controls.Add(console); holder.Controls.Add(gutter); console.BringToFront();
+            var expandBtn = new IconButton("expand"); var copyBtn = new IconButton("copy"); var clearBtn = new IconButton("clear"); var saveBtn = new IconButton("save");
+            UI.Tips.SetToolTip(expandBtn, "Expand or collapse the console."); UI.Tips.SetToolTip(copyBtn, "Copy all."); UI.Tips.SetToolTip(clearBtn, "Clear the console."); UI.Tips.SetToolTip(saveBtn, "Save the log to a file.");
             clearBtn.Click += delegate { console.Clear(); };
             copyBtn.Click += delegate { if (console.TextLength > 0) Clipboard.SetText(console.Text); };
             expandBtn.Click += delegate
             {
-                expanded = !expanded; statsRow.Visible = !expanded; page.RowStyles[1].Height = expanded ? 0 : StatsHeight;
+                expanded = !expanded; statsRow.Visible = !expanded; page.RowStyles[1].Height = expanded ? 0 : dashHeight;
                 expandBtn.Glyph = expanded ? "collapse" : "expand"; expandBtn.Invalidate();
             };
-            IconButton[] icons = { copyBtn, clearBtn, expandBtn };
-            foreach (var ic in icons) { holder.Controls.Add(ic); ic.BringToFront(); }
-            holder.Resize += delegate { for (int i = 0; i < icons.Length; i++) icons[i].Location = new Point(holder.Width - 24 - (i + 1) * 32, 6); };
+            IconButton[] icons = { expandBtn, copyBtn, clearBtn, saveBtn };
+            for (int i = 0; i < icons.Length; i++) { icons[i].Location = new Point(8, 8 + i * 34); gutter.Controls.Add(icons[i]); }
             page.Controls.Add(holder, 0, 3);
 
             var cmd = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0), Tag = "panel" };
@@ -712,13 +747,13 @@ namespace SubVulpesMockup
                 Section(t, "General");
                 AddRow(t, "Server name", null, TB("SubVulpes test", 300), null, true);
                 AddRow(t, "Admin password", "In the game, type /admin and this password.", Inline(pw, new FlatButton("Show") { Margin = new Padding(8, 0, 0, 0) }), null, true);
-                AddRow(t, "Welcome text", "The newspaper (readme.txt).", new TextBox { Text = "Welcome to the test server.", Multiline = true, Height = 54, Width = 380, BorderStyle = BorderStyle.FixedSingle }, null, true);
+                AddRow(t, "Welcome text", "Shown to players in the in-game newspaper (readme.txt).", new TextBox { Text = "Welcome to the test server.", Multiline = true, Height = 54, Width = 380, BorderStyle = BorderStyle.FixedSingle }, null, true);
                 Section(t, "Network");
-                AddRow(t, "Port", "Open this UDP port in the router.", TB("27584", 100), "Applies at the next start", true);
-                AddRow(t, "Upload limit", "Bytes per second for all the players.", TB("100000", 120), null, true);
+                AddRow(t, "Port", "Forward this UDP port on your router.", TB("27584", 100), "Requires restart", true);
+                AddRow(t, "Upload limit", "Shared by all players, in bytes per second.", TB("100000", 120), null, true);
                 Section(t, "Game");
-                AddRow(t, "Game mode", null, Combo(160, "Round", "World"), "Applies at the next start", true);
-                AddRow(t, "Max players", null, TB("16", 80), "Applies at the next start", true);
+                AddRow(t, "Game mode", null, Combo(160, "Round", "World"), "Requires restart", true);
+                AddRow(t, "Max players", null, TB("16", 80), "Requires restart", true);
                 AddRow(t, "Round time", "Minutes in Round mode.", TB("7", 80), null, true);
             });
         }
@@ -742,17 +777,17 @@ namespace SubVulpesMockup
         {
             return SettingsPage(delegate (TableLayoutPanel t)
             {
-                Section(t, "Capture");
-                AddRow(t, "Capture mode", "Records the server speed. Saves a small memory dump if the server crashes or freezes.", Combo(180, "Normal", "Speed Check", "Network Check", "Custom"), null, true);
+                Section(t, "Diagnostics");
+                AddRow(t, "Diagnostics mode", "Records the tick rate. Saves a minidump if the server crashes or hangs.", Combo(180, "Normal", "Performance", "Network", "Custom"), null, true);
                 Section(t, "Tools");
-                AddRow(t, "Speed Profile", "Finds slow functions.", new Switch { On = true }, null, true);
-                AddRow(t, "Game Timers", "Writes the time of each part of the game, once each minute.", new Switch(), null, true);
-                AddRow(t, "Network Packet Capture", "Records network traffic, including player names and chat.", new Switch(), null, true);
-                Section(t, "Crash and freeze");
-                var dumpLabel = L("Save a memory dump:", false, true); dumpLabel.Margin = new Padding(0, 4, 12, 0);
-                var dump = Inline(dumpLabel, new RadioButton { Text = "None", AutoSize = true, Margin = new Padding(0, 0, 12, 0) }, new RadioButton { Text = "Small (about 1 MB)", AutoSize = true, Checked = true, Margin = new Padding(0, 0, 12, 0) }, new RadioButton { Text = "Full (about 600 MB)", AutoSize = true, Margin = new Padding(0) });
-                AddRow(t, "If the server crashes or freezes", null, dump, null, true);
-                AddRow(t, "Memory dump", "A copy of the server memory. Send it to the developers to find a problem.", new FlatButton("Save Memory Dump Now") { Margin = new Padding(0) }, null, false);
+                AddRow(t, "Profiler", "Finds slow code.", new Switch { On = true }, null, true);
+                AddRow(t, "Timing Log", "Logs how long each part of the game takes, once a minute.", new Switch(), null, true);
+                AddRow(t, "Packet Capture", "Records network traffic, including player names and chat.", new Switch(), null, true);
+                Section(t, "Crash handling");
+                var dumpLabel = L("Save a dump:", false, true); dumpLabel.Margin = new Padding(0, 4, 12, 0);
+                var dump = Inline(dumpLabel, new RadioButton { Text = "None", AutoSize = true, Margin = new Padding(0, 0, 12, 0) }, new RadioButton { Text = "Minidump (about 1 MB)", AutoSize = true, Checked = true, Margin = new Padding(0, 0, 12, 0) }, new RadioButton { Text = "Full dump (about 600 MB)", AutoSize = true, Margin = new Padding(0) });
+                AddRow(t, "If the server crashes or hangs", null, dump, null, true);
+                AddRow(t, "Memory dump", "A copy of the server memory. Send it to the developers to help find a problem.", new FlatButton("Save Memory Dump Now") { Margin = new Padding(0) }, null, false);
             });
         }
 
@@ -787,7 +822,7 @@ namespace SubVulpesMockup
             bar.Controls.Add(search);
             var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Tag = "panel" };
             string[][] catalog = {
-                new[] { "Bans", "Ban players by account or address, with an end date.", "Official", "0.1.0", "Install" },
+                new[] { "Bans", "Bans players by account or address, with an optional expiry.", "Official", "0.1.0", "Install" },
                 new[] { "Message of the Day", "Shows a message to each player who joins.", "Official", "0.1.0", "Install" },
                 new[] { "Audit Log", "Writes who used which admin command, and when.", "Official", "0.1.0", "Install" },
                 new[] { "MIDI Jukebox", "Play MIDI music with any game sound.", "Official", "0.2.0", "Installed" },
@@ -953,10 +988,10 @@ namespace SubVulpesMockup
 
         static readonly string[][] HelpDocs = {
             new[] { "Getting Started", "# Getting Started\nThis launcher starts and watches your SubVulpes server.\n## First start\n- Open **Settings** and pick a server folder.\n- Set a name and an admin password.\n- Go to **Server** and press **Start**.\n## Join the game\nPlayers join with the address of your computer and the port in **Settings**. Open the UDP port in your router.\n" },
-            new[] { "The Server Page", "# The Server Page\nThe top row shows the state of the server and the buttons.\n- **Start** starts the server.\n- **Stop** asks the server to save and close.\n- **Restart** stops the server and starts it again.\n- **Kill** ends the server at once. Use it only if Stop does not work.\n## Speed\nThe server runs about 60 steps (ticks) each second. A much lower number means that the server is slow.\n## The list on the left\nPress the sliders icon to choose what the list shows.\n" },
+            new[] { "The Server Page", "# The Server Page\nThe top row shows the state of the server and the buttons.\n- **Start** starts the server.\n- **Stop** asks the server to save and close.\n- **Restart** stops the server and starts it again.\n- **Kill** ends the server at once. Use it only if Stop does not work.\n## Tick rate\nThe server runs about 60 ticks per second. A much lower number means lag.\n## Customize the panel\nSelect the sliders icon to choose which values and graphs the panel shows. Drag the line below the panel to change its height.\n" },
             new[] { "Plugins", "# Plugins\nPlugins add features to the server.\n## Risk\n- **low**: reads data.\n- **high**: changes the game.\n- **highest**: runs inside the server with full access to it.\nTurn on only plugins that you trust.\n## Install\nOpen **Browse** to find plugins, or use `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.\n" },
-            new[] { "Settings", "# Settings\nThe launcher saves each change at once.\n## Applies at the next start\nThe setting is saved. The server uses it only after the next start.\n## Capture mode\nChooses what the launcher records while the server runs. **Normal** records the speed.\n## Memory dump\nA file with a copy of the server memory. Send it to the developers to find the cause of a crash or a freeze.\n" },
-            new[] { "Problems", "# Problems\n## The server does not start\nRead the last lines in the console. Make sure that no other server uses the same port.\n## The server crashes\nThe launcher saves a small memory dump in the log folder. Send it with the log.\n## Logs\nEach start of the server makes a new log folder. Old logs are in the Server tab.\n```\nlogs\\2026-11-02_20-50\n```\n" } };
+            new[] { "Settings", "# Settings\nThe launcher saves each change at once.\n## Requires restart\nThe launcher saves the setting. The server uses it after the next restart.\n## Diagnostics mode\nChooses what the launcher records while the server runs. **Normal** records the tick rate.\n## Memory dump\nA file with a copy of the server memory. Send it to the developers to help find the cause of a crash or a hang.\n" },
+            new[] { "Problems", "# Problems\n## The server does not start\nRead the last lines in the console. Make sure that no other server uses the same port.\n## The server crashes\nThe launcher saves a minidump in the log folder. Send it with the log.\n## Logs\nEach start of the server makes a new log folder. Old logs are in the Server tab.\n```\nlogs\\2026-11-02_20-50\n```\n" } };
 
         void RenderHelp()
         {
