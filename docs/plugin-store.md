@@ -183,6 +183,10 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 8. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
 9. Make the tag and the release of the next minor version (Kit) only after steps 4 to 6 and the SDK update are done. The release page shows the Kit Bodega picture.
 
+## Workshop repository (built on 2026-11-03)
+
+https://github.com/TheGreatVulpzin/SubVulpes-Workshop is public. Done: the layout, CONTRIBUTING.md, CODEOWNERS, 	ools/build_index.py with 18 tests, the signing key, and the Action. The Action tests the script, refuses committed binaries, builds each plugin with its uild.ps1, asks the server to check each manifest, packs, writes index.json, signs it and replaces the branch dist. The first run passed and dist/index.json.sig verifies with the public key. The branch main needs a pull request, one approval from a code owner and a passing build. The owner can still bypass it. Murilo has a pending invitation. Not done: any content, the thumbnails with Pillow (tested only without it locally), the launcher client, and server_min.
+
 ## Manifest renewal (server, installer, pack and launcher done on 2026-11-03)
 
 Done: the server reads and checks the new keys, the installer and `pack.ps1` carry the icon, the tests cover them, and the launcher shows the icon of an installed plugin. Not done: the official manifests (author, license and icon, which change their hashes), the real icons, the comparison of `server_min` (the server program has no version number inside yet), the `entry` runtime, and the Remove action.
@@ -223,7 +227,7 @@ Old plugins keep working. A manifest without the new keys stays valid.
 - **Install while the server runs.** No restart by the launcher. See decision 9 above.
 - **Community rules.** The owner or Murilo approves each pull request. The CI checks the manifest, the license, the size and a build from source. A native plugin of the community enters only after a person reads its C code. A Lua plugin is the easy way.
 - **Name.** `SubVulpes-Workshop`.
-- **Signature.** The index is signed from format 1 (`index.json.sig`, ed25519). The owner keeps the secret key in the secrets of the GitHub repository, and keeps an offline copy. The public key is built into the launcher.
+- **Signature.** The index is signed from format 1 (`index.json.sig`, RSA 3072 with SHA-256). The algorithm is RSA because .NET Framework 4, which the launcher uses, has no Ed25519. The secret key lives only in the secret `INDEX_SIGNING_KEY` of the GitHub repository. No offline copy exists. If the key is lost, a new launcher version brings a new public key. The public key is `tools/index-public.pem` in the Workshop repository, and it will be built into the launcher.
 
 ## Open questions
 
