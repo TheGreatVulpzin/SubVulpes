@@ -4,6 +4,12 @@ SubVulpes is a modified Sub Rosa 0.24 server, based on OpenSubRosa24.
 It supports changes to core rules, admin tools and a future plugin API.
 The future modified client is OverRosa.
 
+<img src="docs/images/kit-bodega.jpg" alt="Kit Bodega" width="160" align="right">
+
+All 0.x versions are named **Kit**, after Kit Bodega from the Gameoverse.
+The picture of Kit Bodega is used with the permission of the project owner. It is not part of the GPL code.
+See [the version names](docs/plano.md).
+
 Source: `svs-base`, commit `eb68519b0982583e188ceb619ff49f14f332e6d9`.
 This repository started with a source import because `git filter-repo` was not installed.
 It now includes the direct-call and native-storage changes from upstream commits `ed4aef5` and `6e56d22`.

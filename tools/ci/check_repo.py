@@ -36,7 +36,12 @@ def main():
             reason = 'symbolic link'
         elif (ROOT / name).is_file() and name != 'tools/ci/check_repo.py':
             data = (ROOT / name).read_bytes()
-            if data.startswith((b'MZ', b'\x7fELF', b'PK\x03\x04')) or b'\0' in data:
+            if lower.startswith('docs/images/') and lower.endswith(('.png', '.jpg')):
+                # A picture for the docs. The header must match the extension, and the file stays small.
+                magic = b'\x89PNG\r\n\x1a\n' if lower.endswith('.png') else b'\xff\xd8\xff'
+                if not data.startswith(magic) or len(data) > 512 * 1024:
+                    reason = 'not a small picture of the type that its name says'
+            elif data.startswith((b'MZ', b'\x7fELF', b'PK\x03\x04')) or b'\0' in data:
                 reason = 'binary content'
             else:
                 text = data.decode('utf-8-sig', errors='replace')
