@@ -1,6 +1,6 @@
 # Plugin store plan
 
-This page plans the plugin store: the `SubVulpes-Workshop` repository, the catalog index and the launcher client. The Workshop holds three kinds of content: plugins (server), packages (game data) and mods (client, OverRosa).
+This page plans the plugin store: the `SubVulpes-Workshop` repository, the catalog index and the launcher client. The Workshop holds three kinds of content: plugins, mods and packages (see Kinds below).
 Status on 2026-11-03: planned, not started. The launcher already has the Catalog tab and reads a local `catalog.json`.
 
 ## Decisions of the owner
@@ -15,6 +15,14 @@ Status on 2026-11-03: planned, not started. The launcher already has the Catalog
 8. The server keeps checking approvals. The launcher writes the approval by itself when the hash of the package matches the index.
 9. The launcher never restarts the server by itself. An install while the server runs waits, and it applies at the next start that the owner makes by hand.
 10. Two seals: `official/` holds the work of the owner and Murilo, and `community/` holds the work of everyone else.
+
+## Kinds
+
+| Kind | What it is |
+| --- | --- |
+| Plugin | Everything that changes the server. |
+| Mod | Everything that changes the client: models, maps, sounds, textures and the like. |
+| Package | A plugin and a mod together, installed as one item. |
 
 ## Repository layout
 
@@ -77,7 +85,7 @@ The Action reads `plugins/<id>/plugin.ini`, builds the package, computes the SHA
 | --- | --- |
 | `format` | The number of this format. The launcher refuses a number that it does not know. |
 | `id`, `name`, `description`, `author`, `version` | As in `plugin.ini`. `author` may be empty. |
-| `kind` | `plugin`, `package` or `mod`. The launcher filters the Catalog tab by it. |
+| `kind` | `plugin`, `mod` or `package`. The launcher filters the Catalog tab by it. |
 | `source` | `Official` or `Community`. The Action sets it from the top folder. |
 | `license` | The license of the content. The CI refuses content without one. |
 | `runtime` | For a plugin only: `native`, `lua` or `wasm`. |
@@ -121,9 +129,9 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 
 1. Close the launcher (the owner tests it, we fix what breaks).
 2. Confirm this format with the owner and the plugin developer who joins as a contributor.
-3. Make the repository: one example plugin, the build script, the index generator and the Action.
-4. Make the launcher client: download, cache, thumbnails, the plugin page from the index, install by one click.
-5. Renew the manifest (`plugin.ini`): icon, author, homepage and the minimum API version. The server lists the new fields and the launcher reads them. Old plugins keep working.
+3. Renew the manifest (`plugin.ini`) together with the plugin API renewal, before the store: icon, author, homepage, license and the minimum API version. The server lists the new fields and the launcher reads them. Old plugins keep working.
+4. Make the repository: one example plugin, the build script, the index generator, the signature and the Action.
+5. Make the launcher client: download, cache, thumbnails, the plugin page from the index, one-click install, pending installs.
 6. Give the review window the new look. Keep it for files from outside the repository.
 7. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
 
@@ -135,9 +143,9 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 - **Install while the server runs.** No restart by the launcher. See decision 9 above.
 - **Community rules.** The owner or Murilo approves each pull request. The CI checks the manifest, the license, the size and a build from source. A native plugin of the community enters only after a person reads its C code. A Lua plugin is the easy way.
 - **Name.** `SubVulpes-Workshop`.
-- **Signature.** The index is signed from format 1 (`index.json.sig`, ed25519). The secret key lives in the secrets of the GitHub repository. The public key is built into the launcher.
+- **Signature.** The index is signed from format 1 (`index.json.sig`, ed25519). The owner keeps the secret key in the secrets of the GitHub repository, and keeps an offline copy. The public key is built into the launcher.
 
 ## Open questions
 
-- The manifest of a package and of a mod: what they list. Decide when the first package or mod comes.
-- How the launcher installs a package and a mod. A plugin goes to `plugins/`. A package and a mod need their own folders and rules.
+- The manifest of a mod and of a package: what they list. A package lists its plugin part and its mod part. Decide when the first mod comes.
+- How the launcher installs a mod. A plugin goes to `plugins/`. A mod goes to the client, so the launcher needs to know where the client lives (or the mod is a download for the player).
