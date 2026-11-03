@@ -55,6 +55,8 @@ Use a server that matches the SDK version. Rebuild your DLLs when the SDK versio
 
    Each command must return 0. After a DLL change, build, test, pack and review the updated package again.
 
+To share the plugin with others, read [the Workshop guide](sdk-workshop.md).
+
 Native code has full access to the server process. Approve only code that you trust.
 The [approval guide](sdk-approval.md) describes the shared CLI path, legacy approvals and one-run development mode.
 The clean-machine test uses the same reviewed install path without the GUI.

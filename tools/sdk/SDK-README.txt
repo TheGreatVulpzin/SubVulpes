@@ -26,6 +26,9 @@ First plugin
      Expect a log line that starts with Hello from.
      After a DLL change, build, test, pack and review the updated package again.
 
+Publish
+  To share the plugin, read docs/sdk-workshop.md. template\build.ps1 is the build script that the Workshop uses.
+
 Reviewed approval
   The launcher uses --plugin-inspect and the scoped store user/plugins/approvals.ini.
   The clean-machine check uses the same installer path without the GUI.

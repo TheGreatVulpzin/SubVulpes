@@ -44,10 +44,10 @@ Assert ($names.Count -gt 0 -and @($names | Where-Object { -not $_.StartsWith($pr
 $relative = @($names | ForEach-Object { $_.Substring($prefix.Length) })
 Assert (@($relative | Where-Object { $_ -clike 'include/sv_*.h' }).Count -eq 15) 'The SDK must carry 15 public headers.'
 Assert (@($relative | Where-Object { $_ -clike 'include/*' -and $_ -cnotlike 'include/sv_*.h' }).Count -eq 0) 'The include folder holds a file that is not a public header.'
-foreach ($need in @('README.txt', 'VERSION.txt', 'template/hello.c', 'template/plugin.ini', 'template/build.bat', 'template/CMakeLists.txt',
+foreach ($need in @('README.txt', 'VERSION.txt', 'template/hello.c', 'template/plugin.ini', 'template/build.bat', 'template/build.ps1', 'template/CMakeLists.txt',
         'tools/pack.ps1', 'tools/validate_plugin.ps1', 'tools/install_plugin.ps1', 'tools/sv_plugin.cmake', 'docs/plugin-abi.md',
         'docs/plugin-manifest.md', 'examples/status/status.c', 'tools/run_plugin_test.ps1', 'tools/subvulpes_plugin_test.exe',
-        'tools/probe/probe.dll', 'tools/probe/plugin.ini', 'template/test.svtest', 'docs/sdk-test-runner.md', 'docs/sdk-first-steps.md', 'docs/sdk-approval.md')) {
+        'tools/probe/probe.dll', 'tools/probe/plugin.ini', 'template/test.svtest', 'docs/sdk-test-runner.md', 'docs/sdk-workshop.md', 'docs/sdk-first-steps.md', 'docs/sdk-approval.md')) {
     Assert ($need -cin $relative) "The package lacks $need."
 }
 foreach ($forbid in @('plugin_host.h', 'plugin_host.c', 'plugin_internal.h', 'config.txt')) {
