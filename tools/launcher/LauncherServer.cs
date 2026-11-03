@@ -23,7 +23,7 @@ namespace SubVulpes
         TextField commandBox;
         string levelFilter = "all";
         bool consoleExpanded;
-        int dashHeight = 214, dashWidth = 290, errorCount, warnCount;
+        int dashHeight = 196, dashWidth = 290, errorCount, warnCount;
         bool graphShown = true;
         static readonly string[] StatNames = { "Uptime", "Tick rate", "Players", "Lowest minute", "Peak players", "Started at", "Port", "Errors", "Warnings", "Last crash", "Server address" };
         const string DefaultHiddenStats = "Peak players|Started at|Port|Errors|Warnings|Last crash|Server address";
@@ -82,7 +82,7 @@ namespace SubVulpes
         void LoadDashboard()
         {
             int value;
-            if (int.TryParse(settings.Get("dash_height", "214"), out value)) dashHeight = Math.Max(90, Math.Min(value, 400));
+            if (int.TryParse(settings.Get("dash_height", "196"), out value)) dashHeight = Math.Max(90, Math.Min(value, 400));
             if (int.TryParse(settings.Get("dash_width", "290"), out value)) dashWidth = Math.Max(170, Math.Min(value, 700));
             graphShown = settings.Get("dash_graph", "1") == "1";
         }
@@ -113,9 +113,8 @@ namespace SubVulpes
             UI.Tips.SetToolTip(chart, "Average tick rate for each of the last 20 minutes.");
             foreach (string name in StatNames) stats.Set(name, "-");
             foreach (string name in settings.Get("dash_hidden", DefaultHiddenStats).Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)) stats.Hidden.Add(name);
-            var head = new Panel { Dock = DockStyle.Top, Height = 28, Tag = "panel" };
-            var gear = new GearButton { Dock = DockStyle.Right };
-            head.Controls.Add(gear);
+            // The gear sits inside the panel, in its top right corner.
+            var gear = new GearButton();
             UI.Tips.SetToolTip(gear, "Customize this panel.");
             gear.Click += delegate { StatsMenu(gear, grid, vgrip); };
             vgrip.Dragged += delegate (int dx)
@@ -139,8 +138,10 @@ namespace SubVulpes
                 serverLayout.RowStyles[1].Height = dashHeight;
             };
             dash.Controls.Add(grid);
-            dash.Controls.Add(head);
             dash.Controls.Add(grip);
+            dash.Controls.Add(gear);
+            gear.BringToFront();
+            dash.Resize += delegate { gear.Location = new Point(dash.Width - gear.Width - 8, 10); };
             return dash;
         }
 
@@ -149,6 +150,9 @@ namespace SubVulpes
             graphShown = show;
             chart.Visible = show;
             vgrip.Visible = show;
+            // Without the graph, the list gives room to the gear in its corner.
+            stats.TopPad = show ? 0 : 26;
+            stats.Invalidate();
             grid.ColumnStyles[0] = show ? new ColumnStyle(SizeType.Absolute, dashWidth) : new ColumnStyle(SizeType.Percent, 100);
             grid.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, show ? 9 : 0);
             grid.ColumnStyles[2] = show ? new ColumnStyle(SizeType.Percent, 100) : new ColumnStyle(SizeType.Absolute, 0);

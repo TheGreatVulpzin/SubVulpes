@@ -54,6 +54,7 @@ namespace SubVulpes.Ui
     {
         public readonly List<string[]> All = new List<string[]>();
         public readonly HashSet<string> Hidden = new HashSet<string>();
+        public int TopPad;
         public StatsList() : base("", "", "") { }
         public void Set(string name, string value)
         {
@@ -65,10 +66,10 @@ namespace SubVulpes.Ui
             var g = e.Graphics; Frame(g, Width, Height, Parent);
             var items = new List<string[]>(); foreach (var row in All) if (!Hidden.Contains(row[0])) items.Add(row);
             if (items.Count == 0) return;
-            int rowH = Math.Min(30, (Height - 8) / items.Count);
+            int rowH = Math.Min(30, (Height - 8 - TopPad) / items.Count);
             for (int i = 0; i < items.Count; i++)
             {
-                int y = 4 + i * rowH;
+                int y = 4 + TopPad + i * rowH;
                 var vf = UI.F(12f, FontStyle.Bold); int vw = TextRenderer.MeasureText(g, items[i][1], vf, new Size(999, 40), TextFormatFlags.NoPadding).Width;
                 TextRenderer.DrawText(g, items[i][0], UI.F(9.5f, FontStyle.Regular), new Rectangle(16, y, Math.Max(20, Width - 32 - vw - 12), rowH), UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
                 TextRenderer.DrawText(g, items[i][1], vf, new Rectangle(16, y, Width - 32, rowH), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
