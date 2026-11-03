@@ -43,6 +43,12 @@ namespace SubVulpes
             return "low";
         }
 
+        // A plugin whose id starts with "sv." comes from the SubVulpes project.
+        static string SourceOf(PluginMetadata m)
+        {
+            return m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Official" : "Installed";
+        }
+
         static string StateText(string state)
         {
             switch (state) {
@@ -98,7 +104,7 @@ namespace SubVulpes
 
         static string SortKey(PluginMetadata p, int column)
         {
-            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateText(p.State) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
+            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateText(p.State) : column == 4 ? SourceOf(p) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
         }
 
         void RebuildPlugins()
@@ -109,11 +115,11 @@ namespace SubVulpes
             string term = pluginSearch == null ? "" : pluginSearch.Text.Trim();
             foreach (var p in plugins)
                 if (term.Length == 0 || p.DisplayName.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 || p.Id.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0) shown.Add(p);
-            if (sortColumn >= 0 && sortColumn <= 3)
+            if (sortColumn >= 0 && sortColumn <= 4)
                 shown.Sort((a, b) => (sortAscending ? 1 : -1) * string.Compare(SortKey(a, sortColumn), SortKey(b, sortColumn), StringComparison.OrdinalIgnoreCase));
             pluginGrid.Rows.Clear();
             foreach (var p in shown) {
-                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateText(p.State), RiskOf(p), "");
+                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateText(p.State), RiskOf(p), SourceOf(p), "");
                 pluginGrid.Rows[r].Tag = p;
                 if (p.Id == selectedPluginId) pluginGrid.CurrentCell = pluginGrid.Rows[r].Cells[0];
             }
@@ -222,21 +228,23 @@ namespace SubVulpes
             pluginGrid.Columns.Add("v", "Version");
             pluginGrid.Columns.Add("s", "State");
             pluginGrid.Columns.Add("r", "Risk");
+            pluginGrid.Columns.Add("src", "Source");
             pluginGrid.Columns.Add("o", "On");
             pluginGrid.Columns[0].FillWeight = 170;
             pluginGrid.Columns[1].FillWeight = 70;
             pluginGrid.Columns[2].FillWeight = 120;
             pluginGrid.Columns[3].FillWeight = 80;
-            pluginGrid.Columns[4].FillWeight = 50;
+            pluginGrid.Columns[4].FillWeight = 80;
+            pluginGrid.Columns[5].FillWeight = 50;
             foreach (DataGridViewColumn col in pluginGrid.Columns) col.SortMode = DataGridViewColumnSortMode.Programmatic;
             // The columns the user hid stay hidden. The setting holds the names of the hidden columns.
-            string hidden = "," + settings.Get("plugin_hidden", "") + ",";
-            for (int i = 1; i <= 3; i++) pluginGrid.Columns[i].Visible = !hidden.Contains("," + i + ",");
+            string hidden = "," + settings.Get("plugin_hidden", "3,4") + ",";
+            for (int i = 1; i <= 4; i++) pluginGrid.Columns[i].Visible = !hidden.Contains("," + i + ",");
             pluginGrid.ColumnHeaderMouseClick += delegate (object s, DataGridViewCellMouseEventArgs e)
             {
                 if (e.Button == MouseButtons.Left)
                 {
-                    if (e.ColumnIndex > 3) return;
+                    if (e.ColumnIndex > 4) return;
                     sortAscending = sortColumn == e.ColumnIndex ? !sortAscending : true;
                     sortColumn = e.ColumnIndex;
                     RebuildPlugins();
@@ -251,7 +259,7 @@ namespace SubVulpes
                 var p = pluginGrid.Rows[e.RowIndex].Tag as PluginMetadata;
                 if (p == null) return;
                 selectedPluginId = p.Id;
-                if (e.ColumnIndex == 4) ToggleFromTable(p);
+                if (e.ColumnIndex == 5) ToggleFromTable(p);
                 else RenderPluginDetail();
             };
             pluginGrid.SelectionChanged += delegate
@@ -275,20 +283,20 @@ namespace SubVulpes
         {
             var menu = Dropdown.Menu();
             menu.ShowCheckMargin = true;
-            for (int i = 1; i <= 3; i++) {
+            for (int i = 1; i <= 4; i++) {
                 var col = pluginGrid.Columns[i];
                 var item = new ToolStripMenuItem(col.HeaderText) { Checked = col.Visible, ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
                 item.Click += delegate
                 {
                     col.Visible = !col.Visible;
                     var hiddenNow = new List<string>();
-                    for (int k = 1; k <= 3; k++) if (!pluginGrid.Columns[k].Visible) hiddenNow.Add(k.ToString());
+                    for (int k = 1; k <= 4; k++) if (!pluginGrid.Columns[k].Visible) hiddenNow.Add(k.ToString());
                     settings.Set("plugin_hidden", string.Join(",", hiddenNow.ToArray()));
                     settings.Save();
                 };
                 menu.Items.Add(item);
             }
-            if (clicked >= 0 && clicked <= 3) {
+            if (clicked >= 0 && clicked <= 4) {
                 menu.Items.Add(new ToolStripSeparator());
                 var up = new ToolStripMenuItem("Sort ascending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
                 var down = new ToolStripMenuItem("Sort descending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
@@ -308,7 +316,7 @@ namespace SubVulpes
 
         void PaintPluginCell(object s, DataGridViewCellPaintingEventArgs e)
         {
-            if (e.RowIndex < 0 || (e.ColumnIndex != 2 && e.ColumnIndex != 3 && e.ColumnIndex != 4)) return;
+            if (e.RowIndex < 0 || (e.ColumnIndex != 2 && e.ColumnIndex != 3 && e.ColumnIndex != 5)) return;
             var p = pluginGrid.Rows[e.RowIndex].Tag as PluginMetadata;
             if (p == null) return;
             e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground | DataGridViewPaintParts.Border);
@@ -327,7 +335,7 @@ namespace SubVulpes
                 var pill = new Rectangle(e.CellBounds.X + 6, my - 11, rw, 22);
                 using (var path = UI.Round(pill, 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, rc, 0.16))) g.FillPath(b, path);
                 TextRenderer.DrawText(g, risk, rf, pill, rc, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-            } else {
+            } else if (e.ColumnIndex == 5) {
                 Switch.Draw(g, new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 20) / 2, 36, 20), p.State != "disabled");
             }
             e.Handled = true;

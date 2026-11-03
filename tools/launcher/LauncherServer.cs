@@ -23,13 +23,17 @@ namespace SubVulpes
         TextField commandBox;
         string levelFilter = "all";
         bool consoleExpanded;
-        int dashHeight = 214;
+        int dashHeight = 214, dashWidth = 290, errorCount, warnCount;
+        bool graphShown = true;
+        static readonly string[] StatNames = { "Uptime", "Tick rate", "Players", "Lowest minute", "Peak players", "Started at", "Port", "Errors", "Warnings", "Last crash", "Server address" };
+        const string DefaultHiddenStats = "Peak players|Started at|Port|Errors|Warnings|Last crash|Server address";
         const int MaxLogLines = 5000;
         // Each entry is the level (i, w or e) and the text.
         readonly List<string[]> logLines = new List<string[]>();
 
         Control ServerPage()
         {
+            LoadDashboard();
             var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5, Dock = DockStyle.Fill, Tag = "panel" };
             serverLayout = page;
             page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -75,12 +79,30 @@ namespace SubVulpes
             return toolbar;
         }
 
+        void LoadDashboard()
+        {
+            int value;
+            if (int.TryParse(settings.Get("dash_height", "214"), out value)) dashHeight = Math.Max(90, Math.Min(value, 400));
+            if (int.TryParse(settings.Get("dash_width", "290"), out value)) dashWidth = Math.Max(170, Math.Min(value, 700));
+            graphShown = settings.Get("dash_graph", "1") == "1";
+        }
+
+        // The choices of the user for the panel stay in launcher.ini.
+        void SaveDashboard()
+        {
+            if (stats == null) return;
+            settings.Set("dash_height", dashHeight.ToString());
+            settings.Set("dash_width", dashWidth.ToString());
+            settings.Set("dash_graph", graphShown ? "1" : "0");
+            settings.Set("dash_hidden", string.Join("|", stats.Hidden.ToArray()));
+            settings.Save();
+        }
+
         // The list of numbers at the left and the graph at the right. The user drags the lines to resize them.
         Control StatsPanel()
         {
             var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" };
-            int listWidth = 290;
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, listWidth));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, dashWidth));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 9));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             var vgrip = new Grip(true);
@@ -89,22 +111,23 @@ namespace SubVulpes
             chart = new AreaChart { Flat = true };
             UI.Tips.SetToolTip(stats, "Tick rate is how many updates the server runs each second. About 60 is normal. Players does not include bots.");
             UI.Tips.SetToolTip(chart, "Average tick rate for each of the last 20 minutes.");
-            foreach (string name in new[] { "Uptime", "Tick rate", "Players", "Lowest minute", "Peak players", "Started at", "Port" }) stats.Set(name, "-");
-            foreach (string name in new[] { "Peak players", "Started at", "Port" }) stats.Hidden.Add(name);
+            foreach (string name in StatNames) stats.Set(name, "-");
+            foreach (string name in settings.Get("dash_hidden", DefaultHiddenStats).Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)) stats.Hidden.Add(name);
             var head = new Panel { Dock = DockStyle.Top, Height = 28, Tag = "panel" };
             var gear = new GearButton { Dock = DockStyle.Right };
             head.Controls.Add(gear);
             UI.Tips.SetToolTip(gear, "Customize this panel.");
-            gear.Click += delegate { StatsMenu(gear, grid, vgrip, listWidth); };
+            gear.Click += delegate { StatsMenu(gear, grid, vgrip); };
             vgrip.Dragged += delegate (int dx)
             {
                 if (!chart.Visible) return;
-                listWidth = Math.Max(170, Math.Min(listWidth + dx, grid.Width - 280));
-                grid.ColumnStyles[0].Width = listWidth;
+                dashWidth = Math.Max(170, Math.Min(dashWidth + dx, grid.Width - 280));
+                grid.ColumnStyles[0].Width = dashWidth;
             };
             grid.Controls.Add(stats, 0, 0);
             grid.Controls.Add(vgrip, 1, 0);
             grid.Controls.Add(chart, 2, 0);
+            ShowGraph(graphShown, grid, vgrip);
             var dash = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
             statsRow = dash;
             var grip = new Grip(false);
@@ -121,19 +144,22 @@ namespace SubVulpes
             return dash;
         }
 
-        void StatsMenu(Control gear, TableLayoutPanel grid, Control vgrip, int listWidth)
+        void ShowGraph(bool show, TableLayoutPanel grid, Control vgrip)
+        {
+            graphShown = show;
+            chart.Visible = show;
+            vgrip.Visible = show;
+            grid.ColumnStyles[0] = show ? new ColumnStyle(SizeType.Absolute, dashWidth) : new ColumnStyle(SizeType.Percent, 100);
+            grid.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, show ? 9 : 0);
+            grid.ColumnStyles[2] = show ? new ColumnStyle(SizeType.Percent, 100) : new ColumnStyle(SizeType.Absolute, 0);
+        }
+
+        void StatsMenu(Control gear, TableLayoutPanel grid, Control vgrip)
         {
             var menu = Dropdown.Menu();
             menu.ShowCheckMargin = true;
             var graphItem = new ToolStripMenuItem("Tick rate graph") { Checked = chart.Visible, ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
-            graphItem.Click += delegate
-            {
-                chart.Visible = !chart.Visible;
-                vgrip.Visible = chart.Visible;
-                grid.ColumnStyles[0] = chart.Visible ? new ColumnStyle(SizeType.Absolute, listWidth) : new ColumnStyle(SizeType.Percent, 100);
-                grid.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, chart.Visible ? 9 : 0);
-                grid.ColumnStyles[2] = chart.Visible ? new ColumnStyle(SizeType.Percent, 100) : new ColumnStyle(SizeType.Absolute, 0);
-            };
+            graphItem.Click += delegate { ShowGraph(!chart.Visible, grid, vgrip); SaveDashboard(); };
             menu.Items.Add(graphItem);
             menu.Items.Add(new ToolStripSeparator());
             foreach (string[] row in stats.All)
@@ -146,6 +172,7 @@ namespace SubVulpes
                     if (stats.Hidden.Contains(name)) stats.Hidden.Remove(name);
                     else if (stats.All.Count - stats.Hidden.Count > 1) stats.Hidden.Add(name);
                     stats.Invalidate();
+                    SaveDashboard();
                 };
                 menu.Items.Add(item);
             }
@@ -271,6 +298,8 @@ namespace SubVulpes
             if (line.StartsWith("PLUGIN\t", StringComparison.Ordinal) || line.StartsWith("SETTING\t", StringComparison.Ordinal)) return;
             string shown = RedactLog(line, config.Get("serverpassword", ""));
             var entry = new[] { LevelOf(shown), shown };
+            if (entry[0] == "e") { errorCount++; stats.Set("Errors", errorCount.ToString()); }
+            else if (entry[0] == "w") { warnCount++; stats.Set("Warnings", warnCount.ToString()); }
             logLines.Add(entry);
             // A long run makes many lines. Keep the last part only: the log file has all.
             if (logLines.Count > MaxLogLines) { logLines.RemoveRange(0, 1000); RenderConsole(); return; }
@@ -285,7 +314,12 @@ namespace SubVulpes
         void ResetStats()
         {
             foreach (string name in new[] { "Uptime", "Tick rate", "Players", "Lowest minute", "Peak players", "Started at" }) stats.Set(name, "-");
+            errorCount = warnCount = 0;
+            stats.Set("Errors", "0");
+            stats.Set("Warnings", "0");
+            stats.Set("Last crash", settings.Get("last_crash", "None"));
             stats.Set("Port", config.Get("port", "27584"));
+            stats.Set("Server address", LocalAddress() + ":" + config.Get("port", "27584"));
             chart.Values = new double[0];
             chart.Invalidate();
             speedStatus = NoSpeedText;
@@ -301,6 +335,16 @@ namespace SubVulpes
             if (players < 0) return;
             stats.Set("Players", players.ToString() + (bots != "0" ? " (+" + bots + " bots)" : ""));
             stats.Set("Peak players", maxPlayers.ToString());
+        }
+
+        // The first IPv4 address of this computer. Players on the same network use it.
+        static string LocalAddress()
+        {
+            try {
+                foreach (var a in System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName()).AddressList)
+                    if (a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) return a.ToString();
+            } catch (Exception) { }
+            return "unknown";
         }
 
         void KillServer()

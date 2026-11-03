@@ -1178,6 +1178,9 @@ namespace SubVulpes
 
             } else if (line.Contains("CRASH")) {
                 crashed = true;
+                settings.Set("last_crash", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+                settings.Save();
+                stats.Set("Last crash", DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
             }
             RefreshStatus();
         }
@@ -1530,6 +1533,7 @@ namespace SubVulpes
         async void OnClosing(object sender, FormClosingEventArgs e)
         {
             if (updating || pluginBusy) { e.Cancel = true; return; }
+            SaveDashboard();
             if (closeAfterStop) return;
             if (dirty) {
                 var answer = MessageBox.Show(this, "Hey, there are unsaved settings. Do you want to save them before closing?", Text, MessageBoxButtons.YesNoCancel);

@@ -14,13 +14,31 @@ namespace SubVulpes
         int helpIndex;
         readonly List<NavItem> helpNav = new List<NavItem>();
 
-        static readonly string[][] HelpDocs = {
-            new[] { "Getting Started", "# Getting Started\nThis launcher starts and watches your SubVulpes server.\n## First start\n- Put the launcher in the server folder, next to `subvulpes_server.exe`.\n- Open **Settings**. Set a name and an admin password.\n- Go to **Server** and press **Start**.\n## Join the game\nPlayers join with the address of your computer and the port in **Settings**. Forward the UDP port on your router.\n## Admin password\nIn the game, type `/admin` and the password in the chat. Keep the password private.\n" },
-            new[] { "The Server Page", "# The Server Page\nThe top row shows the state of the server and the buttons.\n- **Start** starts the server.\n- **Stop** asks the server to save and close.\n- **Restart** stops the server and starts it again.\n- **Kill** ends the server at once. Use it only if Stop does not work.\n## Tick rate\nThe server runs about 60 ticks per second. A much lower number means lag.\n## Customize the panel\nSelect the sliders icon to choose which values and graph the panel shows. Drag the line below the panel to change its height.\n## Console\nThe filter shows only Info, Warnings or Errors. The search box shows only the lines with your text. Type a server command in the box at the bottom and press **Enter**.\n" },
-            new[] { "Settings", "# Settings\n## Server Settings\nSelect **Save** to write the changes to `config.txt`. **Revert changes** brings back the saved values. **Reset to defaults** sets the numbers back to their default values.\n## Requires restart\nThe launcher saves the setting. The server uses it after the next start.\n## Launcher Settings\nThese settings apply at once. Choose the theme and the accent color here. Each run of the server in Debug Mode saves its own log. The **Past Logs** list shows them.\n## Advanced Settings\nThis page shows when **Debug Mode** is on. Use it to record more data about a run.\n" },
-            new[] { "Plugins", "# Plugins\nPlugins add features to the server.\n## Risk\n- **low**: reads data or keeps its own files.\n- **high**: changes the game.\n- **highest**: runs inside the server with full access to it.\nTurn on only plugins that you trust.\n## Install\nUse `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.\n## Approval\nA plugin needs your approval before it runs. **Review approval…** shows the review again. Stop the server first.\n## Settings of a plugin\nSelect a plugin, open the **Settings** tab and select **Save**. A setting that says restart needed applies at the next start.\n" },
-            new[] { "Logs", "# Logs\n## The console log\nThe file `logs\\server.log` has all lines of the last run. Use the save icon in the console to copy it with the password removed.\n## Past Logs\nIn Debug Mode, each run makes its own folder in `logs`. Open **Launcher Settings** to see the list. Write a note for a log, then pack it into one zip to send it.\n## Crash reports\nThe server can save a dump when it crashes or freezes. Turn it on in **Advanced Settings**. Send the dump with the log.\n" },
-            new[] { "Problems", "# Problems\n## The server does not start\nRead the last lines in the console. Make sure that no other server uses the same port. Check that the folder has `data`.\n## The server freezes\nThe launcher shows Frozen when no speed line comes for a long time. Use **Kill** and start again.\n## The launcher cannot update\nCheck your internet connection. You can also install an update from a `.zip` file in **Launcher Settings**.\n" } };
+        // The topics come from tools/launcher/help.md, built into the program. Each "# " line starts a topic.
+        static readonly string[][] HelpDocs = LoadHelp();
+
+        static string[][] LoadHelp()
+        {
+            var topics = new List<string[]>();
+            string title = null;
+            var body = new System.Text.StringBuilder();
+            bool code = false;
+            using (var stream = typeof(LauncherForm).Assembly.GetManifestResourceStream("SubVulpes.Help")) {
+                if (stream == null) return new[] { new[] { "Help", "# Help\nThe help text is missing from this launcher." } };
+                using (var reader = new System.IO.StreamReader(stream, System.Text.Encoding.UTF8))
+                    for (string line = reader.ReadLine(); line != null; line = reader.ReadLine()) {
+                        if (line.StartsWith("```")) code = !code;
+                        if (!code && line.StartsWith("# ")) {
+                            if (title != null) topics.Add(new[] { title, body.ToString() });
+                            title = line.Substring(2).Trim();
+                            body.Length = 0;
+                        }
+                        body.Append(line).Append('\n');
+                    }
+            }
+            if (title != null) topics.Add(new[] { title, body.ToString() });
+            return topics.ToArray();
+        }
 
         Control HelpPage()
         {

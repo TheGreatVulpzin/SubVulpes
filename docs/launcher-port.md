@@ -11,7 +11,7 @@ The real launcher has the same look and uses real data.
 - `LauncherServer.cs`: the Server page (buttons, numbers, graph, console, command box).
 - `LauncherSettings.cs`: Settings with three sub-tabs, the Save bar and Past Logs.
 - `LauncherPlugins.cs`: the plugin table, the detail panel (Summary, Info, Settings) and the Catalog tab.
-- `LauncherHelp.cs`: the Help page. The topics are built into the program.
+- `LauncherHelp.cs`: the Help page. `help.md` holds its text.
 
 `LauncherForm` is one `partial` class. Add a file to `tools/launcher/build.bat` and to `CMakeLists.txt`.
 
@@ -27,10 +27,11 @@ The real launcher has the same look and uses real data.
 - The Save bar (Save, Revert changes, Reset to defaults) belongs to Server Settings only. Launcher and Advanced settings apply at once, as before.
 - Revert changes loads the saved values again. Reset to defaults resets the port, the upload limit, the mode, the player limit and the round time. It does not touch the name, the welcome text or the password.
 - The Catalog tab has no online source yet. It says so and offers Install from File.
-- The plugin table has no Source column. The launcher does not know where a plugin came from.
+- The plugin table has a Source column. A plugin whose id starts with `sv.` is Official. Any other is Installed. Risk and Source are hidden at first. Right-click a column title to choose the columns. The launcher remembers the choice.
 - A plugin risk comes from its runtime and capabilities: native is highest, any capability besides read, storage and config is high, the rest is low.
 - The plugin approval dialog keeps the standard look. Its tests and its security checks did not change.
-- The Help text is built into the program, not read from `docs/*.md`.
+- The Help text is `tools/launcher/help.md`. The build puts it in the program. Each `# ` line starts a topic.
+- The dashboard has 11 rows. Round and Network out are not in the launcher: the server does not report them. The launcher remembers the rows, the graph, the height and the width of the panel.
 
 ## Test aids
 
