@@ -93,14 +93,15 @@ namespace SubVulpesMockup
 
     class Card : Control
     {
-        public string Title = "", Value = "", Unit = "";
+        public string Title = "", Value = "", Unit = ""; public bool Flat;
         public Card(string title, string value, string unit)
         {
             Title = title; Value = value; Unit = unit; Dock = DockStyle.Fill; Margin = new Padding(0, 0, 10, 0); SetStyle(UI.Paint, true);
         }
-        protected static void Frame(Graphics g, int w, int h, Control parent)
+        protected void Frame(Graphics g, int w, int h, Control parent)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(parent.BackColor);
+            if (Flat) return;
             using (var path = UI.Round(new Rectangle(0, 0, w - 1, h - 1), 8)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
         }
         protected override void OnPaint(PaintEventArgs e)
@@ -138,6 +139,7 @@ namespace SubVulpesMockup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; Frame(g, Width, Height, Parent);
+            if (Flat) using (var pen = new Pen(UI.T.Line)) g.DrawLine(pen, 0, 6, 0, Height - 10);
             TextRenderer.DrawText(g, Title, UI.F(8.5f, FontStyle.Regular), new Point(14, 12), UI.T.Muted, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, "ticks/s", UI.F(8.5f, FontStyle.Regular), new Point(Width - 56, 12), UI.T.Muted, TextFormatFlags.NoPadding);
             int left = 46, right = Width - 20, top = 40, bottom = Height - 34; double lo = 58, hi = 63;
@@ -221,7 +223,7 @@ namespace SubVulpesMockup
     class StateLabel : Control
     {
         public string Word = "Running";
-        public StateLabel() { Height = 34; Width = 124; SetStyle(UI.Paint, true); }
+        public StateLabel() { Height = 34; Width = TextRenderer.MeasureText("Running", UI.F(10.5f, FontStyle.Bold)).Width + 50; SetStyle(UI.Paint, true); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
@@ -229,6 +231,16 @@ namespace SubVulpesMockup
             using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(Color.FromArgb(38, UI.T.Ok))) g.FillPath(b, path);
             using (var b = new SolidBrush(UI.T.Ok)) g.FillEllipse(b, 15, r.Height / 2 - 5, 10, 10);
             TextRenderer.DrawText(g, Word, UI.F(10.5f, FontStyle.Bold), new Rectangle(32, 0, r.Width - 32, r.Height), UI.T.Ok, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+    }
+
+    class Surface : Panel
+    {
+        public Surface() { SetStyle(UI.Paint, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 10)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
         }
     }
 
@@ -256,16 +268,16 @@ namespace SubVulpesMockup
             KeyPreview = true; KeyDown += delegate (object o, KeyEventArgs ke) { if (ke.Control && ke.KeyCode == Keys.T) SetTheme(UI.T == Theme.Light ? Theme.Dark : Theme.Light); };
             LoadData();
             tabBar = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8, 0, 8, 0), Tag = "bar" };
-            string[] names = { "Server", "Settings", "Plugins", "Help" };
+            string[] names = { "Server", "Plugins", "Settings", "Help" };
             for (int i = names.Length - 1; i >= 0; i--)
             {
                 var t = new TabLabel(names[i]); int index = i;
                 t.Click += delegate { ShowPage(index); };
                 tabs.Insert(0, t); tabBar.Controls.Add(t);
             }
-            pages.Add(ServerPage()); pages.Add(SettingsHost()); pages.Add(PluginsPage()); pages.Add(HelpPage());
+            pages.Add(ServerPage()); pages.Add(PluginsPage()); pages.Add(SettingsHost()); pages.Add(HelpPage());
             foreach (var p in pages) { p.Dock = DockStyle.Fill; p.Padding = new Padding(16, 12, 16, 10); Controls.Add(p); }
-            pages[1].Padding = Padding.Empty;
+            pages[2].Padding = Padding.Empty; pages[0].Padding = new Padding(16, 12, 16, 12);
             Controls.Add(tabBar);
             tabBar.SendToBack(); foreach (var p in pages) p.BringToFront();
             ShowPage(0); SetTheme(Theme.Light);
@@ -281,10 +293,10 @@ namespace SubVulpesMockup
         public void Go(string what)
         {
             if (what == "server") ShowPage(0);
-            else if (what == "settings-server") { ShowPage(1); ShowSub(0); }
-            else if (what == "settings-launcher") { ShowPage(1); ShowSub(1); }
-            else if (what == "settings-advanced") { ShowPage(1); ShowSub(2); }
-            else if (what == "plugins") ShowPage(2);
+            else if (what == "settings-server") { ShowPage(2); ShowSub(0); }
+            else if (what == "settings-launcher") { ShowPage(2); ShowSub(1); }
+            else if (what == "settings-advanced") { ShowPage(2); ShowSub(2); }
+            else if (what == "plugins") ShowPage(1);
             else if (what == "help") ShowPage(3);
         }
         public static string[] Names = { "server", "settings-server", "settings-launcher", "settings-advanced", "plugins", "help" };
@@ -389,12 +401,12 @@ namespace SubVulpesMockup
         // ---- server page
         Control ServerPage()
         {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5 }; serverPage = page;
+            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5, Dock = DockStyle.Fill, Tag = "panel" }; serverPage = page;
             page.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); page.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
             page.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); page.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); page.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
-            var toolbar = new Panel { Dock = DockStyle.Fill };
-            var rightFlow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
+            var toolbar = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
+            var rightFlow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
             var save = new FlatButton("Save Log") { Margin = new Padding(8, 0, 0, 0) };
             var kill = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 18, 0) };
             var restart = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0) };
@@ -402,21 +414,21 @@ namespace SubVulpesMockup
             var start = new FlatButton("Start") { Kind = "primary", Enabled = false, Margin = new Padding(8, 0, 0, 0) };
             rightFlow.Controls.AddRange(new Control[] { save, kill, restart, stop, start });
             var state = new StateLabel { Dock = DockStyle.Left };
-            var stateHolder = new Panel { Dock = DockStyle.Left, Width = 124, Padding = new Padding(0, 4, 0, 0) };
+            var stateHolder = new Panel { Dock = DockStyle.Left, Width = state.Width, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
             stateHolder.Controls.Add(state); state.Dock = DockStyle.Fill;
             toolbar.Controls.Add(rightFlow); toolbar.Controls.Add(stateHolder);
             page.Controls.Add(toolbar, 0, 0);
 
-            var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8) }; statsRow = stats;
+            var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" }; statsRow = stats;
             stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-            var list = new StatsList(); UI.Tips.SetToolTip(list, "Uptime is the time since the server started. Speed is how many game steps (ticks) the server runs each second. About 60 is normal. Players does not count bots.");
+            var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Uptime is the time since the server started. Speed is how many game steps (ticks) the server runs each second. About 60 is normal. Players does not count bots.");
             stats.Controls.Add(list, 0, 0);
-            var chart = new AreaChart(); UI.Tips.SetToolTip(chart, "The speed of the server in each of the last 20 minutes."); stats.Controls.Add(chart, 1, 0);
+            var chart = new AreaChart { Flat = true }; UI.Tips.SetToolTip(chart, "The speed of the server in each of the last 20 minutes."); stats.Controls.Add(chart, 1, 0);
             page.Controls.Add(stats, 0, 1);
 
-            var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Padding = new Padding(0, 6, 0, 4) };
+            var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Padding = new Padding(0, 6, 0, 4), Tag = "panel" };
             bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 250)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            var pills = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
+            var pills = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0), Tag = "panel" };
             string[] fn = { "All", "Info", "Warnings", "Errors" }; string[] fk = { "all", "i", "w", "e" };
             for (int i = 0; i < 4; i++)
             {
@@ -441,12 +453,14 @@ namespace SubVulpesMockup
             console = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f), Padding = new Padding(8) };
             page.Controls.Add(console, 0, 3);
 
-            var cmd = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0) };
+            var cmd = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0), Tag = "panel" };
             cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
             var box = new TextBox { BorderStyle = BorderStyle.FixedSingle, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 0, 8, 0) };
             cmd.Controls.Add(box, 0, 0); cmd.Controls.Add(new FlatButton("Send") { Anchor = AnchorStyles.Left, Margin = new Padding(0) }, 1, 0);
             page.Controls.Add(cmd, 0, 4);
-            return page;
+            var surface = new Surface { Padding = new Padding(16, 12, 16, 12) };
+            surface.Controls.Add(page);
+            return surface;
         }
 
         static readonly string[][] AllLines = {
