@@ -52,6 +52,12 @@ namespace SubVulpes
             return m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Official" : "Installed";
         }
 
+        // The author of the project is the author of the official plugins when the manifest names nobody.
+        static string AuthorOf(PluginMetadata m)
+        {
+            return m.Author.Length > 0 ? m.Author : m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Vulpzin" : "";
+        }
+
         string SourceOfPlugin(PluginMetadata m)
         {
             // The catalog knows best. Without it, the id decides.
@@ -114,7 +120,7 @@ namespace SubVulpes
 
         string SortKey(PluginMetadata p, int column)
         {
-            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateText(p.State) : column == 4 ? SourceOfPlugin(p) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
+            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateText(p.State) : column == 4 ? SourceOfPlugin(p) : column == 5 ? AuthorOf(p) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
         }
 
         void RebuildPlugins()
@@ -125,11 +131,11 @@ namespace SubVulpes
             string term = pluginSearch == null ? "" : pluginSearch.Text.Trim();
             foreach (var p in plugins)
                 if (term.Length == 0 || p.DisplayName.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 || p.Id.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0) shown.Add(p);
-            if (sortColumn >= 0 && sortColumn <= 4)
+            if (sortColumn >= 0 && sortColumn <= 5)
                 shown.Sort((a, b) => (sortAscending ? 1 : -1) * string.Compare(SortKey(a, sortColumn), SortKey(b, sortColumn), StringComparison.OrdinalIgnoreCase));
             pluginGrid.Rows.Clear();
             foreach (var p in shown) {
-                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateText(p.State), RiskOf(p), SourceOfPlugin(p), "");
+                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateText(p.State), RiskOf(p), SourceOfPlugin(p), AuthorOf(p), "");
                 pluginGrid.Rows[r].Tag = p;
                 if (p.Id == selectedPluginId) pluginGrid.CurrentCell = pluginGrid.Rows[r].Cells[0];
             }
@@ -184,14 +190,16 @@ namespace SubVulpes
 
         // ------------------------------------------------------------ catalog
 
-        // One plugin of catalog.json. File is the package, as a path in the server folder or an absolute path.
+        // One plugin of catalog.json. Icon and Images are picture files, File is the package. A path is in the server folder, or absolute.
         sealed class CatalogEntry
         {
-            public string Id = "", Name = "", Description = "", Author = "", Version = "", Source = "", File = "";
+            public string Id = "", Name = "", Description = "", Author = "", Version = "", Source = "", File = "", Icon = "";
+            public readonly List<string> Images = new List<string>();
         }
 
         readonly List<CatalogEntry> catalog = new List<CatalogEntry>();
-        Panel catalogList;
+        readonly Dictionary<string, Image> catalogPictures = new Dictionary<string, Image>();
+        Panel catalogList, catalogDetail, catalogBar;
         SearchBox catalogSearch;
         Dropdown catalogKind;
         string catalogProblem = "";
@@ -205,10 +213,12 @@ namespace SubVulpes
             return text.Length > maximum ? text.Substring(0, maximum) : text;
         }
 
-        // Reads catalog.json from the server folder: a list of objects with id, name, description, author, version, source and file.
+        // Reads catalog.json from the server folder: a list of objects with id, name, description, author, version, source, file, icon and images.
         void LoadCatalog()
         {
             catalog.Clear();
+            foreach (Image picture in catalogPictures.Values) if (picture != null) picture.Dispose();
+            catalogPictures.Clear();
             catalogProblem = "";
             string path = Path.Combine(folder, "catalog.json");
             if (!System.IO.File.Exists(path)) return;
@@ -222,11 +232,17 @@ namespace SubVulpes
                     if (!PluginId(entry.Id)) continue;
                     entry.Name = CatalogText(d, "name", 48);
                     if (entry.Name.Length == 0) entry.Name = entry.Id;
-                    entry.Description = CatalogText(d, "description", 160);
+                    entry.Description = CatalogText(d, "description", 600);
                     entry.Author = CatalogText(d, "author", 48);
+                    if (entry.Author.Length == 0) entry.Author = "Vulpzin";
                     entry.Version = CatalogText(d, "version", 23);
                     entry.Source = CatalogText(d, "source", 16);
                     entry.File = CatalogText(d, "file", 260);
+                    entry.Icon = CatalogText(d, "icon", 260);
+                    object images;
+                    if (d.TryGetValue("images", out images) && images is object[])
+                        foreach (object image in (object[])images)
+                            if (image is string && entry.Images.Count < 8) entry.Images.Add((string)image);
                     catalog.Add(entry);
                 }
             } catch (Exception ex) {
@@ -235,29 +251,55 @@ namespace SubVulpes
             }
         }
 
-        static string CatalogPackage(string folder, CatalogEntry entry)
+        string CatalogPath(string given)
+        {
+            return Path.IsPathRooted(given) ? given : Path.Combine(folder, given);
+        }
+
+        string CatalogPackage(CatalogEntry entry)
         {
             if (entry.File.Length == 0) return null;
-            string full = Path.IsPathRooted(entry.File) ? entry.File : Path.Combine(folder, entry.File);
+            string full = CatalogPath(entry.File);
             return System.IO.File.Exists(full) ? full : null;
+        }
+
+        // A picture of the catalog. A file that is too big or not a PNG or JPEG gives nothing.
+        Image CatalogPicture(string given)
+        {
+            if (string.IsNullOrEmpty(given)) return null;
+            string full = CatalogPath(given);
+            Image picture;
+            if (catalogPictures.TryGetValue(full, out picture)) return picture;
+            try {
+                var info = new FileInfo(full);
+                string extension = info.Extension.ToLowerInvariant();
+                if (info.Exists && info.Length <= 5 * 1024 * 1024 && (extension == ".png" || extension == ".jpg" || extension == ".jpeg"))
+                    using (var stream = System.IO.File.OpenRead(full))
+                    using (var raw = Image.FromStream(stream))
+                        picture = new Bitmap(raw);
+            } catch (Exception) { picture = null; }
+            catalogPictures[full] = picture;
+            return picture;
         }
 
         Control CatalogPage()
         {
             var page = new Panel();
-            var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
+            catalogBar = new Panel { Dock = DockStyle.Top, Height = 44 };
             catalogSearch = new SearchBox(260) { Location = new Point(0, 8) };
             catalogKind = new Dropdown(150) { Location = new Point(272, 8) };
             catalogKind.Items.AddRange(new object[] { "All plugins", "Official", "Community" });
             catalogKind.SelectedIndex = 0;
             catalogSearch.TextChanged += delegate { RenderCatalog(); };
             catalogKind.SelectedIndexChanged += delegate { RenderCatalog(); };
-            bar.Controls.Add(catalogSearch);
-            bar.Controls.Add(catalogKind);
+            catalogBar.Controls.Add(catalogSearch);
+            catalogBar.Controls.Add(catalogKind);
             catalogList = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            catalogDetail = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Visible = false };
             page.Controls.Add(catalogList);
-            page.Controls.Add(bar);
-            bar.SendToBack();
+            page.Controls.Add(catalogDetail);
+            page.Controls.Add(catalogBar);
+            catalogBar.SendToBack();
             catalogList.BringToFront();
             return page;
         }
@@ -265,6 +307,10 @@ namespace SubVulpes
         void RenderCatalog()
         {
             if (catalogList == null) return;
+            // The list shows again. A plugin page closes.
+            catalogDetail.Visible = false;
+            catalogList.Visible = true;
+            catalogBar.Visible = true;
             catalogList.SuspendLayout();
             catalogList.Controls.Clear();
             string term = catalogSearch.Text.Trim();
@@ -296,45 +342,113 @@ namespace SubVulpes
             return card;
         }
 
+        // The Install button, or the mark of a plugin that is installed already.
+        Control CatalogAction(CatalogEntry c)
+        {
+            if (plugins.Any(p => p.Id == c.Id)) {
+                var done = L("✓ Installed", false, false);
+                done.Tag = "ok";
+                return done;
+            }
+            string package = CatalogPackage(c);
+            var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null };
+            if (package == null) UI.Tips.SetToolTip(install, "The package file of this plugin is not on this computer.");
+            install.Click += async delegate { await InstallPlugin(package); };
+            return install;
+        }
+
         Control CatalogCard(CatalogEntry c)
         {
             var wrap = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(0, 0, 0, 10) };
-            var card = new Surface { Dock = DockStyle.Fill };
-            var avatar = new Avatar(c.Name) { Location = new Point(16, 16) };
+            var card = new Surface { Dock = DockStyle.Fill, Cursor = Cursors.Hand };
+            var avatar = new Avatar(c.Name) { Location = new Point(16, 16), Picture = CatalogPicture(c.Icon) };
             var name = L(c.Name, true, false);
             name.Font = UI.F(10.5f, FontStyle.Bold);
             name.Location = new Point(76, 14);
             var desc = L(c.Description.Length > 0 ? c.Description : "No description.", false, true);
-            desc.AutoEllipsis = true;
             desc.AutoSize = false;
+            desc.AutoEllipsis = true;
             desc.Size = new Size(420, 20);
             desc.Location = new Point(76, 42);
-            var meta = L((c.Author.Length > 0 ? c.Author + " · " : "") + "v" + c.Version, false, true);
+            var meta = L("by " + c.Author + (c.Version.Length > 0 ? " · v" + c.Version : ""), false, true);
             meta.Location = new Point(76, 62);
-            card.Controls.AddRange(new Control[] { avatar, name, desc, meta });
+            var parts = new List<Control> { avatar, name, desc, meta };
             if (c.Source.Length > 0) {
                 var chip = new Label { Text = c.Source, AutoSize = true, Padding = new Padding(8, 3, 8, 3), Font = UI.F(9f, FontStyle.Regular), Tag = "chip" };
                 chip.Location = new Point(76 + name.PreferredWidth + 10, 12);
-                card.Controls.Add(chip);
+                parts.Add(chip);
             }
-            Control action;
-            if (plugins.Any(p => p.Id == c.Id)) {
-                var done = L("✓ Installed", false, false);
-                done.Tag = "ok";
-                action = done;
-            } else {
-                string package = CatalogPackage(folder, c);
-                var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null };
-                if (package == null) UI.Tips.SetToolTip(install, "The package file of this plugin is not on this computer.");
-                install.Click += async delegate { await InstallPlugin(package); };
-                action = install;
-            }
+            card.Controls.AddRange(parts.ToArray());
+            // A click on the card opens the page of the plugin.
+            card.Click += delegate { ShowCatalogDetail(c); };
+            foreach (Control part in parts) { part.Cursor = Cursors.Hand; part.Click += delegate { ShowCatalogDetail(c); }; }
+            Control action = CatalogAction(c);
             card.Controls.Add(action);
             Action place = delegate { action.Location = new Point(card.Width - action.Width - 18, (card.Height - action.Height) / 2); };
             card.Resize += delegate { place(); };
             action.SizeChanged += delegate { place(); };
             wrap.Controls.Add(card);
             return wrap;
+        }
+
+        // The page of one plugin: icon, author, description, a large picture and a row of small ones, like a mod site.
+        void ShowCatalogDetail(CatalogEntry c)
+        {
+            catalogBar.Visible = false;
+            catalogList.Visible = false;
+            catalogDetail.SuspendLayout();
+            catalogDetail.Controls.Clear();
+            var back = new FlatButton("Back") { Location = new Point(0, 4), Height = 28 };
+            back.Click += delegate { RenderCatalog(); };
+            var avatar = new Avatar(c.Name, 72) { Location = new Point(0, 48), Picture = CatalogPicture(c.Icon) };
+            var name = L(c.Name, true, false);
+            name.Font = UI.F(16f, FontStyle.Bold);
+            name.Location = new Point(88, 50);
+            var meta = L("by " + c.Author + (c.Version.Length > 0 ? " · v" + c.Version : ""), false, true);
+            meta.Location = new Point(88, 86);
+            var parts = new List<Control> { back, avatar, name, meta };
+            if (c.Source.Length > 0) {
+                var chip = new Label { Text = c.Source, AutoSize = true, Padding = new Padding(8, 3, 8, 3), Font = UI.F(9f, FontStyle.Regular), Tag = "chip" };
+                chip.Location = new Point(88 + name.PreferredWidth + 12, 56);
+                parts.Add(chip);
+            }
+            var desc = L(c.Description.Length > 0 ? c.Description : "No description.", false, c.Description.Length == 0);
+            desc.MaximumSize = new Size(720, 0);
+            desc.Location = new Point(0, 140);
+            parts.Add(desc);
+            int y = 140 + desc.PreferredSize.Height + 20;
+            var pictures = new List<Image>();
+            foreach (string given in c.Images) { Image picture = CatalogPicture(given); if (picture != null) pictures.Add(picture); }
+            if (pictures.Count == 0) {
+                var none = L("This plugin has no pictures.", false, true);
+                none.Location = new Point(0, y);
+                parts.Add(none);
+            } else {
+                var big = new ImageBox { Location = new Point(0, y), Size = new Size(640, 360), Picture = pictures[0] };
+                parts.Add(big);
+                var thumbs = new List<Thumb>();
+                for (int i = 0; i < pictures.Count; i++) {
+                    var thumb = new Thumb { Picture = pictures[i], Selected = i == 0, Location = new Point(i * 120, y + 372) };
+                    thumb.Click += delegate
+                    {
+                        big.Picture = thumb.Picture;
+                        foreach (Thumb other in thumbs) { other.Selected = other == thumb; other.Invalidate(); }
+                        big.Invalidate();
+                    };
+                    thumbs.Add(thumb);
+                    parts.Add(thumb);
+                }
+            }
+            catalogDetail.Controls.AddRange(parts.ToArray());
+            Control action = CatalogAction(c);
+            catalogDetail.Controls.Add(action);
+            Action place = delegate { action.Location = new Point(Math.Max(400, catalogDetail.ClientSize.Width - action.Width - 8), 62); };
+            catalogDetail.Resize += delegate { place(); };
+            action.SizeChanged += delegate { place(); };
+            place();
+            Skin.Apply(catalogDetail);
+            catalogDetail.Visible = true;
+            catalogDetail.ResumeLayout();
         }
 
         Control PluginsPage()
@@ -378,22 +492,24 @@ namespace SubVulpes
             pluginGrid.Columns.Add("s", "State");
             pluginGrid.Columns.Add("r", "Risk");
             pluginGrid.Columns.Add("src", "Source");
+            pluginGrid.Columns.Add("au", "Author");
             pluginGrid.Columns.Add("o", "On");
             pluginGrid.Columns[0].FillWeight = 170;
             pluginGrid.Columns[1].FillWeight = 70;
             pluginGrid.Columns[2].FillWeight = 120;
             pluginGrid.Columns[3].FillWeight = 80;
             pluginGrid.Columns[4].FillWeight = 80;
-            pluginGrid.Columns[5].FillWeight = 50;
+            pluginGrid.Columns[5].FillWeight = 80;
+            pluginGrid.Columns[6].FillWeight = 50;
             foreach (DataGridViewColumn col in pluginGrid.Columns) col.SortMode = DataGridViewColumnSortMode.Programmatic;
             // The columns the user hid stay hidden. The setting holds the names of the hidden columns.
-            string hidden = "," + settings.Get("plugin_hidden", "3,4") + ",";
-            for (int i = 1; i <= 4; i++) pluginGrid.Columns[i].Visible = !hidden.Contains("," + i + ",");
+            string hidden = "," + settings.Get("plugin_hidden", "3,4,5") + ",";
+            for (int i = 1; i <= 5; i++) pluginGrid.Columns[i].Visible = !hidden.Contains("," + i + ",");
             pluginGrid.ColumnHeaderMouseClick += delegate (object s, DataGridViewCellMouseEventArgs e)
             {
                 if (e.Button == MouseButtons.Left)
                 {
-                    if (e.ColumnIndex > 4) return;
+                    if (e.ColumnIndex > 5) return;
                     sortAscending = sortColumn == e.ColumnIndex ? !sortAscending : true;
                     sortColumn = e.ColumnIndex;
                     RebuildPlugins();
@@ -408,7 +524,7 @@ namespace SubVulpes
                 var p = pluginGrid.Rows[e.RowIndex].Tag as PluginMetadata;
                 if (p == null) return;
                 selectedPluginId = p.Id;
-                if (e.ColumnIndex == 5) ToggleFromTable(p);
+                if (e.ColumnIndex == 6) ToggleFromTable(p);
                 else RenderPluginDetail();
             };
             pluginGrid.CellMouseClick += delegate (object s, DataGridViewCellMouseEventArgs e)
@@ -442,20 +558,20 @@ namespace SubVulpes
         {
             var menu = Dropdown.Menu();
             menu.ShowCheckMargin = true;
-            for (int i = 1; i <= 4; i++) {
+            for (int i = 1; i <= 5; i++) {
                 var col = pluginGrid.Columns[i];
                 var item = new ToolStripMenuItem(col.HeaderText) { Checked = col.Visible, ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
                 item.Click += delegate
                 {
                     col.Visible = !col.Visible;
                     var hiddenNow = new List<string>();
-                    for (int k = 1; k <= 4; k++) if (!pluginGrid.Columns[k].Visible) hiddenNow.Add(k.ToString());
+                    for (int k = 1; k <= 5; k++) if (!pluginGrid.Columns[k].Visible) hiddenNow.Add(k.ToString());
                     settings.Set("plugin_hidden", string.Join(",", hiddenNow.ToArray()));
                     settings.Save();
                 };
                 menu.Items.Add(item);
             }
-            if (clicked >= 0 && clicked <= 4) {
+            if (clicked >= 0 && clicked <= 5) {
                 menu.Items.Add(new ToolStripSeparator());
                 var up = new ToolStripMenuItem("Sort ascending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
                 var down = new ToolStripMenuItem("Sort descending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
@@ -493,7 +609,7 @@ namespace SubVulpes
 
         void PaintPluginCell(object s, DataGridViewCellPaintingEventArgs e)
         {
-            if (e.RowIndex < 0 || (e.ColumnIndex != 2 && e.ColumnIndex != 3 && e.ColumnIndex != 5)) return;
+            if (e.RowIndex < 0 || (e.ColumnIndex != 2 && e.ColumnIndex != 3 && e.ColumnIndex != 6)) return;
             var p = pluginGrid.Rows[e.RowIndex].Tag as PluginMetadata;
             if (p == null) return;
             e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground | DataGridViewPaintParts.Border);
@@ -512,7 +628,7 @@ namespace SubVulpes
                 var pill = new Rectangle(e.CellBounds.X + 6, my - 11, rw, 22);
                 using (var path = UI.Round(pill, 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, rc, 0.16))) g.FillPath(b, path);
                 TextRenderer.DrawText(g, risk, rf, pill, rc, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-            } else if (e.ColumnIndex == 5) {
+            } else if (e.ColumnIndex == 6) {
                 Switch.Draw(g, new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 20) / 2, 36, 20), p.State != "disabled");
             }
             e.Handled = true;
@@ -539,7 +655,7 @@ namespace SubVulpes
             var title = L(p.DisplayName, true, false);
             title.Font = UI.F(13f, FontStyle.Bold);
             title.Location = new Point(56, 5);
-            var sub = L(p.Version + (p.Author.Length > 0 ? " · " + p.Author : ""), false, true);
+            var sub = L(p.Version + (AuthorOf(p).Length > 0 ? " · " + AuthorOf(p) : ""), false, true);
             sub.Location = new Point(56, 31);
             header.Controls.Add(new Avatar(p.DisplayName) { Location = new Point(0, 6) });
             header.Controls.Add(title);
@@ -601,7 +717,7 @@ namespace SubVulpes
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
             string[][] info = {
-                new[] { "ID", p.Id }, new[] { "Version", p.Version }, new[] { "Author", p.Author.Length > 0 ? p.Author : "Not stated" },
+                new[] { "ID", p.Id }, new[] { "Version", p.Version }, new[] { "Author", AuthorOf(p).Length > 0 ? AuthorOf(p) : "Not stated" },
                 new[] { "Runtime", p.Runtime }, new[] { "Risk", RiskOf(p) }, new[] { "Required", p.Required == "1" ? "Yes" : "No" } };
             foreach (var kv in info) {
                 int row = tbl.RowCount++;

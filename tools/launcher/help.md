@@ -46,7 +46,7 @@ Select a column title to sort. Right-click a title to choose the columns. Risk a
 ## Right-click a plugin
 The menu turns the plugin on or off, opens the approval review and copies the id.
 ## Catalog
-The Catalog tab lists the plugins of the file `catalog.json` in the server folder. Select **Install** to install one. The approval review still shows first.
+The Catalog tab lists the plugins of the file `catalog.json` in the server folder. Select **Install** to install one, or select a card to see the page of the plugin with its pictures. The approval review still shows first.
 ## Install
 Use `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.
 ## Approval

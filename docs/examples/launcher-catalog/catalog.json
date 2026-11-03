@@ -1,0 +1,42 @@
+[
+  {
+    "id": "sv.bans",
+    "name": "Bans",
+    "description": "Bans players by account or by address, with an optional end date. A banned player cannot join again. This is an example entry: the package file does not exist yet.",
+    "version": "0.1.0",
+    "source": "Official",
+    "images": ["catalog-images/launcher-plugins.png", "catalog-images/launcher-server.png", "catalog-images/launcher-help.png"]
+  },
+  {
+    "id": "sv.motd",
+    "name": "Message of the Day",
+    "description": "Shows a message to each player who joins the server.",
+    "version": "0.1.0",
+    "source": "Official",
+    "images": ["catalog-images/launcher-server.png"]
+  },
+  {
+    "id": "sv.auditlogs",
+    "name": "Audit Log",
+    "description": "Writes who used which admin command, and when.",
+    "version": "0.1.0",
+    "source": "Official",
+    "images": ["catalog-images/launcher-help.png", "catalog-images/launcher-plugins.png"]
+  },
+  {
+    "id": "sv.jukebox",
+    "name": "MIDI Jukebox",
+    "description": "Play MIDI music with any game sound. This plugin shows as installed when the server has it.",
+    "version": "0.2.0",
+    "source": "Official",
+    "images": ["catalog-images/launcher-plugins.png"]
+  },
+  {
+    "id": "example.flight",
+    "name": "Flight",
+    "description": "Lets players fly with a key. This entry shows how a plugin of another author looks.",
+    "author": "Example Author",
+    "version": "0.3.1",
+    "source": "Community"
+  }
+]

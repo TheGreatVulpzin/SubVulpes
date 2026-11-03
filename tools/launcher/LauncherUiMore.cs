@@ -8,15 +8,76 @@ using System.Windows.Forms;
 
 namespace SubVulpes.Ui
 {
-    // The first letter of a plugin on a tinted rounded square.
+    // The icon of a plugin on a rounded square. Without a picture, the first letter of its name stands in.
     class Avatar : Control
     {
-        public Avatar(string text) { Text = text.Length == 0 ? "?" : text; Size = new Size(44, 44); SetStyle(UI.Paint, true); }
+        public Image Picture;
+        public Avatar(string text) : this(text, 44) { }
+        public Avatar(string text, int size) { Text = text.Length == 0 ? "?" : text; Size = new Size(size, size); SetStyle(UI.Paint, true); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 10)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, UI.T.Accent, 0.16))) g.FillPath(b, path);
-            TextRenderer.DrawText(g, Text.Substring(0, 1).ToUpperInvariant(), UI.F(14f, FontStyle.Bold), new Rectangle(0, 0, Width, Height), UI.T.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            var r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var path = UI.Round(r, Math.Max(10, Width / 5)))
+            {
+                if (Picture != null)
+                {
+                    g.SetClip(path); g.DrawImage(Picture, r); g.ResetClip();
+                    using (var pen = new Pen(UI.T.Line)) g.DrawPath(pen, path);
+                    return;
+                }
+                using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, UI.T.Accent, 0.16))) g.FillPath(b, path);
+            }
+            TextRenderer.DrawText(g, Text.Substring(0, 1).ToUpperInvariant(), UI.F(Width * 0.32f, FontStyle.Bold), new Rectangle(0, 0, Width, Height), UI.T.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+    }
+
+    // A picture that fits in its box, on a rounded frame.
+    class ImageBox : Control
+    {
+        public Image Picture;
+        public ImageBox() { SetStyle(UI.Paint, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.Clear(Parent.BackColor);
+            var r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var path = UI.Round(r, 8))
+            {
+                using (var b = new SolidBrush(UI.T.Chip)) g.FillPath(b, path);
+                if (Picture != null)
+                {
+                    double scale = Math.Min((double)(Width - 2) / Picture.Width, (double)(Height - 2) / Picture.Height);
+                    int w = (int)(Picture.Width * scale), h = (int)(Picture.Height * scale);
+                    g.SetClip(path); g.DrawImage(Picture, new Rectangle((Width - w) / 2, (Height - h) / 2, w, h)); g.ResetClip();
+                }
+                using (var pen = new Pen(UI.T.Line)) g.DrawPath(pen, path);
+            }
+        }
+    }
+
+    // A small preview of a picture. The chosen one has an accent frame.
+    class Thumb : Control
+    {
+        public Image Picture; public bool Selected;
+        public Thumb() { Size = new Size(112, 68); Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.Clear(Parent.BackColor);
+            var r = new Rectangle(1, 1, Width - 3, Height - 3);
+            using (var path = UI.Round(r, 6))
+            {
+                using (var b = new SolidBrush(UI.T.Chip)) g.FillPath(b, path);
+                if (Picture != null)
+                {
+                    // The picture fills the box and the extra part is cut.
+                    double scale = Math.Max((double)r.Width / Picture.Width, (double)r.Height / Picture.Height);
+                    int sw = (int)(r.Width / scale), sh = (int)(r.Height / scale);
+                    g.SetClip(path);
+                    g.DrawImage(Picture, r, new Rectangle((Picture.Width - sw) / 2, (Picture.Height - sh) / 2, sw, sh), GraphicsUnit.Pixel);
+                    g.ResetClip();
+                }
+                using (var pen = new Pen(Selected ? UI.T.Accent : UI.T.Line, Selected ? 2.5f : 1f)) g.DrawPath(pen, path);
+            }
         }
     }
 

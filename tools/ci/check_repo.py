@@ -36,7 +36,11 @@ def main():
             reason = 'symbolic link'
         elif (ROOT / name).is_file() and name != 'tools/ci/check_repo.py':
             data = (ROOT / name).read_bytes()
-            if data.startswith((b'MZ', b'\x7fELF', b'PK\x03\x04')) or b'\0' in data:
+            # Example pictures of the launcher are the one binary kind that docs/examples may hold.
+            example_picture = lower.startswith('docs/examples/') and lower.endswith('.png') and data.startswith(b'\x89PNG\r\n\x1a\n')
+            if example_picture:
+                pass
+            elif data.startswith((b'MZ', b'\x7fELF', b'PK\x03\x04')) or b'\0' in data:
                 reason = 'binary content'
             else:
                 text = data.decode('utf-8-sig', errors='replace')
