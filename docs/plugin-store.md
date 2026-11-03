@@ -178,29 +178,37 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 3. Renew the manifest (`plugin.ini`) together with the plugin API renewal, before the store: icon, author, homepage, license and the minimum API version. The server lists the new fields and the launcher reads them. Old plugins keep working.
 4. Make the repository: one example plugin, the build script, the index generator, the signature and the Action.
 5. Make the launcher client: download, cache, thumbnails, the plugin page from the index, one-click install, pending installs.
-6. Give the review window the new look. Keep it for files from outside the repository.
-7. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
+6. Add the Remove action to the launcher (delete the folder, remove the approval, warn the plugins that depend on it). The Plugins page has no way to uninstall today.
+7. Give the review window the new look. Keep it for files from outside the repository.
+8. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
 
 ## Manifest renewal (spec, not started)
 
-The manifest (`docs/plugin-manifest.md`) already has `name`, `description`, `author` and `homepage`. The store needs three more keys. No other key changes.
+The manifest (`docs/plugin-manifest.md`) already has `name`, `description`, `author` and `homepage`. The store needs these new keys. No other key changes. All of them are optional.
 
 | New key | Required | Rule |
 | --- | --- | --- |
 | `icon` | no | A file name in the plugin folder, such as `icon.png`. A PNG with a valid signature, at most 128 KB, from 64 by 64 to 512 by 512 pixels, and square. |
 | `license` | no | An SPDX identifier, such as `GPL-3.0-only`, 1 to 32 characters from `A-Z a-z 0-9 . + -`. The Workshop CI makes it required for all content. The server only checks the form. |
 | `kind` | no | `plugin` (the default), `mod` or `bundle`. The server accepts `plugin` only. The other values are reserved. |
+| `side` | no | `server` (the default), `client` or `both`. The server accepts `server` only. Reserved for mods and bundles. |
+| `server_min` | no | The lowest server version that the plugin needs, such as `0.1.1`. Digits and dots, up to 23 characters. The host refuses a plugin that needs a newer server, with a fixed reason. A build with no version number skips the check. |
+| `tags` | no | Up to 5 tags separated by commas, with no spaces. Each tag has 2 to 20 characters from `a-z 0-9 -`. The catalog uses them to filter and search. |
+| `channel` | no | `stable` (the default), `beta` or `experimental`. The launcher hides `beta` and `experimental` unless the user turns on Include Beta Versions. |
+| `entry` | no | The main file of a script plugin. Reserved for Lua and WASM. A native plugin keeps `library`. When script runtimes exist, a manifest has `library` or `entry`, never both. The server refuses `entry` until then. |
+
+**Already covered.** `dependencies` with a lowest version (`sv.lib@1.2`), `conflicts`, `role` and `live` exist. The `needs` field of the index copies `dependencies`.
 
 **Compatibility.** The ABI key `api` stays as it is. It already says which API the plugin was built for. The index of the store copies it, and the launcher hides a plugin that the server cannot run. A manifest-only change does not raise `api`.
 
 **What changes in each part**
 
-1. **Server.** The manifest reader accepts and checks the three keys. The rules stay in the server, and the installer and the launcher keep asking it. The check of the PNG (signature, size and the dimensions in the header) runs where the folder is validated. The rows of `--plugins-list` and `--plugin-inspect` keep their format. They already carry the author and the homepage.
+1. **Server.** The manifest reader accepts and checks the new keys. The rules stay in the server, and the installer and the launcher keep asking it. The check of the PNG (signature, size and the dimensions in the header) runs where the folder is validated. The rows of `--plugins-list` and `--plugin-inspect` keep their format. They already carry the author and the homepage.
 2. **Installer.** It copies `icon` with the other files. It refuses a package whose `icon` file is missing or fails the check.
 3. **Launcher.** It reads `plugins/<id>/icon.png` of an installed plugin, with no new request to the server. The table, the detail panel and the catalog card show it in place of the letter. A plugin without an icon shows the letter, as now.
 4. **Official plugins.** Each manifest gets `author=Vulpzin`, `license=GPL-3.0-only` and `icon=icon.png`, with a real icon. This changes their hashes, so the hash list of the package is made again.
 5. **Docs.** `plugin-manifest.md` and `plugin-sdk.md` list the new keys.
-6. **Tests.** New cases in the manifest group (a good icon, a missing file, a file that is not a PNG, a file too big or not square, a bad license, a kind that is not `plugin`). The package tests check that the icon is in the package.
+6. **Tests.** New cases in the manifest group (a good icon, a missing file, a file that is not a PNG, a file too big or not square, a bad license, a kind or a side that is not accepted, a bad `server_min`, too many tags, a bad `channel`, and `entry` before Lua exists). The package tests check that the icon is in the package.
 
 Old plugins keep working. A manifest without the new keys stays valid.
 
