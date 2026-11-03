@@ -181,6 +181,29 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 6. Give the review window the new look. Keep it for files from outside the repository.
 7. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
 
+## Manifest renewal (spec, not started)
+
+The manifest (`docs/plugin-manifest.md`) already has `name`, `description`, `author` and `homepage`. The store needs three more keys. No other key changes.
+
+| New key | Required | Rule |
+| --- | --- | --- |
+| `icon` | no | A file name in the plugin folder, such as `icon.png`. A PNG with a valid signature, at most 128 KB, from 64 by 64 to 512 by 512 pixels, and square. |
+| `license` | no | An SPDX identifier, such as `GPL-3.0-only`, 1 to 32 characters from `A-Z a-z 0-9 . + -`. The Workshop CI makes it required for all content. The server only checks the form. |
+| `kind` | no | `plugin` (the default), `mod` or `bundle`. The server accepts `plugin` only. The other values are reserved. |
+
+**Compatibility.** The ABI key `api` stays as it is. It already says which API the plugin was built for. The index of the store copies it, and the launcher hides a plugin that the server cannot run. A manifest-only change does not raise `api`.
+
+**What changes in each part**
+
+1. **Server.** The manifest reader accepts and checks the three keys. The rules stay in the server, and the installer and the launcher keep asking it. The check of the PNG (signature, size and the dimensions in the header) runs where the folder is validated. The rows of `--plugins-list` and `--plugin-inspect` keep their format. They already carry the author and the homepage.
+2. **Installer.** It copies `icon` with the other files. It refuses a package whose `icon` file is missing or fails the check.
+3. **Launcher.** It reads `plugins/<id>/icon.png` of an installed plugin, with no new request to the server. The table, the detail panel and the catalog card show it in place of the letter. A plugin without an icon shows the letter, as now.
+4. **Official plugins.** Each manifest gets `author=Vulpzin`, `license=GPL-3.0-only` and `icon=icon.png`, with a real icon. This changes their hashes, so the hash list of the package is made again.
+5. **Docs.** `plugin-manifest.md` and `plugin-sdk.md` list the new keys.
+6. **Tests.** New cases in the manifest group (a good icon, a missing file, a file that is not a PNG, a file too big or not square, a bad license, a kind that is not `plugin`). The package tests check that the icon is in the package.
+
+Old plugins keep working. A manifest without the new keys stays valid.
+
 ## Answers of 2026-11-03
 
 - **License.** The repository and the official content use GPL-3.0, as the project does. A community item declares its license in the manifest (`license=`). The CI refuses an item without one.
