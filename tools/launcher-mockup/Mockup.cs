@@ -799,7 +799,7 @@ namespace SubVulpesMockup
             string[] fk = { "all", "i", "w", "e" };
             level.SelectedIndexChanged += delegate { levelFilter = fk[level.SelectedIndex]; FillConsole(); };
             UI.Tips.SetToolTip(level, "Filter by log level.");
-            searchBox = HintBox(240); searchBox.Margin = new Padding(0);
+            searchBox = HintBox(240); searchBox.Margin = new Padding(0); level.Height = searchBox.PreferredHeight + 4;
             UI.Tips.SetToolTip(searchBox, "Filter the log by text.");
             searchBox.TextChanged += delegate { FillConsole(); };
             bar.Controls.Add(level, 0, 0); bar.Controls.Add(searchBox, 1, 0);
@@ -826,7 +826,8 @@ namespace SubVulpesMockup
             var cmd = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0), Tag = "panel" };
             cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
             var box = new TextBox { BorderStyle = BorderStyle.FixedSingle, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 0, 8, 0) };
-            cmd.Controls.Add(box, 0, 0); cmd.Controls.Add(new FlatButton("Send") { Anchor = AnchorStyles.Left, Margin = new Padding(0) }, 1, 0);
+            var send = new FlatButton("Send") { Anchor = AnchorStyles.Left, Margin = new Padding(0), Height = box.PreferredHeight + 4 };
+            cmd.Controls.Add(box, 0, 0); cmd.Controls.Add(send, 1, 0);
             page.Controls.Add(cmd, 0, 4);
             var surface = new Surface { Padding = new Padding(16, 12, 16, 12) };
             surface.Controls.Add(page);
@@ -1071,7 +1072,7 @@ namespace SubVulpesMockup
                 if (e.ColumnIndex == 2 || e.ColumnIndex == 3)
                 {
                     // State gets a colored dot, and Risk gets a tinted pill.
-                    e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+                    e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground | DataGridViewPaintParts.Border);
                     var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; int my = e.CellBounds.Y + e.CellBounds.Height / 2;
                     if (e.ColumnIndex == 2)
                     {
@@ -1089,7 +1090,7 @@ namespace SubVulpesMockup
                     e.Handled = true; return;
                 }
                 if (e.ColumnIndex != 5) return;
-                e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+                e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.SelectionBackground | DataGridViewPaintParts.Border);
                 Switch.Draw(e.Graphics, new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 20) / 2, 36, 20), ((Plugin)grid.Rows[e.RowIndex].Tag).On);
                 e.Handled = true;
             };
@@ -1117,7 +1118,7 @@ namespace SubVulpesMockup
             if (detail == null || sel < 0 || sel >= plugins.Count) return;
             var p = plugins[sel];
             detail.SuspendLayout(); detail.Controls.Clear();
-            var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Width = 340, Tag = "panel" };
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Width = 340, Padding = new Padding(0, 14, 0, 0), Tag = "panel" };
             var title = L(p.Name, true, false); title.Font = UI.F(13f, FontStyle.Bold); title.Margin = new Padding(0, 0, 0, 2); flow.Controls.Add(title);
             var sub = L(p.Version + " · " + p.By, false, true); sub.Margin = new Padding(0, 0, 0, 10); flow.Controls.Add(sub);
             if (detailTab == 0)
