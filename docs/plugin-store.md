@@ -181,6 +181,7 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 6. Add the Remove action to the launcher (delete the folder, remove the approval, warn the plugins that depend on it). The Plugins page has no way to uninstall today.
 7. Give the review window the new look. Keep it for files from outside the repository.
 8. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
+9. Make the tag and the release of the next minor version (Kit) only after steps 4 to 6 and the SDK update are done. The release page shows the Kit Bodega picture.
 
 ## Manifest renewal (server, installer, pack and launcher done on 2026-11-03)
 
