@@ -27,6 +27,7 @@ namespace SubVulpes
         bool sortAscending = true;
         string selectedPluginId;
         readonly List<Control> pluginSubPages = new List<Control>();
+        readonly Dictionary<string, Image> pluginIcons = new Dictionary<string, Image>();
         readonly List<TabLabel> pluginSubTabs = new List<TabLabel>();
 
         static readonly Dictionary<string, string> CapText = new Dictionary<string, string> {
@@ -119,6 +120,7 @@ namespace SubVulpes
         void ClearPlugins()
         {
             plugins.Clear();
+            pluginIcons.Clear();
             RebuildPlugins();
         }
 
@@ -285,15 +287,39 @@ namespace SubVulpes
             string full = CatalogPath(given);
             Image picture;
             if (catalogPictures.TryGetValue(full, out picture)) return picture;
+            picture = LoadPicture(full, 5 * 1024 * 1024);
+            catalogPictures[full] = picture;
+            return picture;
+        }
+
+        // A PNG or JPEG file up to a size limit, copied into memory so that the file stays free. Anything else gives nothing.
+        static Image LoadPicture(string full, long limit)
+        {
             try {
                 var info = new FileInfo(full);
                 string extension = info.Extension.ToLowerInvariant();
-                if (info.Exists && info.Length <= 5 * 1024 * 1024 && (extension == ".png" || extension == ".jpg" || extension == ".jpeg"))
+                if (info.Exists && info.Length <= limit && (extension == ".png" || extension == ".jpg" || extension == ".jpeg"))
                     using (var stream = System.IO.File.OpenRead(full))
                     using (var raw = Image.FromStream(stream))
-                        picture = new Bitmap(raw);
+                        return new Bitmap(raw);
+            } catch (Exception) { }
+            return null;
+        }
+
+        // The icon of an installed plugin: the file that its manifest names in `icon=`, from the plugin folder. No icon gives nothing.
+        Image PluginIcon(string id)
+        {
+            Image picture;
+            if (pluginIcons.TryGetValue(id, out picture)) return picture;
+            try {
+                string dir = Path.Combine(folder, "plugins", id);
+                string ini = Path.Combine(dir, "plugin.ini");
+                if (System.IO.File.Exists(ini) && new FileInfo(ini).Length <= 65536) {
+                    Match m = Regex.Match(System.IO.File.ReadAllText(ini, Encoding.ASCII), @"(?m)^icon=([a-z0-9][a-z0-9._-]{0,43}\.png)\s*$");
+                    if (m.Success) picture = LoadPicture(Path.Combine(dir, m.Groups[1].Value), 131072);
+                }
             } catch (Exception) { picture = null; }
-            catalogPictures[full] = picture;
+            pluginIcons[id] = picture;
             return picture;
         }
 
@@ -376,7 +402,7 @@ namespace SubVulpes
         {
             var wrap = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(0, 0, 0, 10) };
             var card = new Surface { Dock = DockStyle.Fill, Cursor = Cursors.Hand };
-            var avatar = new Avatar(c.Name) { Location = new Point(16, 16), Picture = CatalogPicture(c.Icon) };
+            var avatar = new Avatar(c.Name) { Location = new Point(16, 16), Picture = CatalogPicture(c.Icon) ?? PluginIcon(c.Id) };
             var name = L(c.Name, true, false);
             name.Font = UI.F(10.5f, FontStyle.Bold);
             name.Location = new Point(76, 14);
@@ -415,7 +441,7 @@ namespace SubVulpes
             catalogDetail.Controls.Clear();
             var back = new FlatButton("Back") { Location = new Point(0, 4), Height = 28 };
             back.Click += delegate { RenderCatalog(); };
-            var avatar = new Avatar(c.Name, 72) { Location = new Point(0, 48), Picture = CatalogPicture(c.Icon) };
+            var avatar = new Avatar(c.Name, 72) { Location = new Point(0, 48), Picture = CatalogPicture(c.Icon) ?? PluginIcon(c.Id) };
             var name = L(c.Name, true, false);
             name.Font = UI.F(16f, FontStyle.Bold);
             name.Location = new Point(88, 50);
@@ -672,7 +698,7 @@ namespace SubVulpes
             title.Location = new Point(56, 5);
             var sub = L(p.Version + (AuthorOf(p).Length > 0 ? " · " + AuthorOf(p) : ""), false, true);
             sub.Location = new Point(56, 31);
-            header.Controls.Add(new Avatar(p.DisplayName) { Location = new Point(0, 6) });
+            header.Controls.Add(new Avatar(p.DisplayName) { Location = new Point(0, 6), Picture = PluginIcon(p.Id) });
             header.Controls.Add(title);
             header.Controls.Add(sub);
             if (pluginTab == 0) SummaryTab(flow, p);
