@@ -50,7 +50,7 @@ namespace SubVulpes
         {
             Match a = Tag.Match(left), b = Tag.Match(right);
             if (!a.Success || !b.Success)
-                throw new InvalidDataException("Cannot read the version tag.");
+                throw new InvalidDataException("Version tag is unreadable.");
             for (int i = 1; i <= 3; i++) {
                 int c = long.Parse(a.Groups[i].Value).CompareTo(long.Parse(b.Groups[i].Value));
                 if (c != 0) return c;
@@ -87,7 +87,7 @@ namespace SubVulpes
         static HttpWebRequest Request(string url)
         {
             if (new Uri(url).Scheme != Uri.UriSchemeHttps)
-                throw new InvalidDataException("The download URL must use HTTPS.");
+                throw new InvalidDataException("Download URL is not HTTPS");
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2.
             var request = (HttpWebRequest)WebRequest.Create(url);
             request.UserAgent = "SubVulpes-launcher";
@@ -120,12 +120,12 @@ namespace SubVulpes
         {
             Match hash = Regex.Match(checksum.Trim(), @"\A([0-9a-fA-F]{64})(?:[ \t]+[^\r\n]+)?\s*\z");
             if (!hash.Success)
-                throw new InvalidDataException("The release SHA-256 file is invalid.");
+                throw new InvalidDataException("File hash (SHA-256) is invalid.");
             using (var algorithm = SHA256.Create())
             using (var stream = File.OpenRead(file)) {
                 string actual = BitConverter.ToString(algorithm.ComputeHash(stream)).Replace("-", "");
                 if (!actual.Equals(hash.Groups[1].Value, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("SHA-256 mismatch. The update was not installed.");
+                    throw new InvalidDataException("File hash (SHA-256) mismatch");
             }
         }
 
@@ -136,7 +136,7 @@ namespace SubVulpes
             var zip = assets.FirstOrDefault(a => a.name == name);
             var hash = assets.FirstOrDefault(a => a.name == name + ".sha256");
             if (zip == null || hash == null)
-                throw new InvalidDataException("The release has no server zip or SHA-256 file.");
+                throw new InvalidDataException("Release has no server zip or hash (SHA-256) file.");
             string checksum = Read(hash.browser_download_url);
             Directory.CreateDirectory(directory);
             string path = Path.Combine(directory, name);
@@ -226,8 +226,8 @@ namespace SubVulpes
             if (Timers) parts.Add("game timers");
             if (Packets) parts.Add("packets");
             if (CrashDump != "none") parts.Add(CrashDump + " crash dump");
-            if (FreezeDump) parts.Add("freeze dump");
-            return parts.Count == 0 ? "no captures" : string.Join(", ", parts.ToArray());
+            if (FreezeDump) parts.Add("Freeze Dump");
+            return parts.Count == 0 ? "No Captures" : string.Join(", ", parts.ToArray());
         }
     }
 
@@ -291,6 +291,14 @@ namespace SubVulpes
     {
         static readonly Regex TicksLine = new Regex(@"^Server status: ([0-9.]+) ticks/s, (\d+) players, (\d+) bots$");
         const int FreezeSeconds = 150;
+        const string AppTitle = "SubVulpes Server Launcher";
+        const string SettingsPageName = "Server Settings";
+        const string IncompleteReviewText = "The plugin review is incomplete. Please try again.";
+        const string InvalidReviewText = "The saved review is not valid. Review the plugin again.";
+        const string StoppedUnexpectedly = "Stopped unexpectedly";
+        const string UpdateInstalledText = "Update Installed!";
+        const string NoSpeedText = "- ticks/s";
+        const string NoPlayersText = "- players";
         const int HotkeyId = 1;
         static readonly string[] UpdateFiles = {
             "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt",
@@ -319,7 +327,7 @@ namespace SubVulpes
             FileSystemInfo item = File.Exists(path) ? (FileSystemInfo)new FileInfo(path) : new DirectoryInfo(path);
             while (item != null) {
                 if (item.Exists && (item.Attributes & FileAttributes.ReparsePoint) != 0)
-                    throw new IOException("Update paths cannot contain links.");
+                    throw new IOException("The update folder cannot contain symbolic links.");
                 var directory = item as DirectoryInfo;
                 item = directory != null ? directory.Parent : ((FileInfo)item).Directory;
             }
@@ -332,16 +340,16 @@ namespace SubVulpes
         }
 
         static readonly Preset[] Presets = {
-            new Preset("Normal Playtest",
-                "Captures a speed profile and small crash or freeze dumps.",
+            new Preset("Normal",
+                "Records the server speed. Saves a small report if the server crashes or freezes.",
                 new Captures { Profile = true, FreezeDump = true }),
-            new Preset("Playtest (For Speed Issues)",
-                "Captures a speed profile, game timers and small crash or freeze dumps.",
+            new Preset("Speed Check",
+                "Records the server speed. Also, saves a small report if the server crashes or freezes.",
                 new Captures { Profile = true, Timers = true, FreezeDump = true }),
             new Preset("Crashhunt",
-                "Captures packets and full crash or freeze dumps.",
+                "Records the network packets. Saves a full report if the server crashes or freezes.",
                 new Captures { Packets = true, FreezeDump = true, CrashDump = "full" }),
-            new Preset("Custom", "Uses the selected capture options.", null),
+            new Preset("Custom", "Records only what you select in the capture options.", null),
         };
 
         string folder, logsRoot, logFile;
@@ -361,7 +369,7 @@ namespace SubVulpes
         // Frame
         TabControl mainTabs;
         readonly Dictionary<string, TabPage> pages = new Dictionary<string, TabPage>();
-        string serverState = "Stopped", speedStatus = "- ticks/s", playersStatus = "- players";
+        string serverState = "Stopped", speedStatus = NoSpeedText, playersStatus = NoPlayersText;
         Label message, serverStatus, missingText;
         ComboBox presetBox;
         Button startStop, stopButton, browseButton, checkUpdate;
@@ -417,7 +425,7 @@ namespace SubVulpes
             this.folder = settings.Get("server_folder", folder);
             if (!Directory.Exists(this.folder)) this.folder = folder;
             SetFolder(this.folder);
-            Text = "SubVulpes Server" + Version();
+            Text = AppTitle + Version();
             Font = SystemFonts.MessageBoxFont;
             ForeColor = SystemColors.ControlText;
             AutoScaleMode = AutoScaleMode.Dpi;
@@ -436,9 +444,9 @@ namespace SubVulpes
             layout.Controls.Add(mainTabs, 0, 0);
             layout.Controls.Add(message, 0, 1);
             AddPage("Server", ServerPage());
-            AddPage("Server settings", SettingsPage());
+            AddPage(SettingsPageName, SettingsPage());
             AddPage("Plugins", PluginsPage());
-            AddPage("Launcher settings", LauncherSettingsPage());
+            AddPage("Launcher Settings", LauncherSettingsPage());
             AddPage("Debug", DeveloperPage());
             Controls.Add(layout);
             SetTextColors(this);
@@ -509,14 +517,14 @@ namespace SubVulpes
             logOffset = 0;
             pendingLog = "";
             console.Clear();
-            Text = "SubVulpes Server" + Version();
+            Text = AppTitle + Version();
         }
 
         void ShowMissing(bool configCreated)
         {
             var missing = new List<string>();
             if (!Directory.Exists(Path.Combine(folder, "data"))) missing.Add("data/");
-            if (configCreated) missing.Add("config.txt (created)");
+            if (configCreated) missing.Add("config.txt has been created.");
             missingText.Text = missing.Count == 0 ? "" : "Missing: " + string.Join(", ", missing.ToArray());
         }
 
@@ -524,7 +532,7 @@ namespace SubVulpes
         {
             using (var dialog = new FolderBrowserDialog { SelectedPath = folder }) {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                if (dirty && MessageBox.Show(this, "Save the changed settings?", Text, MessageBoxButtons.YesNo) == DialogResult.Yes)
+                if (dirty && MessageBox.Show(this, "Do you want to save the changed settings?", Text, MessageBoxButtons.YesNo) == DialogResult.Yes)
                     SaveSettings();
                 try {
                     OpenServerFolder(dialog.SelectedPath);
@@ -569,7 +577,7 @@ namespace SubVulpes
             folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
             folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 460));
             folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            folderRow.Controls.Add(new Label { Text = "Server folder", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
+            folderRow.Controls.Add(new Label { Text = "Server Folder", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
             folderBox = new TextBox { Text = folder, ReadOnly = true, Dock = DockStyle.Fill };
             browseButton = new Button { Text = "Browse", AutoSize = true };
             browseButton.Click += delegate { ChooseFolder(); };
@@ -577,20 +585,20 @@ namespace SubVulpes
             folderRow.Controls.Add(browseButton, 2, 0);
             page.Controls.Add(folderRow);
             var updates = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 0, 0, 8) };
-            checkUpdate = new Button { Text = "Check for updates", AutoSize = true };
+            checkUpdate = new Button { Text = "Check for Updates", AutoSize = true };
             checkUpdate.Click += async delegate { await CheckForUpdates(); };
-            tips.SetToolTip(checkUpdate, "Finds and verifies a newer release on GitHub.");
-            var update = new Button { Text = "Update from a zip", AutoSize = true };
+            tips.SetToolTip(checkUpdate, "Looks for a newer version on GitHub.");
+            var update = new Button { Text = "Update from .ZIP", AutoSize = true };
             update.Click += async delegate { await ChooseUpdate(); };
-            tips.SetToolTip(update, "Installs package files and keeps a backup.");
+            tips.SetToolTip(update, "Installs a server/launcher update from a .ZIP.");
             updates.Controls.AddRange(new Control[] { checkUpdate, update });
             page.Controls.Add(updates);
-            previewsBox = new CheckBox { Text = "Include pre-releases", AutoSize = true, Checked = settings.Get("pre_releases", "0") == "1" };
-            tips.SetToolTip(previewsBox, "Includes test versions that may still contain bugs.");
+            previewsBox = new CheckBox { Text = "Include Beta Versions", AutoSize = true, Checked = settings.Get("pre_releases", "0") == "1" };
+            tips.SetToolTip(previewsBox, "Includes beta versions. They can still contain bugs.");
             previewsBox.CheckedChanged += delegate { settings.Set("pre_releases", previewsBox.Checked ? "1" : "0"); settings.Save(); };
             page.Controls.Add(previewsBox);
             debugModeBox = new CheckBox { Text = "Debug Mode", AutoSize = true, Checked = settings.Get("developer", "0") == "1" };
-            tips.SetToolTip(debugModeBox, "Shows Debug and uses its captures on the next server start.");
+            tips.SetToolTip(debugModeBox, "Shows the Debug tab and some advanced log capture options.");
             debugModeBox.CheckedChanged += delegate { SetDebugMode(debugModeBox.Checked); settings.Set("developer", debugModeBox.Checked ? "1" : "0"); settings.Save(); };
             page.Controls.Add(debugModeBox);
             return page;
@@ -608,7 +616,7 @@ namespace SubVulpes
             page.Controls.Add(presetBox, 0, 0);
             var tabs = new TabControl { Dock = DockStyle.Fill };
             Control[] views = { OverviewPage(), CapturesPage(), TestsPage() };
-            string[] names = { "Test", "Captures", "Past tests" };
+            string[] names = { "Test", "Captures", "Past Logs" };
             for (int i = 0; i < views.Length; i++) {
                 var tab = new TabPage(names[i]) { Padding = new Padding(8), UseVisualStyleBackColor = true };
                 views[i].Dock = DockStyle.Fill;
@@ -675,21 +683,21 @@ namespace SubVulpes
             var cards = new TableLayoutPanel { Dock = DockStyle.Fill, Height = 48, ColumnCount = 5, Margin = new Padding(0, 0, 0, 8) };
             for (int i = 0; i < 5; i++)
                 cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
-            lastTicks = Card(cards, 0, "Last minute");
-            lowTicks = Card(cards, 1, "Lowest minute");
+            lastTicks = Card(cards, 0, "Last Minute");
+            lowTicks = Card(cards, 1, "Lowest Minute");
             playersText = Card(cards, 2, "Players");
             uptimeText = Card(cards, 3, "Running for");
             marksText = Card(cards, 4, "Marks");
             page.Controls.Add(cards, 0, 0);
 
-            page.Controls.Add(new Label { Text = "Speed of each minute (ticks/s)", AutoSize = true, ForeColor = SystemColors.ControlText, Margin = new Padding(3, 4, 3, 2) }, 0, 1);
+            page.Controls.Add(new Label { Text = "Server Speed per Minute (ticks/s)", AutoSize = true, ForeColor = SystemColors.ControlText, Margin = new Padding(3, 4, 3, 2) }, 0, 1);
             graph = new SpeedGraph { Dock = DockStyle.Fill, MinimumSize = new Size(0, 120) };
             page.Controls.Add(graph, 0, 2);
 
             // While a test runs: the marks and the dumps. After the stop: the result and the notes.
             runPanel = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
-            var mark = new Button { Text = "Mark this moment (Ctrl+F12)", AutoSize = true };
-            var dump = new Button { Text = "Dump now", AutoSize = true };
+            var mark = new Button { Text = "Mark This Moment (Ctrl+F12)", AutoSize = true };
+            var dump = new Button { Text = "Save Memory Dump Now", AutoSize = true };
             mark.Click += delegate { AddMark(); };
             dump.Click += delegate { DumpNow("dump"); };
             tips.SetToolTip(mark, "Writes a timestamp to the test log.");
@@ -703,7 +711,7 @@ namespace SubVulpes
             endText = new Label { AutoSize = true, ForeColor = SystemColors.ControlText, Margin = new Padding(3, 2, 3, 6) };
             endNotes = new TextBox { Multiline = true, Height = 54, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical };
             var endBar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 4, 0, 0) };
-            var pack = new Button { Text = "Pack this test", AutoSize = true };
+            var pack = new Button { Text = "Pack This Log", AutoSize = true };
             pack.Click += delegate { SaveNotes(testDir, endNotes.Text); PackTest(testDir); };
             capturesText = new Label { AutoSize = true, ForeColor = SystemColors.ControlText, Anchor = AnchorStyles.Left, Margin = new Padding(8, 8, 3, 3) };
             endBar.Controls.AddRange(new Control[] { pack, capturesText });
@@ -736,8 +744,8 @@ namespace SubVulpes
                 SetCard(l, "-");
             lastTicks.ForeColor = SystemColors.ControlText;
             SetCard(marksText, "0");
-            speedStatus = "- ticks/s";
-            playersStatus = "- players";
+            speedStatus = NoSpeedText;
+            playersStatus = NoPlayersText;
         }
 
         // ------------------------------------------------------------ console
@@ -757,19 +765,19 @@ namespace SubVulpes
         {
             var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
 
-            profileBox = Option("Speed profile", "Samples code each millisecond to locate slow functions.");
-            timersBox = Option("Game timers", "The time of each part of the game, in the log each minute.");
-            packetsBox = Option("Packet capture", "Records network traffic, including player names and chat.");
-            freezeBox = Option("Freeze dump", "A dump when the server writes no speed line for " + FreezeSeconds + " s.");
+            profileBox = Option("Speed Profile", "Profile the server code to locate slow functions.");
+            timersBox = Option("Game Timers", "Writes how long each part of the game takes, once each minute, in the log.");
+            packetsBox = Option("Network Packet Capture", "Records network traffic, including player names and chat.");
+            freezeBox = Option("Freeze Dump", "Automatically dump when the server freezes for " + FreezeSeconds + " s.");
             page.Controls.Add(Group("Speed", profileBox, timersBox));
             page.Controls.Add(Group("Session", packetsBox));
 
             dumpNone = new RadioButton { Text = "None", AutoSize = true };
-            dumpSmall = new RadioButton { Text = "Small: the stacks of the threads (about 1 MB)", AutoSize = true };
-            dumpFull = new RadioButton { Text = "Full: all the memory (about 600 MB, less in the zip)", AutoSize = true };
+            dumpSmall = new RadioButton { Text = "Small: Thread Stack (~1MB)", AutoSize = true };
+            dumpFull = new RadioButton { Text = "Full: Whole Memory (~600MB)", AutoSize = true };
             foreach (var r in new[] { dumpNone, dumpSmall, dumpFull })
                 r.CheckedChanged += delegate { OnCaptureChanged(); };
-            var crash = Group("Crash and freeze", new Label { Text = "Crash dump:", AutoSize = true }, dumpNone, dumpSmall, dumpFull, freezeBox);
+            var crash = Group("On Crash or Freeze", new Label { Text = "Memory Dump Type:", AutoSize = true }, dumpNone, dumpSmall, dumpFull, freezeBox);
             page.Controls.Add(crash);
             return page;
         }
@@ -873,9 +881,9 @@ namespace SubVulpes
             enable.Click += async delegate { await ChangePlugin(true); };
             var disable = new Button { Text = "Disable", AutoSize = true };
             disable.Click += async delegate { await ChangePlugin(false); };
-            var approve = new Button { Text = "Review approval...", AutoSize = true };
+            var approve = new Button { Text = "Review Approval...", AutoSize = true };
             approve.Click += async delegate { await ApprovePlugin(); };
-            var install = new Button { Text = "Install / update plugin package", AutoSize = true };
+            var install = new Button { Text = "Install/Update", AutoSize = true };
             install.Click += async delegate { await InstallPlugin(); };
             var pluginSettingsButton = new Button { Text = "Settings...", AutoSize = true };
             pluginSettingsButton.Click += async delegate { await EditPluginSettings(); };
@@ -890,19 +898,19 @@ namespace SubVulpes
             pluginList.Columns.Add("Details", 490);
             page.Controls.Add(pluginList, 0, 1);
             nativeBypass = new CheckBox {
-                Text = "Allow unapproved native DLLs on the next Start (full process access and crash risk)",
+                Text = "Allow unapproved DLLs temporarily",
                 AutoSize = true, Margin = new Padding(3, 10, 3, 10)
             };
             nativeBypass.CheckedChanged += delegate {
                 if (nativeBypass.Checked && MessageBox.Show(this,
-                    "This skips native content approval. A DLL can read private process data, corrupt memory, hang or crash the server.\r\n\r\n" +
-                    "API, path and dependency checks still apply. Allow unapproved native DLLs for this launcher session?",
-                    "Native DLL approval bypass", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    "Danger!!! This will skip the content approval process. A DLL plugin has full access to the server and your system. Only use this for plugins that you trust completely.\r\n\r\n" +
+                    "Are you sure you want to allow unapproved DLL plugins for this launcher session?",
+                    "NATIVE PLUGIN BYPASS", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                     nativeBypass.Checked = false;
             };
             page.Controls.Add(nativeBypass, 0, 2);
             var commandRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
-            commandRow.Controls.Add(new Label { Text = "Local server command", AutoSize = true, Margin = new Padding(3, 8, 3, 3) });
+            commandRow.Controls.Add(new Label { Text = "Server Command", AutoSize = true, Margin = new Padding(3, 8, 3, 3) });
             pluginCommand = new TextBox { Width = 400, MaxLength = 300 };
             var send = new Button { Text = "Send", AutoSize = true };
             send.Click += delegate { SendPluginCommand(pluginCommand.Text); };
@@ -1010,7 +1018,7 @@ namespace SubVulpes
         string SelectedPlugin()
         {
             if (pluginList.SelectedItems.Count != 1) {
-                message.Text = "Select a plugin first.";
+                message.Text = "Select a plugin in the list first.";
                 return null;
             }
             return PluginActionId(pluginList.SelectedItems[0]);
@@ -1032,9 +1040,9 @@ namespace SubVulpes
             if (metadata.Author.Length > 0) text.AppendLine("Author: " + metadata.Author);
             if (metadata.Homepage.Length > 0) text.AppendLine("Homepage: " + metadata.Homepage);
             text.AppendLine("Version: " + metadata.Version).AppendLine("Runtime: " + metadata.Runtime);
-            text.AppendLine("Capabilities: " + (metadata.Capabilities.Length == 0 ? "none declared" : metadata.Capabilities));
-            text.AppendLine("SHA-256: " + metadata.Hash).AppendLine();
-            if (nativeApproval || metadata.Runtime == "native") text.AppendLine("Native code gets full process access. It can read private data, corrupt memory, hang or crash the server.").AppendLine();
+            text.AppendLine("Capabilities: " + (metadata.Capabilities.Length == 0 ? "None has been declared" : metadata.Capabilities));
+            text.AppendLine("File Hash (SHA-256): " + metadata.Hash).AppendLine();
+            if (nativeApproval || metadata.Runtime == "native") text.AppendLine("Runs inside the server with full access to it.").AppendLine();
             text.Append(question);
             return text.ToString();
         }
@@ -1097,17 +1105,17 @@ namespace SubVulpes
         internal static PluginMetadata ParsePluginTrust(string output, string id)
         {
             string[] lines = output.Replace("\r", "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length != 1) throw new IOException("The server returned an invalid saved review.");
+            if (lines.Length != 1) throw new IOException(InvalidReviewText);
             string[] fields = lines[0].Split('\t');
             if (fields.Length == 2 && fields[0] == "TRUST_NONE" && fields[1] == id) return null;
             if (fields.Length != 10 || fields[0] != "TRUST" || fields[1] != "1" || fields[2] != id ||
                 !Regex.IsMatch(fields[7], @"\A[0-9a-f]{64}\z") ||
                 (fields[8].Length != 0 && !Regex.IsMatch(fields[8], @"\A[0-9a-f]{64}\z")) ||
                 !Regex.IsMatch(fields[9], @"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\z"))
-                throw new IOException("The server returned an invalid saved review.");
+                throw new IOException(InvalidReviewText);
             PluginMetadata result = ParsePluginRow("MODULE\t" + id + "\t" + fields[3] + "\t" + fields[6] +
                 "\t" + (fields[8].Length == 0 ? fields[6] : fields[8]) + "\t" + fields[4] + "\t" + fields[5] + "\t\t\t\t", true);
-            if (result == null) throw new IOException("The server returned an invalid saved review.");
+            if (result == null) throw new IOException(InvalidReviewText);
             result.ManifestHash = fields[7]; result.PackageHash = fields[8];
             return result;
         }
@@ -1123,7 +1131,7 @@ namespace SubVulpes
             {
                 metadata = next;
                 FullReview = NeedsFullPluginReview(next, previous);
-                Text = "Install and approve plugin";
+                Text = "Plugin Installation";
                 StartPosition = FormStartPosition.CenterParent;
                 Font = SystemFonts.MessageBoxFont;
                 ClientSize = new Size(700, 580); MinimumSize = new Size(600, 480);
@@ -1133,23 +1141,23 @@ namespace SubVulpes
                 for (int i = 0; i < 6; i++) table.RowStyles.Add(new RowStyle(i == 3 ? SizeType.Percent : SizeType.AutoSize, i == 3 ? 100 : 0));
                 table.Controls.Add(new Label { Text = next.DisplayName + " (" + next.Id + ")", AutoSize = true,
                     MaximumSize = new Size(650, 0), UseMnemonic = false, Margin = new Padding(3, 3, 3, 8) }, 0, 0);
-                string details = (next.Description.Length == 0 ? "" : next.Description + "\r\n") + "Author: " + (next.Author.Length == 0 ? "Not stated" : next.Author) +
+                string details = (next.Description.Length == 0 ? "" : next.Description + "\r\n") + "Author: " + (next.Author.Length == 0 ? "Not Stated" : next.Author) +
                     "\r\nRuntime: " + next.Runtime;
                 table.Controls.Add(new Label { Text = details, AutoSize = true, MaximumSize = new Size(650, 0), UseMnemonic = false, Margin = new Padding(3, 3, 3, 8) }, 0, 1);
                 string version = previous == null ? "Version " + next.Version :
                     "Version " + previous.Version + " to " + next.Version;
-                table.Controls.Add(new Label { Text = version + (FullReview ? ". Review all requested capabilities." :
-                    ". Runtime and capabilities are unchanged."), AutoSize = true, MaximumSize = new Size(650, 0), UseMnemonic = false,
+                table.Controls.Add(new Label { Text = version + (FullReview ? ". The plugin has new capabilities." :
+                    ". The plugin has no new capabilities."), AutoSize = true, MaximumSize = new Size(650, 0), UseMnemonic = false,
                     Margin = new Padding(3, 3, 3, 8) }, 0, 2);
                 var review = new RichTextBox { ReadOnly = true, Dock = DockStyle.Fill, BackColor = SystemColors.Window,
                     BorderStyle = BorderStyle.FixedSingle, DetectUrls = false, TabIndex = 0, Name = "capabilityReview" };
                 table.Controls.Add(review, 0, 3);
-                NativeConfirmation = new CheckBox { Text = "I accept full process access for this native plugin.",
+                NativeConfirmation = new CheckBox { Text = "Allow this plugin to run on my server",
                     AutoSize = true, Visible = next.Runtime == "native", Checked = false, ForeColor = Color.DarkRed,
                     Name = "nativeConfirmation", TabIndex = 1, Margin = new Padding(3, 12, 3, 12) };
                 table.Controls.Add(NativeConfirmation, 0, 4);
                 var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, TabIndex = 2 };
-                ApproveButton = new Button { Text = "Install and approve", AutoSize = true, TabIndex = 0, Name = "installAndApprove" };
+                ApproveButton = new Button { Text = "Install", AutoSize = true, TabIndex = 0, Name = "installAndApprove" };
                 var cancel = new LinkLabel { Text = "Cancel", AutoSize = true, Margin = new Padding(12, 8, 12, 3), TabIndex = 1 };
                 cancel.LinkClicked += delegate { DialogResult = DialogResult.Cancel; Close(); };
                 ApproveButton.Click += delegate { TryApprove(); };
@@ -1163,7 +1171,7 @@ namespace SubVulpes
                         danger.Capability + " (" + danger.Level + "): " + danger.Text + "\r\n\r\n");
                 }
                 review.SelectionColor = SystemColors.ControlText;
-                review.AppendText((install ? "The server stops before installation. New plugins start disabled.\r\n" : "") +
+                review.AppendText(
                     "SHA-256: " + (next.PackageHash.Length == 0 ? next.Hash : next.PackageHash));
                 review.SelectionStart = 0; review.SelectionLength = 0;
                 AcceptButton = ApproveButton;
@@ -1199,7 +1207,7 @@ namespace SubVulpes
         {
             string executable = Path.Combine(serverFolder, "subvulpes_server.exe");
             var info = new FileInfo(executable);
-            if (!info.Exists || info.Length > 64 * 1024 * 1024) throw new IOException("Invalid server executable.");
+            if (!info.Exists || info.Length > 64 * 1024 * 1024) throw new IOException("Server Executable is invalid.");
             string content = Encoding.ASCII.GetString(File.ReadAllBytes(executable));
             if (!content.Contains("SubVulpes-plugin-cli-v1"))
                 throw new IOException("This server does not support plugin metadata requests. Update the server and launcher together.");
@@ -1238,7 +1246,7 @@ namespace SubVulpes
                 if (selectedFolder != folder || server != null) return;
                 pluginList.Items.Clear();
                 foreach (string line in output.Replace("\r", "").Split('\n')) ReadPluginLine(line);
-                message.Text = "Plugin metadata read. No native DLL was executed.";
+                message.Text = "Plugin metadata read.";
             } catch (Exception ex) {
                 message.Text = "Cannot list plugins: " + ex.Message;
             } finally { pluginBusy = false; SetState(serverState); }
@@ -1247,12 +1255,12 @@ namespace SubVulpes
         void SendPluginCommand(string command)
         {
             if (updating) return;
-            if (server == null || stopping) { message.Text = "Start the server before sending a local command."; return; }
+            if (server == null || stopping) { message.Text = "Cannot send a command while the server is closed."; return; }
             if (command.Length == 0 || command.Length > 300 || command.IndexOfAny(new[] { '\r', '\n' }) >= 0) return;
             try {
                 server.StandardInput.WriteLine(command);
                 server.StandardInput.Flush();
-                message.Text = "Command sent. Results appear in the server console.";
+                message.Text = "Command sent.";
             } catch (Exception ex) { message.Text = "Cannot send the command: " + ex.Message; }
         }
 
@@ -1368,7 +1376,7 @@ namespace SubVulpes
                 table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
                 table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
                 foreach (PluginSetting s in rows) {
-                    var caption = s.Label + (s.Live ? "" : " (needs a restart)") + (s.Pending ? " *" : "");
+                    var caption = s.Label + (s.Live ? "" : " (Restart Needed)") + (s.Pending ? " *" : "");
                     var label = new Label { Text = caption, AutoSize = false, Width = 240, Height = 24, TextAlign = ContentAlignment.MiddleLeft };
                     s.Editor = SettingEditor(s);
                     var reset = new Button { Text = "Default", AutoSize = true };
@@ -1392,8 +1400,7 @@ namespace SubVulpes
                 var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, Height = 44, Padding = new Padding(8) };
                 var save = new Button { Text = "Save", DialogResult = DialogResult.OK, AutoSize = true };
                 var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-                var note = new Label { Text = "A setting marked * is saved and waits for a restart.", AutoSize = true, Margin = new Padding(12, 8, 3, 3) };
-                footer.Controls.AddRange(new Control[] { save, cancel, note });
+                footer.Controls.AddRange(new Control[] { save, cancel });
                 dialog.Controls.Add(table);
                 dialog.Controls.Add(footer);
                 dialog.AcceptButton = save;
@@ -1409,7 +1416,7 @@ namespace SubVulpes
                     }
                 }
             }
-            if (changes.Count == 0) { message.Text = "No setting changed."; return; }
+            if (changes.Count == 0) { message.Text = "No changes."; return; }
             int saved = 0;
             var failures = new List<string>();
             foreach (PluginSetting s in changes) {
@@ -1430,7 +1437,7 @@ namespace SubVulpes
                     saved++;
                 } catch (Exception ex) { failures.Add(s.Key + ": " + ex.Message); }
             }
-            message.Text = saved + " setting(s) sent." + (server != null ? " Results appear in the server console." : " They apply at the next server start.") +
+            message.Text = saved + " setting(s) sent." + (server != null ? " Check the console for the result." : " Changes apply at the next server start.") +
                 (failures.Count > 0 ? " Refused: " + string.Join(", ", failures.ToArray()) : "");
         }
 
@@ -1447,13 +1454,13 @@ namespace SubVulpes
                 message.Text = "Reading installed plugin content...";
                 string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-inspect " + id));
                 PluginMetadata metadata = ParsePluginInspection(output, false);
-                if (metadata == null) throw new IOException("The server returned an incomplete plugin review.");
+                if (metadata == null) throw new IOException(IncompleteReviewText);
                 PluginMetadata previous = await Task.Run(() => ReadPreviousPluginReview(selectedFolder, id));
                 if (server != null || folder != selectedFolder || !ReviewPluginApproval(metadata, previous, false)) return;
                 string arguments = "--plugin-trust " + id + " " + metadata.Hash + " " + metadata.ManifestHash + " " +
                     metadata.Runtime + " " + (metadata.Capabilities.Length == 0 ? "-" : metadata.Capabilities) + " - --native-confirmed";
                 await Task.Run(() => RunPluginTool(selectedFolder, arguments));
-                message.Text = outcome = metadata.DisplayName + " " + metadata.Version + " is approved.";
+                message.Text = outcome = metadata.DisplayName + " " + metadata.Version + " has been approved.";
             } catch (Exception ex) { message.Text = outcome = "Plugin approval failed: " + ex.Message; }
             finally { pluginBusy = false; SetState(serverState); }
             await RefreshPlugins();
@@ -1480,7 +1487,7 @@ namespace SubVulpes
                 !Regex.IsMatch(metadata.Hash ?? "", @"\A[0-9a-f]{64}\z") ||
                 !Regex.IsMatch(metadata.ManifestHash ?? "", @"\A[0-9a-f]{64}\z") ||
                 !Regex.IsMatch(metadata.PackageHash ?? "", @"\A[0-9a-f]{64}\z"))
-                throw new IOException("The package review is incomplete.");
+                throw new IOException("The review is incomplete.");
             return " -Approve -ExpectedPayloadHash " + metadata.Hash + " -ExpectedManifestHash " + metadata.ManifestHash +
                 " -ExpectedRuntime " + metadata.Runtime + " -ExpectedCapabilities " +
                 QuoteProcessArgument(metadata.Capabilities.Length == 0 ? "-" : metadata.Capabilities) + " -NativeConfirmed";
@@ -1525,13 +1532,13 @@ namespace SubVulpes
                 message.Text = "Reading plugin package...";
                 string inspection = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-inspect " + QuoteProcessArgument(zip), 45000));
                 PluginMetadata metadata = ParsePluginInspection(inspection, true);
-                if (metadata == null) throw new IOException("The server returned an incomplete package review.");
+                if (metadata == null) throw new IOException(IncompleteReviewText);
                 PluginMetadata previous = await Task.Run(() => ReadPreviousPluginReview(selectedFolder, metadata.Id));
                 if (selectedFolder != folder || !ReviewPluginApproval(metadata, previous, true)) return;
                 if (!await StopServer() || selectedFolder != folder) return;
-                message.Text = "Installing and approving " + metadata.DisplayName + "...";
+                message.Text = "Installing " + metadata.DisplayName + "...";
                 await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, false, metadata.PackageHash, metadata));
-                message.Text = outcome = metadata.DisplayName + " " + metadata.Version + " is installed and approved. New plugins start disabled.";
+                message.Text = outcome = metadata.DisplayName + " " + metadata.Version + " is installed and approved.";
             } catch (Exception ex) { message.Text = outcome = "Plugin installation failed: " + ex.Message; }
             finally { pluginBusy = false; SetState(serverState); }
             await RefreshPlugins();
@@ -1555,10 +1562,10 @@ namespace SubVulpes
                 return;
             }
             if (MissingAdminPassword(passwordBox.Text)) {
-                message.Text = "Set an admin password before you start the server.";
+                message.Text = "Set an admin password in Server Settings before you start the server.";
                 dirtyText.Text = message.Text;
                 dirtyText.ForeColor = Color.Red;
-                ShowPage("Server settings");
+                ShowPage(SettingsPageName);
                 passwordBox.Focus();
                 return;
             }
@@ -1647,8 +1654,8 @@ namespace SubVulpes
             await Task.WhenAny(serverStopped.Task, Task.Delay(15000));
             if (server == null) return true;
             stopping = false;
-            SetState("Stop timed out");
-            message.Text = "The server did not stop within 15 seconds.";
+            SetState("Stop has timed out");
+            message.Text = "The server did not stop within 15 seconds. Close it from Task Manager if it stays open.";
             return false;
         }
 
@@ -1731,7 +1738,7 @@ namespace SubVulpes
             // The status line comes each minute. No line for a long time: the main loop stops.
             frozen = true;
             SetState("Frozen?");
-            AddLine("[launcher] No speed line for " + FreezeSeconds + " s. The server can be frozen.");
+            AddLine("[launcher] No speed status for " + FreezeSeconds + " s. The server is probably frozen.");
             if (activeCaptures.FreezeDump)
                 DumpNow("freeze");
         }
@@ -1747,13 +1754,13 @@ namespace SubVulpes
             serverStopped.TrySetResult(true);
             string result;
             if (stopping) {
-                AddLine("[launcher] You stopped the server.");
+                AddLine("[launcher] Server stopped by the user.");
                 SetState("Stopped");
                 result = frozen ? "frozen" : "ok";
             } else {
-                AddLine("[launcher] The server stopped by itself, exit code " + code + ".");
-                SetState(crashed ? "Crashed" : "Stopped by itself");
-                result = crashed ? "crash" : "stopped by itself";
+                AddLine("[launcher] Server stopped unexpectedly. Exit Code: " + code + ".");
+                SetState(crashed ? "Crashed" : StoppedUnexpectedly);
+                result = crashed ? "crash" : StoppedUnexpectedly;
             }
             if (!developerRun) return;
             TimeSpan t = DateTime.Now - started;
@@ -1771,13 +1778,13 @@ namespace SubVulpes
 
             runPanel.Visible = false;
             endPanel.Visible = true;
-            endTitle.Text = "Test finished: " + (int)t.TotalMinutes + " min, " + result;
+            endTitle.Text = "Log summary: " + (int)t.TotalMinutes + " min, " + result;
             endTitle.ForeColor = SystemColors.ControlText;
             endText.Text = (speeds.Count > 0
                                 ? "Speed " + speeds.Min().ToString("0", CultureInfo.InvariantCulture) + " to " +
-                                      speeds.Max().ToString("0", CultureInfo.InvariantCulture) + " ticks/s (normal 62). "
-                                : "No speed line (the test was shorter than 1 minute). ") +
-                           marks + (marks == 1 ? " mark" : " marks") + ". Most players: " + maxPlayers + ".";
+                                      speeds.Max().ToString("0", CultureInfo.InvariantCulture) + " ticks/s (Normal ~60). "
+                                : "No speed status (<1 minute). ") +
+                           marks + (marks == 1 ? " mark" : " marks") + ". Peak players: " + maxPlayers + ".";
             endNotes.Text = "";
             capturesText.Text = Files(testDir).Count + " files, " + FolderSize(testDir);
             if (debugModeBox.Checked) ShowPage("Debug");
@@ -1828,7 +1835,7 @@ namespace SubVulpes
                 using (var f = new FileStream(file, FileMode.Create, FileAccess.Write))
                     ok = MiniDumpWriteDump(handle, pid, f.SafeFileHandle, full ? FullDump : SmallDump, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
                 string size = (new FileInfo(file).Length / 1048576.0).ToString("0.0", CultureInfo.InvariantCulture) + " MB";
-                BeginInvoke(new Action<string>(AddLine), ok ? "[launcher] Dump ready (" + size + ")." : "[launcher] The dump failed.");
+                BeginInvoke(new Action<string>(AddLine), ok ? "[launcher] Memory Dump ready (" + size + ")." : "[launcher] The Memory Dump failed.");
             });
         }
 
@@ -1845,17 +1852,17 @@ namespace SubVulpes
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             testsList = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false };
-            foreach (var c in new[] { "Start", "Preset", "Minutes", "Speed (min / avg)", "Players", "Result", "Size" })
+            foreach (var c in new[] { "Start", "Preset", "Minutes", "Speed (min/avg)", "Players", "Result", "Size" })
                 testsList.Columns.Add(c, c == "Preset" ? 190 : c == "Start" ? 140 : c.StartsWith("Speed") ? 130 : 90);
             testsList.SelectedIndexChanged += delegate { ShowTestNotes(); };
             page.Controls.Add(testsList, 0, 1);
-            page.Controls.Add(new Label { Text = "Notes of the selected test", AutoSize = true, Margin = new Padding(3, 8, 3, 2) }, 0, 2);
+            page.Controls.Add(new Label { Text = "Notes of the selected log", AutoSize = true, Margin = new Padding(3, 8, 3, 2) }, 0, 2);
             testNotes = new TextBox { Multiline = true, Height = 60, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical };
             page.Controls.Add(testNotes, 0, 3);
             var bar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
-            var pack = new Button { Text = "Pack the selected test", AutoSize = true };
-            var open = new Button { Text = "Open its folder", AutoSize = true };
-            var save = new Button { Text = "Save the notes", AutoSize = true };
+            var pack = new Button { Text = "Pack the Selected Log", AutoSize = true };
+            var open = new Button { Text = "Open Folder", AutoSize = true };
+            var save = new Button { Text = "Save Notes", AutoSize = true };
             pack.Click += delegate { string d = SelectedTest(); if (d != null) { SaveNotes(d, testNotes.Text); PackTest(d); } };
             open.Click += delegate { string d = SelectedTest(); if (d != null) Process.Start("explorer.exe", "\"" + d + "\""); };
             save.Click += delegate { string d = SelectedTest(); if (d != null) SaveNotes(d, testNotes.Text); };
@@ -1918,7 +1925,7 @@ namespace SubVulpes
         void PackTest(string dir)
         {
             if (dir == null || Files(dir).Count == 0) {
-                MessageBox.Show(this, "This test has no files.", Text);
+                MessageBox.Show(this, "This log is empty.", Text);
                 return;
             }
             string zip = Path.Combine(logsRoot, "test-" + Path.GetFileName(dir) + ".zip");
@@ -2034,7 +2041,7 @@ namespace SubVulpes
                 string directory = Path.Combine(logsRoot, "updates", Guid.NewGuid().ToString("N"));
                 zip = await Task.Run(() => ReleaseUpdate.Download(release, directory));
             } catch (WebException) {
-                message.Text = "Cannot check for updates: no network connection or GitHub is unavailable.";
+                message.Text = "Cannot check for updates. GitHub is unreachable or your internet is down.";
             } catch (Exception ex) {
                 message.Text = "Cannot update: " + ex.Message;
             } finally {
@@ -2053,7 +2060,7 @@ namespace SubVulpes
 
         async Task ChooseUpdate()
         {
-            using (var dialog = new OpenFileDialog { Filter = "Update zip (*.zip)|*.zip", Title = "Choose the update zip" })
+            using (var dialog = new OpenFileDialog { Filter = "Update zip (*.zip)|*.zip", Title = "Pick the update zip file!" })
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                     await InstallUpdate(dialog.FileName);
         }
@@ -2080,18 +2087,18 @@ namespace SubVulpes
                     if (key == null) continue;
                     string root = entry.FullName.Substring(0, entry.FullName.Length - key.Length);
                     if (archiveRoot != null && !root.Equals(archiveRoot, StringComparison.OrdinalIgnoreCase)) {
-                        message.Text = "The zip mixes multiple update roots.";
+                        message.Text = "The zip file has more than one update folder. Use a zip from a SubVulpes release.";
                         return;
                     }
                     archiveRoot = root;
                     if (found.ContainsKey(key) || entry.Length > 64 * 1024 * 1024) {
-                        message.Text = "The zip contains duplicate update files.";
+                        message.Text = "The zip contains duplicate files.";
                         return;
                     }
                     found[key] = entry;
                 }
                 if (found.Count == 0) {
-                    MessageBox.Show(this, "The zip has no update file (" + string.Join(", ", UpdateFiles) + ").", Text);
+                    MessageBox.Show(this, "Hey, this is probably not an update .zip ???(" + string.Join(", ", UpdateFiles) + ").", Text);
                     return;
                 }
                 string version = "";
@@ -2128,10 +2135,10 @@ namespace SubVulpes
                         }
                         f.Value.ExtractToFile(target, true);
                     }
-                    Text = "SubVulpes Server" + Version();
-                    message.Text = "Update installed" + version + ". Old files: backup\\" + Path.GetFileName(backup);
+                    Text = AppTitle + Version();
+                    message.Text = UpdateInstalledText + version + ". Old files: backup\\" + Path.GetFileName(backup);
                 } catch (Exception ex) {
-                    MessageBox.Show(this, "The update stopped: " + ex.Message +
+                    MessageBox.Show(this, "Update stopped: " + ex.Message +
                         (backup == null ? "" : "\r\n\r\nBackup path: " + backup + "."), Text);
                     return;
                 } finally {
@@ -2139,7 +2146,7 @@ namespace SubVulpes
                     SetState(serverState);
                 }
                 if (newLauncher) {
-                    MessageBox.Show(this, "Update installed" + version + ". The launcher starts again now.", Text);
+                    MessageBox.Show(this, UpdateInstalledText + version + ". The launcher will now restart.", Text);
                     try {
                         Process.Start(Application.ExecutablePath);
                         Close();
@@ -2177,8 +2184,8 @@ namespace SubVulpes
             welcomeBox = new TextBox { Width = 300, Height = 54, Multiline = true, ScrollBars = ScrollBars.Vertical };
             page.Controls.Add(SettingsGroup("Server", new[] {
                 Row("Name", nameBox, null),
-                Row("Admin password", password, "In the game, type /admin and this password to become admin."),
-                Row("Welcome text", welcomeBox, "The players see it when they join (readme.txt)."),
+                Row("Admin Password", password, "Use this in game, typing /admin (PASSWORD) in the chat."),
+                Row("Welcome Text", welcomeBox, "The text on the Newspaper (readme.txt)"),
             }));
 
             modeBox = new ComboBox { Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -2187,15 +2194,15 @@ namespace SubVulpes
             modeBox.SelectedIndexChanged += delegate { var m = modeBox.SelectedItem as Mode; roundBox.Enabled = m != null && m.Value == "3"; };
             page.Controls.Add(SettingsGroup("Game", new[] {
                 Row("Mode", modeBox, null),
-                Row("Max players", playersBox, null),
-                Row("Round time", roundBox, "Minutes in Round mode."),
+                Row("Max Players", playersBox, null),
+                Row("Round Time", roundBox, "The length of a Round on Round Mode."),
             }));
 
             portBox = new NumericUpDown { Width = 100, Minimum = 1, Maximum = 65535 };
             bytesBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 100000000, Increment = 100000, ThousandsSeparator = true };
             page.Controls.Add(SettingsGroup("Network", new[] {
-                Row("Port", portBox, "Open this UDP port in the router."),
-                Row("Upload limit", bytesBox, "Bytes per second for all the players."),
+                Row("Port", portBox, "Portforward this UDP port if you want to connect through the interweb. (Default: 27584)"),
+                Row("Upload Limit ", bytesBox, "Bytes/s shared along all the players."),
             }));
 
             var bar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
@@ -2278,7 +2285,7 @@ namespace SubVulpes
             modeBox.Items.Add(new Mode("3", "Round"));
             modeBox.Items.Add(new Mode("4", "World"));
             if (type != "3" && type != "4")
-                modeBox.Items.Add(new Mode(type, "Mode " + type));
+                modeBox.Items.Add(new Mode(type, "Gamemode " + type));
             foreach (Mode m in modeBox.Items)
                 if (m.Value == type)
                     modeBox.SelectedItem = m;
@@ -2304,7 +2311,7 @@ namespace SubVulpes
             config.Save();
             File.WriteAllText(Path.Combine(folder, "readme.txt"), welcomeBox.Text, Encoding.Default);
             SetDirty(false);
-            dirtyText.Text = server == null ? "Saved." : "Saved. Stop and start the server to use the changes.";
+            dirtyText.Text = server == null ? "Saved." : "Settings Saved. Restart the server to apply them.";
             dirtyText.ForeColor = SystemColors.ControlText;
         }
 
@@ -2315,8 +2322,8 @@ namespace SubVulpes
             dirty = value;
             saveButton.Enabled = value;
             undoButton.Enabled = value;
-            pages["Server settings"].Text = value ? "Server settings *" : "Server settings";
-            dirtyText.Text = value ? "Unsaved changes." : "";
+            pages[SettingsPageName].Text = value ? SettingsPageName + " *" : SettingsPageName;
+            dirtyText.Text = value ? "Unsaved Changes." : "";
             dirtyText.ForeColor = SystemColors.ControlText;
         }
 
@@ -2329,7 +2336,7 @@ namespace SubVulpes
             if (updating || pluginBusy) { e.Cancel = true; return; }
             if (closeAfterStop) return;
             if (dirty) {
-                var answer = MessageBox.Show(this, "Save the changed settings?", Text, MessageBoxButtons.YesNoCancel);
+                var answer = MessageBox.Show(this, "Hey, there are unsaved settings. Do you want to save them before closing?", Text, MessageBoxButtons.YesNoCancel);
                 if (answer == DialogResult.Cancel) { e.Cancel = true; return; }
                 if (answer == DialogResult.Yes) SaveSettings();
             }

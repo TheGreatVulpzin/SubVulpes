@@ -302,7 +302,7 @@ Actor zero is the local operator on the server console. The chat never sends it.
 | `SV_COMMAND_ADMIN` | A player with the `is_admin` flag, which `/admin PASSWORD` sets |
 | `SV_COMMAND_LOCAL` | Nobody. Only the server console runs it |
 
-The host refuses a denied command and logs `Plugin command permission denied`. The host reserves the names `plugins` and `admin`.
+The host refuses a denied command and logs `Plugin command denied`. The host reserves the names `plugins` and `admin`.
 A plugin answers one player with `message_to`. The server filters that event for each connection, so the original client gets a normal message.
 
 ## Bone mass

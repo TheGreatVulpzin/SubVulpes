@@ -81,7 +81,7 @@ static void open_log(void)
 {
     const char *path = getenv("SV_LOG");
     if (path && !(g_log = fopen(path, "w")))
-        sv_log("cannot open the log file %s", path);
+        sv_log("Cannot open the log file %s", path);
 }
 
 /* ------------------------------------------------------------ packet capture */
@@ -143,14 +143,14 @@ static void open_packets(void)
     if (!path)
         return;
     if (!(g_packets = fopen(path, "wb"))) {
-        sv_log("cannot open the packet file %s", path);
+        sv_log("Cannot open the packet file %s", path);
         return;
     }
     fwrite("SVPK", 4, 1, g_packets);
     fwrite(&version, 4, 1, g_packets);
     fwrite(&base, 4, 1, g_packets);
     g_packets_start = GetTickCount();
-    sv_log("packet capture: %s", path);
+    sv_log("Packet capture: %s", path);
 }
 
 /* ------------------------------------------------------------ imports */
@@ -164,7 +164,7 @@ void *sr_import(const char *dll, const char *name)
     else
         p = plat_lookup(dll, name, 0);
     if (!p) {
-        sv_log("import not found: %s!%s", dll, name);
+        sv_log("Import not found: %s!%s", dll, name);
         ExitProcess(1);
     }
     return p;
@@ -174,7 +174,7 @@ void *sr_import_ordinal(const char *dll, unsigned ordinal)
 {
     void *p = plat_lookup(dll, NULL, ordinal);
     if (!p) {
-        sv_log("import not found: %s!#%u", dll, ordinal);
+        sv_log("Import not found: %s!#%u", dll, ordinal);
         ExitProcess(1);
     }
     /* WSOCK32 ordinal 17 is recvfrom and 20 is sendto. */
@@ -201,7 +201,7 @@ void sv_profile_report(void)
         if (!t->name[0])
             continue;
         last = ((uint64_t)(uint32_t)t->total_hi << 32) | (uint32_t)t->total_lo;
-        sv_log("  timer %-24.40s %8.2f Mcycles in the last tick", t->name, last / 1e6);
+        sv_log("  Timer %-24.40s %8.2f Mcycles in the last tick", t->name, last / 1e6);
     }
 }
 
@@ -243,7 +243,7 @@ static void start_sampler(void)
                     DUPLICATE_SAME_ACCESS);
     fprintf(g_samples, "base %08lx\n", (unsigned long)(uintptr_t)GetModuleHandleA(NULL));
     g_sampler = CreateThread(NULL, 0, sampler, NULL, 0, NULL);
-    sv_log("sampling profiler: %s", path);
+    sv_log("Sampling profiler: %s", path);
 }
 
 /* SV_DUMP=<file>: a minidump at a crash. SV_DUMP_TYPE=full adds all game storage.
@@ -259,7 +259,7 @@ static void write_dump(EXCEPTION_POINTERS *ep)
         return;
     f = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (f == INVALID_HANDLE_VALUE) {
-        sv_log("CRASH: cannot write the dump %s", path);
+        sv_log("CRASH: Cannot write the dump %s", path);
         return;
     }
     info.ThreadId = GetCurrentThreadId();
@@ -285,7 +285,7 @@ static LONG WINAPI on_crash(EXCEPTION_POINTERS *ep)
     if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                            (const char *)at, &m))
         GetModuleFileNameA(m, name, sizeof name);
-    sv_log("CRASH: exception %08lx at %s+0x%x, data address %08x", er->ExceptionCode,
+    sv_log("CRASH: Exception %08lx at %s+0x%x. Data address %08x", er->ExceptionCode,
            strrchr(name, '\\') ? strrchr(name, '\\') + 1 : name, (unsigned)(at - (uintptr_t)m),
            er->NumberParameters >= 2 ? (unsigned)er->ExceptionInformation[1] : 0);
     if (g_packets)
@@ -355,7 +355,7 @@ int main(int argc, char **argv)
     if (stop_name) {
         g_stop_event = OpenEventA(SYNCHRONIZE, FALSE, stop_name);
         if (!g_stop_event) {
-            fprintf(stderr, "cannot open the stop event\n");
+            fprintf(stderr, "Cannot set up the stop signal. Launcher is unable to stop the server.\n");
             return 1;
         }
     }

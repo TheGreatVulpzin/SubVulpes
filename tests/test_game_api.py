@@ -48,8 +48,8 @@ with tempfile.TemporaryDirectory(prefix="game-api-", dir=build / "tests") as fol
         # A player with no reference must not become the local operator (actor zero).
         absent = ("COMMAND secret one", "COMMAND localonly", "COMMAND echo nope", "Plugin command result: echo",
                   "Plugin command result: corecheck", "Read API fixture failed")
-        denied = run.stdout.count("Plugin command permission denied: secret") == 1 and \
-            run.stdout.count("Plugin command permission denied: localonly") == 2
+        denied = run.stdout.count("Plugin command denied: secret") == 1 and \
+            run.stdout.count("Plugin command denied: localonly") == 2
         if run.returncode or not denied or any(text not in run.stdout for text in required) or \
                 any(text in run.stdout for text in absent):
             raise SystemExit(run.returncode or 1)

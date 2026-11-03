@@ -68,7 +68,7 @@ void sv_control_poll(void)
         --count;
         LeaveCriticalSection(&mutex);
         if (!sv_plugins_command(0, line))
-            sv_log("Unknown local command.");
+            sv_log("Unknown command.");
     }
 }
 

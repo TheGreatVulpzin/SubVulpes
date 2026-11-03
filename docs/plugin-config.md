@@ -73,7 +73,7 @@ A secret shows `*` in the listing when it has a value, and nothing otherwise. It
 The pending column is `1` when the saved value waits for a restart.
 
 A player who is an administrator can use the same command in the chat. He sees only the settings with `admin=1`, he can change only those, and the answers are short messages to him (at most 63 bytes).
-A player who is not an administrator gets `Plugin command permission denied: plugins`. The other `plugins` commands stay for the local operator.
+A player who is not an administrator gets `Plugin command denied: plugins`. The other `plugins` commands stay for the local operator.
 
 Results of a change: `Setting saved` with `applies now` or `applies at the next server start`, or `Setting refused` with `invalid value`, `unknown key` or `denied by the plugin` (an administrator and a key with `admin=0`).
 A refusal changes nothing.

@@ -56,13 +56,13 @@ void sv_systems_install(void)
     sv_ai_install();
     sv_mission_install();
     if (!sv_settings_install(SV_EVENT_SETTING, post_setting))
-        sv_log("Cannot install the core settings.");
+        sv_log("Cannot set up the core settings system.");
     if (!sv_engine_install(SV_ENGINE_OWNER_CLEANUP | SV_ENGINE_GLOBAL_CONSUMERS))
-        sv_log("Cannot install the engine parameters.");
+        sv_log("Cannot set up the engine parameters system.");
     /* The phone decisions wait for the next tick (sv_shop_poll), and the two purchase functions check their slots first. */
     if (!sv_shop_install(sv_plugins_decide, sv_plugins_write_context, SV_EVENT_PHONE_DIGIT, SV_EVENT_PHONE_CALL,
             SV_SHOP_SAFE_DECISIONS | SV_SHOP_SAFE_PURCHASES))
-        sv_log("Cannot install the shop hooks.");
+        sv_log("Cannot set up the shop hook system.");
 }
 
 int sv_game_start(void)

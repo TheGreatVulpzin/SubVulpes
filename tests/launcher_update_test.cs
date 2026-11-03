@@ -83,7 +83,7 @@ namespace SubVulpes
                 throw new Exception("Plugin metadata or legacy rows did not parse.");
             current.Runtime = "lua";
             string review = LauncherForm.PluginReviewDetails(current, "Approve this content?", true);
-            if (!review.Contains("Native code gets full process access.") || !review.Contains("crash the server."))
+            if (!review.Contains("Runs inside the server with full access to it."))
                 throw new Exception("Native approval lost its full process warning for a cached script row.");
             current.Runtime = "native";
             var item = LauncherForm.MakePluginItem(current);
@@ -219,7 +219,7 @@ namespace SubVulpes
                     throw new Exception("Explicit native consent did not permit approval.");
             }
             using (var dialog = new LauncherForm.PluginApprovalDialog(next, null, true)) {
-                if (!dialog.FullReview || dialog.ApproveButton.Text != "Install and approve")
+                if (!dialog.FullReview || dialog.ApproveButton.Text != "Install")
                     throw new Exception("The first review lost its full disclosure or action.");
             }
             bool refused = false;

@@ -74,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix='inspect-', dir=BUILD / 'tests') as temp
         assert set(danger) == {'read', 'write', 'storage', 'native'}, danger
         assert danger['read'][0] == danger['storage'][0] == 'low', danger
         assert danger['write'][0] == 'high' and 'kick' in danger['write'][1], danger
-        assert danger['native'][0] == 'highest' and 'full process access' in danger['native'][1], danger
+        assert danger['native'][0] == 'highest' and 'full access' in danger['native'][1], danger
         assert all(len(row) == 4 for row in rows[2:-1]), rows
 
     manifest = installed / 'plugin.ini'

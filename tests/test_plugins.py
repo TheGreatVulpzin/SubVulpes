@@ -124,11 +124,11 @@ run(RUNNER, ['start-list'], profile({'test.library': 'enabled', 'test.fixture': 
     extra={'test.library': ROLE, 'test.fixture': 'conflicts=test.library\n'}),
     contains=['Plugin failed: test.fixture: Conflicts with active plugin test.library.', 'PASS'])
 folder = profile({'test.fixture': 'enabled', 'test.library': 'disabled'}, extra={'test.library': CONFLICT})
-run(RUNNER, ['conflict-enable'], folder, contains=['conflicts with the active plugin test.fixture', 'PASS'])
+run(RUNNER, ['conflict-enable'], folder, contains=['conflicts with plugin test.fixture', 'PASS'])
 state = (folder / 'user/plugins/state.ini').read_text()
 assert 'test.library=enabled' in state and 'test.fixture=disabled' in state, state
 folder = profile({'test.fixture': 'enabled', 'test.library': 'disabled'}, extra={'test.library': CONFLICT})
-run(SERVER, ['--plugin-enable', 'test.library'], folder, code=2, contains=['conflicts with the selected plugin test.fixture'])
+run(SERVER, ['--plugin-enable', 'test.library'], folder, code=2, contains=['conflicts with test.fixture'])
 assert not (folder / 'user/plugins/state.ini').exists(), 'A refused enable saved its state.'
 run(SERVER, ['--plugins-list'], profile({'test.fixture': 'enabled', 'test.library': 'enabled'}, extra={'test.library': CONFLICT}),
     contains=['test.library\t1.2.0\tfailed\t0\t', 'Conflicts with plugin test.fixture, which starts first.'])
@@ -157,7 +157,7 @@ run(RUNNER, ['required-event-fail'], profile({'test.fixture': 'required'}), mode
 # Actor 7 is an administrator and actor 8 is not. Actor 0 is the local operator.
 run(RUNNER, ['permissions'], profile(fixture), mode='permissions',
     contains=['ran perm_public 0', 'ran perm_admin 0', 'ran perm_local 0', 'ran perm_public 8', 'ran perm_admin 7',
-              'permission denied: perm_admin', 'permission denied: perm_local', 'PASS'],
+              'command denied: perm_admin', 'command denied: perm_local', 'PASS'],
     absent=['ran perm_admin 8', 'ran perm_local 7', 'ran perm_local 8'])
 header = (Path(__file__).resolve().parents[1] / 'src/plugins/plugin_host.h').read_text()
 command_max = int(re.search(r'SV_PLUGIN_COMMAND_MAX\s+(\d+)', header).group(1))
@@ -165,7 +165,7 @@ output = run(RUNNER, ['limit'], profile(fixture), mode='limit', contains=['PASS'
 assert output.count(f'commands registered {command_max}') == 2, 'The command table did not fill, then clear.'
 # The status answer goes to the server log, so a player must not run it.
 output = run(RUNNER, ['status-local'], profile({'sv.status': 'enabled'}),
-             contains=['Status: tick 42', 'Plugin command permission denied: status', 'PASS'])
+             contains=['Status: tick 42', 'Plugin command denied: status', 'PASS'])
 assert output.count('Status: tick') == 1, 'A player ran the status command.'
 run(RUNNER, ['metrics'], profile(fixture), mode='normal', contains=['Plugin metrics: test.fixture, 3 callbacks', 'fixture stop event'])
 run(RUNNER, ['metrics'], profile(fixture), mode='resubscribe', contains=['PASS'], absent=['Plugin metrics'])
@@ -180,7 +180,7 @@ run(RUNNER, ['unsafe-fail'], profile(optional, unsafe='1'), mode='unsafe-fail',
     contains=['Plugin failed: test.fixture: Event callback reported failure.', 'PASS'])
 # The plugin list tells the administrator that this plugin takes damage decisions inside the simulation.
 run(RUNNER, ['metrics'], profile(fixture, unsafe='1'), mode='unsafe-budget',
-    contains=['takes damage decisions inside the simulation (unsafe_events)', 'PASS'])
+    contains=['can change or cancel some events while the game calculates it', 'PASS'])
 # The settings of a plugin (N23): every type, every error, a restart, an update of the manifest, the file command, and the
 # declarations that the host refuses.
 SETTINGS = """
@@ -240,7 +240,7 @@ output = run(RUNNER, ['config'], folder, mode='config', contains=[
     'SETTING\ttest.fixture\ttoken\tsecret\t*\t\t0\t30\t1\t0\t0\tToken\t',
     'CONFIG price [300] [77]', 'TELL 7 Saved test.fixture.price (now)',
     'TELL 7 Refused test.fixture.rate: denied by the plugin', 'TELL 7 price = 77',
-    'TELL 8 Plugin command permission denied: plugins', 'PASS'],
+    'TELL 8 Plugin command denied: plugins', 'PASS'],
     absent=['s3cret', 'TELL 7 rate =', 'TELL 7 token', 'TELL 8 price'])
 # Ten values fail the check: four for the price, and the flag, the choice, two floats and two texts.
 assert output.count('invalid value') == 10, 'A wrong value was not refused ten times.'
@@ -298,7 +298,7 @@ run(SERVER, ['--allow-unapproved-native', '--plugins-check'],
     profile({'sv.status': 'required'}, approval=False, abi='999'), code=2, contains=['failed'])
 hash_value = hashlib.sha256(SOURCE['sv.status'].read_bytes()).hexdigest()
 run(SERVER, ['--plugin-hash', 'sv.status'], folder, contains=[hash_value, 'crash'])
-run(SERVER, ['--plugin-approve', 'sv.status', '0' * 64], folder, code=2, contains=['Approval failed'])
+run(SERVER, ['--plugin-approve', 'sv.status', '0' * 64], folder, code=2, contains=['was not approved'])
 run(SERVER, ['--plugin-approve', 'sv.status', hash_value], folder, contains=['approved'])
 assert hash_value in (folder / 'user/plugins/native-approvals.ini').read_text()
 run(SERVER, ['--plugins-check'], folder, contains=['\tactive\t'])
@@ -322,11 +322,11 @@ manifest.write_text(manifest.read_text().replace('version=0.1.0', 'version=0.1.1
 run(SERVER, ['--allow-unapproved-native', '--plugins-check'], folder, code=2, contains=['descriptor differs'])
 
 folder = profile({'sv.status': 'enabled'})
-run(SERVER, ['--plugin-disable', 'sv.status'], folder, contains=['state saved'])
+run(SERVER, ['--plugin-disable', 'sv.status'], folder, contains=['changes saved'])
 assert 'sv.status=disabled' in (folder / 'user/plugins/state.ini').read_text()
 output = run(SERVER, ['--plugins-check'], folder, contains=['\tdisabled\t'])
 assert '\tactive\t' not in output
-run(SERVER, ['--plugin-enable', 'sv.status'], folder, contains=['state saved'])
+run(SERVER, ['--plugin-enable', 'sv.status'], folder, contains=['changes saved'])
 run(SERVER, ['--plugins-check'], folder, contains=['\tactive\t'])
 run(SERVER, ['--plugin-disable', 'sv.status'], profile({'sv.status': 'required'}), code=2, contains=['cannot be disabled'])
 folder = profile(fixture, abi='999')
@@ -365,7 +365,7 @@ try:
         assert line, 'The host exited before obtaining its profile lock.'
         if line.strip() == 'READY':
             break
-    run(SERVER, ['--plugins-check'], folder, code=2, contains=['Cannot lock plugin state'])
+    run(SERVER, ['--plugins-check'], folder, code=2, contains=['Cannot use the plugin files'])
     run(SERVER, ['--plugin-disable', 'test.fixture'], folder, code=2, contains=['Stop the server'])
     # The listing of the settings only reads files, so it works beside a running server. A change needs the stopped server.
     run(SERVER, ['--plugin-config', 'test.fixture'], folder, contains=['SubVulpes-plugin-config-v1'])

@@ -82,7 +82,7 @@ Storage and reads use the low risk color. Writes and kick use the high risk colo
 A new capability has a visible `NEW` label and needs the full review.
 An update with the same ID, runtime and capability set shows the previous and new versions in one review.
 
-The only approval action is **Install and approve**.
+The only approval action is **Install**.
 Native content requires an unchecked-by-default box for full process access.
 The primary action stays disabled until the operator checks that box.
 Cancel and Escape save nothing.

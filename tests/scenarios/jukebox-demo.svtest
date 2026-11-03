@@ -16,6 +16,6 @@ expect log "Finished: played=6 dropped_notes=0 dropped_calls=0 moved=0 failed=0.
 spawn player Guest admin=0
 say Guest /jukebox demo
 tick 1
-expect log "Plugin command permission denied: jukebox"
+expect log "Plugin command denied: jukebox"
 expect count 6 "JUKEBOX_SOUND "
 expect no-failure

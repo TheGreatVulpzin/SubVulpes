@@ -34,7 +34,7 @@ Official plugins use the public API and separate versions/packages so compatible
 - Use `os_rand()` for game randomness. Do not replace it with CRT `rand()`.
 - State behavior changes and compatibility limits in `docs/game/`.
 - Use SubVulpes in text. Use `subvulpes_server.exe`, `subvulpes_launcher.exe` and `SubVulpes-server-<version>.zip`.
-- The launcher title is `SubVulpes Server`. Its update endpoint uses the SubVulpes repository.
+- The launcher title is `SubVulpes Server Launcher`. Its update endpoint uses the SubVulpes repository.
 - Make small commits in English. Do not add AI coauthor lines. Do not push or create tags without a user request.
 
 ## Privacy and ownership

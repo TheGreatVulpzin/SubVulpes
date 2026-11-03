@@ -542,12 +542,12 @@ SvResult sv_plugin_load(SvModule *module)
     }
     if (!sv_plugin_approved(module) && !native_bypass) {
         strcpy(module->reason, "Native approval required. Inspect and approve this exact SHA-256 before loading.");
-        sv_log("Native plugin %s needs approval: %s", module->id, module->hash);
+        sv_log("Plugin %s needs approval: %s", module->id, module->hash);
         sv_plugin_unload(module);
         return SV_DENIED;
     }
     if (native_bypass)
-        sv_log("WARNING: native approval bypass is active for %s. Full process access and crash risk remain.", module->id);
+        sv_log("WARNING: %s is running without approval. Plugin approval bypass is enabled.", module->id);
     /* Adjacent helper DLLs have no content approval in this ABI. */
     module->library = LoadLibraryExA(module->path, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!module->library) {

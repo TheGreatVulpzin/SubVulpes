@@ -10,7 +10,7 @@ import time
 
 BUILD = Path(sys.argv[1]).resolve()
 SERVER = BUILD / 'subvulpes_server.exe'
-WARNING = 'WARNING: development plugin approval is active for this run only.'
+WARNING = 'WARNING: Developer mode is active.'
 checks = 0
 
 with tempfile.TemporaryDirectory(prefix='dev-plugins-', dir=BUILD / 'tests') as temporary:
@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix='dev-plugins-', dir=BUILD / 'tests') as 
     unmatched.mkdir()
     development(unmatched, False)
     output = development(root / 'plugins')
-    assert WARNING in output and 'Approval is not saved.' in output
+    assert WARNING in output and 'Approval is not saved for future sessions.' in output
     command(['--plugins-check'], False)
     development(plugin)
     digest = hashlib.sha256((plugin / 'trust-fixture.dll').read_bytes()).hexdigest()

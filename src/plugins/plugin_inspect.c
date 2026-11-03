@@ -85,7 +85,7 @@ static void dangers(const SvManifest *manifest)
     if (manifest->unsafe)
         puts("DANGER\tunsafe_events\thigh\tRuns callbacks inside the simulation. A fault can stop the server.");
     if (manifest->runtime == SV_RUNTIME_NATIVE)
-        puts("DANGER\tnative\thighest\tNative code gets full process access. It can read private data, corrupt memory, hang or crash the server.");
+        puts("DANGER\tnative\thighest\tRuns inside the server with full access to it.");
 }
 
 static int inspect_folder(const char *folder, const char *expected_id)
@@ -221,7 +221,7 @@ static HANDLE dev_stop_event, dev_warning_thread;
 
 static void dev_warning(void)
 {
-    sv_log("WARNING: development plugin approval is active for this run only. Native code has full process access. Approval is not saved.");
+    sv_log("WARNING: Developer mode is active. Approval is not saved for future sessions.");
 }
 
 static DWORD WINAPI dev_warnings(void *unused)

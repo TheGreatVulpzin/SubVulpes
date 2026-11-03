@@ -19,8 +19,8 @@ First plugin
        powershell -NoProfile -ExecutionPolicy Bypass -File tools\pack.ps1 -Folder template\out -OutputDir dist -ServerExe SERVERFOLDER\subvulpes_server.exe
        powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_plugin_test.ps1 -Plugin dist\my.hello-0.1.0-native.svplugin -Scenario template\test.svtest -ServerExe SERVERFOLDER\subvulpes_server.exe
      Expect PASS test.svtest. Use a server that matches this SDK version.
-  4. Open Plugins in the server launcher. Choose Install / update plugin package and select the .svplugin file.
-     Read the identity and capability risks. Check the native full-process box, then select Install and approve.
+  4. Open Plugins in the server launcher. Choose Install/Update and select the .svplugin file.
+     Read the identity and capability risks. Check the native full-process box, then select Install.
      The launcher stops the server after consent. A new plugin stays disabled.
   5. Enable my.hello in Plugins. Start the server and type hello in its console.
      Expect a log line that starts with Hello from.

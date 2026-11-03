@@ -628,7 +628,7 @@ SvResult sv_plugins_enable(const char *id)
         return SV_INCOMPATIBLE;
     /* Refuse before the state is saved, so a restart does not let the plugin take the place of the other one. */
     if (modules[index].state != SV_MODULE_ACTIVE && (other = conflicting((uint32_t)index, 0)) >= 0) {
-        sv_log("Plugin %s conflicts with the active plugin %s. Disable %s first.", id, modules[other].id, modules[other].id);
+        sv_log("Plugin %s conflicts with plugin %s. Disable %s first.", id, modules[other].id, modules[other].id);
         return SV_CONFLICT;
     }
     if (!sv_plugin_save_state(id, 1))
@@ -681,7 +681,7 @@ void sv_plugins_list(void)
         SvModule *module = &modules[i];
         list_module(module, module->state == SV_MODULE_ACTIVE && !module->wanted ? "restart" : states[module->state]);
         if (module->unsafe && (module->events & SV_EVENT_DAMAGE))
-            sv_log("Plugin %s takes damage decisions inside the simulation (unsafe_events). Its owner takes the risk.", module->id);
+            sv_log("Plugin %s can change or cancel some events while the game calculates it. If it is slow or has an error, the server can lag or even crash.", module->id);
         if (module->calls)
             sv_log("Plugin metrics: %s, %llu callbacks, %llu us total.", module->id,
                    (unsigned long long)module->calls, (unsigned long long)module->elapsed_us);
@@ -707,14 +707,14 @@ int sv_plugins_start(void)
     if (!sv_game_start()) {
         failed = 1;
         module_count = 0;
-        sv_log("Cannot initialize game services. Normal startup refused.");
+        sv_log("The plugin system could not start, so the server did not start.");
         return 0;
     }
     profile_lock = sv_plugin_lock();
     if (profile_lock == INVALID_HANDLE_VALUE) {
         failed = 1;
         module_count = 0;
-        sv_log("Cannot lock plugin state. Another host or installer may be using this server folder.");
+        sv_log("Cannot use the plugin files because another server or installer is already using this folder.");
         return 0;
     }
     if (!sv_plugin_profile(modules, &module_count)) {
@@ -1034,7 +1034,7 @@ static void config_command(uint64_t actor, char *arguments)
     SvResult result;
     int by_admin = actor != 0;
     if (by_admin && !sv_game_actor_admin(actor)) {
-        reply(actor, "Plugin command permission denied: plugins");
+        reply(actor, "Plugin command denied: plugins");
         return;
     }
     while (*arguments == ' ')
@@ -1123,7 +1123,7 @@ int sv_plugins_command(uint64_t actor, const char *text)
             return 1;
         }
         if (actor) {
-            sv_log("Plugin management requires the local operator.");
+            sv_log("Plugin commands only work in the server console.");
             return 1;
         }
         if (!strcmp(arguments, "list")) {
@@ -1141,7 +1141,7 @@ int sv_plugins_command(uint64_t actor, const char *text)
             static const char *results[] = { "OK", "invalid request", "wrong state", "resource limit",
                 "conflict", "denied", "not found", "incompatible API", "I/O failure",
                 "dependency blocked", "restart required", "callback failure" };
-            sv_log("Plugin management result: %s (%d)",
+            sv_log("Plugin management finished: %s (%d)",
                    result >= SV_OK && result <= SV_FAILED ? results[result] : "unknown failure", result);
         }
         sv_plugins_list();
@@ -1155,14 +1155,14 @@ int sv_plugins_command(uint64_t actor, const char *text)
             continue;
         if (actor && (command.permission == SV_COMMAND_LOCAL ||
             (command.permission == SV_COMMAND_ADMIN && !sv_game_actor_admin(actor)))) {
-            sv_log("Plugin command permission denied: %s", name);
+            sv_log("Plugin command denied: %s", name);
             return 1;
         }
         control = enter(command.owner - 1);
         result = command.callback(command.owner, actor, arguments);
         leave(control);
         if (result != SV_OK)
-            sv_log("Plugin command result: %s %d", name, result);
+            sv_log("Plugin command finished: %s %d", name, result);
         return 1;
     }
     return 0;
@@ -1204,7 +1204,7 @@ int sv_plugins_cli(int argc, char **argv)
         uint32_t i;
         HANDLE lock = sv_plugin_lock();
         if (lock == INVALID_HANDLE_VALUE) {
-            sv_log("Stop the server before changing state with an offline command.");
+            sv_log("Stop the server before you enable or disable plugins with this command.");
             return 2;
         }
         if (!sv_plugin_profile(modules, &module_count) || (index = find_module(argv[2])) < 0) {
@@ -1214,7 +1214,7 @@ int sv_plugins_cli(int argc, char **argv)
         }
         if (!enabled && modules[index].required) {
             CloseHandle(lock);
-            sv_log("A required plugin cannot be disabled.");
+            sv_log("This plugin cannot be disabled.");
             return 2;
         }
         if (enabled && !modules[index].metadata_valid) {
@@ -1225,7 +1225,7 @@ int sv_plugins_cli(int argc, char **argv)
         for (i = 0; i < module_count; ++i) {
             if (!enabled && modules[i].wanted && needs(&modules[i], argv[2])) {
                 CloseHandle(lock);
-                sv_log("Disable dependent plugins first.");
+                sv_log("This plugin is required by other plugins. Disable them first.");
                 return 2;
             }
         }
@@ -1233,18 +1233,18 @@ int sv_plugins_cli(int argc, char **argv)
             int other = conflicting((uint32_t)index, 1);
             if (other >= 0) {
                 CloseHandle(lock);
-                sv_log("Plugin %s conflicts with the selected plugin %s. Disable %s first.", argv[2], modules[other].id,
+                sv_log("Cannot enable %s because it conflicts with %s. Disable %s first.", argv[2], modules[other].id,
                     modules[other].id);
                 return 2;
             }
         }
         if (!sv_plugin_save_state(argv[2], enabled)) {
             CloseHandle(lock);
-            sv_log("Cannot save the private plugin state.");
+            sv_log("Cannot save the plugin changes.");
             return 2;
         }
         CloseHandle(lock);
-        sv_log("Plugin state saved. It applies at the next server start.");
+        sv_log("Plugin changes saved. They will apply at the next server start.");
         return 0;
     }
     /* The launcher: list the settings of a plugin, set one, or put one back to the default. The server must be stopped. */
@@ -1284,7 +1284,7 @@ int sv_plugins_cli(int argc, char **argv)
             sv_log("Setting refused (%d).", result);
             return 2;
         }
-        sv_log("Setting saved. It applies at the next server start.");
+        sv_log("Setting saved. It will apply at the next server start.");
         return 0;
     }
     if (argc == 2 && !strcmp(argv[1], "--plugins-check")) {
@@ -1301,21 +1301,21 @@ int sv_plugins_cli(int argc, char **argv)
             sv_log("Cannot inspect the plugin metadata or x86 DLL.");
             return 2;
         }
-        sv_log("Native code can read process data, corrupt memory, block or crash the server.");
+        sv_log("This plugin has full access to the server. It can read private data, freeze it or crash it.");
         if (module.unsafe)
-            sv_log("This plugin declares unsafe_events: it takes damage decisions inside the simulation, and the owner takes the risk.");
+            sv_log("This plugin can change or cancel some events while the game calculates it. If it is slow or has an error, the server can lag or even crash.");
         sv_log("SHA256\t%s\t%s", module.id, module.hash);
         return 0;
     }
     if (argc == 4 && !strcmp(argv[1], "--plugin-approve")) {
-        sv_log("Native approval accepts full process access and crash risk. A hash proves identity only.");
+        sv_log("By approving, you let this plugin do anything on the server, including undocumented behavior.");
         if (sv_plugin_inspect(argv[2], &module) && module.unsafe)
-            sv_log("This plugin declares unsafe_events: it takes damage decisions inside the simulation. A slow or wrong answer slows or breaks the game for every player, and the owner takes the risk.");
+            sv_log("This plugin can change or cancel some events while the game calculates it. If it is slow or has an error, the server can lag or even crash.");
         if (!sv_plugin_approve(argv[2], argv[3])) {
-            sv_log("Approval failed. Check the exact current SHA-256 and the private storage directory.");
+            sv_log("The plugin was not approved. Check that the SHA-256 is the current one for the plugin file, and that the server can write to its user folder.");
             return 2;
         }
-        sv_log("Native content approved: %s", argv[2]);
+        sv_log("Plugin approved: %s", argv[2]);
         return 0;
     }
     return -1;

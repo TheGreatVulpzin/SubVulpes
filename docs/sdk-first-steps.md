@@ -34,11 +34,11 @@ Use a server that matches the SDK version. Rebuild your DLLs when the SDK versio
    Expect `PASS test.svtest`. The SDK supplies the runner and probe plugin.
    The scenario needs no client and changes no approval on your server.
 
-4. Open the launcher in the test server folder. Select **Plugins**, then **Install / update plugin package**.
+4. Open the launcher in the test server folder. Select **Plugins**, then **Install/Update**.
    Choose `dist\my.hello-0.1.0-native.svplugin`.
    Read the name, author, description and capability risks.
    For native code, check the box for full process access.
-   Select **Install and approve**.
+   Select **Install**.
    The launcher stops the server after consent. A new plugin stays disabled.
    An update shows the version change. New capabilities require the full review.
 

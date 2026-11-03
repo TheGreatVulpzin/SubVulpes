@@ -143,7 +143,7 @@ Updates save the previous manifest and DLL in `backup/plugins/<unique>.zip`.
 Use that ZIP as `-Package` to restore the previous module. Approve exact DLL content separately when needed.
 A compatible module update needs no core rebuild.
 
-The launcher's Plugins page offers Refresh, Enable, Disable, Approve native DLL and Install / update plugin package.
+The launcher's Plugins page offers Refresh, Enable, Disable, Approve native DLL and Install/Update.
 Live controls send local commands. Offline controls save the state for the next start.
 The install action inspects the package, shows its identity, asks for confirmation, stops the server and installs the same bytes.
 The native bypass checkbox applies to the next Start and is off by default.
