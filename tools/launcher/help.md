@@ -44,11 +44,11 @@ Turn on only plugins that you trust.
 ## The table
 Select a column title to sort. Right-click a title to choose the columns. Risk and Source are hidden at first.
 ## Right-click a plugin
-The menu turns the plugin on or off, opens the approval review, copies the id and removes the plugin.
-## Catalog
-The Catalog tab lists the plugins of the SubVulpes Workshop. The launcher checks the signature of the list, and keeps a saved copy for when you are offline. Select **Refresh** to read it again. Select **Install** to install a plugin, or select a card to see its page and its pictures. An official plugin installs at once. A plugin of the community shows its review first. When the server runs, the install waits and runs at the next start that you make. **Update** shows when the catalog has a newer version.
-## Remove
-**Remove�** deletes a plugin: its folder and its approval. The data that the plugin saved stays. Stop the server first. A required plugin, or a plugin that another plugin needs, stays.
+The menu turns the plugin on or off, opens the approval review, copies the id and uninstalls the plugin.
+## Workshop
+The Workshop tab lists the plugins of the SubVulpes Workshop. The launcher checks the signature of the list, and keeps a saved copy for when you are offline. Select **Refresh** to read it again. Select **Install** to install a plugin, or select a card to see its page and its pictures. An official plugin installs at once. A plugin of the community shows its review first. When the server runs, the install waits and runs at the next start that you make. **Update** shows when the catalog has a newer version.
+## Uninstall
+**Uninstall…** deletes a plugin: its folder and its approval. The data that the plugin saved stays. Stop the server first. A required plugin, or a plugin that another plugin needs, stays.
 ## Install
 Use `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.
 ## Approval

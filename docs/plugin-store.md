@@ -1,7 +1,7 @@
 # Plugin store plan
 
 This page plans the plugin store: the `SubVulpes-Workshop` repository, the catalog index and the launcher client. The Workshop holds three kinds of content: plugins, mods and bundles (see Kinds below).
-Status on 2026-11-03: planned, not started. The launcher already has the Catalog tab and reads a local `catalog.json`.
+Status on 2026-11-03: planned, not started. The launcher already has the Workshop tab and reads a local `catalog.json`.
 
 ## Decisions of the owner
 
@@ -131,7 +131,7 @@ The Action reads `plugins/<id>/plugin.ini`, builds the package, computes the SHA
 | --- | --- |
 | `format` | The number of this format. The launcher refuses a number that it does not know. |
 | `id`, `name`, `description`, `author`, `version` | As in `plugin.ini`. `author` may be empty. |
-| `kind` | `plugin`, `mod` or `bundle`. The launcher filters the Catalog tab by it. |
+| `kind` | `plugin`, `mod` or `bundle`. The launcher filters the Workshop tab by it. |
 | `source` | `Official` or `Community`. The Action sets it from the top folder. |
 | `license` | The license of the content. The CI refuses content without one. |
 | `runtime` | For a plugin only: `native`, `lua` or `wasm`. |
@@ -145,11 +145,11 @@ The local `catalog.json` of today is the same list without the new fields. The l
 
 ## What the launcher does
 
-1. At start, and when the user opens the Catalog tab, it downloads `index.json` from `dist`. It keeps the last good copy in a cache folder. Without a network, it shows the cache.
+1. At start, and when the user opens the Workshop tab, it downloads `index.json` from `dist`. It keeps the last good copy in a cache folder. Without a network, it shows the cache.
 2. The list shows the icon and the thumbnails from the cache. It downloads a missing thumbnail once.
 3. The plugin page loads the full images when the user opens it, and caches them.
 4. Install downloads the package and checks the size and the SHA-256. With the server stopped, it runs the installer script and writes the approval, because the hash matches the index. With the server running, it keeps the package as a pending install and tells the user that the plugin applies at the next start. The launcher runs the pending installs just before the next start. It never restarts the server.
-5. The Catalog tab marks a plugin that has a newer version than the installed one, and offers Update.
+5. The Workshop tab marks a plugin that has a newer version than the installed one, and offers Update.
 6. The launcher reuses the update code that exists (`ReleaseUpdate`: the request, the download and the checksum).
 
 ## Install tiers
@@ -178,7 +178,7 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 3. Renew the manifest (`plugin.ini`) together with the plugin API renewal, before the store: icon, author, homepage, license and the minimum API version. The server lists the new fields and the launcher reads them. Old plugins keep working.
 4. Make the repository: one example plugin, the build script, the index generator, the signature and the Action.
 5. Make the launcher client: download, cache, thumbnails, the plugin page from the index, one-click install, pending installs.
-6. Add the Remove action to the launcher (delete the folder, remove the approval, warn the plugins that depend on it). The Plugins page has no way to uninstall today.
+6. Add the Uninstall action to the launcher (delete the folder, remove the approval, warn the plugins that depend on it). The Plugins page has no way to uninstall today.
 7. Give the review window the new look. Keep it for files from outside the repository.
 8. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
 9. Make the tag and the release of the next minor version (Kit) only after steps 4 to 6 and the SDK update are done. The release page shows the Kit Bodega picture.
@@ -189,7 +189,7 @@ https://github.com/TheGreatVulpzin/SubVulpes-Workshop is public. Done: the layou
 
 ## Launcher client (built on 2026-11-03)
 
-The Catalog tab reads the Workshop. Done:
+The Workshop tab reads the Workshop. It was named Catalog before. Done:
 
 - The launcher downloads `index.json` and `index.json.sig` from the branch `dist` over HTTPS and checks the RSA signature with the key inside the program (`tools/launcher/index-public.pem`, a resource). A catalog that fails the check never shows. The launcher keeps the last good copy in `workshop-cache\` next to the launcher, and checks it again at each load. Without a network, the saved catalog shows.
 - The list shows the icons, which load once in the background. The plugin page loads its large pictures when the user opens it. The thumbnails of the index are not used yet.
@@ -197,7 +197,7 @@ The Catalog tab reads the Workshop. Done:
 - A newer version in the catalog shows an Update button. A beta or experimental plugin shows only with Include Beta Versions.
 - With the server running, an install waits. It is saved in `workshop-cache\pending.txt` and runs just before the next start that the user makes. The launcher never restarts the server.
 - A `catalog.json` in the server folder still works. It is for developers and for tests, and its entries come first.
-- The Plugins page has a Remove action (the table menu and the Summary tab). It needs a stopped server. It refuses a required plugin, and a plugin that another installed plugin lists in `dependencies=`. It deletes the plugin folder, its line in `plugins.ini` and its approvals. The data that the plugin saved in `user\plugins` stays.
+- The Plugins page has an Uninstall action (the table menu, the Summary tab and the cards of the Workshop tab). It needs a stopped server. It refuses a required plugin, and a plugin that another installed plugin lists in `dependencies=`. It deletes the plugin folder, its line in `plugins.ini` and its approvals. The data that the plugin saved in `user\plugins` stays.
 - The plugin list reads again each time its page opens.
 
 Tests: signature (good, changed data, changed signature, another key, bad key), the index rules, the package check, the needed-by check and the removal, in `tests/launcher_update_test.cs`.
@@ -205,7 +205,7 @@ Tests: signature (good, changed data, changed signature, another key, bad key), 
 Not done: moving `sv.jukebox` to the Workshop. The jukebox builds from the SDK with CMake, and its tests live in the main repository, so a move needs its own plan. The Workshop has no content yet. The short install card for the community and the unseen screens (the Workshop pages with real data) wait for the first content.
 ## Manifest renewal (server, installer, pack and launcher done on 2026-11-03)
 
-Done: the server reads and checks the new keys, the installer and `pack.ps1` carry the icon, the tests cover them, and the launcher shows the icon of an installed plugin. Not done: the official manifests (author, license and icon, which change their hashes), the real icons, the comparison of `server_min` (the server program has no version number inside yet), the `entry` runtime, and the Remove action.
+Done: the server reads and checks the new keys, the installer and `pack.ps1` carry the icon, the tests cover them, and the launcher shows the icon of an installed plugin. Not done: the official manifests (author, license and icon, which change their hashes), the real icons, the comparison of `server_min` (the server program has no version number inside yet), the `entry` runtime, and the Uninstall action.
 
 The manifest (`docs/plugin-manifest.md`) already has `name`, `description`, `author` and `homepage`. The store needs these new keys. No other key changes. All of them are optional.
 

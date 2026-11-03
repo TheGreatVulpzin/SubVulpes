@@ -175,7 +175,7 @@ namespace SubVulpes
             host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
             var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
-            string[] names = { "My Plugins", "Catalog" };
+            string[] names = { "My Plugins", "Workshop" };
             Control[] subs = { PluginsPage(), CatalogPage() };
             for (int i = names.Length - 1; i >= 0; i--) {
                 var tab = new TabLabel(names[i]) { Selected = i == 0, Sub = true };
@@ -397,7 +397,7 @@ namespace SubVulpes
             string why = catalogProblem.Length > 0 ? catalogProblem :
                 catalog.Count > 0 ? "No plugin matches the search." :
                 "The Workshop has no plugin that this launcher can show, and no saved catalog exists yet. Select Refresh when the computer is online. Or install a plugin from a file.";
-            var title = L(catalog.Count > 0 ? "Nothing to show" : "The catalog is empty", true, false);
+            var title = L(catalog.Count > 0 ? "Nothing to show" : "The Workshop is empty", true, false);
             title.Font = UI.F(11f, FontStyle.Bold);
             title.Location = new Point(24, 22);
             var text = L(why, false, true);
@@ -414,26 +414,49 @@ namespace SubVulpes
         {
             PluginMetadata installed = plugins.FirstOrDefault(p => p.Id == c.Id);
             if (pendingInstalls.Any(x => x[3] == c.Id)) return L("Installs at the next start", false, true);
-            if (installed != null && c.Remote && NewerVersion(c.Version, installed.Version)) {
-                var update = new FlatButton("Update") { Glyph = "download" };
-                update.Click += async delegate { await InstallFromStore(c); };
-                return update;
-            }
             if (installed != null) {
-                var done = L("✓ Installed", false, false);
-                done.Tag = "ok";
-                return done;
+                // An installed plugin shows its state, an Update button when the Workshop has a newer version, and Uninstall.
+                var row = new Panel { BackColor = Color.Transparent };
+                var uninstall = new FlatButton("Uninstall") { Enabled = installed.Required != "1" };
+                string id = c.Id;
+                uninstall.Click += async delegate { await UninstallPlugin(id); ReshowCatalog(c); };
+                int left;
+                if (c.Remote && NewerVersion(c.Version, installed.Version)) {
+                    var update = new FlatButton("Update") { Glyph = "download", Location = new Point(0, 0) };
+                    update.Click += async delegate { await InstallFromStore(c); ReshowCatalog(c); };
+                    row.Controls.Add(update);
+                    left = update.Width;
+                } else {
+                    var done = L("✓ Installed", false, false);
+                    done.Tag = "ok";
+                    done.BackColor = Color.Transparent;
+                    done.Location = new Point(0, (uninstall.Height - done.PreferredHeight) / 2);
+                    row.Controls.Add(done);
+                    left = done.PreferredWidth;
+                }
+                uninstall.Location = new Point(left + 12, 0);
+                row.Controls.Add(uninstall);
+                row.Size = new Size(uninstall.Right, uninstall.Height);
+                return row;
             }
             if (c.Remote) {
                 var get = new FlatButton("Install") { Glyph = "download" };
-                get.Click += async delegate { await InstallFromStore(c); };
+                get.Click += async delegate { await InstallFromStore(c); ReshowCatalog(c); };
                 return get;
             }
             string package = CatalogPackage(c);
             var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null };
             if (package == null) UI.Tips.SetToolTip(install, "The package file of this plugin is not on this computer.");
-            install.Click += async delegate { await InstallPlugin(package); };
+            install.Click += async delegate { await InstallPlugin(package); ReshowCatalog(c); };
             return install;
+        }
+
+        // The card or the page shows again, so that its button follows what was installed or uninstalled.
+        void ReshowCatalog(CatalogEntry c)
+        {
+            if (IsDisposed || catalogList == null) return;
+            if (catalogDetail.Visible) ShowCatalogDetail(c);
+            else if (catalogList.Visible) RenderCatalog();
         }
 
         Control CatalogCard(CatalogEntry c)
@@ -675,13 +698,13 @@ namespace SubVulpes
             toggle.Click += delegate { ToggleFromTable(p); };
             review.Click += async delegate { await ApprovePlugin(id); };
             copy.Click += delegate { Clipboard.SetText(id); message.Text = "Copied: " + id; };
-            var remove = new ToolStripMenuItem("Remove…") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
-            remove.Click += async delegate { await RemovePlugin(id); };
+            var uninstall = new ToolStripMenuItem("Uninstall…") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+            uninstall.Click += async delegate { await UninstallPlugin(id); };
             menu.Items.Add(toggle);
             menu.Items.Add(review);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(copy);
-            menu.Items.Add(remove);
+            menu.Items.Add(uninstall);
             menu.Show(Cursor.Position);
         }
 
@@ -710,8 +733,8 @@ namespace SubVulpes
             if (kept.Length != lines.Length) System.IO.File.WriteAllText(path, string.Join("\r\n", kept), Encoding.Default);
         }
 
-        // Deletes the folder of a plugin, its line in plugins.ini and its approvals. The data of the plugin in user\plugins stays.
-        internal static void RemovePluginFiles(string serverFolder, string id)
+        // Uninstalls a plugin: it deletes its folder, its line in plugins.ini and its approvals. The data of the plugin in user\plugins stays.
+        internal static void UninstallPluginFiles(string serverFolder, string id)
         {
             if (!PluginId(id)) throw new IOException("The identifier of the plugin is not valid.");
             string root = Path.GetFullPath(Path.Combine(serverFolder, "plugins"));
@@ -726,25 +749,25 @@ namespace SubVulpes
             RemoveIniKey(Path.Combine(serverFolder, "user", "plugins", "native-approvals.ini"), id);
         }
 
-        async Task RemovePlugin(string id)
+        async Task UninstallPlugin(string id)
         {
             if (pluginBusy || updating) return;
             id = PluginActionId(id);
             if (id == null) return;
-            if (server != null) { message.Text = "Stop the server before you remove a plugin."; return; }
+            if (server != null) { message.Text = "Stop the server before you uninstall a plugin."; return; }
             PluginMetadata p = FindPlugin(id);
             string name = p != null ? p.DisplayName : id;
-            if (p != null && p.Required == "1") { message.Text = name + " is required. It cannot be removed."; return; }
+            if (p != null && p.Required == "1") { message.Text = name + " is required. It cannot be uninstalled."; return; }
             string selectedFolder = folder;
             string needed = PluginNeededBy(selectedFolder, id);
-            if (needed.Length > 0) { message.Text = name + " is needed by " + needed + ". Remove that plugin first."; return; }
-            if (MessageBox.Show(this, "Remove " + name + "? Its folder and its approval are deleted. The data that it saved stays.",
+            if (needed.Length > 0) { message.Text = name + " is needed by " + needed + ". Uninstall that plugin first."; return; }
+            if (MessageBox.Show(this, "Uninstall " + name + "? Its folder and its approval are deleted. The data that it saved stays.",
                 AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             pluginBusy = true; SetState(serverState);
             try {
-                await Task.Run(() => RemovePluginFiles(selectedFolder, id));
-                message.Text = name + " is removed.";
-            } catch (Exception ex) { message.Text = "Cannot remove the plugin: " + ex.Message; }
+                await Task.Run(() => UninstallPluginFiles(selectedFolder, id));
+                message.Text = name + " is uninstalled.";
+            } catch (Exception ex) { message.Text = "Cannot uninstall the plugin: " + ex.Message; }
             finally { pluginBusy = false; SetState(serverState); }
             await RefreshPlugins();
         }
@@ -854,8 +877,8 @@ namespace SubVulpes
             var review = new FlatButton("Review approval…") { Margin = new Padding(0) };
             string id = p.Id;
             review.Click += async delegate { await ApprovePlugin(id); };
-            var remove = new FlatButton("Remove…") { Enabled = p.Required != "1" };
-            remove.Click += async delegate { await RemovePlugin(id); };
+            var remove = new FlatButton("Uninstall…") { Enabled = p.Required != "1" };
+            remove.Click += async delegate { await UninstallPlugin(id); };
             acts.Controls.Add(update);
             acts.Controls.Add(review);
             acts.Controls.Add(remove);

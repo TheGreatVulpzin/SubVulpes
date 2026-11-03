@@ -284,8 +284,8 @@ namespace SubVulpes
             CheckPluginMetadata();
             CheckPluginApproval();
             CheckStore();
-            CheckRemove();
-            Console.WriteLine("Launcher update, backup, admin password, plugin metadata, Workshop and remove checks passed.");
+            CheckUninstall();
+            Console.WriteLine("Launcher update, backup, admin password, plugin metadata, Workshop and uninstall checks passed.");
         }
 
         static void Fail(string text) { throw new Exception(text); }
@@ -358,7 +358,7 @@ namespace SubVulpes
             } finally { Directory.Delete(dir, true); }
         }
 
-        static void CheckRemove()
+        static void CheckUninstall()
         {
             string root = Path.Combine(Path.GetTempPath(), "launcher-remove-" + Guid.NewGuid().ToString("N"));
             try {
@@ -373,7 +373,7 @@ namespace SubVulpes
                 File.WriteAllText(Path.Combine(root, "user\\plugins\\native-approvals.ini"), "[native]\r\nb.user=aa\r\nc.free=bb\r\n");
                 if (LauncherForm.PluginNeededBy(root, "a.lib") != "b.user") Fail("The needed-by check missed a plugin.");
                 if (LauncherForm.PluginNeededBy(root, "c.free") != "") Fail("The needed-by check found a plugin that does not exist.");
-                LauncherForm.RemovePluginFiles(root, "b.user");
+                LauncherForm.UninstallPluginFiles(root, "b.user");
                 if (Directory.Exists(Path.Combine(root, "plugins\\b.user"))) Fail("The plugin folder stayed.");
                 if (!File.Exists(Path.Combine(root, "user\\plugins\\b.user\\data.txt"))) Fail("The saved data of the plugin was deleted.");
                 string enabled = File.ReadAllText(Path.Combine(root, "plugins\\plugins.ini")), approvals = File.ReadAllText(Path.Combine(root, "user\\plugins\\approvals.ini"));
@@ -383,7 +383,7 @@ namespace SubVulpes
                 if (LauncherForm.PluginNeededBy(root, "a.lib") != "") Fail("The needed-by check still sees the removed plugin.");
                 foreach (string bad in new[] { "..\\x", "../x", "a.lib\\..", "", "A.Upper", "con" }) {
                     bool refused = false;
-                    try { LauncherForm.RemovePluginFiles(root, bad); } catch (Exception) { refused = true; }
+                    try { LauncherForm.UninstallPluginFiles(root, bad); } catch (Exception) { refused = true; }
                     if (!refused) Fail("A bad plugin id was accepted: " + bad);
                 }
                 if (!Directory.Exists(Path.Combine(root, "plugins\\a.lib"))) Fail("A bad id removed another plugin.");
