@@ -221,15 +221,14 @@ namespace SubVulpesMockup
     class StateLabel : Control
     {
         public string Word = "Running";
-        public StateLabel() { Height = 34; Width = 128; SetStyle(UI.Paint, true); }
+        public StateLabel() { Height = 34; Width = 124; SetStyle(UI.Paint, true); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            var r = new Rectangle(0, 2, Width - 2, Height - 5);
+            var r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(Color.FromArgb(38, UI.T.Ok))) g.FillPath(b, path);
-            int cy = r.Y + r.Height / 2;
-            using (var b = new SolidBrush(UI.T.Ok)) g.FillEllipse(b, r.X + 14, cy - 5, 10, 10);
-            TextRenderer.DrawText(g, Word, UI.F(10.5f, FontStyle.Bold), new Rectangle(r.X + 30, r.Y, r.Width - 30, r.Height), UI.T.Ok, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var b = new SolidBrush(UI.T.Ok)) g.FillEllipse(b, 15, r.Height / 2 - 5, 10, 10);
+            TextRenderer.DrawText(g, Word, UI.F(10.5f, FontStyle.Bold), new Rectangle(32, 0, r.Width - 32, r.Height), UI.T.Ok, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -266,6 +265,7 @@ namespace SubVulpesMockup
             }
             pages.Add(ServerPage()); pages.Add(SettingsHost()); pages.Add(PluginsPage()); pages.Add(HelpPage());
             foreach (var p in pages) { p.Dock = DockStyle.Fill; p.Padding = new Padding(16, 12, 16, 10); Controls.Add(p); }
+            pages[1].Padding = Padding.Empty;
             Controls.Add(tabBar);
             tabBar.SendToBack(); foreach (var p in pages) p.BringToFront();
             ShowPage(0); SetTheme(Theme.Light);
@@ -393,13 +393,18 @@ namespace SubVulpesMockup
             page.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); page.RowStyles.Add(new RowStyle(SizeType.Absolute, 168));
             page.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); page.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); page.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
 
-            var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
-            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
-            var left = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, 3, 0, 0) };
-            left.Controls.Add(new StateLabel { Margin = new Padding(0, 0, 14, 0) });
-            left.Controls.AddRange(new Control[] { new FlatButton("Start") { Kind = "primary", Enabled = false }, new FlatButton("Stop"), new FlatButton("Restart"), new FlatButton("Kill") { Kind = "danger" } });
-            toolbar.Controls.Add(left, 0, 0);
-            toolbar.Controls.Add(new FlatButton("Save Log") { Anchor = AnchorStyles.Right, Margin = new Padding(0, 0, 0, 0), Width = 100 }, 1, 0);
+            var toolbar = new Panel { Dock = DockStyle.Fill };
+            var rightFlow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
+            var save = new FlatButton("Save Log") { Margin = new Padding(8, 0, 0, 0) };
+            var kill = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 18, 0) };
+            var restart = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0) };
+            var stop = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0) };
+            var start = new FlatButton("Start") { Kind = "primary", Enabled = false, Margin = new Padding(8, 0, 0, 0) };
+            rightFlow.Controls.AddRange(new Control[] { save, kill, restart, stop, start });
+            var state = new StateLabel { Dock = DockStyle.Left };
+            var stateHolder = new Panel { Dock = DockStyle.Left, Width = 124, Padding = new Padding(0, 4, 0, 0) };
+            stateHolder.Controls.Add(state); state.Dock = DockStyle.Fill;
+            toolbar.Controls.Add(rightFlow); toolbar.Controls.Add(stateHolder);
             page.Controls.Add(toolbar, 0, 0);
 
             var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8) }; statsRow = stats;
@@ -472,9 +477,9 @@ namespace SubVulpesMockup
         {
             var host = new TableLayoutPanel { ColumnCount = 1, RowCount = 2 };
             host.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0, 0, 0, 6) };
+            var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
             string[] names = { "Server Settings", "Launcher Settings", "Advanced Settings" };
-            var area = new Panel { Dock = DockStyle.Fill };
+            var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
             Control[] subs = { ServerSettings(), LauncherSettings(), AdvancedSettings() };
             for (int i = names.Length - 1; i >= 0; i--)
             {
@@ -500,8 +505,8 @@ namespace SubVulpesMockup
         {
             var outer = new Panel();
             var bottom = new Panel { Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(0, 10, 0, 0) };
-            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-            flow.Controls.Add(new FlatButton("Revert changes")); flow.Controls.Add(new FlatButton("Reset to defaults") { Kind = "danger" });
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, FlowDirection = FlowDirection.RightToLeft };
+            flow.Controls.Add(new FlatButton("Reset to defaults") { Kind = "danger", Margin = new Padding(8, 0, 0, 0) }); flow.Controls.Add(new FlatButton("Revert changes") { Margin = new Padding(8, 0, 0, 0) });
             bottom.Controls.Add(flow);
             var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
             var t = RowTable(); build(t); scroll.Controls.Add(t);
