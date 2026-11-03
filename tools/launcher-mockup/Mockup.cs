@@ -13,14 +13,14 @@ namespace SubVulpesMockup
 {
     class Theme
     {
-        public Color Bg, Win, Panel, Line, Fg, Muted, Accent, Ok, Warn, Bad, Chip, Console, ConsoleFg, Bar, BarFg, BarMuted, SubBar;
-        public static readonly Theme Light = new Theme {
+        public Color Violet, Bg, Win, Panel, Line, Fg, Muted, Accent, Ok, Warn, Bad, Chip, Console, ConsoleFg, Bar, BarFg, BarMuted, SubBar;
+        public static readonly Theme Light = new Theme { Violet = Color.FromArgb(112, 82, 196),
             Bg = Color.FromArgb(238, 240, 243), Win = Color.FromArgb(246, 247, 249), Panel = Color.White, Line = Color.FromArgb(217, 220, 225),
             Fg = Color.FromArgb(27, 29, 33), Muted = Color.FromArgb(106, 112, 122), Accent = Color.FromArgb(217, 99, 30),
             Ok = Color.FromArgb(42, 138, 74), Warn = Color.FromArgb(183, 121, 31), Bad = Color.FromArgb(194, 54, 43),
             Chip = Color.FromArgb(236, 239, 243), Console = Color.Black, ConsoleFg = Color.FromArgb(212, 215, 220),
             Bar = Color.FromArgb(222, 226, 232), SubBar = Color.FromArgb(238, 240, 244), BarFg = Color.White, BarMuted = Color.FromArgb(96, 103, 115) };
-        public static readonly Theme Dark = new Theme {
+        public static readonly Theme Dark = new Theme { Violet = Color.FromArgb(176, 158, 240),
             Bg = Color.FromArgb(15, 17, 20), Win = Color.FromArgb(26, 29, 34), Panel = Color.FromArgb(33, 37, 43), Line = Color.FromArgb(50, 56, 65),
             Fg = Color.FromArgb(232, 234, 238), Muted = Color.FromArgb(154, 161, 172), Accent = Color.FromArgb(240, 138, 75),
             Ok = Color.FromArgb(94, 194, 125), Warn = Color.FromArgb(224, 176, 80), Bad = Color.FromArgb(239, 111, 100),
@@ -235,21 +235,21 @@ namespace SubVulpesMockup
         }
     }
 
-    // A small orange pill with the restart icon. It tells that a setting needs a restart of the server.
+    // A small violet pill with the restart icon. It tells that a setting needs a restart of the server.
     class Badge : Control
     {
         readonly string text;
         public Badge(string text)
         {
-            this.text = text; Height = 24; SetStyle(UI.Paint, true);
-            Width = 8 + 13 + 5 + TextRenderer.MeasureText(text, UI.F(9f, FontStyle.Regular), new Size(999, 30), TextFormatFlags.NoPadding).Width + 10;
+            this.text = text.ToUpperInvariant(); Height = 22; SetStyle(UI.Paint, true);
+            Width = 9 + 12 + 6 + TextRenderer.MeasureText(this.text, UI.F(8f, FontStyle.Bold), new Size(999, 30), TextFormatFlags.NoPadding).Width + 11;
         }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 12)) using (var b = new SolidBrush(Icons.Blend(UI.T.Win, UI.T.Warn, 0.16))) g.FillPath(b, path);
-            Svg.Draw(g, "restart", new RectangleF(8, (Height - 13) / 2f, 13, 13), UI.T.Warn);
-            TextRenderer.DrawText(g, text, UI.F(9f, FontStyle.Regular), new Rectangle(26, 0, Width - 26, Height), UI.T.Warn, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Win, UI.T.Violet, 0.14))) g.FillPath(b, path);
+            Svg.Draw(g, "restart", new RectangleF(9, (Height - 12) / 2f, 12, 12), UI.T.Violet);
+            TextRenderer.DrawText(g, text, UI.F(8f, FontStyle.Bold), new Rectangle(27, 0, Width - 27, Height), UI.T.Violet, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -321,7 +321,8 @@ namespace SubVulpesMockup
             Color fill = UI.T.Panel, border = UI.T.Line, fg = UI.T.Fg;
             if (Kind == "primary") { fill = UI.T.Ok; border = UI.T.Ok; fg = Color.White; }
             else if (Kind == "danger") { border = UI.T.Bad; fg = UI.T.Bad; }
-            if (!Enabled) { fill = UI.T.Chip; border = UI.T.Line; fg = UI.T.Muted; }
+            if (Kind == "link") { Color back = Parent != null ? Parent.BackColor : UI.T.Win; fill = back; border = back; fg = hover ? UI.T.Bad : UI.T.Muted; }
+            else if (!Enabled) { fill = UI.T.Chip; border = UI.T.Line; fg = UI.T.Muted; }
             else if (hover) border = UI.T.Accent;
             using (var path = UI.Round(r, 6)) using (var b = new SolidBrush(fill)) using (var p = new Pen(border)) { g.FillPath(b, path); g.DrawPath(p, path); }
             if (glyph == null) { TextRenderer.DrawText(g, Text, Font, r, fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter); return; }
@@ -772,7 +773,7 @@ namespace SubVulpesMockup
         {
             var t = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 4 };
             t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 240)); t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
-            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20));
             return t;
         }
 
@@ -785,14 +786,10 @@ namespace SubVulpesMockup
             Control cell = input;
             if (hint != null) cell = Inline(input, new Badge(hint) { Margin = new Padding(12, 2, 0, 0) });  // the badge sits right next to the field
             cell.Anchor = AnchorStyles.Left; t.Controls.Add(cell, 2, row);
-            var right = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
-            var saved = L("Saved ✓", false, false); saved.Tag = "ok"; saved.Visible = false; saved.Margin = new Padding(0, 0, 10, 0);
-            right.Controls.Add(saved); t.Controls.Add(right, 3, row);
             if (autosave)
             {
-                var timer = new System.Windows.Forms.Timer { Interval = 1600 };
-                timer.Tick += delegate { saved.Visible = false; timer.Stop(); };
-                EventHandler show = delegate { saved.Visible = true; timer.Stop(); timer.Start(); };
+                // A change only marks the page as edited. The Save button at the bottom of Settings writes it.
+                EventHandler show = delegate { MarkDirty(); };
                 if (input is TextField) ((TextField)input).TextChanged += show;
                 else if (input is TextBox) ((TextBox)input).TextChanged += show;
                 else if (input is Dropdown) ((Dropdown)input).SelectedIndexChanged += show;
@@ -953,10 +950,11 @@ namespace SubVulpesMockup
         // ---- settings with sub-tabs
         Control SettingsHost()
         {
-            var host = new TableLayoutPanel { ColumnCount = 1, RowCount = 2 };
-            host.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var host = new TableLayoutPanel { ColumnCount = 1, RowCount = 3 };
+            host.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); host.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); host.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
             string[] names = { "Server Settings", "Launcher Settings", "Advanced Settings" };
+            var settingsBar = SettingsBar();
             var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
             Control[] subs = { ServerSettings(), LauncherSettings(), AdvancedSettings() };
             for (int i = names.Length - 1; i >= 0; i--)
@@ -965,7 +963,7 @@ namespace SubVulpesMockup
                 subTabs.Insert(0, tab); strip.Controls.Add(tab);
                 subs[i].Dock = DockStyle.Fill; subs[i].Visible = i == 0; area.Controls.Add(subs[i]); subPages.Insert(0, subs[i]);
             }
-            host.Controls.Add(strip, 0, 0); host.Controls.Add(area, 0, 1);
+            host.Controls.Add(strip, 0, 0); host.Controls.Add(area, 0, 1); host.Controls.Add(settingsBar, 0, 2);
             return host;
         }
 
@@ -981,15 +979,39 @@ namespace SubVulpesMockup
 
         Control SettingsPage(Action<TableLayoutPanel> build)
         {
-            var outer = new Panel();
-            var bottom = new Panel { Dock = DockStyle.Bottom, Height = 56, Padding = new Padding(0, 10, 0, 0) };
-            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, FlowDirection = FlowDirection.RightToLeft };
-            flow.Controls.Add(new FlatButton("Reset to defaults") { Kind = "danger", Margin = new Padding(8, 0, 0, 0) }); flow.Controls.Add(new FlatButton("Revert changes") { Margin = new Padding(8, 0, 0, 0) });
-            bottom.Controls.Add(flow);
             var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
             var t = RowTable(); build(t); scroll.Controls.Add(t);
-            outer.Controls.Add(scroll); outer.Controls.Add(bottom); scroll.BringToFront();
-            return outer;
+            return scroll;
+        }
+
+        FlatButton saveBtn, revertBtn; Label dirtyLabel;
+
+        void MarkDirty()
+        {
+            if (saveBtn == null) return;
+            saveBtn.Enabled = true; revertBtn.Enabled = true; saveBtn.Invalidate(); revertBtn.Invalidate();
+            dirtyLabel.Text = "Unsaved changes"; dirtyLabel.Tag = "warn"; Apply(dirtyLabel);
+        }
+
+        // One bar for all the Settings pages. Reset to defaults sits apart on the left, because it is a last resort.
+        Control SettingsBar()
+        {
+            var bar = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 8) };
+            var line = new Panel { Dock = DockStyle.Top, Height = 1, Tag = "line" };
+            var reset = new FlatButton("Reset to defaults…") { Kind = "link", Dock = DockStyle.Left };
+            reset.Click += delegate
+            {
+                if (MessageBox.Show("Set every setting back to its default value?", "Reset to defaults", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) MarkDirty();
+            };
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft };
+            saveBtn = new FlatButton("Save") { Kind = "primary", Enabled = false, Margin = new Padding(8, 0, 0, 0) };
+            revertBtn = new FlatButton("Revert changes") { Enabled = false, Margin = new Padding(8, 0, 0, 0) };
+            dirtyLabel = L("", false, true); dirtyLabel.Margin = new Padding(0, 8, 16, 0);
+            saveBtn.Click += delegate { saveBtn.Enabled = false; revertBtn.Enabled = false; dirtyLabel.Text = "Saved ✓"; dirtyLabel.Tag = "ok"; Apply(dirtyLabel); saveBtn.Invalidate(); revertBtn.Invalidate(); };
+            revertBtn.Click += delegate { saveBtn.Enabled = false; revertBtn.Enabled = false; dirtyLabel.Text = ""; saveBtn.Invalidate(); revertBtn.Invalidate(); };
+            flow.Controls.Add(saveBtn); flow.Controls.Add(revertBtn); flow.Controls.Add(dirtyLabel);
+            bar.Controls.Add(flow); bar.Controls.Add(reset); bar.Controls.Add(line);
+            return bar;
         }
 
         Control ServerSettings()
@@ -1002,11 +1024,11 @@ namespace SubVulpesMockup
                 AddRow(t, "Admin password", "In the game, type /admin and this password.", Inline(pw, new FlatButton("Show") { Margin = new Padding(8, 0, 0, 0) }), null, true);
                 AddRow(t, "Welcome text", "Shown to players in the in-game newspaper (readme.txt).", new TextField(380, true) { Text = "Welcome to the test server." }, null, true);
                 Section(t, "Network");
-                AddRow(t, "Port", "Forward this UDP port on your router.", TB("27584", 100), "Restart to apply", true);
+                AddRow(t, "Port", "Forward this UDP port on your router.", TB("27584", 100), "Restart required", true);
                 AddRow(t, "Upload limit", "Shared by all players, in bytes per second.", TB("100000", 120), null, true);
                 Section(t, "Game");
-                AddRow(t, "Game mode", null, Combo(160, "Round", "World"), "Restart to apply", true);
-                AddRow(t, "Max players", null, TB("16", 80), "Restart to apply", true);
+                AddRow(t, "Game mode", null, Combo(160, "Round", "World"), "Restart required", true);
+                AddRow(t, "Max players", null, TB("16", 80), "Restart required", true);
                 AddRow(t, "Round time", "Minutes in Round mode.", TB("7", 80), null, true);
             });
         }
@@ -1433,10 +1455,10 @@ namespace SubVulpesMockup
                         {
                             form.SetTheme(themes[t]); form.Go(name); Application.DoEvents(); Thread.Sleep(350); Application.DoEvents();
                             // The form paints itself into the picture, so nothing else on the screen can show up in it.
-                            using (var bmp = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
+                            using (var bmp = new Bitmap(form.Width, form.Height))
                             {
                                 // Rich text boxes (the console and the help text) do not draw themselves into a picture and stay blank.
-                                form.DrawToBitmap(bmp, new Rectangle(Point.Empty, form.ClientSize));
+                                form.DrawToBitmap(bmp, new Rectangle(Point.Empty, form.Size));
                                 bmp.Save(Path.Combine(dir, tn[t] + "-" + name + ".png"));
                             }
                         }
