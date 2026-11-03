@@ -1,5 +1,5 @@
 // A dummy launcher in Windows Forms. It shows the new look with fake data and talks to no server.
-// Build: tools\launcher-mockup\build.bat. Run with --shot DIR to save a picture of each page.
+// Build: tools\launcher-mockup\build.bat. Run with --shot DIR to save a picture of each page (the form draws itself, it does not copy the screen).
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -181,6 +181,68 @@ namespace SubVulpesMockup
                 var p3 = k == n - 1 ? b : OnEllipse(cx, cy, rx, ry, cos, sin, c2, s2);
                 path.AddBezier(cur, p1, p2, p3); cur = p3;
             }
+        }
+    }
+
+    // A search field with a magnifier. The text sits in the middle of the box and lines up with the text of the dropdowns.
+    class SearchBox : Control
+    {
+        public readonly TextBox Box;
+        public SearchBox(int width)
+        {
+            Width = width; Height = 28; Anchor = AnchorStyles.Left; Margin = new Padding(0); SetStyle(UI.Paint, true);
+            Box = new TextBox { Text = "Search…", BorderStyle = BorderStyle.None, Tag = "hint", Font = UI.F(9.5f, FontStyle.Regular) };
+            Box.GotFocus += delegate { if (Box.Text == "Search…") { Box.Text = ""; Box.ForeColor = UI.T.Fg; } Invalidate(); };
+            Box.LostFocus += delegate { if (Box.Text.Length == 0) { Box.Text = "Search…"; Box.ForeColor = UI.T.Muted; } Invalidate(); };
+            Controls.Add(Box); Place();
+        }
+        public override string Text { get { return Box.Text == "Search…" ? "" : Box.Text; } set { Box.Text = value; } }
+        public new event EventHandler TextChanged { add { Box.TextChanged += value; } remove { Box.TextChanged -= value; } }
+        void Place() { Box.Location = new Point(32, (Height - Box.Height) / 2); Box.Width = Math.Max(20, Width - 32 - 10); }
+        protected override void OnResize(EventArgs e) { base.OnResize(e); if (Box != null) Place(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 6)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            Svg.Draw(g, "search", new RectangleF(9, (Height - 15) / 2f, 15, 15), UI.T.Muted);
+        }
+    }
+
+    // A text field with rounded corners, like the dropdowns and the search box.
+    class TextField : Control
+    {
+        public readonly TextBox Box; readonly bool multiline;
+        public TextField(int width, bool multiline)
+        {
+            this.multiline = multiline; Width = width; Height = multiline ? 56 : 28; Anchor = AnchorStyles.Left; Margin = new Padding(0); SetStyle(UI.Paint, true);
+            Box = new TextBox { BorderStyle = BorderStyle.None, Multiline = multiline, Font = UI.F(9.5f, FontStyle.Regular) };
+            Box.GotFocus += delegate { Invalidate(); }; Box.LostFocus += delegate { Invalidate(); };
+            Controls.Add(Box); Place();
+        }
+        public override string Text { get { return Box.Text; } set { Box.Text = value; } }
+        public new event EventHandler TextChanged { add { Box.TextChanged += value; } remove { Box.TextChanged -= value; } }
+        void Place()
+        {
+            Box.Width = Math.Max(20, Width - 20);
+            if (multiline) { Box.Height = Math.Max(20, Height - 14); Box.Location = new Point(10, 7); }
+            else Box.Location = new Point(10, (Height - Box.Height) / 2);
+        }
+        protected override void OnResize(EventArgs e) { base.OnResize(e); if (Box != null) Place(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 6)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+        }
+    }
+
+    class Avatar : Control
+    {
+        public Avatar(string text) { Text = text; Size = new Size(44, 44); SetStyle(UI.Paint, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Panel);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 10)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, UI.T.Accent, 0.16))) g.FillPath(b, path);
+            TextRenderer.DrawText(g, Text.Substring(0, 1), UI.F(14f, FontStyle.Bold), new Rectangle(0, 0, Width, Height), UI.T.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -418,7 +480,6 @@ namespace SubVulpesMockup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; Frame(g, Width, Height, Parent);
-            if (Flat) using (var pen = new Pen(UI.T.Line)) g.DrawLine(pen, 0, 6, 0, Height - 10);
             TextRenderer.DrawText(g, Title, UI.F(8.5f, FontStyle.Regular), new Point(14, 12), UI.T.Muted, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, "ticks/s", UI.F(8.5f, FontStyle.Regular), new Point(Width - 56, 12), UI.T.Muted, TextFormatFlags.NoPadding);
             int left = 46, right = Width - 20, top = 40, bottom = Height - 34; double lo = 58, hi = 63;
@@ -483,19 +544,28 @@ namespace SubVulpesMockup
 
     class Grip : Control
     {
-        public event Action<int> Dragged; int startY; bool down;
-        public Grip() { Height = 9; Dock = DockStyle.Bottom; Cursor = Cursors.SizeNS; SetStyle(UI.Paint, true); }
-        protected override void OnMouseDown(MouseEventArgs e) { down = true; startY = Cursor.Position.Y; base.OnMouseDown(e); }
+        public event Action<int> Dragged; int start; bool down; readonly bool vertical;
+        // A thin line that the user drags. Vertical means that it splits left from right.
+        public Grip(bool vertical)
+        {
+            this.vertical = vertical; SetStyle(UI.Paint, true); Margin = new Padding(0);
+            if (vertical) { Width = 9; Dock = DockStyle.Fill; Cursor = Cursors.SizeWE; } else { Height = 9; Dock = DockStyle.Bottom; Cursor = Cursors.SizeNS; }
+        }
+        protected override void OnMouseDown(MouseEventArgs e) { down = true; start = vertical ? Cursor.Position.X : Cursor.Position.Y; base.OnMouseDown(e); }
         protected override void OnMouseUp(MouseEventArgs e) { down = false; base.OnMouseUp(e); }
         protected override void OnMouseMove(MouseEventArgs e)
         {
-            if (down && Dragged != null) { int y = Cursor.Position.Y; Dragged(y - startY); startY = y; }
+            if (down && Dragged != null) { int now = vertical ? Cursor.Position.X : Cursor.Position.Y; Dragged(now - start); start = now; }
             base.OnMouseMove(e);
         }
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(Parent.BackColor);
-            using (var p = new Pen(UI.T.Line)) e.Graphics.DrawLine(p, 0, Height - 1, Width, Height - 1);
+            using (var p = new Pen(UI.T.Line))
+            {
+                if (vertical) e.Graphics.DrawLine(p, Width / 2, 6, Width / 2, Height - 10);
+                else e.Graphics.DrawLine(p, 0, Height - 1, Width, Height - 1);
+            }
         }
     }
 
@@ -601,10 +671,12 @@ namespace SubVulpesMockup
             else if (what == "settings-server") { ShowPage(2); ShowSub(0); }
             else if (what == "settings-launcher") { ShowPage(2); ShowSub(1); }
             else if (what == "settings-advanced") { ShowPage(2); ShowSub(2); }
-            else if (what == "plugins") ShowPage(1);
+            else if (what == "plugins") { ShowPage(1); showPluginSub(0); }
+            else if (what == "plugins-browse") { ShowPage(1); showPluginSub(1); }
             else if (what == "help") ShowPage(3);
         }
-        public static string[] Names = { "server", "settings-server", "settings-launcher", "settings-advanced", "plugins", "help" };
+        public static string[] Names = { "server", "settings-server", "settings-launcher", "settings-advanced", "plugins", "plugins-browse", "help" };
+        Action<int> showPluginSub;
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
@@ -629,6 +701,7 @@ namespace SubVulpesMockup
             else if (c is Label && (c.Tag as string) == "chip") { c.BackColor = UI.T.Chip; c.ForeColor = UI.T.Fg; }
             else if (c is Label) { c.BackColor = Color.Transparent; c.ForeColor = (c.Tag as string) == "muted" ? UI.T.Muted : (c.Tag as string) == "ok" ? UI.T.Ok : (c.Tag as string) == "warn" ? UI.T.Warn : UI.T.Fg; }
             else if (c is Panel && (c.Tag as string) == "consolebg") c.BackColor = UI.T.Console;
+            else if (c is Surface) c.BackColor = UI.T.Panel;
             else if (c is FlowLayoutPanel || c is Panel || c is TableLayoutPanel) c.BackColor = (c.Tag as string) == "panel" ? UI.T.Panel : UI.T.Win;
             else if (c is RadioButton) { c.BackColor = Color.Transparent; c.ForeColor = UI.T.Fg; }
             ThemeScroll(c);
@@ -672,9 +745,9 @@ namespace SubVulpesMockup
             return new Label { Text = text, AutoSize = true, Font = UI.F(bold ? 10f : 9.5f, bold ? FontStyle.Bold : FontStyle.Regular), Tag = muted ? "muted" : null, Margin = new Padding(0) };
         }
 
-        static TextBox TB(string text, int width)
+        static TextField TB(string text, int width)
         {
-            return new TextBox { Text = text, Width = width, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0), Anchor = AnchorStyles.Left };
+            var f = new TextField(width, false); f.Box.Text = text; return f;
         }
 
         TableLayoutPanel RowTable()
@@ -704,20 +777,15 @@ namespace SubVulpesMockup
                 var timer = new System.Windows.Forms.Timer { Interval = 1600 };
                 timer.Tick += delegate { saved.Visible = false; timer.Stop(); };
                 EventHandler show = delegate { saved.Visible = true; timer.Stop(); timer.Start(); };
-                if (input is TextBox) ((TextBox)input).TextChanged += show;
+                if (input is TextField) ((TextField)input).TextChanged += show;
+                else if (input is TextBox) ((TextBox)input).TextChanged += show;
                 else if (input is Dropdown) ((Dropdown)input).SelectedIndexChanged += show;
                 else if (input is Switch) ((Switch)input).Changed += show;
                 else if (input is Segmented) ((Segmented)input).Changed += show;
             }
         }
 
-        static TextBox HintBox(int width)
-        {
-            var box = new TextBox { Text = "Search…", BorderStyle = BorderStyle.FixedSingle, Width = width, Anchor = AnchorStyles.Left, Tag = "hint" };
-            box.GotFocus += delegate { if (box.Text == "Search…") { box.Text = ""; box.ForeColor = UI.T.Fg; } };
-            box.LostFocus += delegate { if (box.Text.Length == 0) { box.Text = "Search…"; box.ForeColor = UI.T.Muted; } };
-            return box;
-        }
+        static SearchBox HintBox(int width) { return new SearchBox(width); }
 
         static FlowLayoutPanel Inline(params Control[] items)
         {
@@ -751,15 +819,16 @@ namespace SubVulpesMockup
             toolbar.Controls.Add(rightFlow); toolbar.Controls.Add(stateHolder);
             page.Controls.Add(toolbar, 0, 0);
 
-            var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" };
-            stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
+            var stats = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" };
+            int listWidth = 290;
+            stats.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, listWidth)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 9)); stats.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            var vgrip = new Grip(true); UI.Tips.SetToolTip(vgrip, "Drag to resize.");
             var list = new StatsList { Flat = true }; UI.Tips.SetToolTip(list, "Tick rate is how many updates the server runs each second. About 60 is normal. Players does not include bots.");
             var chart = new AreaChart { Flat = true }; UI.Tips.SetToolTip(chart, "Average tick rate for each of the last 20 minutes.");
             // The customize icon sits in a small header row, at the right edge of the panel.
-            var head = new Panel { Dock = DockStyle.Top, Height = 30, Tag = "panel" };
+            var head = new Panel { Dock = DockStyle.Top, Height = 28, Tag = "panel" };
             var gear = new GearButton { Dock = DockStyle.Right };
-            var headTitle = L("Overview", false, true); headTitle.Location = new Point(2, 6);
-            head.Controls.Add(gear); head.Controls.Add(headTitle);
+            head.Controls.Add(gear);
             UI.Tips.SetToolTip(gear, "Customize this panel.");
             gear.Click += delegate
             {
@@ -767,8 +836,10 @@ namespace SubVulpesMockup
                 var graphItem = new ToolStripMenuItem("Tick rate graph") { Checked = chart.Visible, ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
                 graphItem.Click += delegate
                 {
-                    chart.Visible = !chart.Visible;
-                    stats.ColumnStyles[0].Width = chart.Visible ? 30 : 100; stats.ColumnStyles[1].Width = chart.Visible ? 70 : 0;
+                    chart.Visible = !chart.Visible; vgrip.Visible = chart.Visible;
+                    stats.ColumnStyles[0] = chart.Visible ? new ColumnStyle(SizeType.Absolute, listWidth) : new ColumnStyle(SizeType.Percent, 100);
+                    stats.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, chart.Visible ? 9 : 0);
+                    stats.ColumnStyles[2] = chart.Visible ? new ColumnStyle(SizeType.Percent, 100) : new ColumnStyle(SizeType.Absolute, 0);
                 };
                 menu.Items.Add(graphItem); menu.Items.Add(new ToolStripSeparator());
                 for (int i = 0; i < list.All.Length; i++)
@@ -785,10 +856,16 @@ namespace SubVulpesMockup
                 }
                 menu.Show(gear, new Point(0, gear.Height));
             };
+            vgrip.Dragged += delegate (int dx)
+            {
+                if (!chart.Visible) return;
+                listWidth = Math.Max(170, Math.Min(listWidth + dx, stats.Width - 280)); stats.ColumnStyles[0].Width = listWidth;
+            };
             stats.Controls.Add(list, 0, 0);
-            stats.Controls.Add(chart, 1, 0);
+            stats.Controls.Add(vgrip, 1, 0);
+            stats.Controls.Add(chart, 2, 0);
             var dash = new Panel { Dock = DockStyle.Fill, Tag = "panel" }; statsRow = dash;
-            var grip = new Grip(); UI.Tips.SetToolTip(grip, "Drag to resize.");
+            var grip = new Grip(false); UI.Tips.SetToolTip(grip, "Drag to resize.");
             grip.Dragged += delegate (int dy) { if (!expanded) { dashHeight = Math.Max(90, Math.Min(dashHeight + dy, page.Height - 240)); page.RowStyles[1].Height = dashHeight; } };
             dash.Controls.Add(stats); dash.Controls.Add(head); dash.Controls.Add(grip);
             page.Controls.Add(dash, 0, 1);
@@ -799,10 +876,10 @@ namespace SubVulpesMockup
             string[] fk = { "all", "i", "w", "e" };
             level.SelectedIndexChanged += delegate { levelFilter = fk[level.SelectedIndex]; FillConsole(); };
             UI.Tips.SetToolTip(level, "Filter by log level.");
-            searchBox = HintBox(240); searchBox.Margin = new Padding(0); level.Height = searchBox.PreferredHeight + 4;
-            UI.Tips.SetToolTip(searchBox, "Filter the log by text.");
-            searchBox.TextChanged += delegate { FillConsole(); };
-            bar.Controls.Add(level, 0, 0); bar.Controls.Add(searchBox, 1, 0);
+            var searchField = HintBox(240); searchBox = searchField.Box;
+            UI.Tips.SetToolTip(searchField, "Filter the log by text.");
+            searchField.TextChanged += delegate { FillConsole(); };
+            bar.Controls.Add(level, 0, 0); bar.Controls.Add(searchField, 1, 0);
             page.Controls.Add(bar, 0, 2);
 
             console = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f), Padding = new Padding(8) };
@@ -825,8 +902,8 @@ namespace SubVulpesMockup
 
             var cmd = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0), Tag = "panel" };
             cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); cmd.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
-            var box = new TextBox { BorderStyle = BorderStyle.FixedSingle, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 0, 8, 0) };
-            var send = new FlatButton("Send") { Anchor = AnchorStyles.Left, Margin = new Padding(0), Height = box.PreferredHeight + 4 };
+            var box = new TextField(200, false) { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 0, 8, 0) };
+            var send = new FlatButton("Send") { Anchor = AnchorStyles.Left, Margin = new Padding(0), Height = 28 };
             cmd.Controls.Add(box, 0, 0); cmd.Controls.Add(send, 1, 0);
             page.Controls.Add(cmd, 0, 4);
             var surface = new Surface { Padding = new Padding(16, 12, 16, 12) };
@@ -903,11 +980,11 @@ namespace SubVulpesMockup
         {
             return SettingsPage(delegate (TableLayoutPanel t)
             {
-                var pw = TB("secret123", 220); pw.UseSystemPasswordChar = true;
+                var pw = TB("secret123", 220); pw.Box.UseSystemPasswordChar = true;
                 Section(t, "General");
                 AddRow(t, "Server name", null, TB("SubVulpes test", 300), null, true);
                 AddRow(t, "Admin password", "In the game, type /admin and this password.", Inline(pw, new FlatButton("Show") { Margin = new Padding(8, 0, 0, 0) }), null, true);
-                AddRow(t, "Welcome text", "Shown to players in the in-game newspaper (readme.txt).", new TextBox { Text = "Welcome to the test server.", Multiline = true, Height = 54, Width = 380, BorderStyle = BorderStyle.FixedSingle }, null, true);
+                AddRow(t, "Welcome text", "Shown to players in the in-game newspaper (readme.txt).", new TextField(380, true) { Text = "Welcome to the test server." }, null, true);
                 Section(t, "Network");
                 AddRow(t, "Port", "Forward this UDP port on your router.", TB("27584", 100), "Requires restart", true);
                 AddRow(t, "Upload limit", "Shared by all players, in bytes per second.", TB("100000", 120), null, true);
@@ -960,10 +1037,14 @@ namespace SubVulpesMockup
             var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
             string[] names = { "Installed", "Browse" };
             Control[] subs = { PluginsPage(), BrowsePage() };
+            showPluginSub = delegate (int k)
+            {
+                for (int n = 0; n < pluginSubPages.Count; n++) { pluginSubPages[n].Visible = n == k; pluginSubTabs[n].Selected = n == k; pluginSubTabs[n].Invalidate(); }
+            };
             for (int i = names.Length - 1; i >= 0; i--)
             {
                 var tab = new TabLabel(names[i]) { Selected = i == 0, Sub = true }; int index = i;
-                tab.Click += delegate { for (int k = 0; k < pluginSubPages.Count; k++) { pluginSubPages[k].Visible = k == index; pluginSubTabs[k].Selected = k == index; pluginSubTabs[k].Invalidate(); } };
+                tab.Click += delegate { showPluginSub(index); };
                 pluginSubTabs.Insert(0, tab); strip.Controls.Add(tab);
                 subs[i].Dock = DockStyle.Fill; subs[i].Visible = i == 0; area.Controls.Add(subs[i]); pluginSubPages.Insert(0, subs[i]);
             }
@@ -975,9 +1056,11 @@ namespace SubVulpesMockup
         {
             var page = new Panel();
             var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
-            var search = HintBox(260); search.Location = new Point(0, 9);
-            bar.Controls.Add(search);
-            var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Tag = "panel" };
+            var search = HintBox(260); search.Location = new Point(0, 8);
+            var kindFilter = Combo(150, "All plugins", "Official", "Community"); kindFilter.Location = new Point(272, 8);
+            bar.Controls.Add(search); bar.Controls.Add(kindFilter);
+            var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            var cards = new List<Panel>(); var cardKind = new List<string>();
             string[][] catalog = {
                 new[] { "Bans", "Bans players by account or address, with an optional expiry.", "Official", "0.1.0", "Install" },
                 new[] { "Message of the Day", "Shows a message to each player who joins.", "Official", "0.1.0", "Install" },
@@ -987,16 +1070,28 @@ namespace SubVulpesMockup
             for (int i = catalog.Length - 1; i >= 0; i--)
             {
                 var c = catalog[i];
-                var row = new Panel { Dock = DockStyle.Top, Height = 78, Tag = "panel" };
-                var name = L(c[0], true, false); name.Location = new Point(16, 14);
-                var chip = Chip(c[2]); chip.Location = new Point(name.PreferredWidth + 28, 12);
-                var desc = L(c[1], false, true); desc.Location = new Point(16, 42);
-                var ver = L("v" + c[3], false, true); ver.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-                var btn = new FlatButton(c[4]) { Anchor = AnchorStyles.Top | AnchorStyles.Right, Enabled = c[4] == "Install" };
-                btn.Location = new Point(row.Width - btn.Width - 16, 22); row.Resize += delegate { btn.Location = new Point(row.Width - btn.Width - 16, 22); ver.Location = new Point(btn.Left - ver.Width - 16, 30); };
-                row.Controls.AddRange(new Control[] { name, chip, desc, ver, btn, new Panel { Dock = DockStyle.Bottom, Height = 1, Tag = "line" } });
-                scroll.Controls.Add(row);
+                // Each plugin is a rounded card on a gap of its own.
+                var wrap = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(0, 0, 0, 10) };
+                var card = new Surface { Dock = DockStyle.Fill };
+                var avatar = new Avatar(c[0]) { Location = new Point(16, 16) };
+                var name = L(c[0], true, false); name.Font = UI.F(10.5f, FontStyle.Bold); name.Location = new Point(76, 14);
+                var chip = Chip(c[2]); chip.Location = new Point(76 + name.PreferredWidth + 10, 12);
+                var desc = L(c[1], false, true); desc.Location = new Point(76, 42);
+                var ver = L("v" + c[3], false, true);
+                Control action;
+                if (c[4] == "Installed") { var done = L("✓ Installed", false, false); done.Tag = "ok"; action = done; }
+                else action = new FlatButton("Install") { Glyph = "download" };
+                card.Controls.AddRange(new Control[] { avatar, name, chip, desc, ver, action });
+                Action place = delegate { action.Location = new Point(card.Width - action.Width - 18, (card.Height - action.Height) / 2); ver.Location = new Point(action.Left - ver.Width - 18, (card.Height - ver.Height) / 2); };
+                card.Resize += delegate { place(); };
+                action.SizeChanged += delegate { place(); };
+                wrap.Controls.Add(card); scroll.Controls.Add(wrap); cards.Add(wrap); cardKind.Add(c[2]);
             }
+            kindFilter.SelectedIndexChanged += delegate
+            {
+                string want = kindFilter.SelectedIndex == 1 ? "Official" : kindFilter.SelectedIndex == 2 ? "Community" : null;
+                for (int i = 0; i < cards.Count; i++) cards[i].Visible = want == null || cardKind[i] == want;
+            };
             page.Controls.Add(scroll); page.Controls.Add(bar); bar.SendToBack(); scroll.BringToFront();
             return page;
         }
@@ -1299,7 +1394,6 @@ namespace SubVulpesMockup
             if (args.Length == 2 && args[0] == "--shot")
             {
                 string dir = args[1]; Directory.CreateDirectory(dir);
-                form.TopMost = true;
                 form.Shown += delegate
                 {
                     var timer = new System.Windows.Forms.Timer { Interval = 400 };
@@ -1310,9 +1404,13 @@ namespace SubVulpesMockup
                         for (int t = 0; t < 2; t++) foreach (string name in MainForm.Names)
                         {
                             form.SetTheme(themes[t]); form.Go(name); Application.DoEvents(); Thread.Sleep(350); Application.DoEvents();
-                            using (var bmp = new Bitmap(form.Width, form.Height))
-                            using (var g = Graphics.FromImage(bmp))
-                            { g.CopyFromScreen(form.Location, Point.Empty, form.Size); bmp.Save(Path.Combine(dir, tn[t] + "-" + name + ".png")); }
+                            // The form paints itself into the picture, so nothing else on the screen can show up in it.
+                            using (var bmp = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
+                            {
+                                // Rich text boxes (the console and the help text) do not draw themselves into a picture and stay blank.
+                                form.DrawToBitmap(bmp, new Rectangle(Point.Empty, form.ClientSize));
+                                bmp.Save(Path.Combine(dir, tn[t] + "-" + name + ".png"));
+                            }
                         }
                         Application.Exit();
                     };
