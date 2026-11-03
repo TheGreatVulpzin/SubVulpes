@@ -1,11 +1,11 @@
 # Plugin store plan
 
-This page plans the plugin store: the `SubVulpes-Workshop` repository, the catalog index and the launcher client. The Workshop holds three kinds of content: plugins, mods and packages (see Kinds below).
+This page plans the plugin store: the `SubVulpes-Workshop` repository, the catalog index and the launcher client. The Workshop holds three kinds of content: plugins, mods and bundles (see Kinds below).
 Status on 2026-11-03: planned, not started. The launcher already has the Catalog tab and reads a local `catalog.json`.
 
 ## Decisions of the owner
 
-1. The repository is `SubVulpes-Workshop`. It holds content (plugins, packages and mods), never the host or the SDK. Their source stays in `SubVulpes`.
+1. The repository is `SubVulpes-Workshop`. It holds content (plugins, mods and bundles), never the host or the SDK. Their source stays in `SubVulpes`.
 2. GitHub builds the packages. A person never uploads a `.svplugin` or a hash by hand.
 3. The launcher gets the catalog from the repository. It shows thumbnails from the repository and keeps a cache.
 4. The icons of the official plugins ship inside the launcher. Other icons come from the repository.
@@ -16,20 +16,25 @@ Status on 2026-11-03: planned, not started. The launcher already has the Catalog
 9. The launcher never restarts the server by itself. An install while the server runs waits, and it applies at the next start that the owner makes by hand.
 10. Two seals: `official/` holds the work of the owner and Murilo, and `community/` holds the work of everyone else.
 
+## Scope
+
+Only plugins exist now. The format and the code reserve `mod` and `bundle` so that they do not change later. The launcher lists the `plugin` kind only, until the first mod exists.
+A mod changes the client, and the client lives on the computer of each player. So the launcher cannot install a mod on the server. The card of a mod will offer Download. OverRosa will support downloading mods to the computer of the player.
+
 ## Kinds
 
 | Kind | What it is |
 | --- | --- |
 | Plugin | Everything that changes the server. |
 | Mod | Everything that changes the client: models, maps, sounds, textures and the like. |
-| Package | A plugin and a mod together, installed as one item. |
+| Bundle | A plugin and a mod together, as one item. |
 
 ## Repository layout
 
 ```
 SubVulpes-Workshop/
-  official/plugins/<id>/     official/packages/<id>/     official/mods/<id>/
-  community/plugins/<id>/    community/packages/<id>/    community/mods/<id>/
+  official/plugins/<id>/     official/mods/<id>/     official/bundles/<id>/
+  community/plugins/<id>/    community/mods/<id>/    community/bundles/<id>/
   tools/                     the build script and the index generator
   .github/workflows/         the Action that builds and publishes
   .github/CODEOWNERS         only the owner and Murilo approve changes in official/
@@ -85,7 +90,7 @@ The Action reads `plugins/<id>/plugin.ini`, builds the package, computes the SHA
 | --- | --- |
 | `format` | The number of this format. The launcher refuses a number that it does not know. |
 | `id`, `name`, `description`, `author`, `version` | As in `plugin.ini`. `author` may be empty. |
-| `kind` | `plugin`, `mod` or `package`. The launcher filters the Catalog tab by it. |
+| `kind` | `plugin`, `mod` or `bundle`. The launcher filters the Catalog tab by it. |
 | `source` | `Official` or `Community`. The Action sets it from the top folder. |
 | `license` | The license of the content. The CI refuses content without one. |
 | `runtime` | For a plugin only: `native`, `lua` or `wasm`. |
@@ -138,7 +143,7 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 ## Answers of 2026-11-03
 
 - **License.** The repository and the official content use GPL-3.0, as the project does. A community item declares its license in the manifest (`license=`). The CI refuses an item without one.
-- **Game files.** The Workshop may hold game data and assets in packages and mods, as the server zip already does. It never holds the original game executable. The owner accepts this, and `CLAUDE.md` says the same. Content that is not yours needs the permission of its owner.
+- **Game files.** The Workshop may hold game data and assets in mods and bundles, as the server zip already does. It never holds the original game executable. The owner accepts this, and `CLAUDE.md` says the same. Content that is not yours needs the permission of its owner.
 - **Server zip.** It keeps `sv.status`, `sv.permissions` and `sv.admcmd`. `sv.jukebox` and `sv.testroom` move to the Workshop as Official. This replaces decision 10 of the plan.
 - **Install while the server runs.** No restart by the launcher. See decision 9 above.
 - **Community rules.** The owner or Murilo approves each pull request. The CI checks the manifest, the license, the size and a build from source. A native plugin of the community enters only after a person reads its C code. A Lua plugin is the easy way.
@@ -147,5 +152,5 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 
 ## Open questions
 
-- The manifest of a mod and of a package: what they list. A package lists its plugin part and its mod part. Decide when the first mod comes.
+- The manifest of a mod and of a bundle: what they list. A bundle lists its plugin part and its mod part. Decide when the first mod comes.
 - How the launcher installs a mod. A plugin goes to `plugins/`. A mod goes to the client, so the launcher needs to know where the client lives (or the mod is a download for the player).

@@ -237,6 +237,9 @@ namespace SubVulpes
                     if (d == null) continue;
                     var entry = new CatalogEntry { Id = CatalogText(d, "id", 47) };
                     if (!PluginId(entry.Id)) continue;
+                    // Only plugins exist now. The kinds mod and bundle are reserved for later and the list skips them.
+                    string kind = CatalogText(d, "kind", 16);
+                    if (kind.Length > 0 && kind != "plugin") continue;
                     entry.Name = CatalogText(d, "name", 48);
                     if (entry.Name.Length == 0) entry.Name = entry.Id;
                     entry.Description = CatalogText(d, "description", 600);
