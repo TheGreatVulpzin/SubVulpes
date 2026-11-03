@@ -43,10 +43,76 @@ namespace SubVulpesMockup
         public const ControlStyles Paint = ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw;
     }
 
+    static class Icons
+    {
+        public static Color Blend(Color back, Color front, double amount)
+        {
+            return Color.FromArgb((int)(back.R + (front.R - back.R) * amount), (int)(back.G + (front.G - back.G) * amount), (int)(back.B + (front.B - back.B) * amount));
+        }
+
+        // Draws a small icon in a 16 by 16 box at x, y.
+        public static void Draw(Graphics g, string name, int x, int y, Color c)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var pen = new Pen(c, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round }) using (var b = new SolidBrush(c))
+            {
+                switch (name)
+                {
+                    case "play": g.FillPolygon(b, new[] { new Point(x + 4, y + 2), new Point(x + 4, y + 14), new Point(x + 14, y + 8) }); break;
+                    case "stop": using (var path = UI.Round(new Rectangle(x + 3, y + 3, 10, 10), 2)) g.FillPath(b, path); break;
+                    case "bolt": g.FillPolygon(b, new[] { new PointF(x + 9, y + 1), new PointF(x + 3, y + 9), new PointF(x + 7.5f, y + 9), new PointF(x + 6.5f, y + 15), new PointF(x + 13, y + 6.5f), new PointF(x + 8.5f, y + 6.5f) }); break;
+                    case "restart": case "refresh":
+                        g.DrawArc(pen, x + 3, y + 3, 10, 10, -40, 290);
+                        g.DrawLines(pen, new[] { new Point(x + 12, y + 1), new Point(x + 12, y + 5), new Point(x + 8, y + 5) }); break;
+                    case "download":
+                        g.DrawLine(pen, x + 8, y + 2, x + 8, y + 10); g.DrawLines(pen, new[] { new Point(x + 4, y + 7), new Point(x + 8, y + 11), new Point(x + 12, y + 7) });
+                        g.DrawLines(pen, new[] { new Point(x + 3, y + 11), new Point(x + 3, y + 14), new Point(x + 13, y + 14), new Point(x + 13, y + 11) }); break;
+                }
+            }
+        }
+    }
+
+    class Segmented : Control
+    {
+        public string[] Options; int sel; int[] widths;
+        public event EventHandler Changed;
+        public Segmented(params string[] options)
+        {
+            Options = options; Height = 32; Cursor = Cursors.Hand; Margin = new Padding(0); SetStyle(UI.Paint, true);
+            widths = new int[options.Length]; int total = 0;
+            for (int i = 0; i < options.Length; i++) { widths[i] = TextRenderer.MeasureText(options[i], UI.F(9.5f, FontStyle.Bold)).Width + 20; total += widths[i]; }
+            Width = total + 4; sel = 1 < options.Length ? 1 : 0;
+        }
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            int x = 2;
+            for (int i = 0; i < Options.Length; i++) { if (e.X >= x && e.X < x + widths[i]) { if (sel != i) { sel = i; Invalidate(); if (Changed != null) Changed(this, EventArgs.Empty); } break; } x += widths[i]; }
+            base.OnMouseClick(e);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 7)) using (var b = new SolidBrush(UI.T.Chip)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            int x = 2;
+            for (int i = 0; i < Options.Length; i++)
+            {
+                var r = new Rectangle(x, 2, widths[i], Height - 5);
+                if (i == sel) using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+                TextRenderer.DrawText(g, Options[i], i == sel ? UI.F(9.5f, FontStyle.Bold) : UI.F(9.5f, FontStyle.Regular), r, i == sel ? UI.T.Accent : UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                x += widths[i];
+            }
+        }
+    }
+
     class FlatButton : Control
     {
         public string Kind = "normal";
-        bool hover;
+        bool hover; string glyph;
+        public string Glyph
+        {
+            get { return glyph; }
+            set { glyph = value; Width = TextRenderer.MeasureText(Text, Font).Width + 32 + (value != null ? 22 : 0); Invalidate(); }
+        }
         public FlatButton(string text)
         {
             Text = text; Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular); Height = 34; Margin = new Padding(0, 0, 8, 0);
@@ -66,7 +132,10 @@ namespace SubVulpesMockup
             if (!Enabled) { fill = UI.T.Chip; border = UI.T.Line; fg = UI.T.Muted; }
             else if (hover) border = UI.T.Accent;
             using (var path = UI.Round(r, 6)) using (var b = new SolidBrush(fill)) using (var p = new Pen(border)) { g.FillPath(b, path); g.DrawPath(p, path); }
-            TextRenderer.DrawText(g, Text, Font, r, fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (glyph == null) { TextRenderer.DrawText(g, Text, Font, r, fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter); return; }
+            int tw = TextRenderer.MeasureText(g, Text, Font, new Size(999, 40), TextFormatFlags.NoPadding).Width, start = (Width - (16 + 6 + tw)) / 2;
+            Icons.Draw(g, glyph, start, (Height - 16) / 2, fg);
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(start + 22, 0, tw + 4, Height), fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -476,6 +545,7 @@ namespace SubVulpesMockup
             else if (c is RichTextBox && (c.Tag as string) == "doc") { c.BackColor = UI.T.Panel; c.ForeColor = UI.T.Fg; }
             else if (c is RichTextBox) { c.BackColor = UI.T.Console; c.ForeColor = UI.T.ConsoleFg; }
             else if (c is DataGridView) StyleGrid((DataGridView)c);
+            else if (c is Label && (c.Tag as string) == "restart") { c.BackColor = Icons.Blend(UI.T.Win, UI.T.Warn, 0.18); c.ForeColor = UI.T.Warn; }
             else if (c is Label && (c.Tag as string) == "chip") { c.BackColor = UI.T.Chip; c.ForeColor = UI.T.Fg; }
             else if (c is Label) { c.BackColor = Color.Transparent; c.ForeColor = (c.Tag as string) == "muted" ? UI.T.Muted : (c.Tag as string) == "ok" ? UI.T.Ok : (c.Tag as string) == "warn" ? UI.T.Warn : UI.T.Fg; }
             else if (c is Panel && (c.Tag as string) == "consolebg") c.BackColor = UI.T.Console;
@@ -543,7 +613,11 @@ namespace SubVulpesMockup
             input.Anchor = AnchorStyles.Left; input.Margin = new Padding(0); t.Controls.Add(input, 2, row);
             var right = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
             var saved = L("Saved ✓", false, false); saved.Tag = "ok"; saved.Visible = false; saved.Margin = new Padding(0, 0, 10, 0);
-            if (hint != null) { var h2 = L(hint, false, true); h2.Margin = new Padding(0, 0, 10, 0); right.Controls.Add(h2); }
+            if (hint != null)
+            {
+                var h2 = L("↻ " + hint, false, false); h2.Tag = "restart"; h2.Padding = new Padding(8, 3, 8, 3); h2.Font = UI.F(9f, FontStyle.Regular); h2.Margin = new Padding(0, 0, 10, 0);
+                right.Controls.Add(h2);
+            }
             right.Controls.Add(saved); t.Controls.Add(right, 3, row);
             if (autosave)
             {
@@ -553,6 +627,7 @@ namespace SubVulpesMockup
                 if (input is TextBox) ((TextBox)input).TextChanged += show;
                 else if (input is Dropdown) ((Dropdown)input).SelectedIndexChanged += show;
                 else if (input is Switch) ((Switch)input).Changed += show;
+                else if (input is Segmented) ((Segmented)input).Changed += show;
             }
         }
 
@@ -585,10 +660,10 @@ namespace SubVulpesMockup
 
             var toolbar = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
             var rightFlow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
-            var kill = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0) };
-            var restart = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0) };
-            var stop = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0) };
-            var start = new FlatButton("Start") { Kind = "primary", Enabled = false, Margin = new Padding(8, 0, 0, 0) };
+            var kill = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0), Glyph = "bolt" };
+            var restart = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0), Glyph = "restart" };
+            var stop = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0), Glyph = "stop" };
+            var start = new FlatButton("Start") { Kind = "primary", Enabled = false, Margin = new Padding(8, 0, 0, 0), Glyph = "play" };
             rightFlow.Controls.AddRange(new Control[] { kill, restart, stop, start });
             var state = new StateLabel { Dock = DockStyle.Left };
             var stateHolder = new Panel { Dock = DockStyle.Left, Width = state.Width, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
@@ -721,7 +796,7 @@ namespace SubVulpesMockup
         {
             int row = t.RowCount++; t.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
             var p = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
-            var l = L(title.ToUpperInvariant(), true, true); l.Font = UI.F(8.5f, FontStyle.Bold); l.Location = new Point(0, 18);
+            var l = L(title, true, false); l.Font = UI.F(11.5f, FontStyle.Bold); l.Location = new Point(0, 12);
             var line = new Panel { Dock = DockStyle.Bottom, Height = 1, Tag = "line" };
             p.Controls.Add(l); p.Controls.Add(line);
             t.Controls.Add(p, 0, row); t.SetColumnSpan(p, 4);
@@ -785,9 +860,7 @@ namespace SubVulpesMockup
                 AddRow(t, "Timing Log", "Logs how long each part of the game takes, once a minute.", new Switch(), null, true);
                 AddRow(t, "Packet Capture", "Records network traffic, including player names and chat.", new Switch(), null, true);
                 Section(t, "Crash handling");
-                var dumpLabel = L("Save a dump:", false, true); dumpLabel.Margin = new Padding(0, 4, 12, 0);
-                var dump = Inline(dumpLabel, new RadioButton { Text = "None", AutoSize = true, Margin = new Padding(0, 0, 12, 0) }, new RadioButton { Text = "Minidump (about 1 MB)", AutoSize = true, Checked = true, Margin = new Padding(0, 0, 12, 0) }, new RadioButton { Text = "Full dump (about 600 MB)", AutoSize = true, Margin = new Padding(0) });
-                AddRow(t, "If the server crashes or hangs", null, dump, null, true);
+                AddRow(t, "If the server crashes or hangs", null, new Segmented("None", "Minidump (about 1 MB)", "Full dump (about 600 MB)"), null, true);
                 AddRow(t, "Memory dump", "A copy of the server memory. Send it to the developers to help find a problem.", new FlatButton("Save Memory Dump Now") { Margin = new Padding(0) }, null, false);
             });
         }
@@ -850,7 +923,7 @@ namespace SubVulpesMockup
             var page = new Panel();
             var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
             var barButtons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
-            barButtons.Controls.Add(new FlatButton("Refresh") { Margin = new Padding(0) }); barButtons.Controls.Add(new FlatButton("Install from File…"));
+            barButtons.Controls.Add(new FlatButton("Refresh") { Margin = new Padding(0), Glyph = "refresh" }); barButtons.Controls.Add(new FlatButton("Install from File…") { Glyph = "download" });
             var pluginSearch = HintBox(260); pluginSearch.Location = new Point(0, 9);
             bar.Controls.Add(barButtons); bar.Controls.Add(pluginSearch);
             detail = new Panel { Dock = DockStyle.Right, Width = 380, Padding = new Padding(16), Tag = "panel", AutoScroll = true };
@@ -911,7 +984,29 @@ namespace SubVulpesMockup
             };
             grid.CellPainting += delegate (object s, DataGridViewCellPaintingEventArgs e)
             {
-                if (e.RowIndex < 0 || e.ColumnIndex != 5) return;
+                if (e.RowIndex < 0 || (e.ColumnIndex != 2 && e.ColumnIndex != 3 && e.ColumnIndex != 5)) return;
+                var pl = (Plugin)grid.Rows[e.RowIndex].Tag; if (pl == null) return;
+                if (e.ColumnIndex == 2 || e.ColumnIndex == 3)
+                {
+                    // State gets a colored dot, and Risk gets a tinted pill.
+                    e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+                    var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; int my = e.CellBounds.Y + e.CellBounds.Height / 2;
+                    if (e.ColumnIndex == 2)
+                    {
+                        Color sc = pl.State == "Active" ? UI.T.Ok : pl.State == "Restart needed" ? UI.T.Warn : UI.T.Muted;
+                        using (var b = new SolidBrush(sc)) g.FillEllipse(b, e.CellBounds.X + 6, my - 4, 8, 8);
+                        TextRenderer.DrawText(g, pl.State, UI.F(9.5f, FontStyle.Regular), new Rectangle(e.CellBounds.X + 20, e.CellBounds.Y, e.CellBounds.Width - 20, e.CellBounds.Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+                    }
+                    else
+                    {
+                        Color rc = pl.Risk == "low" ? UI.T.Ok : pl.Risk == "high" ? UI.T.Warn : UI.T.Bad; var rf = UI.F(9f, FontStyle.Bold);
+                        int rw = TextRenderer.MeasureText(g, pl.Risk, rf, new Size(999, 30), TextFormatFlags.NoPadding).Width + 20; var pill = new Rectangle(e.CellBounds.X + 6, my - 11, rw, 22);
+                        using (var path = UI.Round(pill, 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, rc, 0.16))) g.FillPath(b, path);
+                        TextRenderer.DrawText(g, pl.Risk, rf, pill, rc, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    }
+                    e.Handled = true; return;
+                }
+                if (e.ColumnIndex != 5) return;
                 e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
                 Switch.Draw(e.Graphics, new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 20) / 2, 36, 20), ((Plugin)grid.Rows[e.RowIndex].Tag).On);
                 e.Handled = true;
