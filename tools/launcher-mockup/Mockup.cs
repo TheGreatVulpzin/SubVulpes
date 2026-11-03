@@ -650,7 +650,7 @@ namespace SubVulpesMockup
         readonly List<Control> subPages = new List<Control>();
         readonly List<TabLabel> subTabs = new List<TabLabel>();
         readonly List<Plugin> plugins = new List<Plugin>();
-        Panel tabBar; RichTextBox console; DataGridView grid; Panel detail; int sel = 2;
+        Panel tabBar; RichTextBox console; DataGridView grid; Panel detail; int sel = 0;
         string levelFilter = "all"; TextBox searchBox; bool expanded; TableLayoutPanel serverPage; Control statsRow;
         const int StatsHeight = 214; int dashHeight = StatsHeight;
 
@@ -1264,10 +1264,11 @@ namespace SubVulpesMockup
             detail.SuspendLayout(); detail.Controls.Clear();
             var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Width = 340, Padding = new Padding(0, 14, 0, 0), Tag = "panel" };
             // The icon of the plugin comes from its package. The first letter stands in when there is none.
-            var header = new Panel { Width = 340, Height = 56, Tag = "panel", Margin = new Padding(0, 0, 0, 8) };
+            // The header stays above the three tabs, so it shows which plugin the tab belongs to.
+            var header = new Panel { Dock = DockStyle.Top, Height = 58, Tag = "panel" };
             var title = L(p.Name, true, false); title.Font = UI.F(13f, FontStyle.Bold); title.Location = new Point(56, 5);
             var sub = L(p.Version + " · " + p.By, false, true); sub.Location = new Point(56, 31);
-            header.Controls.Add(new Avatar(p.Name) { Location = new Point(0, 6) }); header.Controls.Add(title); header.Controls.Add(sub); flow.Controls.Add(header);
+            header.Controls.Add(new Avatar(p.Name) { Location = new Point(0, 6) }); header.Controls.Add(title); header.Controls.Add(sub);
             if (detailTab == 0)
             {
                 var d = L(p.Desc, false, false); d.MaximumSize = new Size(330, 0); d.Margin = new Padding(0, 0, 0, 12); flow.Controls.Add(d);
@@ -1334,7 +1335,7 @@ namespace SubVulpesMockup
                 tab.Click += delegate { detailTab = index; RenderDetail(); };
                 strip.Controls.Add(tab);
             }
-            detail.Controls.Add(strip);
+            detail.Controls.Add(strip); detail.Controls.Add(header);
             Apply(detail);
             detail.ResumeLayout();
         }
