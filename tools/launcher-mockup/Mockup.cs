@@ -780,9 +780,9 @@ namespace SubVulpesMockup
         void AddRow(TableLayoutPanel t, string label, string help, Control input, string hint, bool autosave)
         {
             int row = t.RowCount++; t.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-            var lab = L(label, true, false); lab.Anchor = AnchorStyles.Left; t.Controls.Add(lab, 0, row);
+            var lab = L(label, true, false); lab.Anchor = AnchorStyles.Left; lab.Margin = new Padding(0, 6, 0, 0); t.Controls.Add(lab, 0, row);
             if (help != null) { var h = new HelpIcon(help) { Anchor = AnchorStyles.Left }; t.Controls.Add(h, 1, row); }
-            input.Anchor = AnchorStyles.Left; input.Margin = new Padding(0);
+            input.Anchor = AnchorStyles.Left; input.Margin = new Padding(0); Compact(input);
             Control cell = input;
             if (hint != null) cell = Inline(input, new Badge(hint) { Margin = new Padding(12, 2, 0, 0) });  // the badge sits right next to the field
             cell.Anchor = AnchorStyles.Left; t.Controls.Add(cell, 2, row);
@@ -796,6 +796,13 @@ namespace SubVulpesMockup
                 else if (input is Switch) ((Switch)input).Changed += show;
                 else if (input is Segmented) ((Segmented)input).Changed += show;
             }
+        }
+
+        // Buttons inside a settings row have the height of the fields, so the row lines up.
+        static void Compact(Control c)
+        {
+            var fb = c as FlatButton; if (fb != null) { fb.Height = 28; return; }
+            foreach (Control k in c.Controls) Compact(k);
         }
 
         static SearchBox HintBox(int width) { return new SearchBox(width); }
@@ -896,7 +903,7 @@ namespace SubVulpesMockup
             page.Controls.Add(bar, 0, 2);
 
             console = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f), Padding = new Padding(8) };
-            var holder = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), Tag = "consolebg" };
+            var holder = new Panel { Dock = DockStyle.Fill, Margin = new Padding(3, 0, 3, 0), Tag = "consolebg" };
             holder.Controls.Add(console);
             var expandBtn = new IconButton("expand"); var copyBtn = new IconButton("copy"); var clearBtn = new IconButton("clear"); var saveBtn = new IconButton("save");
             UI.Tips.SetToolTip(expandBtn, "Expand or collapse the console."); UI.Tips.SetToolTip(copyBtn, "Copy all."); UI.Tips.SetToolTip(clearBtn, "Clear the console."); UI.Tips.SetToolTip(saveBtn, "Save the log to a file.");
@@ -996,7 +1003,7 @@ namespace SubVulpesMockup
         // One bar for all the Settings pages. Reset to defaults sits apart on the left, because it is a last resort.
         Control SettingsBar()
         {
-            var bar = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 8) };
+            var bar = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 8, 16, 8) };
             var line = new Panel { Dock = DockStyle.Top, Height = 1, Tag = "line" };
             var reset = new FlatButton("Reset to defaults…") { Kind = "link", Dock = DockStyle.Left };
             reset.Click += delegate
@@ -1131,7 +1138,7 @@ namespace SubVulpesMockup
                 if (c[4] == "Installed") { var done = L("✓ Installed", false, false); done.Tag = "ok"; action = done; }
                 else action = new FlatButton("Install") { Glyph = "download" };
                 card.Controls.AddRange(new Control[] { avatar, name, chip, desc, ver, action });
-                Action place = delegate { action.Location = new Point(card.Width - action.Width - 18, (card.Height - action.Height) / 2); ver.Location = new Point(action.Left - ver.Width - 18, (card.Height - ver.Height) / 2); };
+                Action place = delegate { action.Location = new Point(card.Width - action.Width - 18, (card.Height - action.Height) / 2); ver.Location = new Point(card.Width - 18 - 100 - 12 - ver.Width, (card.Height - ver.Height) / 2); };
                 card.Resize += delegate { place(); };
                 action.SizeChanged += delegate { place(); };
                 wrap.Controls.Add(card); scroll.Controls.Add(wrap); cards.Add(wrap); cardKind.Add(c[2]);
@@ -1163,7 +1170,7 @@ namespace SubVulpesMockup
                 EnableHeadersVisualStyles = false, ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, AllowUserToResizeRows = false, ColumnHeadersHeight = 36,
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
             };
-            grid.RowTemplate.Height = 40;
+            grid.RowTemplate.Height = 40; grid.DefaultCellStyle.Padding = new Padding(2, 0, 0, 0);
             grid.Columns.Add("n", "Name"); grid.Columns.Add("v", "Version"); grid.Columns.Add("s", "State"); grid.Columns.Add("r", "Risk"); grid.Columns.Add("o", "Source"); grid.Columns.Add("on", "On");
             grid.Columns[0].FillWeight = 160; grid.Columns[1].FillWeight = 70; grid.Columns[2].FillWeight = 110; grid.Columns[3].FillWeight = 70; grid.Columns[4].FillWeight = 80; grid.Columns[5].FillWeight = 50;
             foreach (DataGridViewColumn col in grid.Columns) col.SortMode = DataGridViewColumnSortMode.Programmatic;
