@@ -9,6 +9,9 @@ typedef struct {
     char id[48], version[24], library[48];
     uint32_t runtime, live, unsafe, library_role, cap_mask;
     char name[49], description[161], author[49], homepage[97];
+    /* Store keys. The icon is a file name in the plugin folder. The channel is 0 stable, 1 beta or 2 experimental. */
+    char icon[49], license[33], tags[105], server_min[24];
+    uint32_t channel;
     char dependencies[8][48], dependency_min[8][24], conflicts[8][48];
     uint32_t dependency_count, conflict_count;
     SvSettingSet config;

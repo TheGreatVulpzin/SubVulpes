@@ -95,6 +95,12 @@ namespace SubVulpes
             return risk == "low" ? UI.T.Ok : risk == "high" ? UI.T.Warn : UI.T.Bad;
         }
 
+        // An action takes the id of a parsed row and nothing else. The text of the display never becomes an id.
+        internal static string PluginActionId(string id)
+        {
+            return id != null && PluginId(id) ? id : null;
+        }
+
         PluginMetadata FindPlugin(string id)
         {
             return plugins.FirstOrDefault(p => p.Id == id);
@@ -851,6 +857,8 @@ namespace SubVulpes
 
         async void LoadPluginSettings(FlowLayoutPanel flow, Label wait, string id)
         {
+            id = PluginActionId(id);
+            if (id == null) { wait.Text = "This plugin has an invalid identifier."; return; }
             if (pluginBusy || updating) { wait.Text = "Try again in a moment."; return; }
             pluginBusy = true;
             SetState(serverState);
@@ -922,6 +930,8 @@ namespace SubVulpes
         // Saves each changed value with the file command when the server is stopped, and with a local command when the server runs.
         async Task SavePluginSettings(string id, string selectedFolder, List<PluginSetting> changes)
         {
+            id = PluginActionId(id);
+            if (id == null) { message.Text = "This plugin has an invalid identifier."; return; }
             if (changes.Count == 0) { message.Text = "No changes."; return; }
             int saved = 0;
             var failures = new List<string>();

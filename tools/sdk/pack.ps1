@@ -1,4 +1,4 @@
-# Packs a plugin folder into ID-VERSION-RUNTIME.svplugin. The folder holds plugin.ini and the library, and nothing else.
+# Packs a plugin folder into ID-VERSION-RUNTIME.svplugin. The folder holds plugin.ini, the library and the icon that the manifest names (if any), and nothing else.
 # The server checks the manifest first, so a package that this script makes passes the rules of the loader.
 # The ZIP has a fixed order and a fixed time stamp, so the same folder gives the same bytes.
 # Usage: pack.ps1 -Folder <plugin folder> -OutputDir <folder> [-ServerExe <subvulpes_server.exe>]
@@ -25,7 +25,7 @@ if ($LASTEXITCODE -ne 0) { throw ("The manifest is not valid:`n" + ($report -joi
 
 $values = @{}
 foreach ($line in Get-Content -LiteralPath $manifestPath) {
-    if ($line -cmatch '^(id|version|library|runtime)=(.+)$') { $values[$Matches[1]] = $Matches[2].Trim() }
+    if ($line -cmatch '^(id|version|library|runtime|icon)=(.+)$') { $values[$Matches[1]] = $Matches[2].Trim() }
 }
 $runtime = if ($values.ContainsKey('runtime')) { $values.runtime } else { 'native' }
 foreach ($key in @('id', 'version', 'library')) {
@@ -34,9 +34,10 @@ foreach ($key in @('id', 'version', 'library')) {
 $package = "$($values.id)-$($values.version)-$runtime.svplugin"
 if ($package -cnotmatch '^[A-Za-z0-9._+-]{1,120}$') { throw 'The package name has a character that is not safe.' }
 
-# The folder holds exactly the manifest and the library.
+# The folder holds exactly the manifest, the library and the icon (when the manifest names one).
 $files = @(Get-ChildItem -LiteralPath $folderPath -Force | ForEach-Object Name)
 $expected = @('plugin.ini', $values.library)
+if ($values.ContainsKey('icon')) { $expected += $values.icon }
 foreach ($name in $files) {
     if ($name -cnotin $expected) { throw "The folder holds a file that the package does not carry: $name" }
 }

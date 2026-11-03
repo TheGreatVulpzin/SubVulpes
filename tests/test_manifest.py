@@ -4,8 +4,10 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import struct
 import tempfile
 import zipfile
+import zlib
 
 BUILD = Path(sys.argv[1]).resolve()
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,11 +20,26 @@ BASE = 'id=test.manifest\nversion=0.1.0\nlibrary=fixture.dll\napi=1\nlive=1\n'
 checked = 0
 
 
-def folder_with(extra, manifest=None):
+def folder_with(extra, manifest=None, icon=None):
     folder = Path(tempfile.mkdtemp(prefix='manifest-', dir=CASES)).resolve()
     (folder / 'plugin.ini').write_text('[plugin]\n' + (manifest if manifest is not None else BASE) + extra, encoding='ascii')
     shutil.copyfile(DLL, folder / 'fixture.dll')
+    if icon is not None:
+        (folder / 'icon.png').write_bytes(icon)
     return folder
+
+
+def make_png(width, height=None):
+    """A real PNG: a plain gray picture of the given size."""
+    height = width if height is None else height
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body) & 0xffffffff)
+
+    rows = b''.join(b'\x00' + b'\x80' * width for _ in range(height))
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 0, 0, 0, 0)) +
+            chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
 
 
 def validate(folder):
@@ -30,17 +47,17 @@ def validate(folder):
     return result.returncode, result.stdout + result.stderr
 
 
-def accept(extra, *needles):
+def accept(extra, *needles, icon=None):
     global checked
-    code, output = validate(folder_with(extra))
+    code, output = validate(folder_with(extra, icon=icon))
     assert code == 0 and output.startswith('MANIFEST\t') and all(n in output for n in needles), (extra, code, output)
     checked += 1
     return output
 
 
-def refuse(extra, key, manifest=None):
+def refuse(extra, key, manifest=None, icon=None):
     global checked
-    code, output = validate(folder_with(extra, manifest))
+    code, output = validate(folder_with(extra, manifest, icon))
     assert code == 1 and f'INVALID\t{key}\t' in output, (extra, code, output)
     assert 'INVALID' in output.splitlines()[0]
     checked += 1
@@ -72,6 +89,51 @@ refuse('name=A\nname=B\n', 'name')
 output = refuse('runtime=java\ncapabilities=fly\nname=%s\n' % ('x' * 60), 'runtime')
 assert 'INVALID\tcapabilities\t' in output and 'INVALID\tname\t' in output, 'The report must list every problem.'
 assert 'java' not in output and 'fly' not in output and 'xxxx' not in output, 'The report repeated a value.'
+# The keys of the plugin store.
+accept('icon=icon.png\nlicense=GPL-3.0-only\nkind=plugin\nside=server\nserver_min=0.1.1\ntags=admin,chat-tools\nchannel=beta\n',
+       '\tnative\t', icon=make_png(64))
+accept('icon=icon.png\n', icon=make_png(512))
+accept('license=MIT\n')
+accept('channel=stable\n')
+accept('channel=experimental\n')
+accept('tags=a1,b2,c3,d4,e5\n')
+accept('server_min=1.2.3\n')
+# The icon file is checked when a folder or a package is validated.
+refuse('icon=icon.png\n', 'icon')
+refuse('icon=icon.png\n', 'icon', icon=b'not a png at all, just text of some length here')
+refuse('icon=icon.png\n', 'icon', icon=make_png(32))
+refuse('icon=icon.png\n', 'icon', icon=make_png(1024))
+refuse('icon=icon.png\n', 'icon', icon=make_png(64, 128))
+refuse('icon=icon.png\n', 'icon', icon=make_png(64) + b'\x00' * 131100)
+refuse('icon=icon.jpg\n', 'icon', icon=make_png(64))
+refuse('icon=Icon.png\n', 'icon', icon=make_png(64))
+refuse('icon=..png\n', 'icon', icon=make_png(64))
+refuse('icon=\n', 'icon')
+refuse('license=%s\n' % ('a' * 33), 'license')
+refuse('license=GPL 3\n', 'license')
+refuse('license=\n', 'license')
+refuse('kind=mod\n', 'kind')
+refuse('kind=bundle\n', 'kind')
+refuse('kind=addon\n', 'kind')
+refuse('side=client\n', 'side')
+refuse('side=both\n', 'side')
+refuse('side=everywhere\n', 'side')
+refuse('server_min=abc\n', 'server_min')
+refuse('server_min=1..2\n', 'server_min')
+refuse('server_min=1.2.\n', 'server_min')
+refuse('tags=a\n', 'tags')
+refuse('tags=admin,admin\n', 'tags')
+refuse('tags=Admin\n', 'tags')
+refuse('tags=a1,b2,c3,d4,e5,f6\n', 'tags')
+refuse('tags=%s\n' % ('t' * 21), 'tags')
+refuse('tags=\n', 'tags')
+refuse('channel=nightly\n', 'channel')
+refuse('channel=Beta\n', 'channel')
+refuse('entry=main.lua\n', 'entry')
+refuse('license=MIT\nlicense=GPL-3.0-only\n', 'license')
+# The report never repeats a value of the new keys.
+output = refuse('kind=addonxyz\nchannel=nightlyxyz\n', 'kind')
+assert 'xyz' not in output, 'The report repeated a value.'
 # The library file must exist, and a script runtime has no adapter yet.
 refuse('', 'library', manifest=BASE.replace('fixture.dll', 'absent.dll'))
 # A script runtime needs a script file. With a DLL the extension does not match. With a script file the adapter is missing.
@@ -139,6 +201,28 @@ code, output, server_dir = install(script_runtime)
 assert code != 0 and not (server_dir / 'plugins/test.manifest').exists(), output
 checked += 4
 
+# A package may carry the icon that its manifest names, and nothing else.
+icon_manifest = manifest_text + 'icon=icon.png\n'
+icon_package = package('icon.svplugin', {'plugin.ini': icon_manifest, 'fixture.dll': DLL.read_bytes(), 'icon.png': make_png(64)})
+code, output = run_script(icon_package)
+assert code == 0 and output.startswith('MANIFEST\t'), output
+code, output, server_dir = install(icon_package)
+assert code == 0 and (server_dir / 'plugins/test.manifest/icon.png').read_bytes() == make_png(64), output
+# An update without the icon removes the old icon file.
+second = package('plain.svplugin', {'plugin.ini': manifest_text.replace('0.1.0', '0.2.0'), 'fixture.dll': DLL.read_bytes()})
+result = subprocess.run([*POWERSHELL, str(installer), '-ServerDir', str(server_dir), '-Package', str(second)],
+                        capture_output=True, text=True, timeout=120)
+assert result.returncode == 0 and not (server_dir / 'plugins/test.manifest/icon.png').exists(), result.stdout + result.stderr
+# Refusals leave nothing installed: a bad icon, a missing icon entry, and an icon entry that the manifest does not name.
+for name, entries in (
+        ('icon-bad.svplugin', {'plugin.ini': icon_manifest, 'fixture.dll': DLL.read_bytes(), 'icon.png': make_png(32)}),
+        ('icon-text.svplugin', {'plugin.ini': icon_manifest, 'fixture.dll': DLL.read_bytes(), 'icon.png': b'text' * 20}),
+        ('icon-missing.svplugin', {'plugin.ini': icon_manifest, 'fixture.dll': DLL.read_bytes()}),
+        ('icon-extra.svplugin', {'plugin.ini': manifest_text, 'fixture.dll': DLL.read_bytes(), 'icon.png': make_png(64)})):
+    code, output, server_dir = install(package(name, entries))
+    assert code != 0 and not (server_dir / 'plugins/test.manifest').exists(), (name, output)
+checked += 7
+
 # pack.ps1 makes ID-VERSION-RUNTIME.svplugin from a folder, with the same bytes each time, and it refuses a bad folder.
 pack_script = ROOT / 'tools/sdk/pack.ps1'
 status_dir = BUILD / 'plugins/sv.status'
@@ -194,5 +278,24 @@ assert code != 0 and 'INVALID' in output and not list(out_three.glob('*.svplugin
 code, output = pack(copy_of_status(drop_library=True), out_three)
 assert code != 0 and not list(out_three.glob('*.svplugin')), output
 checked += 3
+
+# A folder with an icon packs with the icon. A folder with an icon that the manifest does not name does not pack.
+icon_folder = copy_of_status(manifest_extra='icon=icon.png\n')
+(icon_folder / 'icon.png').write_bytes(make_png(128))
+out_icon = CASES / 'pack-icon'
+if out_icon.exists():
+    shutil.rmtree(out_icon)
+code, output = pack(icon_folder, out_icon)
+assert code == 0, output
+with zipfile.ZipFile(next(out_icon.glob('*.svplugin'))) as archive:
+    assert archive.namelist() == ['plugin.ini', 'status.dll', 'icon.png'], archive.namelist()
+loose = copy_of_status()
+(loose / 'icon.png').write_bytes(make_png(128))
+out_loose = CASES / 'pack-loose'
+if out_loose.exists():
+    shutil.rmtree(out_loose)
+code, output = pack(loose, out_loose)
+assert code != 0 and 'icon.png' in output and not list(out_loose.glob('*.svplugin')), output
+checked += 2
 
 print(f'MANIFEST_PASS {checked}')

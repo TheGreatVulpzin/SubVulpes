@@ -86,17 +86,16 @@ namespace SubVulpes
             if (!review.Contains("Runs inside the server with full access to it."))
                 throw new Exception("Native approval lost its full process warning for a cached script row.");
             current.Runtime = "native";
-            var item = LauncherForm.MakePluginItem(current);
-            if (item.Text != "Health Commands" || item.Name != "sv.health" || (string)item.Tag != hash ||
-                item.SubItems[1].Text != "sv.health" || item.SubItems[2].Text != "0.1.0" ||
-                item.SubItems[3].Text != "ready" || item.SubItems[4].Text != "No" || item.SubItems[5].Text != "Ready.")
+            if (current.DisplayName != "Health Commands" || current.Id != "sv.health" || current.Hash != hash ||
+                current.Version != "0.1.0" || current.State != "ready" || current.Required != "0" || current.Reason != "Ready.")
                 throw new Exception("Plugin display changed identity, hash or column data.");
-            item.Text = "other.plugin";
-            if (LauncherForm.PluginActionId(item) != "sv.health")
+            // An action takes the id of the parsed row. The display name never becomes an identifier.
+            current.Name = "other.plugin";
+            if (LauncherForm.PluginActionId(current.Id) != "sv.health")
                 throw new Exception("Plugin display text became an action identifier.");
-            item.Name = "../escape";
-            if (LauncherForm.PluginActionId(item) != null)
+            if (LauncherForm.PluginActionId("../escape") != null || LauncherForm.PluginActionId("") != null || LauncherForm.PluginActionId(null) != null)
                 throw new Exception("The action accepted an invalid plugin identifier.");
+            current.Name = "Health Commands";
             display[2] = "";
             if (LauncherForm.ParsePluginRow(legacy + "\t" + string.Join("\t", display), false).DisplayName != "sv.health")
                 throw new Exception("An empty display name did not use the identifier.");

@@ -21,7 +21,16 @@ All keys sit in the section `[plugin]`. A key is lower case. A key that appears 
 | `description` | no | A line of up to 160 characters. |
 | `author` | no | Up to 48 characters. |
 | `homepage` | no | A web address that starts with `https://` or `http://`, up to 96 characters. |
+| `icon` | no | The file name of a PNG in the plugin folder, such as `icon.png`. A safe lower-case name that ends in `.png`. The file is square, from 64 to 512 pixels, and at most 128 KiB. The package carries it. The server checks it when it validates a folder or a package, and never when the plugin loads. |
+| `license` | no | An SPDX identifier, such as `GPL-3.0-only`: 1 to 32 letters, digits, dots, plus signs and hyphens. |
+| `kind` | no | `plugin` (the default). The values `mod` and `bundle` are reserved and are refused for now. |
+| `side` | no | `server` (the default). The values `client` and `both` are reserved and are refused for now. |
+| `server_min` | no | The lowest server version that the plugin needs, such as `0.1.1`. Digits and dots, up to 23 characters. The server reads the key. It does not compare it yet, because the server program has no version number inside. |
+| `tags` | no | Up to 5 tags separated by commas, with no spaces. A tag has 2 to 20 characters from `a-z`, `0-9` and the hyphen, and no tag repeats. The plugin catalog uses them to filter. |
+| `channel` | no | `stable` (the default), `beta` or `experimental`. The launcher hides the last two unless the user turns on Include Beta Versions. |
+| `entry` | no | Reserved for the main file of a script plugin. The server refuses it until script runtimes exist. |
 
+The display keys and the store keys (`icon`, `license`, `kind`, `side`, `server_min`, `tags`, `channel`, `entry`) are for people and for the catalog. They do not change what the plugin can do. An old manifest without them stays valid.
 The display keys are for people only. The launcher shows the name first and the identifier in small text.
 Every action, such as enable, disable or approve, uses the identifier.
 

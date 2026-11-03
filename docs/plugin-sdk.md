@@ -121,8 +121,8 @@ It preserves ABI and dependency checks. Metadata inspection does not prove safe 
 
 ## Module ZIP installation and launcher management
 
-A module ZIP contains exactly two root files: `plugin.ini` and the DLL named by its `library` field.
-The INI limit is 64 KiB. The DLL limit is 64 MiB, and the ZIP limit is 70 MiB.
+A module ZIP contains two root files: `plugin.ini` and the DLL named by its `library` field. When the manifest has an `icon` key, the ZIP also contains that PNG file, and nothing else.
+The INI limit is 64 KiB. The DLL limit is 64 MiB, the icon limit is 128 KiB, and the ZIP limit is 70 MiB.
 The installer rejects unsafe paths, duplicate entries, incompatible metadata and invalid x86 DLL headers without loading code.
 It checks installed dependencies before public changes.
 

@@ -108,6 +108,29 @@ static void manifest_problem(void *context, const char *key, const char *message
         sv_log("INVALID\t%s\t%s", key, message);
 }
 
+/* The icon is a plain PNG file of at most 128 KiB. It is square, from 64 to 512 pixels. The header decides, no decoder runs. */
+static int icon_file_ok(const char *path)
+{
+    static const unsigned char signature[16] = { 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 'I', 'H', 'D', 'R' };
+    unsigned char head[24];
+    BY_HANDLE_FILE_INFORMATION info;
+    DWORD got;
+    uint32_t width, height;
+    int ok = 0;
+    HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    if (file == INVALID_HANDLE_VALUE)
+        return 0;
+    if (GetFileInformationByHandle(file, &info) && !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) &&
+        !info.nFileSizeHigh && info.nFileSizeLow >= sizeof head && info.nFileSizeLow <= 131072 &&
+        ReadFile(file, head, sizeof head, &got, NULL) && got == sizeof head && !memcmp(head, signature, sizeof signature)) {
+        width = ((uint32_t)head[16] << 24) | ((uint32_t)head[17] << 16) | ((uint32_t)head[18] << 8) | head[19];
+        height = ((uint32_t)head[20] << 24) | ((uint32_t)head[21] << 16) | ((uint32_t)head[22] << 8) | head[23];
+        ok = width == height && width >= 64 && width <= 512;
+    }
+    CloseHandle(file);
+    return ok;
+}
+
 static int metadata_folder(const char *folder, const char *id, SvModule *module, int print)
 {
     char manifest[MAX_PATH], binary[MAX_PATH];
@@ -153,6 +176,15 @@ static int metadata_folder(const char *folder, const char *id, SvModule *module,
     if (length < 0 || (size_t)length >= sizeof binary || !plain_path(binary, 0) || !absolute(binary, module->path)) {
         manifest_problem(&report, "library", "Cannot read a plain plugin payload.");
         return 0;
+    }
+    /* The icon is for display only. The check runs when a folder or a package is validated, never when the plugin loads. */
+    if (print && parsed.icon[0]) {
+        char icon[MAX_PATH];
+        length = snprintf(icon, sizeof icon, "%s/%s", folder, parsed.icon);
+        if (length < 0 || (size_t)length >= sizeof icon || !plain_path(icon, 0) || !icon_file_ok(icon)) {
+            manifest_problem(&report, "icon", "The icon must be a plain square PNG file, 64 to 512 pixels, up to 128 KiB.");
+            return 0;
+        }
     }
     module->metadata_valid = 1;
     return 1;

@@ -900,6 +900,8 @@ namespace SubVulpes
         async Task ChangePlugin(string id, bool enabled)
         {
             if (pluginBusy || updating) return;
+            id = PluginActionId(id);
+            if (id == null) return;
             if (server != null) {
                 SendPluginCommand("plugins " + (enabled ? "enable " : "disable ") + id);
                 return;
@@ -919,6 +921,8 @@ namespace SubVulpes
         async Task ApprovePlugin(string id)
         {
             if (pluginBusy || updating) return;
+            id = PluginActionId(id);
+            if (id == null) return;
             if (server != null) { message.Text = "Stop the server before reviewing installed content."; return; }
             pluginBusy = true; SetState(serverState);
             string selectedFolder = folder;

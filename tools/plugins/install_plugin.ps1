@@ -125,7 +125,8 @@ function Read-Manifest([byte[]]$Bytes) {
             continue
         }
         if ($key -notin @('id', 'version', 'library', 'api', 'live', 'dependencies', 'unsafe_events', 'conflicts', 'role',
-                'runtime', 'capabilities', 'name', 'description', 'author', 'homepage') -or $values.ContainsKey($key)) {
+                'runtime', 'capabilities', 'name', 'description', 'author', 'homepage',
+                'icon', 'license', 'kind', 'side', 'server_min', 'tags', 'channel', 'entry') -or $values.ContainsKey($key)) {
             throw 'Invalid or duplicate manifest field.'
         }
         $values[$key] = $value
@@ -143,6 +144,10 @@ function Read-Manifest([byte[]]$Bytes) {
         throw 'Invalid unsafe_events setting.'
     }
     if ($values.ContainsKey('role') -and $values.role -cnotmatch '^(plugin|library)$') { throw 'Invalid module role.' }
+    # The server checks the other store keys. The installer must know the icon, because the package carries that file.
+    if ($values.ContainsKey('icon') -and ($values.icon -cnotmatch '^[a-z0-9][a-z0-9._-]{0,43}\.png$' -or $values.icon.Contains('..'))) {
+        throw 'Invalid icon file name.'
+    }
     # The server checks the values of the display keys and the capability list. This installer carries a DLL, so it takes native code only.
     if ($values.ContainsKey('runtime') -and $values.runtime -cne 'native') { throw 'This installer carries native plugins only.' }
     $dependencyList = Read-IdList $(if ($values.ContainsKey('dependencies')) { $values.dependencies } else { '' }) $values.id $true
@@ -151,6 +156,7 @@ function Read-Manifest([byte[]]$Bytes) {
         if ($id -cin $dependencyList.Ids) { throw 'A module cannot depend on a module that it conflicts with.' }
     }
     return [pscustomobject]@{ Id=$values.id; Version=$values.version; Library=$values.library;
+        Icon=$(if ($values.ContainsKey('icon')) { $values.icon } else { $null });
         Dependencies=$dependencyList.Ids; DependencyMinimum=$dependencyList.Minimum }
 }
 function Assert-Dll([byte[]]$Bytes) {
@@ -162,6 +168,15 @@ function Assert-Dll([byte[]]$Bytes) {
         [BitConverter]::ToUInt16($Bytes, $offset + 4) -ne 0x14c -or
         [BitConverter]::ToUInt16($Bytes, $offset + 24) -ne 0x10b -or
         -not ([BitConverter]::ToUInt16($Bytes, $offset + 22) -band 0x2000)) { throw 'The binary is not an x86 PE DLL.' }
+}
+# The icon is a PNG of at most 128 KiB, square, from 64 to 512 pixels. The header decides and no decoder runs.
+function Assert-Png([byte[]]$Bytes) {
+    if ($Bytes.Length -lt 24 -or $Bytes.Length -gt 131072) { throw 'The icon must be a PNG file of at most 128 KiB.' }
+    $signature = @(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52)
+    for ($i = 0; $i -lt 16; $i++) { if ($Bytes[$i] -ne $signature[$i]) { throw 'The icon is not a PNG file.' } }
+    $width = ([int64]$Bytes[16] * 16777216) + ([int64]$Bytes[17] * 65536) + ([int64]$Bytes[18] * 256) + [int64]$Bytes[19]
+    $height = ([int64]$Bytes[20] * 16777216) + ([int64]$Bytes[21] * 65536) + ([int64]$Bytes[22] * 256) + [int64]$Bytes[23]
+    if ($width -ne $height -or $width -lt 64 -or $width -gt 512) { throw 'The icon must be square, from 64 to 512 pixels.' }
 }
 function Read-Entry($Entry, [long]$Limit) {
     if ($Entry.Length -gt $Limit) { throw 'A ZIP entry exceeds its size limit.' }
@@ -200,12 +215,14 @@ function Read-Profile([string]$Text) {
     if ($entries.get_Count() -gt 32) { throw 'The profile exceeds 32 modules.' }
     return ,$entries
 }
-function Write-Backup([string]$Path, [byte[]]$Manifest, [string]$Library, [byte[]]$Dll) {
+function Write-Backup([string]$Path, [byte[]]$Manifest, [string]$Library, [byte[]]$Dll, [string]$IconName = $null, [byte[]]$Icon = $null) {
     Assert-Target $Path
     $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
     $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create)
     try {
-        foreach ($pair in @(@('plugin.ini', $Manifest), @($Library, $Dll))) {
+        $pairs = @(@('plugin.ini', $Manifest), @($Library, $Dll))
+        if ($IconName -and $null -ne $Icon) { $pairs += ,@($IconName, $Icon) }
+        foreach ($pair in $pairs) {
             $entry = $archive.CreateEntry($pair[0])
             $out = $entry.Open()
             try { $out.Write($pair[1], 0, $pair[1].Length) } finally { $out.Dispose() }
@@ -221,7 +238,7 @@ try {
     $packageHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($ExpectedPackageHash -and ($ExpectedPackageHash -cnotmatch '^[0-9a-f]{64}$' -or
         $ExpectedPackageHash -cne $packageHash)) { throw 'The package changed after inspection.' }
-    if ($zip.Entries.Count -ne 2) { throw 'A package must contain only plugin.ini and its DLL.' }
+    if ($zip.Entries.Count -lt 2 -or $zip.Entries.Count -gt 3) { throw 'A package must contain plugin.ini, its DLL and at most one icon.' }
     $names = @{}
     foreach ($entry in $zip.Entries) {
         $name = $entry.FullName
@@ -242,6 +259,15 @@ try {
     }
     [byte[]]$dllBytes = Read-Entry $names[$manifest.Library] 67108864
     Assert-Dll $dllBytes
+    [byte[]]$iconBytes = $null
+    if ($zip.Entries.Count -ne $(if ($manifest.Icon) { 3 } else { 2 })) { throw 'A package must contain only plugin.ini, its DLL and its icon.' }
+    if ($manifest.Icon) {
+        if (-not $names.ContainsKey($manifest.Icon) -or $names[$manifest.Icon].FullName -cne $manifest.Icon) {
+            throw 'The ZIP icon does not match the manifest.'
+        }
+        [byte[]]$iconBytes = Read-Entry $names[$manifest.Icon] 131072
+        Assert-Png $iconBytes
+    }
 } finally { $zip.Dispose() }
 
 if ($Inspect -and $ServerInspect) {
@@ -254,6 +280,7 @@ if ($Inspect -and $ServerInspect) {
         Assert-Plain $reviewStage
         [IO.File]::WriteAllBytes((Join-Path $reviewStage 'plugin.ini'), $manifestBytes)
         [IO.File]::WriteAllBytes((Join-Path $reviewStage $manifest.Library), $dllBytes)
+        if ($iconBytes) { [IO.File]::WriteAllBytes((Join-Path $reviewStage $manifest.Icon), $iconBytes) }
         $inspector = Join-Path $serverRoot 'subvulpes_server.exe'
         Assert-Plain $inspector
         & $inspector --plugin-inspect-folder $reviewStage
@@ -326,13 +353,17 @@ try {
     $moduleDir = Join-Path $public $manifest.Id
     $manifestPath = Join-Path $moduleDir 'plugin.ini'
     $dllPath = Join-Path $moduleDir $manifest.Library
+    $iconPath = if ($manifest.Icon) { Join-Path $moduleDir $manifest.Icon } else { $null }
     Assert-FileTarget $manifestPath
     Assert-FileTarget $dllPath
+    if ($iconPath) { Assert-FileTarget $iconPath }
     $hadModuleDir = Test-Path -LiteralPath $moduleDir -PathType Container
     $hadManifest = Test-Path -LiteralPath $manifestPath -PathType Leaf
     $oldManifestBytes = $null
     $oldDllBytes = $null
     $oldDllPath = $null
+    $oldIconPath = $null
+    $oldIconBytes = $null
     $backupPath = $null
     if ($hadManifest) {
         $oldManifestBytes = [IO.File]::ReadAllBytes($manifestPath)
@@ -342,12 +373,19 @@ try {
         Assert-FileTarget $oldDllPath
         $oldDllBytes = [IO.File]::ReadAllBytes($oldDllPath)
         Assert-Dll $oldDllBytes
+        if ($oldManifest.Icon) {
+            $oldIconPath = Join-Path $moduleDir $oldManifest.Icon
+            Assert-FileTarget $oldIconPath
+            if (Test-Path -LiteralPath $oldIconPath -PathType Leaf) { $oldIconBytes = [IO.File]::ReadAllBytes($oldIconPath) }
+        }
     }
     if ((Test-Path -LiteralPath $dllPath) -and $dllPath -ine $oldDllPath) { throw 'The target DLL already exists outside the installed manifest.' }
+    if ($iconPath -and (Test-Path -LiteralPath $iconPath) -and $iconPath -ine $oldIconPath) { throw 'The target icon already exists outside the installed manifest.' }
     $stage = Join-Path $private ('install-' + [Guid]::NewGuid().ToString('N'))
     New-Directory $stage
     [IO.File]::WriteAllBytes((Join-Path $stage 'plugin.ini'), $manifestBytes)
     [IO.File]::WriteAllBytes((Join-Path $stage $manifest.Library), $dllBytes)
+    if ($iconBytes) { [IO.File]::WriteAllBytes((Join-Path $stage $manifest.Icon), $iconBytes) }
     # The server holds the one set of manifest rules. Ask it, when the server program is in the folder.
     $validator = Join-Path $serverRoot 'subvulpes_server.exe'
     if (Test-Path -LiteralPath $validator -PathType Leaf) {
@@ -371,7 +409,7 @@ try {
         $backupDir = Join-Path $serverRoot 'backup/plugins'
         New-Directory $backupDir
         $backupPath = Join-Path $backupDir ($manifest.Id + '-' + [Guid]::NewGuid().ToString('N') + '.zip')
-        Write-Backup $backupPath $oldManifestBytes $oldManifest.Library $oldDllBytes
+        Write-Backup $backupPath $oldManifestBytes $oldManifest.Library $oldDllBytes $oldManifest.Icon $oldIconBytes
     }
     $changed = $false
     try {
@@ -379,6 +417,10 @@ try {
         $changed = $true
         Assert-FileTarget $dllPath
         Copy-Item -LiteralPath (Join-Path $stage $manifest.Library) -Destination $dllPath -Force
+        if ($iconPath) {
+            Assert-FileTarget $iconPath
+            Copy-Item -LiteralPath (Join-Path $stage $manifest.Icon) -Destination $iconPath -Force
+        }
         Assert-FileTarget $manifestPath
         Copy-Item -LiteralPath (Join-Path $stage 'plugin.ini') -Destination $manifestPath -Force
         if (-not $profile.ContainsKey($manifest.Id)) {
@@ -388,6 +430,10 @@ try {
         if ($oldDllPath -and $oldDllPath -ine $dllPath) {
             Assert-FileTarget $oldDllPath
             Remove-Item -LiteralPath $oldDllPath -Force
+        }
+        if ($oldIconPath -and $oldIconPath -ine $iconPath -and (Test-Path -LiteralPath $oldIconPath -PathType Leaf)) {
+            Assert-FileTarget $oldIconPath
+            Remove-Item -LiteralPath $oldIconPath -Force
         }
         # Approve last so a refused review leaves the saved approval intact.
         if ($Approve) {
@@ -403,6 +449,15 @@ try {
             Assert-FileTarget $dllPath
             if ($oldDllPath -and $oldDllPath -ieq $dllPath) { [IO.File]::WriteAllBytes($dllPath, $oldDllBytes) }
             elseif (Test-Path -LiteralPath $dllPath) { Remove-Item -LiteralPath $dllPath -Force }
+            if ($iconPath) {
+                Assert-FileTarget $iconPath
+                if ($oldIconPath -and $oldIconPath -ieq $iconPath -and $null -ne $oldIconBytes) { [IO.File]::WriteAllBytes($iconPath, $oldIconBytes) }
+                elseif (Test-Path -LiteralPath $iconPath) { Remove-Item -LiteralPath $iconPath -Force }
+            }
+            if ($oldIconPath -and $oldIconPath -ine $iconPath -and $null -ne $oldIconBytes) {
+                Assert-FileTarget $oldIconPath
+                [IO.File]::WriteAllBytes($oldIconPath, $oldIconBytes)
+            }
             Assert-FileTarget $manifestPath
             if ($hadManifest) {
                 [IO.File]::WriteAllBytes($manifestPath, $oldManifestBytes)

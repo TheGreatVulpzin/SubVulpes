@@ -7,13 +7,15 @@
 enum {
     FIELD_ID, FIELD_VERSION, FIELD_LIBRARY, FIELD_API, FIELD_LIVE, FIELD_UNSAFE, FIELD_ROLE,
     FIELD_DEPENDENCIES, FIELD_CONFLICTS, FIELD_RUNTIME, FIELD_CAPS, FIELD_NAME, FIELD_DESCRIPTION,
-    FIELD_AUTHOR, FIELD_HOMEPAGE, FIELD_COUNT,
+    FIELD_AUTHOR, FIELD_HOMEPAGE, FIELD_ICON, FIELD_LICENSE, FIELD_KIND, FIELD_SIDE, FIELD_SERVER_MIN,
+    FIELD_TAGS, FIELD_CHANNEL, FIELD_ENTRY, FIELD_COUNT,
     MANIFEST_LIMIT = 65536, SECTION_LIMIT = SV_SETTING_MAX + 1
 };
 
 static const char *const field_names[FIELD_COUNT] = {
     "id", "version", "library", "api", "live", "unsafe_events", "role", "dependencies", "conflicts",
-    "runtime", "capabilities", "name", "description", "author", "homepage"
+    "runtime", "capabilities", "name", "description", "author", "homepage",
+    "icon", "license", "kind", "side", "server_min", "tags", "channel", "entry"
 };
 /* Row order defines the manifest bits. Rows 1 to 12 match the public API IDs minus one. The row network has no API table. */
 const SvCapabilityInfo sv_plugin_caps[SV_CAP_COUNT] = {
@@ -316,6 +318,99 @@ static int homepage_ok(const char *text)
     return 1;
 }
 
+/* An SPDX identifier, such as GPL-3.0-only: 1 to 32 letters, digits, dots, plus signs and hyphens. */
+static int license_ok(const char *text)
+{
+    const unsigned char *p = (const unsigned char *)text;
+    size_t length = strlen(text);
+    if (!length || length > 32)
+        return 0;
+    for (; *p; ++p)
+        if (!(*p >= 'a' && *p <= 'z') && !(*p >= 'A' && *p <= 'Z') && !(*p >= '0' && *p <= '9') &&
+            *p != '.' && *p != '+' && *p != '-')
+            return 0;
+    return 1;
+}
+
+/* Up to five tags, separated by commas. A tag has 2 to 20 characters from a-z, 0-9 and the hyphen. No tag repeats. */
+static int tags_ok(const char *text)
+{
+    char seen[5][21];
+    unsigned count = 0, j;
+    if (!*text)
+        return 0;
+    for (;;) {
+        const char *end = strchr(text, ',');
+        size_t length = end ? (size_t)(end - text) : strlen(text), i;
+        if (length < 2 || length > 20 || count == 5)
+            return 0;
+        for (i = 0; i < length; ++i)
+            if (!(text[i] >= 'a' && text[i] <= 'z') && !(text[i] >= '0' && text[i] <= '9') && text[i] != '-')
+                return 0;
+        for (j = 0; j < count; ++j)
+            if (!strncmp(seen[j], text, length) && !seen[j][length])
+                return 0;
+        memcpy(seen[count], text, length);
+        seen[count][length] = 0;
+        ++count;
+        if (!end)
+            return 1;
+        text = end + 1;
+    }
+}
+
+/* The keys of the plugin store. A value of a reserved kind or side is refused until that kind exists. */
+static void store_keys(Reader *reader, SvManifest *out)
+{
+    static const char *const channels[] = { "stable", "beta", "experimental" };
+    const char *text;
+    int index;
+    if (reader->value[FIELD_ICON] && copy_field(reader, FIELD_ICON, out->icon, sizeof out->icon, 1)) {
+        size_t length = strlen(out->icon);
+        if (!sv_plugin_id(out->icon) || length < 5 || strcmp(out->icon + length - 4, ".png"))
+            problem(reader, "icon", "The icon must be a safe file name that ends in .png.");
+    }
+    text = field(reader, FIELD_LICENSE);
+    if (reader->value[FIELD_LICENSE]) {
+        if (!license_ok(text))
+            problem(reader, "license", "The license must be an SPDX identifier of 1 to 32 safe characters.");
+        else
+            strcpy(out->license, text);
+    }
+    text = field(reader, FIELD_KIND);
+    if (reader->value[FIELD_KIND] && strcmp(text, "plugin"))
+        problem(reader, "kind", !strcmp(text, "mod") || !strcmp(text, "bundle") ?
+                "This kind is reserved and is not supported yet." : "The kind must be plugin, mod, or bundle.");
+    text = field(reader, FIELD_SIDE);
+    if (reader->value[FIELD_SIDE] && strcmp(text, "server"))
+        problem(reader, "side", !strcmp(text, "client") || !strcmp(text, "both") ?
+                "This side is reserved and is not supported yet." : "The side must be server, client, or both.");
+    text = field(reader, FIELD_SERVER_MIN);
+    if (reader->value[FIELD_SERVER_MIN]) {
+        if (!sv_plugin_version_min(text))
+            problem(reader, "server_min", "The server version must be digits and dots, up to 23 characters.");
+        else
+            strcpy(out->server_min, text);
+    }
+    text = field(reader, FIELD_TAGS);
+    if (reader->value[FIELD_TAGS]) {
+        if (!tags_ok(text))
+            problem(reader, "tags", "The tags must be 1 to 5 names of 2 to 20 characters from a-z, 0-9 and the hyphen.");
+        else
+            strcpy(out->tags, text);
+    }
+    text = field(reader, FIELD_CHANNEL);
+    if (reader->value[FIELD_CHANNEL]) {
+        index = lookup_exact(text, channels, sizeof channels / sizeof channels[0]);
+        if (index < 0)
+            problem(reader, "channel", "The channel must be stable, beta, or experimental.");
+        else
+            out->channel = (uint32_t)index;
+    }
+    if (reader->value[FIELD_ENTRY])
+        problem(reader, "entry", "A script entry is not supported yet.");
+}
+
 static void capabilities(Reader *reader, SvManifest *manifest)
 {
     char *part = reader->value[FIELD_CAPS], *next;
@@ -430,6 +525,7 @@ static void validate(Reader *reader, SvManifest *out)
     copy_field(reader, FIELD_AUTHOR, out->author, sizeof out->author, 0);
     if (copy_field(reader, FIELD_HOMEPAGE, out->homepage, sizeof out->homepage, 0) && !homepage_ok(out->homepage))
         problem(reader, "homepage", "The homepage needs an HTTP or HTTPS URL with a host and no spaces.");
+    store_keys(reader, out);
     id_list(reader, FIELD_DEPENDENCIES, out->id, out->dependencies, out->dependency_min, &out->dependency_count);
     id_list(reader, FIELD_CONFLICTS, out->id, out->conflicts, NULL, &out->conflict_count);
     for (i = 0; i < out->dependency_count; ++i)
