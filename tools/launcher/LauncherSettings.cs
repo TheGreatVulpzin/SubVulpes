@@ -185,7 +185,12 @@ namespace SubVulpes
             input.Margin = new Padding(0);
             Compact(input);
             Control cell = input;
-            if (badge != null) cell = Inline(input, new Badge(badge) { Margin = new Padding(12, 2, 0, 0) });
+            if (badge != null) {
+                // The badge shows only when the server runs with another value than the field.
+                var mark = new Badge(badge) { Margin = new Padding(12, 2, 0, 0), Visible = false };
+                restartBadges[label] = mark;
+                cell = Inline(input, mark);
+            }
             cell.Anchor = AnchorStyles.Left;
             t.Controls.Add(cell, 2, row);
         }
@@ -239,9 +244,29 @@ namespace SubVulpes
             });
         }
 
+        readonly Dictionary<string, Badge> restartBadges = new Dictionary<string, Badge>();
+        string[] runValues;   // port, game mode and max players that the running server started with
+
+        string[] CurrentRestartValues()
+        {
+            var mode = modeBox.SelectedItem as Mode;
+            return new[] { portBox.Value.ToString(CultureInfo.InvariantCulture), mode == null ? "" : mode.Value, playersBox.Value.ToString(CultureInfo.InvariantCulture) };
+        }
+
+        void UpdateRestartBadges()
+        {
+            if (portBox == null || modeBox == null || playersBox == null) return;
+            string[] now = CurrentRestartValues();
+            string[] labels = { "Port", "Game mode", "Max players" };
+            for (int i = 0; i < labels.Length; i++) {
+                Badge badge;
+                if (restartBadges.TryGetValue(labels[i], out badge)) badge.Visible = server != null && runValues != null && runValues[i] != now[i];
+            }
+        }
+
         void WatchSettings()
         {
-            EventHandler changed = delegate { SetDirty(true); };
+            EventHandler changed = delegate { SetDirty(true); UpdateRestartBadges(); };
             foreach (TextField f in new[] { nameBox, passwordBox, welcomeBox, playersBox, roundBox, portBox, bytesBox }) f.TextChanged += changed;
             modeBox.SelectedIndexChanged += changed;
         }
@@ -318,6 +343,7 @@ namespace SubVulpes
             bytesBox.Value = Clamp(config.Get("servermaxbytespersecond", "100000"), 100000, bytesBox);
             loading = false;
             SetDirty(false);
+            UpdateRestartBadges();
         }
 
         void SaveSettings()
@@ -397,6 +423,8 @@ namespace SubVulpes
                 Section(t, "Appearance");
                 AddRow(t, "Theme", null, themeBox, null);
                 AddRow(t, "Accent color", "Used for the active tab, the graph and the highlights.", accentBox, null);
+                Section(t, "About");
+                AddRow(t, "Version", "The version of the server in this folder. The name belongs to the minor version.", L(AboutVersion(), false, false), null);
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab. Each run then saves its own log folder.", debugModeBox, null);
             });
@@ -410,6 +438,9 @@ namespace SubVulpes
             Theme.Dark.Accent = Accents[accent][1];
             Skin.Window(this, themeBox.SelectedIndex == 1 ? Theme.Dark : Theme.Light);
             tabBar.BackColor = UI.T.Bar;
+            statusBar.BackColor = UI.T.SubBar;
+            message.ForeColor = UI.T.Muted;
+            foreach (Control k in statusBar.Controls) if ((k.Tag as string) == "line") k.BackColor = UI.T.Line;
             RenderConsole();
             RenderPluginDetail();
             RenderCatalog();

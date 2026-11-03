@@ -59,12 +59,18 @@ static int decide(int amount)
 #define CHECK(condition) do { if (!(condition)) { \
     fprintf(stderr, "Failed line %d: %s\n", __LINE__, #condition); return 1; } } while (0)
 
+int sv_server_version_ok(const char *have, const char *want);
+
 int main(int argc, char **argv)
 {
     unsigned before, after;
     int ok;
     if (argc != 2)
         return 2;
+    /* server_min: a development build and an empty request accept. A suffix does not count. */
+    CHECK(sv_server_version_ok("", "9.9.9") && sv_server_version_ok("0.2.0", "") && sv_server_version_ok("0.2.0", NULL));
+    CHECK(sv_server_version_ok("0.2.0", "0.2.0") && sv_server_version_ok("0.2.0-rc.1", "0.2.0") && sv_server_version_ok("0.10.0", "0.9.5"));
+    CHECK(!sv_server_version_ok("0.2.0", "0.2.1") && !sv_server_version_ok("0.1.9", "0.2.0") && !sv_server_version_ok("0.2.0-rc.1", "0.3.0"));
     ok = sv_plugins_start();
     if (!strcmp(argv[1], "required-fail")) {
         CHECK(!ok && sv_plugins_failed());

@@ -1,5 +1,6 @@
 /* Call native modules only on the server thread and between lifecycle transitions. */
 #include "plugin_internal.h"
+#include "server_version.h"
 #include "plugin_caps.h"
 #include "sv_plugins_api.h"
 #include <float.h>
@@ -554,6 +555,10 @@ static SvResult activate(uint32_t index, int initial)
         module->state = SV_MODULE_RESTART;
         strcpy(module->reason, "Activation requires a server restart.");
         return SV_RESTART;
+    }
+    if (!sv_server_version_ok(SV_SERVER_VERSION, module->server_min)) {
+        deactivate(index, SV_MODULE_FAILED, "The plugin needs a newer server.");
+        return SV_INCOMPATIBLE;
     }
     other = conflicting(index, 0);
     if (other >= 0) {

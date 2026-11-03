@@ -107,13 +107,30 @@ namespace SubVulpes
             return plugins.FirstOrDefault(p => p.Id == id);
         }
 
+        // Everything that the table and the detail panel show. A row with the same key needs no redraw.
+        static string PluginKey(PluginMetadata m)
+        {
+            return string.Join("|", new[] { m.Id, m.Version, m.Hash, m.PackageHash, m.State, m.Required, m.Reason, m.ManifestHash,
+                m.Runtime, m.Capabilities, m.Name, m.Description, m.Author, m.Homepage });
+        }
+
         void ReadPluginLine(string line)
         {
             PluginMetadata metadata = ParsePluginRow(line, false);
             if (metadata == null) return;
             int at = plugins.FindIndex(p => p.Id == metadata.Id);
+            if (at >= 0 && PluginKey(plugins[at]) == PluginKey(metadata)) return;
             if (at < 0) plugins.Add(metadata);
             else plugins[at] = metadata;
+            RebuildPlugins();
+        }
+
+        // A whole list at once. The table redraws one time, and not at all when nothing changed. This keeps the page from flickering.
+        void ReplacePlugins(List<PluginMetadata> fresh)
+        {
+            if (fresh.Count == plugins.Count && fresh.Zip(plugins, (a, b) => PluginKey(a) == PluginKey(b)).All(same => same)) return;
+            plugins.Clear();
+            plugins.AddRange(fresh);
             RebuildPlugins();
         }
 

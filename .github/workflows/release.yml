@@ -56,7 +56,9 @@ jobs:
         run: python -I tools/ci/check_repo.py
       - name: Build server and launcher
         shell: cmd
-        run: tools\build_hook.bat
+        run: |
+          set "SV_SERVER_VERSION=%RELEASE_TAG:~1%"
+          tools\build_hook.bat
       - name: Download and check server data
         id: data
         env:

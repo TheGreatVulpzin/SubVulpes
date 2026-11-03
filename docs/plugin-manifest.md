@@ -25,7 +25,7 @@ All keys sit in the section `[plugin]`. A key is lower case. A key that appears 
 | `license` | no | An SPDX identifier, such as `GPL-3.0-only`: 1 to 32 letters, digits, dots, plus signs and hyphens. |
 | `kind` | no | `plugin` (the default). The values `mod` and `bundle` are reserved and are refused for now. |
 | `side` | no | `server` (the default). The values `client` and `both` are reserved and are refused for now. |
-| `server_min` | no | The lowest server version that the plugin needs, such as `0.1.1`. Digits and dots, up to 23 characters. The server reads the key. It does not compare it yet, because the server program has no version number inside. |
+| `server_min` | no | The lowest server version that the plugin needs, such as `0.1.1`. Digits and dots, up to 23 characters. A server that is older than this version does not start the plugin. The state shows "The plugin needs a newer server." A suffix such as `-rc.1` does not count, so `0.2.0-rc.1` meets `0.2.0`. A development build has no version and accepts any plugin. Release builds carry the version of the tag. `subvulpes_server.exe --version` prints it. |
 | `tags` | no | Up to 5 tags separated by commas, with no spaces. A tag has 2 to 20 characters from `a-z`, `0-9` and the hyphen, and no tag repeats. The plugin catalog uses them to filter. |
 | `channel` | no | `stable` (the default), `beta` or `experimental`. The launcher hides the last two unless the user turns on Include Beta Versions. |
 | `entry` | no | Reserved for the main file of a script plugin. The server refuses it until script runtimes exist. |

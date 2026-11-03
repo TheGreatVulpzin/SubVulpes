@@ -10,6 +10,7 @@
 typedef struct {
     char id[SV_PLUGIN_ID_SIZE];
     char version[SV_PLUGIN_VERSION_SIZE];
+    char server_min[24];
     char path[MAX_PATH];
     char hash[65];
     uint32_t runtime, cap_mask;

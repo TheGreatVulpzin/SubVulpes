@@ -328,7 +328,7 @@ namespace SubVulpes
         TabControl mainTabs;
         readonly Dictionary<string, TabPage> pages = new Dictionary<string, TabPage>();
         readonly Dictionary<string, TabLabel> tabLabels = new Dictionary<string, TabLabel>();
-        Panel tabBar;
+        Panel tabBar, statusBar;
         ServerName serverName;
         StateLabel stateLabel;
         string serverState = "Stopped", speedStatus = NoSpeedText, playersStatus = NoPlayersText;
@@ -365,23 +365,30 @@ namespace SubVulpes
             BackColor = UI.T.Win;
             // The tab headers of the control stay hidden. The bar at the top of the window draws the tabs.
             mainTabs = new TabControl { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(0, 1), Padding = new Point(0, 0) };
-            message = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(8, 4, 8, 4), Tag = "muted" };
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(4) };
+            // The status bar sits at the bottom, in a tone a little stronger than the window. A message fades after a few seconds.
+            message = new Label { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty, BackColor = Color.Transparent };
+            statusBar = new Panel { Dock = DockStyle.Bottom, Height = 28, Padding = new Padding(14, 0, 14, 0), Tag = "subbar", BackColor = UI.T.SubBar };
+            message.ForeColor = UI.T.Muted;
+            statusBar.Controls.Add(message);
+            statusBar.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, Tag = "line" });
+            var fade = new Timer { Interval = 9000 };
+            fade.Tick += delegate { fade.Stop(); message.Text = ""; };
+            message.TextChanged += delegate { fade.Stop(); if (message.Text.Length > 0) fade.Start(); };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1, Padding = new Padding(4) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             // The tab control draws a frame of its own. It sits a little outside its holder, so that the holder clips the frame.
             var tabHolder = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
             mainTabs.Dock = DockStyle.None;
             tabHolder.Controls.Add(mainTabs);
             tabHolder.Resize += delegate { mainTabs.SetBounds(-4, -8, tabHolder.Width + 8, tabHolder.Height + 12); };
             layout.Controls.Add(tabHolder, 0, 0);
-            layout.Controls.Add(message, 0, 1);
             AddPage("Server", ServerPage());
             AddPage("Plugins", PluginsHost());
             AddPage(SettingsPageName, SettingsHost());
             AddPage("Help", HelpPage());
             Controls.Add(layout);
+            Controls.Add(statusBar);
             tabBar = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8, 0, 8, 0), BackColor = UI.T.Bar, Tag = "bar" };
             serverName = new ServerName("SubVulpes");
             tabBar.Controls.Add(serverName);
@@ -418,6 +425,35 @@ namespace SubVulpes
             clock.Start();
             FormClosing += OnClosing;
             Load += delegate { CleanOldLauncher(); };
+        }
+
+        // The name of a version, such as Kit for 0.2.0. The table is tools/release/version-names.csv, inside the program.
+        internal static string VersionName(string version)
+        {
+            Match m = Regex.Match(version ?? "", @"^v?(\d+)\.(\d+)\.\d+");
+            if (!m.Success) return "";
+            string exact = m.Groups[1].Value + "." + m.Groups[2].Value, major = m.Groups[1].Value, found = "";
+            string table;
+            using (var stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("SubVulpes.VersionNames"))
+            using (var reader = new StreamReader(stream, Encoding.UTF8))
+                table = reader.ReadToEnd();
+            foreach (string line in table.Replace("\r", "").Split('\n')) {
+                if (line.Length == 0 || line[0] == '#') continue;
+                string[] f = line.Split(new[] { ',' }, 4);
+                if (f.Length < 2) continue;
+                if (f[0] == exact) return f[1];
+                if (f[0] == major) found = f[1];
+            }
+            return found;
+        }
+
+        string AboutVersion()
+        {
+            string v = Path.Combine(folder, "version.txt");
+            string number = File.Exists(v) ? (File.ReadLines(v).FirstOrDefault() ?? "").Trim() : "";
+            if (number.Length == 0) return "Unknown";
+            string name = VersionName(number);
+            return name.Length > 0 ? number + " " + name : number;
         }
 
         string Version()
@@ -526,6 +562,7 @@ namespace SubVulpes
             browseButton.Enabled = server == null && !updating && !pluginBusy;
             presetBox.Enabled = server == null && !updating && !pluginBusy;
             nativeBypass.Enabled = server == null && !updating && !pluginBusy;
+            UpdateRestartBadges();
             RefreshStatus();
         }
 
@@ -868,7 +905,7 @@ namespace SubVulpes
         {
             if (pluginBusy || updating) return;
             if (server != null) {
-                ClearPlugins();
+                // The rows that come back replace the rows that exist. The list does not empty first.
                 SendPluginCommand("plugins list");
                 return;
             }
@@ -878,9 +915,14 @@ namespace SubVulpes
             try {
                 string output = await Task.Run(() => RunPluginTool(selectedFolder, "--plugins-list"));
                 if (selectedFolder != folder || server != null) return;
-                ClearPlugins();
-                foreach (string line in output.Replace("\r", "").Split('\n')) ReadPluginLine(line);
-                message.Text = "Plugin metadata read.";
+                var fresh = new List<PluginMetadata>();
+                foreach (string line in output.Replace("\r", "").Split('\n')) {
+                    PluginMetadata row = ParsePluginRow(line, false);
+                    if (row == null) continue;
+                    int same = fresh.FindIndex(p => p.Id == row.Id);
+                    if (same < 0) fresh.Add(row); else fresh[same] = row;
+                }
+                ReplacePlugins(fresh);
             } catch (Exception ex) {
                 message.Text = "Cannot list plugins: " + ex.Message;
             } finally { pluginBusy = false; SetState(serverState); }
@@ -1112,6 +1154,8 @@ namespace SubVulpes
                 // Remove the previous session before the server opens SV_LOG.
                 if (File.Exists(logFile)) File.Delete(logFile);
                 server.Start();
+                runValues = CurrentRestartValues();
+                UpdateRestartBadges();
                 server.BeginOutputReadLine();
                 server.BeginErrorReadLine();
                 started = lastSpeedLine = DateTime.Now;

@@ -286,6 +286,7 @@ namespace SubVulpes
             CheckStore();
             CheckUninstall();
             CheckCommunityCard();
+            CheckVersionNames();
             Console.WriteLine("Launcher update, backup, admin password, plugin metadata, Workshop and uninstall checks passed.");
         }
 
@@ -370,6 +371,14 @@ namespace SubVulpes
                 card.Allow.Checked = false;
                 if (card.InstallButton.Enabled) Fail("The card kept Install after the box was cleared.");
             }
+        }
+
+        static void CheckVersionNames()
+        {
+            string[][] cases = { new[] { "v0.2.0", "Kit" }, new[] { "v0.0.0-s3-smoke", "Kit" }, new[] { "v1.0.0-rc.1", "Arctic" }, new[] { "v1.3.2", "Fennec" },
+                new[] { "2.0.0", "Red" }, new[] { "v3.0.0", "" }, new[] { "nonsense", "" }, new[] { "", "" } };
+            foreach (string[] c in cases)
+                if (LauncherForm.VersionName(c[0]) != c[1]) Fail("The version name of " + c[0] + " is " + LauncherForm.VersionName(c[0]) + " and not " + c[1] + ".");
         }
 
         static void CheckUninstall()

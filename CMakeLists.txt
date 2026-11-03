@@ -16,6 +16,10 @@ add_executable(subvulpes-server
 target_include_directories(subvulpes-server PRIVATE
     src/include src/platform src/common src/net src/game src/plugins)
 target_compile_definitions(subvulpes-server PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
+set(SV_SERVER_VERSION "" CACHE STRING "The version that the server reports and compares with server_min (empty for a development build)")
+if(SV_SERVER_VERSION)
+    target_compile_definitions(subvulpes-server PRIVATE SV_SERVER_VERSION="${SV_SERVER_VERSION}")
+endif()
 target_compile_options(subvulpes-server PRIVATE /W4 /WX /utf-8)
 set_source_files_properties(${SV_GAME_SOURCES} PROPERTIES COMPILE_OPTIONS "/arch:IA32;/Z7")
 set_source_files_properties(src/game/ai_car.c
@@ -92,7 +96,7 @@ add_subdirectory(plugins/jukebox)
 set(SV_LAUNCHER "${CMAKE_SOURCE_DIR}/build/launcher/subvulpes_launcher.exe")
 add_custom_command(OUTPUT "${SV_LAUNCHER}"
     COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat"
-    DEPENDS tools/launcher/Launcher.cs tools/launcher/LauncherUi.cs tools/launcher/LauncherUiMore.cs tools/launcher/LauncherServer.cs tools/launcher/LauncherSettings.cs tools/launcher/LauncherPlugins.cs tools/launcher/LauncherHelp.cs tools/launcher/LauncherStore.cs tools/launcher/help.md tools/launcher/index-public.pem tools/launcher/build.bat tools/release/default-config.ini
+    DEPENDS tools/launcher/Launcher.cs tools/launcher/LauncherUi.cs tools/launcher/LauncherUiMore.cs tools/launcher/LauncherServer.cs tools/launcher/LauncherSettings.cs tools/launcher/LauncherPlugins.cs tools/launcher/LauncherHelp.cs tools/launcher/LauncherStore.cs tools/launcher/help.md tools/launcher/index-public.pem tools/release/version-names.csv tools/launcher/build.bat tools/release/default-config.ini
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" VERBATIM)
 add_custom_target(subvulpes-launcher ALL DEPENDS "${SV_LAUNCHER}")
 
@@ -288,7 +292,7 @@ if(BUILD_TESTING)
     set(SV_LAUNCHER_TEST "${CMAKE_SOURCE_DIR}/build/launcher/launcher-update-tests.exe")
     add_custom_command(OUTPUT "${SV_LAUNCHER_TEST}"
         COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat" test
-        DEPENDS tools/launcher/Launcher.cs tools/launcher/LauncherUi.cs tools/launcher/LauncherUiMore.cs tools/launcher/LauncherServer.cs tools/launcher/LauncherSettings.cs tools/launcher/LauncherPlugins.cs tools/launcher/LauncherHelp.cs tools/launcher/LauncherStore.cs tools/launcher/help.md tools/launcher/index-public.pem tools/launcher/build.bat tests/launcher_update_test.cs
+        DEPENDS tools/launcher/Launcher.cs tools/launcher/LauncherUi.cs tools/launcher/LauncherUiMore.cs tools/launcher/LauncherServer.cs tools/launcher/LauncherSettings.cs tools/launcher/LauncherPlugins.cs tools/launcher/LauncherHelp.cs tools/launcher/LauncherStore.cs tools/launcher/help.md tools/launcher/index-public.pem tools/release/version-names.csv tools/launcher/build.bat tests/launcher_update_test.cs
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" VERBATIM)
     add_custom_target(sv-launcher-tests ALL DEPENDS "${SV_LAUNCHER_TEST}")
     add_test(NAME launcher-update-paths COMMAND "${SV_LAUNCHER_TEST}" "${CMAKE_BINARY_DIR}")

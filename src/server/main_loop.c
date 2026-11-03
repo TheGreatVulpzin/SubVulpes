@@ -14,6 +14,7 @@
 #ifndef SR_STANDALONE
 #include "hook.h"
 #endif
+#include "../plugins/server_version.h"
 #include "block_mesh.h"
 #include "bonds.h"
 #include "bullets.h"
@@ -211,6 +212,8 @@ void __cdecl sr_dedicatedserverloop(void)
      * third tick in a row, the schedule restarts from now instead of catching up. */
     next = systemtimer();
     status_ms = next;
+    if (SV_SERVER_VERSION[0])
+        sv_log("SubVulpes server %s.", SV_SERVER_VERSION);
     sv_log("Server started on port %u.", (unsigned)(uint16_t)sr_bsdsocket.port);
     for (;;) {
 #ifdef SR_STANDALONE

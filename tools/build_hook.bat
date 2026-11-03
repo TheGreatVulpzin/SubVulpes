@@ -9,7 +9,8 @@ call "%VCVARS%" >nul 2>nul || (echo ERROR: vcvars32.bat not found & exit /b 1)
 cd /d "%~dp0.."
 if not exist build\server\.cmake\api\v1\query mkdir build\server\.cmake\api\v1\query
 type nul > build\server\.cmake\api\v1\query\codemodel-v2
-cmake -S . -B build\server -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release || exit /b 1
+if not defined SV_SERVER_VERSION set "SV_SERVER_VERSION="
+cmake -S . -B build\server -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release "-DSV_SERVER_VERSION=%SV_SERVER_VERSION%" || exit /b 1
 cmake --build build\server || exit /b 1
 echo OK: build\server\subvulpes_server.exe
 echo OK: build\launcher\subvulpes_launcher.exe

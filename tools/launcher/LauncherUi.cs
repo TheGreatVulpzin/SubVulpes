@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
@@ -559,18 +560,25 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; Frame(g, Width, Height, Parent);
             TextRenderer.DrawText(g, Title, UI.F(8.5f, FontStyle.Regular), new Point(14, 12), UI.T.Muted, TextFormatFlags.NoPadding);
-            int left = 46, right = Width - 20, top = 40, bottom = Height - 34; double lo = 58, hi = 63;
-            foreach (double v in Values) { lo = Math.Min(lo, Math.Floor(v)); hi = Math.Max(hi, Math.Ceiling(v)); }
+            int left = 46, right = Width - 20, top = 40, bottom = Height - 34;
             if (right - left < 40 || bottom - top < 20) return;
-            // The nominal lines stay. The lowest and highest lines show a wide range, when no other line is near.
-            var marks = new List<double> { 63, 61, 59 };
-            foreach (double edge in new[] { lo, hi }) if (!marks.Exists(m => Math.Abs(m - edge) * (bottom - top) / (hi - lo) < 14)) marks.Add(edge);
-            foreach (var m in marks)
+            // The scale holds 58 to 64 at least. A lower or higher value widens it. The lines sit at even steps, about one for each 28 pixels.
+            double lo = 58, hi = 64;
+            foreach (double v in Values) { lo = Math.Min(lo, v); hi = Math.Max(hi, v); }
+            double raw = (hi - lo) / Math.Max(2, (bottom - top) / 28), step = 100;
+            foreach (double candidate in new double[] { 1, 2, 5, 10, 20, 50 }) if (candidate >= raw) { step = candidate; break; }
+            lo = Math.Floor(lo / step) * step;
+            hi = Math.Ceiling(hi / step) * step;
+            // The dashed line is the usual speed of the server.
+            if (lo < 61 && hi > 61) {
+                int y61 = bottom - (int)((61 - lo) / (hi - lo) * (bottom - top));
+                using (var pen = new Pen(Color.FromArgb(140, UI.T.Line)) { DashStyle = DashStyle.Dash }) g.DrawLine(pen, left, y61, right, y61);
+            }
+            for (double m = lo; m <= hi + 0.001; m += step)
             {
-                if (m < lo || m > hi) continue;
                 int y = bottom - (int)((m - lo) / (hi - lo) * (bottom - top));
-                using (var pen = new Pen(Color.FromArgb(m == 61 ? 140 : 70, UI.T.Line)) { DashStyle = m == 61 ? DashStyle.Dash : DashStyle.Solid }) g.DrawLine(pen, left, y, right, y);
-                TextRenderer.DrawText(g, m.ToString(), UI.F(8f, FontStyle.Regular), new Rectangle(8, y - 8, left - 14, 16), UI.T.Muted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                using (var pen = new Pen(Color.FromArgb(70, UI.T.Line))) g.DrawLine(pen, left, y, right, y);
+                TextRenderer.DrawText(g, m.ToString("0", CultureInfo.InvariantCulture), UI.F(8f, FontStyle.Regular), new Rectangle(8, y - 8, left - 14, 16), UI.T.Muted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
             int n = Values.Length;
             if (n < 2) return;
@@ -581,15 +589,15 @@ namespace SubVulpes.Ui
             g.SetClip(new Rectangle(left - 4, top - 3, right - left + 8, bottom - top + 6));
             using (var fill = new GraphicsPath())
             {
-                fill.AddCurve(pts, 0.4f); fill.AddLine(pts[n - 1].X, pts[n - 1].Y, pts[n - 1].X, bottom); fill.AddLine(pts[n - 1].X, bottom, pts[0].X, bottom); fill.CloseFigure();
+                fill.AddCurve(pts, 0.3f); fill.AddLine(pts[n - 1].X, pts[n - 1].Y, pts[n - 1].X, bottom); fill.AddLine(pts[n - 1].X, bottom, pts[0].X, bottom); fill.CloseFigure();
                 using (var br = new LinearGradientBrush(new Rectangle(left, top - 1, right - left, bottom - top + 2), Color.FromArgb(120, UI.T.Accent), Color.FromArgb(0, UI.T.Accent), 90f)) g.FillPath(br, fill);
             }
-            using (var pen = new Pen(UI.T.Accent, 2.5f) { LineJoin = LineJoin.Round }) g.DrawCurve(pen, pts, 0.4f);
+            using (var pen = new Pen(UI.T.Accent, 2.5f) { LineJoin = LineJoin.Round }) g.DrawCurve(pen, pts, 0.3f);
             g.ResetClip();
             var last = pts[n - 1];
             using (var b = new SolidBrush(UI.T.Panel)) g.FillEllipse(b, last.X - 6, last.Y - 6, 12, 12);
             using (var b = new SolidBrush(UI.T.Accent)) g.FillEllipse(b, last.X - 4, last.Y - 4, 8, 8);
-            string label = Values[n - 1].ToString("0.0");
+            string label = Values[n - 1].ToString("0.0", CultureInfo.InvariantCulture);
             var lr = new Rectangle((int)last.X - 40, Math.Max(4, (int)last.Y - 30), 34, 20);
             using (var path = UI.Round(lr, 5)) using (var b = new SolidBrush(UI.T.Fg)) g.FillPath(b, path);
             TextRenderer.DrawText(g, label, UI.F(8.5f, FontStyle.Bold), lr, UI.T.Panel, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);

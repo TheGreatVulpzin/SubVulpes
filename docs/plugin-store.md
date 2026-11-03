@@ -185,7 +185,7 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 
 ## Workshop repository (built on 2026-11-03)
 
-https://github.com/TheGreatVulpzin/SubVulpes-Workshop is public. Done: the layout, CONTRIBUTING.md, CODEOWNERS, 	ools/build_index.py with 18 tests, the signing key, and the Action. The Action tests the script, refuses committed binaries, builds each plugin with its uild.ps1, asks the server to check each manifest, packs, writes index.json, signs it and replaces the branch dist. The first run passed and dist/index.json.sig verifies with the public key. The branch main needs a pull request, one approval from a code owner and a passing build. The owner can still bypass it. Murilo has a pending invitation. Not done: any content, the thumbnails with Pillow (tested only without it locally), the launcher client, and server_min.
+https://github.com/TheGreatVulpzin/SubVulpes-Workshop is public. Done: the layout, `CONTRIBUTING.md`, `CODEOWNERS`, `tools/build_index.py` with 18 tests, the signing key, and the Action. The Action tests the script, refuses committed binaries, builds each plugin with its `build.ps1`, asks the server to check each manifest, packs, writes `index.json`, signs it and replaces the branch `dist`. The branch `main` needs a pull request, one approval from a code owner and a passing build. The owner can still bypass it. Murilo has a pending invitation. The first content is `official/plugins/sv.jukebox`. Its source stays in the main repository, where its tests run. Its `build.ps1` downloads the source at a pinned commit, checks the SHA-256 of each file against `source.sha256`, and builds with the SDK. Until a server release knows the new manifest keys (`license`, `tags`), the Action fails at the manifest check, and `dist` keeps the last good index. Not done: the thumbnails with Pillow (tested only without it locally) and real icons.
 
 ## Launcher client (built on 2026-11-03)
 
@@ -205,7 +205,7 @@ Tests: signature (good, changed data, changed signature, another key, bad key), 
 Not done: moving `sv.jukebox` to the Workshop. The jukebox builds from the SDK with CMake, and its tests live in the main repository, so a move needs its own plan. The Workshop has no content yet. The short install card for the community and the unseen screens (the Workshop pages with real data) wait for the first content.
 ## Manifest renewal (server, installer, pack and launcher done on 2026-11-03)
 
-Done: the server reads and checks the new keys, the installer and `pack.ps1` carry the icon, the tests cover them, and the launcher shows the icon of an installed plugin. Not done: the official manifests (author, license and icon, which change their hashes), the real icons, the comparison of `server_min` (the server program has no version number inside yet), the `entry` runtime, and the Uninstall action.
+Done: the server reads and checks the new keys, the installer and `pack.ps1` carry the icon, the tests cover them, and the launcher shows the icon of an installed plugin. Not done: the official manifests (author, license and icon, which change their hashes), the real icons, the `entry` runtime, and the Uninstall action.
 
 The manifest (`docs/plugin-manifest.md`) already has `name`, `description`, `author` and `homepage`. The store needs these new keys. No other key changes. All of them are optional.
 

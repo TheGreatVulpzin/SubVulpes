@@ -1,5 +1,6 @@
 /* Check metadata and content approval before loading executable code. */
 #include "plugin_internal.h"
+#include "server_version.h"
 #include <bcrypt.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -88,6 +89,13 @@ int sv_plugin_version_at_least(const char *have, const char *want)
     return 1;
 }
 
+int sv_server_version_ok(const char *have, const char *want)
+{
+    if (!have || !have[0] || !want || !want[0])
+        return 1;
+    return sv_plugin_version_at_least(have, want);
+}
+
 static int absolute(const char *relative, char path[MAX_PATH])
 {
     DWORD n = GetFullPathNameA(relative, MAX_PATH, path, NULL);
@@ -155,6 +163,7 @@ static int metadata_folder(const char *folder, const char *id, SvModule *module,
     }
     strcpy(module->id, parsed.id);
     strcpy(module->version, parsed.version);
+    strcpy(module->server_min, parsed.server_min);
     strcpy(module->name, parsed.name);
     strcpy(module->description, parsed.description);
     strcpy(module->author, parsed.author);

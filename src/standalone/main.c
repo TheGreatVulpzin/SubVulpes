@@ -18,6 +18,7 @@
 #include "sr_math.h"
 #include "platform.h"
 #include "plugin_host.h"
+#include "server_version.h"
 
 
 void __cdecl sr_getpaths(void);
@@ -335,6 +336,10 @@ int main(int argc, char **argv)
     if (dev_folder && (native_bypass || (argc != 1 && (argc != 2 || strcmp(argv[1], "--plugins-check"))))) {
         fputs("Use --dev-plugins only for a server run or --plugins-check. Do not combine it with the native bypass.\n", stderr);
         return 2;
+    }
+    if (argc == 2 && !strcmp(argv[1], "--version")) {
+        puts(SV_SERVER_VERSION[0] ? SV_SERVER_VERSION : "development");
+        return 0;
     }
     if (argc > 1) {
         if (dev_folder && !sv_plugin_dev_start(dev_folder))
