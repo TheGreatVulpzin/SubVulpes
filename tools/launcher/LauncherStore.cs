@@ -1,6 +1,7 @@
 // The Workshop client: the signed index, the cache, the downloads and the installs that wait for the next start.
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -10,6 +11,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
+using System.Windows.Forms;
 
 namespace SubVulpes
 {
@@ -322,7 +324,7 @@ namespace SubVulpes
                 if (catalogList != null && catalogList.Visible) RenderCatalog();
                 return;
             }
-            await InstallPlugin(target, c.Sha256, c.Source == "Official");
+            await InstallPlugin(target, c.Sha256, c.Source);
         }
 
         // The installs that wait for a server that runs are in a small file, so a closed launcher keeps them.
@@ -355,8 +357,60 @@ namespace SubVulpes
             var work = pendingInstalls.ToList();
             pendingInstalls.Clear();
             SavePendingInstalls();
-            foreach (string[] item in work) await InstallPlugin(item[0], item[1], item[2] == "Official");
+            foreach (string[] item in work) await InstallPlugin(item[0], item[1], item[2]);
             StartServer();
+        }
+
+        // The short card for a plugin of the community: who made it, what it can do, and one box that allows it to run.
+        bool ReviewCommunityCard(PluginMetadata metadata)
+        {
+            using (var card = new CommunityCard(metadata))
+                return card.ShowDialog(this) == DialogResult.OK;
+        }
+
+        internal sealed class CommunityCard : Form
+        {
+            internal readonly CheckBox Allow;
+            internal readonly Button InstallButton;
+
+            internal CommunityCard(PluginMetadata m)
+            {
+                Text = "Install " + m.DisplayName;
+                StartPosition = FormStartPosition.CenterParent;
+                Font = SystemFonts.MessageBoxFont;
+                ClientSize = new Size(480, 330);
+                FormBorderStyle = FormBorderStyle.FixedDialog;
+                MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; KeyPreview = true;
+                var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(14) };
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                for (int i = 0; i < 5; i++) table.RowStyles.Add(new RowStyle(i == 2 ? SizeType.Percent : SizeType.AutoSize, i == 2 ? 100 : 0));
+                var title = new Label { Text = m.DisplayName + " " + m.Version, AutoSize = true, UseMnemonic = false, Font = new Font(Font.FontFamily, Font.Size + 2f, FontStyle.Bold), Margin = new Padding(3, 3, 3, 4) };
+                string by = (m.Author.Length == 0 ? "Author not stated" : "By " + m.Author) + ". Community plugin.";
+                var info = new Label { Text = by + (m.Description.Length > 0 ? "\r\n" + m.Description : ""), AutoSize = true, MaximumSize = new Size(440, 0), UseMnemonic = false, Margin = new Padding(3, 3, 3, 10) };
+                var can = new RichTextBox { ReadOnly = true, Dock = DockStyle.Fill, BackColor = SystemColors.Window, BorderStyle = BorderStyle.FixedSingle, DetectUrls = false, TabStop = false };
+                foreach (PluginDanger danger in m.Dangers.OrderByDescending(d => d.Level == "highest" ? 2 : d.Level == "high" ? 1 : 0)) {
+                    can.SelectionColor = PluginDangerColor(danger.Level);
+                    can.AppendText(danger.Capability + " (" + danger.Level + "): " + danger.Text + "\r\n");
+                }
+                can.SelectionStart = 0; can.SelectionLength = 0;
+                Allow = new CheckBox { Text = "Allow this plugin to run on my server", AutoSize = true, Checked = false, ForeColor = Color.DarkRed, Margin = new Padding(3, 12, 3, 8) };
+                var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
+                InstallButton = new Button { Text = "Install", AutoSize = true, Enabled = false };
+                var cancel = new LinkLabel { Text = "Cancel", AutoSize = true, Margin = new Padding(12, 8, 12, 3) };
+                cancel.LinkClicked += delegate { DialogResult = DialogResult.Cancel; Close(); };
+                Allow.CheckedChanged += delegate { InstallButton.Enabled = CanApprovePlugin(m.Runtime, Allow.Checked); };
+                InstallButton.Click += delegate { if (CanApprovePlugin(m.Runtime, Allow.Checked)) { DialogResult = DialogResult.OK; Close(); } };
+                actions.Controls.Add(InstallButton);
+                actions.Controls.Add(cancel);
+                table.Controls.Add(title, 0, 0);
+                table.Controls.Add(info, 0, 1);
+                table.Controls.Add(can, 0, 2);
+                table.Controls.Add(Allow, 0, 3);
+                table.Controls.Add(actions, 0, 4);
+                Controls.Add(table);
+                AcceptButton = InstallButton;
+                KeyDown += (sender, e) => { if (e.KeyCode == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); } };
+            }
         }
     }
 }

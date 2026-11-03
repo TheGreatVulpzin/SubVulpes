@@ -113,8 +113,9 @@ jobs:
           PACKAGE_ZIP: ${{ steps.package.outputs.zip }}
           PACKAGE_CHECKSUM: ${{ steps.package.outputs.checksum }}
         run: |
+          $info = & .\tools\release\version_name.ps1 -Version $env:RELEASE_TAG
           $arguments = @('release', 'create', $env:RELEASE_TAG, '--verify-tag',
-            '--title', "SubVulpes Server $env:RELEASE_TAG", '--notes-file', 'build/package/release-notes.md',
+            '--title', "SubVulpes Server $($info.Title -replace '^SubVulpes ', '')", '--notes-file', 'build/package/release-notes.md',
             $env:PACKAGE_ZIP, $env:PACKAGE_CHECKSUM)
           if ($env:RELEASE_TAG.Contains('-')) { $arguments += @('--prerelease', '--latest=false') }
           & gh @arguments

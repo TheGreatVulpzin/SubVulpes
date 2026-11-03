@@ -1,4 +1,4 @@
-{summary}
+{picture}{summary}
 
 **Download:** `SubVulpes-server-{version}.zip`
 SHA-256: `{sha256}`

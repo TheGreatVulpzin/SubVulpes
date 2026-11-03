@@ -285,6 +285,7 @@ namespace SubVulpes
             CheckPluginApproval();
             CheckStore();
             CheckUninstall();
+            CheckCommunityCard();
             Console.WriteLine("Launcher update, backup, admin password, plugin metadata, Workshop and uninstall checks passed.");
         }
 
@@ -356,6 +357,19 @@ namespace SubVulpes
                     File.WriteAllBytes(file, new byte[] { 1, 2, 3 });
                 }
             } finally { Directory.Delete(dir, true); }
+        }
+
+        // The short card of a community plugin: Install stays off until the user allows the plugin to run.
+        static void CheckCommunityCard()
+        {
+            var metadata = new LauncherForm.PluginMetadata { Id = "ann.two", Version = "0.1.0", Runtime = "native", Name = "Two", Author = "Ann" };
+            using (var card = new LauncherForm.CommunityCard(metadata)) {
+                if (card.InstallButton.Enabled) Fail("The card allowed Install before the box was checked.");
+                card.Allow.Checked = true;
+                if (!card.InstallButton.Enabled) Fail("The card refused Install after the box was checked.");
+                card.Allow.Checked = false;
+                if (card.InstallButton.Enabled) Fail("The card kept Install after the box was cleared.");
+            }
         }
 
         static void CheckUninstall()

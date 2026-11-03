@@ -409,6 +409,9 @@ namespace SubVulpes
             return card;
         }
 
+        // The buttons of a card have one width, so that they line up from card to card.
+        const int ActionWidth = 108;
+
         // The Install button, or the mark of a plugin that is installed already.
         Control CatalogAction(CatalogEntry c)
         {
@@ -416,20 +419,19 @@ namespace SubVulpes
             if (pendingInstalls.Any(x => x[3] == c.Id)) return L("Installs at the next start", false, true);
             if (installed != null) {
                 // An installed plugin shows its state, an Update button when the Workshop has a newer version, and Uninstall.
-                var row = new Panel { BackColor = Color.Transparent };
-                var uninstall = new FlatButton("Uninstall") { Enabled = installed.Required != "1" };
+                var row = new Panel { Tag = "panel" };
+                var uninstall = new FlatButton("Uninstall") { Enabled = installed.Required != "1", Width = ActionWidth };
                 string id = c.Id;
                 uninstall.Click += async delegate { await UninstallPlugin(id); ReshowCatalog(c); };
                 int left;
                 if (c.Remote && NewerVersion(c.Version, installed.Version)) {
-                    var update = new FlatButton("Update") { Glyph = "download", Location = new Point(0, 0) };
+                    var update = new FlatButton("Update") { Glyph = "download", Location = new Point(0, 0), Width = ActionWidth };
                     update.Click += async delegate { await InstallFromStore(c); ReshowCatalog(c); };
                     row.Controls.Add(update);
                     left = update.Width;
                 } else {
                     var done = L("✓ Installed", false, false);
                     done.Tag = "ok";
-                    done.BackColor = Color.Transparent;
                     done.Location = new Point(0, (uninstall.Height - done.PreferredHeight) / 2);
                     row.Controls.Add(done);
                     left = done.PreferredWidth;
@@ -440,12 +442,12 @@ namespace SubVulpes
                 return row;
             }
             if (c.Remote) {
-                var get = new FlatButton("Install") { Glyph = "download" };
+                var get = new FlatButton("Install") { Glyph = "download", Width = ActionWidth };
                 get.Click += async delegate { await InstallFromStore(c); ReshowCatalog(c); };
                 return get;
             }
             string package = CatalogPackage(c);
-            var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null };
+            var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null, Width = ActionWidth };
             if (package == null) UI.Tips.SetToolTip(install, "The package file of this plugin is not on this computer.");
             install.Click += async delegate { await InstallPlugin(package); ReshowCatalog(c); };
             return install;

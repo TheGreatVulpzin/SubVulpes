@@ -34,9 +34,13 @@ if ([string]::IsNullOrWhiteSpace($Summary)) {
 $changelog = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $ChangelogFile)).Trim()
 # Keep generated changes inside the template section.
 $changelog = [regex]::Replace($changelog, '(?m)^#{1,6}\s+.*(?:\r?\n|$)', '').Trim()
-$values = @{ version = $Version; summary = $Summary.Trim(); sha256 = $hash; changelog = $changelog }
+# A new minor version shows its picture and a caption. Other releases show none.
+$info = & (Join-Path $PSScriptRoot 'version_name.ps1') -Version $Version
+$picture = ''
+if ($info.Picture) { $picture = '<img src="' + $info.Picture + '" alt="' + $info.Name + '" width="220" align="right">' + "`n`n" + '*' + $info.Caption + '*' + "`n`n" }
+$values = @{ version = $Version; summary = $Summary.Trim(); sha256 = $hash; changelog = $changelog; picture = $picture }
 $template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'release-notes.md'))
-$body = [regex]::Replace($template, '\{(version|summary|sha256|changelog)\}', {
+$body = [regex]::Replace($template, '\{(version|summary|sha256|changelog|picture)\}', {
     param($match)
     $values[$match.Groups[1].Value]
 })
