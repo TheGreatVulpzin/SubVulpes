@@ -235,6 +235,24 @@ namespace SubVulpesMockup
         }
     }
 
+    // A small orange pill with the restart icon. It tells that a setting needs a restart of the server.
+    class Badge : Control
+    {
+        readonly string text;
+        public Badge(string text)
+        {
+            this.text = text; Height = 24; SetStyle(UI.Paint, true);
+            Width = 8 + 13 + 5 + TextRenderer.MeasureText(text, UI.F(9f, FontStyle.Regular), new Size(999, 30), TextFormatFlags.NoPadding).Width + 10;
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 12)) using (var b = new SolidBrush(Icons.Blend(UI.T.Win, UI.T.Warn, 0.16))) g.FillPath(b, path);
+            Svg.Draw(g, "restart", new RectangleF(8, (Height - 13) / 2f, 13, 13), UI.T.Warn);
+            TextRenderer.DrawText(g, text, UI.F(9f, FontStyle.Regular), new Rectangle(26, 0, Width - 26, Height), UI.T.Warn, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+    }
+
     class Avatar : Control
     {
         public Avatar(string text) { Text = text; Size = new Size(44, 44); SetStyle(UI.Paint, true); }
@@ -754,7 +772,7 @@ namespace SubVulpesMockup
         {
             var t = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 4 };
             t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 240)); t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
-            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
             return t;
         }
 
@@ -763,14 +781,12 @@ namespace SubVulpesMockup
             int row = t.RowCount++; t.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
             var lab = L(label, true, false); lab.Anchor = AnchorStyles.Left; t.Controls.Add(lab, 0, row);
             if (help != null) { var h = new HelpIcon(help) { Anchor = AnchorStyles.Left }; t.Controls.Add(h, 1, row); }
-            input.Anchor = AnchorStyles.Left; input.Margin = new Padding(0); t.Controls.Add(input, 2, row);
+            input.Anchor = AnchorStyles.Left; input.Margin = new Padding(0);
+            Control cell = input;
+            if (hint != null) cell = Inline(input, new Badge(hint) { Margin = new Padding(12, 2, 0, 0) });  // the badge sits right next to the field
+            cell.Anchor = AnchorStyles.Left; t.Controls.Add(cell, 2, row);
             var right = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
             var saved = L("Saved ✓", false, false); saved.Tag = "ok"; saved.Visible = false; saved.Margin = new Padding(0, 0, 10, 0);
-            if (hint != null)
-            {
-                var h2 = L("↻ " + hint, false, false); h2.Tag = "restart"; h2.Padding = new Padding(8, 3, 8, 3); h2.Font = UI.F(9f, FontStyle.Regular); h2.Margin = new Padding(0, 0, 10, 0);
-                right.Controls.Add(h2);
-            }
             right.Controls.Add(saved); t.Controls.Add(right, 3, row);
             if (autosave)
             {
@@ -986,11 +1002,11 @@ namespace SubVulpesMockup
                 AddRow(t, "Admin password", "In the game, type /admin and this password.", Inline(pw, new FlatButton("Show") { Margin = new Padding(8, 0, 0, 0) }), null, true);
                 AddRow(t, "Welcome text", "Shown to players in the in-game newspaper (readme.txt).", new TextField(380, true) { Text = "Welcome to the test server." }, null, true);
                 Section(t, "Network");
-                AddRow(t, "Port", "Forward this UDP port on your router.", TB("27584", 100), "Requires restart", true);
+                AddRow(t, "Port", "Forward this UDP port on your router.", TB("27584", 100), "Restart to apply", true);
                 AddRow(t, "Upload limit", "Shared by all players, in bytes per second.", TB("100000", 120), null, true);
                 Section(t, "Game");
-                AddRow(t, "Game mode", null, Combo(160, "Round", "World"), "Requires restart", true);
-                AddRow(t, "Max players", null, TB("16", 80), "Requires restart", true);
+                AddRow(t, "Game mode", null, Combo(160, "Round", "World"), "Restart to apply", true);
+                AddRow(t, "Max players", null, TB("16", 80), "Restart to apply", true);
                 AddRow(t, "Round time", "Minutes in Round mode.", TB("7", 80), null, true);
             });
         }
@@ -1000,7 +1016,7 @@ namespace SubVulpesMockup
             return SettingsPage(delegate (TableLayoutPanel t)
             {
                 Section(t, "Server");
-                AddRow(t, "Server folder", null, Inline(TB("C:\\SubVulpes-server", 320), new FlatButton("Browse…") { Margin = new Padding(8, 0, 0, 0) }, new FlatButton("Open Folder") { Margin = new Padding(8, 0, 0, 0) }), null, false);
+                AddRow(t, "Server folder", null, Inline(TB("C:\\SubVulpes-server", 240), new FlatButton("Browse…") { Margin = new Padding(8, 0, 0, 0) }, new FlatButton("Open Folder") { Margin = new Padding(8, 0, 0, 0) }), null, false);
                 Section(t, "Updates");
                 AddRow(t, "Check now", "Looks for a newer version on GitHub.", Inline(new FlatButton("Check for Updates"), new FlatButton("Update from .ZIP") { Margin = new Padding(0) }), null, false);
                 AddRow(t, "Include Beta Versions", "Includes beta versions. They can still contain bugs.", new Switch(), null, true);
@@ -1035,7 +1051,7 @@ namespace SubVulpesMockup
             host.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
             var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
-            string[] names = { "Installed", "Browse" };
+            string[] names = { "My Plugins", "Catalog" };
             Control[] subs = { PluginsPage(), BrowsePage() };
             showPluginSub = delegate (int k)
             {
@@ -1214,8 +1230,11 @@ namespace SubVulpesMockup
             var p = plugins[sel];
             detail.SuspendLayout(); detail.Controls.Clear();
             var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Width = 340, Padding = new Padding(0, 14, 0, 0), Tag = "panel" };
-            var title = L(p.Name, true, false); title.Font = UI.F(13f, FontStyle.Bold); title.Margin = new Padding(0, 0, 0, 2); flow.Controls.Add(title);
-            var sub = L(p.Version + " · " + p.By, false, true); sub.Margin = new Padding(0, 0, 0, 10); flow.Controls.Add(sub);
+            // The icon of the plugin comes from its package. The first letter stands in when there is none.
+            var header = new Panel { Width = 340, Height = 56, Tag = "panel", Margin = new Padding(0, 0, 0, 8) };
+            var title = L(p.Name, true, false); title.Font = UI.F(13f, FontStyle.Bold); title.Location = new Point(56, 5);
+            var sub = L(p.Version + " · " + p.By, false, true); sub.Location = new Point(56, 31);
+            header.Controls.Add(new Avatar(p.Name) { Location = new Point(0, 6) }); header.Controls.Add(title); header.Controls.Add(sub); flow.Controls.Add(header);
             if (detailTab == 0)
             {
                 var d = L(p.Desc, false, false); d.MaximumSize = new Size(330, 0); d.Margin = new Padding(0, 0, 0, 12); flow.Controls.Add(d);
@@ -1255,13 +1274,22 @@ namespace SubVulpesMockup
             {
                 var tbl = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Tag = "panel", Margin = new Padding(0, 0, 0, 12) };
                 tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+                var save = new FlatButton("Save") { Kind = "primary", Enabled = false, Margin = new Padding(0, 0, 8, 0) };
+                var revert = new FlatButton("Revert") { Enabled = false, Margin = new Padding(0) };
+                var done = L("Saved ✓", false, false); done.Tag = "ok"; done.Visible = false; done.Margin = new Padding(12, 8, 0, 0);
                 foreach (var s in p.Settings)
                 {
                     int row = tbl.RowCount++; tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
                     var lab = L(s[0], false, false); lab.Anchor = AnchorStyles.Left; tbl.Controls.Add(lab, 0, row);
                     var tb = TB(s[1], 180); tbl.Controls.Add(tb, 1, row);
+                    tb.TextChanged += delegate { save.Enabled = true; revert.Enabled = true; done.Visible = false; save.Invalidate(); revert.Invalidate(); };
                 }
                 flow.Controls.Add(tbl);
+                // The settings of a plugin are saved with a button.
+                save.Click += delegate { save.Enabled = false; revert.Enabled = false; done.Visible = true; save.Invalidate(); revert.Invalidate(); };
+                revert.Click += delegate { RenderDetail(); };
+                var bar = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Tag = "panel", Margin = new Padding(0) };
+                bar.Controls.Add(save); bar.Controls.Add(revert); bar.Controls.Add(done); flow.Controls.Add(bar);
             }
             detail.Controls.Add(flow);
             var strip = new Panel { Dock = DockStyle.Top, Height = 38, Tag = "panel" };
@@ -1328,7 +1356,7 @@ namespace SubVulpesMockup
         static readonly string[][] HelpDocs = {
             new[] { "Getting Started", "# Getting Started\nThis launcher starts and watches your SubVulpes server.\n## First start\n- Open **Settings** and pick a server folder.\n- Set a name and an admin password.\n- Go to **Server** and press **Start**.\n## Join the game\nPlayers join with the address of your computer and the port in **Settings**. Open the UDP port in your router.\n" },
             new[] { "The Server Page", "# The Server Page\nThe top row shows the state of the server and the buttons.\n- **Start** starts the server.\n- **Stop** asks the server to save and close.\n- **Restart** stops the server and starts it again.\n- **Kill** ends the server at once. Use it only if Stop does not work.\n## Tick rate\nThe server runs about 60 ticks per second. A much lower number means lag.\n## Customize the panel\nSelect the sliders icon to choose which values and graphs the panel shows. Drag the line below the panel to change its height.\n" },
-            new[] { "Plugins", "# Plugins\nPlugins add features to the server.\n## Risk\n- **low**: reads data.\n- **high**: changes the game.\n- **highest**: runs inside the server with full access to it.\nTurn on only plugins that you trust.\n## Install\nOpen **Browse** to find plugins, or use `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.\n" },
+            new[] { "Plugins", "# Plugins\nPlugins add features to the server.\n## Risk\n- **low**: reads data.\n- **high**: changes the game.\n- **highest**: runs inside the server with full access to it.\nTurn on only plugins that you trust.\n## Install\nOpen **Catalog** to find plugins, or use `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.\n" },
             new[] { "Settings", "# Settings\nThe launcher saves each change at once.\n## Requires restart\nThe launcher saves the setting. The server uses it after the next restart.\n## Diagnostics mode\nChooses what the launcher records while the server runs. **Normal** records the tick rate.\n## Memory dump\nA file with a copy of the server memory. Send it to the developers to help find the cause of a crash or a hang.\n" },
             new[] { "Problems", "# Problems\n## The server does not start\nRead the last lines in the console. Make sure that no other server uses the same port.\n## The server crashes\nThe launcher saves a minidump in the log folder. Send it with the log.\n## Logs\nEach start of the server makes a new log folder. Old logs are in the Server tab.\n```\nlogs\\2026-11-02_20-50\n```\n" } };
 
