@@ -195,7 +195,16 @@ namespace SubVulpes
 
         void ShowPluginSub(int k)
         {
-            if (k == 1) { LoadCatalog(); RenderCatalog(); }
+            if (k == 1) {
+                // The saved catalog shows at once. The Workshop answers a moment later.
+                if (!storeAsked && storeEntries.Count == 0) {
+                    string saved = ReadStoreCache(StoreCacheFolder());
+                    try { if (saved != null) storeEntries.AddRange(ParseStoreIndex(saved, StoreCacheFolder())); } catch (Exception) { }
+                }
+                LoadCatalog();
+                RenderCatalog();
+                if (!storeAsked) { var read = RefreshStore(); }
+            }
             for (int n = 0; n < pluginSubPages.Count; n++) {
                 pluginSubPages[n].Visible = n == k;
                 pluginSubTabs[n].Selected = n == k;
@@ -206,10 +215,14 @@ namespace SubVulpes
         // ------------------------------------------------------------ catalog
 
         // One plugin of catalog.json. Icon and Images are picture files, File is the package. A path is in the server folder, or absolute.
-        sealed class CatalogEntry
+        // An entry of the Workshop (Remote) has its package in the Workshop. Its Icon and Images are files in the cache.
+        internal sealed class CatalogEntry
         {
             public string Id = "", Name = "", Description = "", Author = "", Version = "", Source = "", File = "", Icon = "";
-            public readonly List<string> Images = new List<string>();
+            public string Channel = "stable", License = "", PackageFile = "", Sha256 = "", IconRemote = "";
+            public long Size;
+            public bool Remote;
+            public readonly List<string> Images = new List<string>(), ImageRemote = new List<string>();
         }
 
         readonly List<CatalogEntry> catalog = new List<CatalogEntry>();
@@ -235,6 +248,16 @@ namespace SubVulpes
             foreach (Image picture in catalogPictures.Values) if (picture != null) picture.Dispose();
             catalogPictures.Clear();
             catalogProblem = "";
+            ReadLocalCatalog();
+            // The Workshop adds what the local file does not name. A beta or experimental plugin shows only with Include Beta Versions.
+            foreach (CatalogEntry e in storeEntries)
+                if (catalog.All(c => c.Id != e.Id) && (e.Channel == "stable" || previewsBox.On)) catalog.Add(e);
+            if (catalogProblem.Length == 0) catalogProblem = storeProblem;
+        }
+
+        // catalog.json in the server folder is for developers and for tests. Its entries come first.
+        void ReadLocalCatalog()
+        {
             string path = Path.Combine(folder, "catalog.json");
             if (!System.IO.File.Exists(path)) return;
             try {
@@ -333,8 +356,11 @@ namespace SubVulpes
             catalogKind.SelectedIndex = 0;
             catalogSearch.TextChanged += delegate { RenderCatalog(); };
             catalogKind.SelectedIndexChanged += delegate { RenderCatalog(); };
+            var reload = new FlatButton("Refresh") { Glyph = "refresh", Location = new Point(434, 6) };
+            reload.Click += async delegate { await RefreshStore(); };
             catalogBar.Controls.Add(catalogSearch);
             catalogBar.Controls.Add(catalogKind);
+            catalogBar.Controls.Add(reload);
             catalogList = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
             catalogDetail = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Visible = false };
             page.Controls.Add(catalogList);
@@ -370,7 +396,7 @@ namespace SubVulpes
             var card = new Surface { Dock = DockStyle.Top, Height = 150 };
             string why = catalogProblem.Length > 0 ? catalogProblem :
                 catalog.Count > 0 ? "No plugin matches the search." :
-                "Put a file named catalog.json in the server folder to list plugins here. Each plugin has an id, a name, a description, a version, a source and a package file. Or install a plugin from a file.";
+                "The Workshop has no plugin that this launcher can show, and no saved catalog exists yet. Select Refresh when the computer is online. Or install a plugin from a file.";
             var title = L(catalog.Count > 0 ? "Nothing to show" : "The catalog is empty", true, false);
             title.Font = UI.F(11f, FontStyle.Bold);
             title.Location = new Point(24, 22);
@@ -386,10 +412,22 @@ namespace SubVulpes
         // The Install button, or the mark of a plugin that is installed already.
         Control CatalogAction(CatalogEntry c)
         {
-            if (plugins.Any(p => p.Id == c.Id)) {
+            PluginMetadata installed = plugins.FirstOrDefault(p => p.Id == c.Id);
+            if (pendingInstalls.Any(x => x[3] == c.Id)) return L("Installs at the next start", false, true);
+            if (installed != null && c.Remote && NewerVersion(c.Version, installed.Version)) {
+                var update = new FlatButton("Update") { Glyph = "download" };
+                update.Click += async delegate { await InstallFromStore(c); };
+                return update;
+            }
+            if (installed != null) {
                 var done = L("✓ Installed", false, false);
                 done.Tag = "ok";
                 return done;
+            }
+            if (c.Remote) {
+                var get = new FlatButton("Install") { Glyph = "download" };
+                get.Click += async delegate { await InstallFromStore(c); };
+                return get;
             }
             string package = CatalogPackage(c);
             var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null };
@@ -435,6 +473,8 @@ namespace SubVulpes
         // The page of one plugin: icon, author, description, a large picture and a row of small ones, like a mod site.
         void ShowCatalogDetail(CatalogEntry c)
         {
+            // The large pictures of a Workshop plugin load once. The page shows again when they arrive.
+            if (c.Remote && c.Images.Any(p => !System.IO.File.Exists(p)) && storeImagesAsked.Add(c.Id)) { var fetch = FetchStoreImages(c); }
             catalogBar.Visible = false;
             catalogList.Visible = false;
             catalogDetail.SuspendLayout();
@@ -635,11 +675,78 @@ namespace SubVulpes
             toggle.Click += delegate { ToggleFromTable(p); };
             review.Click += async delegate { await ApprovePlugin(id); };
             copy.Click += delegate { Clipboard.SetText(id); message.Text = "Copied: " + id; };
+            var remove = new ToolStripMenuItem("Remove…") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+            remove.Click += async delegate { await RemovePlugin(id); };
             menu.Items.Add(toggle);
             menu.Items.Add(review);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(copy);
+            menu.Items.Add(remove);
             menu.Show(Cursor.Position);
+        }
+
+        // The ids of the installed plugins that name this id in `dependencies=`. They need it, so it must stay.
+        internal static string PluginNeededBy(string serverFolder, string id)
+        {
+            var users = new List<string>();
+            string root = Path.Combine(serverFolder, "plugins");
+            if (!Directory.Exists(root)) return "";
+            foreach (string dir in Directory.GetDirectories(root)) {
+                string other = Path.GetFileName(dir), ini = Path.Combine(dir, "plugin.ini");
+                if (other == id || !System.IO.File.Exists(ini) || new FileInfo(ini).Length > 65536) continue;
+                Match m = Regex.Match(System.IO.File.ReadAllText(ini, Encoding.ASCII), @"(?m)^dependencies=(.*)$");
+                if (m.Success && m.Groups[1].Value.Split(',').Any(d => d.Split('@')[0].Trim() == id)) users.Add(other);
+            }
+            return string.Join(", ", users.ToArray());
+        }
+
+        // A key=value line of an ini file goes away. The other lines stay as they are.
+        static void RemoveIniKey(string path, string key)
+        {
+            if (!System.IO.File.Exists(path)) return;
+            string text = System.IO.File.ReadAllText(path, Encoding.Default);
+            string[] lines = text.Replace("\r\n", "\n").Split('\n');
+            string[] kept = lines.Where(l => !l.StartsWith(key + "=", StringComparison.Ordinal)).ToArray();
+            if (kept.Length != lines.Length) System.IO.File.WriteAllText(path, string.Join("\r\n", kept), Encoding.Default);
+        }
+
+        // Deletes the folder of a plugin, its line in plugins.ini and its approvals. The data of the plugin in user\plugins stays.
+        internal static void RemovePluginFiles(string serverFolder, string id)
+        {
+            if (!PluginId(id)) throw new IOException("The identifier of the plugin is not valid.");
+            string root = Path.GetFullPath(Path.Combine(serverFolder, "plugins"));
+            string dir = Path.GetFullPath(Path.Combine(root, id));
+            if (!dir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new IOException("The folder is outside the plugins folder.");
+            if (Directory.Exists(dir)) {
+                if ((new DirectoryInfo(dir).Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("The plugin folder is a link.");
+                Directory.Delete(dir, true);
+            }
+            RemoveIniKey(Path.Combine(root, "plugins.ini"), id);
+            RemoveIniKey(Path.Combine(serverFolder, "user", "plugins", "approvals.ini"), id);
+            RemoveIniKey(Path.Combine(serverFolder, "user", "plugins", "native-approvals.ini"), id);
+        }
+
+        async Task RemovePlugin(string id)
+        {
+            if (pluginBusy || updating) return;
+            id = PluginActionId(id);
+            if (id == null) return;
+            if (server != null) { message.Text = "Stop the server before you remove a plugin."; return; }
+            PluginMetadata p = FindPlugin(id);
+            string name = p != null ? p.DisplayName : id;
+            if (p != null && p.Required == "1") { message.Text = name + " is required. It cannot be removed."; return; }
+            string selectedFolder = folder;
+            string needed = PluginNeededBy(selectedFolder, id);
+            if (needed.Length > 0) { message.Text = name + " is needed by " + needed + ". Remove that plugin first."; return; }
+            if (MessageBox.Show(this, "Remove " + name + "? Its folder and its approval are deleted. The data that it saved stays.",
+                AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            pluginBusy = true; SetState(serverState);
+            try {
+                await Task.Run(() => RemovePluginFiles(selectedFolder, id));
+                message.Text = name + " is removed.";
+            } catch (Exception ex) { message.Text = "Cannot remove the plugin: " + ex.Message; }
+            finally { pluginBusy = false; SetState(serverState); }
+            await RefreshPlugins();
         }
 
         void ToggleFromTable(PluginMetadata p)
@@ -747,8 +854,11 @@ namespace SubVulpes
             var review = new FlatButton("Review approval…") { Margin = new Padding(0) };
             string id = p.Id;
             review.Click += async delegate { await ApprovePlugin(id); };
+            var remove = new FlatButton("Remove…") { Enabled = p.Required != "1" };
+            remove.Click += async delegate { await RemovePlugin(id); };
             acts.Controls.Add(update);
             acts.Controls.Add(review);
+            acts.Controls.Add(remove);
             flow.Controls.Add(acts);
         }
 

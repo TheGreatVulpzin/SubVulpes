@@ -402,6 +402,7 @@ namespace SubVulpes
             SetDebugMode(debugModeBox.On);
 
             LoadSettings();
+            LoadPendingInstalls();
             ShowServerName();
             string saved = settings.Get("preset", Presets[0].Name);
             presetBox.SelectedItem = Presets.FirstOrDefault(p => p.Name == saved) ?? Presets[0];
@@ -993,7 +994,9 @@ namespace SubVulpes
         }
 
         // The package comes from the catalog, or from a file that the user chooses.
-        async Task InstallPlugin(string given = null)
+        // A package from the Workshop has the hash of the signed catalog (expectedHash). It must match what the server reads.
+        // When skipReview is true, the package is official and the review window does not show.
+        async Task InstallPlugin(string given = null, string expectedHash = null, bool skipReview = false)
         {
             if (pluginBusy || updating) return;
             string zip = given;
@@ -1012,8 +1015,9 @@ namespace SubVulpes
                 string inspection = await Task.Run(() => RunPluginTool(selectedFolder, "--plugin-inspect " + QuoteProcessArgument(zip), 45000));
                 PluginMetadata metadata = ParsePluginInspection(inspection, true);
                 if (metadata == null) throw new IOException(IncompleteReviewText);
+                if (expectedHash != null && metadata.PackageHash != expectedHash) throw new IOException("The package does not match the signed catalog.");
                 PluginMetadata previous = await Task.Run(() => ReadPreviousPluginReview(selectedFolder, metadata.Id));
-                if (selectedFolder != folder || !ReviewPluginApproval(metadata, previous, true)) return;
+                if (selectedFolder != folder || !(skipReview && expectedHash != null) && !ReviewPluginApproval(metadata, previous, true)) return;
                 if (!await StopServer() || selectedFolder != folder) return;
                 message.Text = "Installing " + metadata.DisplayName + "...";
                 await Task.Run(() => RunPluginInstaller(selectedFolder, script, zip, false, metadata.PackageHash, metadata));
@@ -1029,6 +1033,8 @@ namespace SubVulpes
         internal void StartServer()
         {
             if (server != null || updating || pluginBusy) return;
+            // An install that waited for the next start runs first. Then the server starts.
+            if (pendingInstalls.Count > 0) { var apply = ApplyPendingInstalls(); return; }
             developerRun = debugModeBox.On;
             activeCaptures = developerRun ? captures.Copy() : new Captures { CrashDump = "none" };
             string exe = Path.Combine(folder, "subvulpes_server.exe");

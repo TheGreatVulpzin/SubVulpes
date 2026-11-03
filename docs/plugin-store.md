@@ -187,6 +187,22 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 
 https://github.com/TheGreatVulpzin/SubVulpes-Workshop is public. Done: the layout, CONTRIBUTING.md, CODEOWNERS, 	ools/build_index.py with 18 tests, the signing key, and the Action. The Action tests the script, refuses committed binaries, builds each plugin with its uild.ps1, asks the server to check each manifest, packs, writes index.json, signs it and replaces the branch dist. The first run passed and dist/index.json.sig verifies with the public key. The branch main needs a pull request, one approval from a code owner and a passing build. The owner can still bypass it. Murilo has a pending invitation. Not done: any content, the thumbnails with Pillow (tested only without it locally), the launcher client, and server_min.
 
+## Launcher client (built on 2026-11-03)
+
+The Catalog tab reads the Workshop. Done:
+
+- The launcher downloads `index.json` and `index.json.sig` from the branch `dist` over HTTPS and checks the RSA signature with the key inside the program (`tools/launcher/index-public.pem`, a resource). A catalog that fails the check never shows. The launcher keeps the last good copy in `workshop-cache\` next to the launcher, and checks it again at each load. Without a network, the saved catalog shows.
+- The list shows the icons, which load once in the background. The plugin page loads its large pictures when the user opens it. The thumbnails of the index are not used yet.
+- Install downloads the package, checks the size and the SHA-256 against the signed index, and runs the existing installer. An official plugin installs without the review window, because the hash of the package must equal the hash of the signed index. The installer checks that hash again. A plugin of the community still shows the full review window. The short card is not built.
+- A newer version in the catalog shows an Update button. A beta or experimental plugin shows only with Include Beta Versions.
+- With the server running, an install waits. It is saved in `workshop-cache\pending.txt` and runs just before the next start that the user makes. The launcher never restarts the server.
+- A `catalog.json` in the server folder still works. It is for developers and for tests, and its entries come first.
+- The Plugins page has a Remove action (the table menu and the Summary tab). It needs a stopped server. It refuses a required plugin, and a plugin that another installed plugin lists in `dependencies=`. It deletes the plugin folder, its line in `plugins.ini` and its approvals. The data that the plugin saved in `user\plugins` stays.
+- The plugin list reads again each time its page opens.
+
+Tests: signature (good, changed data, changed signature, another key, bad key), the index rules, the package check, the needed-by check and the removal, in `tests/launcher_update_test.cs`.
+
+Not done: moving `sv.jukebox` to the Workshop. The jukebox builds from the SDK with CMake, and its tests live in the main repository, so a move needs its own plan. The Workshop has no content yet. The short install card for the community and the unseen screens (the Workshop pages with real data) wait for the first content.
 ## Manifest renewal (server, installer, pack and launcher done on 2026-11-03)
 
 Done: the server reads and checks the new keys, the installer and `pack.ps1` carry the icon, the tests cover them, and the launcher shows the icon of an installed plugin. Not done: the official manifests (author, license and icon, which change their hashes), the real icons, the comparison of `server_min` (the server program has no version number inside yet), the `entry` runtime, and the Remove action.

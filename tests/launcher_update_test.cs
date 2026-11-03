@@ -283,7 +283,111 @@ namespace SubVulpes
             CheckAdminPassword();
             CheckPluginMetadata();
             CheckPluginApproval();
-            Console.WriteLine("Launcher update, backup, admin password and plugin metadata checks passed.");
+            CheckStore();
+            CheckRemove();
+            Console.WriteLine("Launcher update, backup, admin password, plugin metadata, Workshop and remove checks passed.");
+        }
+
+        static void Fail(string text) { throw new Exception(text); }
+
+        static string Fixture(string name)
+        {
+            for (string dir = AppDomain.CurrentDomain.BaseDirectory; dir != null; dir = Path.GetDirectoryName(dir)) {
+                string path = Path.Combine(dir, "tests", "launcher-fixtures", name);
+                if (File.Exists(path)) return path;
+            }
+            throw new Exception("Fixture not found: " + name);
+        }
+
+        static void CheckStore()
+        {
+            // The signature: the fixture is signed with a test key. A change in the data, the signature or the key must fail.
+            byte[] index = File.ReadAllBytes(Fixture("index.json")), seal = Convert.FromBase64String(File.ReadAllText(Fixture("index.json.sig.b64")).Trim());
+            string testKey = File.ReadAllText(Fixture("test-public.pem")), realKey = LauncherForm.StoreKeyText();
+            if (!LauncherForm.VerifyIndex(index, seal, testKey)) Fail("A good signature was refused.");
+            if (LauncherForm.VerifyIndex(index, seal, realKey)) Fail("A signature of another key was accepted.");
+            var changed = (byte[])index.Clone(); changed[changed.Length - 3] ^= 1;
+            if (LauncherForm.VerifyIndex(changed, seal, testKey)) Fail("A changed index was accepted.");
+            var badSeal = (byte[])seal.Clone(); badSeal[10] ^= 1;
+            if (LauncherForm.VerifyIndex(index, badSeal, testKey)) Fail("A changed signature was accepted.");
+            if (LauncherForm.VerifyIndex(index, new byte[10], testKey)) Fail("A short signature was accepted.");
+            if (LauncherForm.VerifyIndex(index, seal, "not a key") || LauncherForm.VerifyIndex(index, seal, "")) Fail("A bad key was accepted.");
+            // The key inside the launcher is a 3072-bit RSA key.
+            if (LauncherForm.ReadPublicKey(realKey).Modulus.Length != 384) Fail("The key of the launcher has an unexpected size.");
+
+            // The index: good entries pass, entries that break a rule are skipped.
+            string hash = new string('a', 64);
+            string good = "{\"id\":\"sv.one\",\"name\":\"One\",\"description\":\"d\",\"author\":\"A\",\"version\":\"0.1.0\",\"kind\":\"plugin\",\"source\":\"Official\"," +
+                "\"channel\":\"beta\",\"icon\":\"icons/sv.one.png\",\"images\":[\"images/sv.one-1.png\",\"../x.png\"]," +
+                "\"package\":{\"file\":\"packages/sv.one-0.1.0-native.svplugin\",\"sha256\":\"" + hash + "\",\"size\":1234}}";
+            string text = "{\"format\":1,\"plugins\":[" + good + "," +
+                good.Replace("sv.one", "sv.two").Replace("\"plugin\"", "\"mod\"") + "," +
+                good.Replace("sv.one", "sv.three").Replace("\"Official\"", "\"Mine\"") + "," +
+                good.Replace("sv.one", "sv.four").Replace("packages/", "../") + "," +
+                good.Replace("sv.one", "sv.five").Replace(hash, "xyz") + "," +
+                good.Replace("sv.one", "sv.six").Replace("1234", "99999999999") + "," +
+                good.Replace("sv.one", "Bad Id") + "]}";
+            var list = LauncherForm.ParseStoreIndex(text, "C:\\cache");
+            if (list.Count != 1 || list[0].Id != "sv.one") Fail("The index kept " + list.Count + " entries.");
+            LauncherForm.CatalogEntry one = list[0];
+            if (!one.Remote || one.Size != 1234 || one.Sha256 != hash || one.Channel != "beta" || one.Source != "Official") Fail("An entry lost a field.");
+            if (one.Icon != "C:\\cache\\icons\\sv.one.png" || one.Images.Count != 1 || one.ImageRemote[0] != "images/sv.one-1.png") Fail("The paths of the pictures are wrong.");
+            foreach (string badIndex in new[] { "{\"format\":2,\"plugins\":[]}", "{\"plugins\":[]}", "[]", "{\"format\":1}" }) {
+                bool refused = false;
+                try { LauncherForm.ParseStoreIndex(badIndex, "C:\\cache"); } catch (Exception) { refused = true; }
+                if (!refused) Fail("A bad index was accepted: " + badIndex);
+            }
+
+            // The package must match the size and the hash of the signed index. A bad file is deleted.
+            string dir = Path.Combine(Path.GetTempPath(), "launcher-store-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try {
+                string file = Path.Combine(dir, "p.svplugin");
+                File.WriteAllBytes(file, new byte[] { 1, 2, 3 });
+                string right = "039058c6f2c0cb492c533b0a4d14ef77cc0f78abe8f9c9e5d6d8c6ef8fa2e7ff";
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                    right = BitConverter.ToString(sha.ComputeHash(new byte[] { 1, 2, 3 })).Replace("-", "").ToLowerInvariant();
+                LauncherForm.VerifyStorePackage(file, 3, right);
+                if (!File.Exists(file)) Fail("A good package was deleted.");
+                foreach (var bad in new[] { new object[] { 3L, hash }, new object[] { 4L, right } }) {
+                    bool refused = false;
+                    try { LauncherForm.VerifyStorePackage(file, (long)bad[0], (string)bad[1]); } catch (Exception) { refused = true; }
+                    if (!refused || File.Exists(file)) Fail("A package that does not match was kept.");
+                    File.WriteAllBytes(file, new byte[] { 1, 2, 3 });
+                }
+            } finally { Directory.Delete(dir, true); }
+        }
+
+        static void CheckRemove()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "launcher-remove-" + Guid.NewGuid().ToString("N"));
+            try {
+                foreach (string sub in new[] { "plugins\\a.lib", "plugins\\b.user", "plugins\\c.free", "user\\plugins\\b.user" })
+                    Directory.CreateDirectory(Path.Combine(root, sub));
+                File.WriteAllText(Path.Combine(root, "plugins\\a.lib\\plugin.ini"), "[plugin]\r\nid=a.lib\r\n");
+                File.WriteAllText(Path.Combine(root, "plugins\\b.user\\plugin.ini"), "[plugin]\r\nid=b.user\r\ndependencies=x.other@1.0,a.lib@1.2\r\n");
+                File.WriteAllText(Path.Combine(root, "plugins\\c.free\\plugin.ini"), "[plugin]\r\nid=c.free\r\n");
+                File.WriteAllText(Path.Combine(root, "user\\plugins\\b.user\\data.txt"), "saved");
+                File.WriteAllText(Path.Combine(root, "plugins\\plugins.ini"), "[plugins]\r\na.lib=enabled\r\nb.user=enabled\r\nc.free=disabled\r\n");
+                File.WriteAllText(Path.Combine(root, "user\\plugins\\approvals.ini"), "[approvals]\r\nb.user=1|x\r\nc.free=1|y\r\n");
+                File.WriteAllText(Path.Combine(root, "user\\plugins\\native-approvals.ini"), "[native]\r\nb.user=aa\r\nc.free=bb\r\n");
+                if (LauncherForm.PluginNeededBy(root, "a.lib") != "b.user") Fail("The needed-by check missed a plugin.");
+                if (LauncherForm.PluginNeededBy(root, "c.free") != "") Fail("The needed-by check found a plugin that does not exist.");
+                LauncherForm.RemovePluginFiles(root, "b.user");
+                if (Directory.Exists(Path.Combine(root, "plugins\\b.user"))) Fail("The plugin folder stayed.");
+                if (!File.Exists(Path.Combine(root, "user\\plugins\\b.user\\data.txt"))) Fail("The saved data of the plugin was deleted.");
+                string enabled = File.ReadAllText(Path.Combine(root, "plugins\\plugins.ini")), approvals = File.ReadAllText(Path.Combine(root, "user\\plugins\\approvals.ini"));
+                if (enabled.Contains("b.user") || !enabled.Contains("a.lib=enabled") || !enabled.Contains("c.free=disabled")) Fail("plugins.ini is wrong after the removal.");
+                if (approvals.Contains("b.user") || !approvals.Contains("c.free=1|y")) Fail("approvals.ini is wrong after the removal.");
+                if (File.ReadAllText(Path.Combine(root, "user\\plugins\\native-approvals.ini")).Contains("b.user")) Fail("native-approvals.ini kept the plugin.");
+                if (LauncherForm.PluginNeededBy(root, "a.lib") != "") Fail("The needed-by check still sees the removed plugin.");
+                foreach (string bad in new[] { "..\\x", "../x", "a.lib\\..", "", "A.Upper", "con" }) {
+                    bool refused = false;
+                    try { LauncherForm.RemovePluginFiles(root, bad); } catch (Exception) { refused = true; }
+                    if (!refused) Fail("A bad plugin id was accepted: " + bad);
+                }
+                if (!Directory.Exists(Path.Combine(root, "plugins\\a.lib"))) Fail("A bad id removed another plugin.");
+            } finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
         }
     }
 }
