@@ -9,7 +9,7 @@ The real launcher has the same look and uses real data.
 - `LauncherUi.cs`: the theme, the Lucide icons and the flat controls.
 - `LauncherUiMore.cs`: more controls (avatar, list entry, number list) and `Skin`, which paints a theme on the window.
 - `LauncherServer.cs`: the Server page (buttons, numbers, graph, console, command box).
-- `LauncherSettings.cs`: Settings with three sub-tabs, the Save bar and Past Logs.
+- `LauncherSettings.cs`: Settings with four sub-tabs (Server, Launcher, Past Logs, Advanced) and the Save bar.
 - `LauncherPlugins.cs`: the plugin table, the detail panel (Summary, Info, Settings) and the Catalog tab.
 - `LauncherHelp.cs`: the Help page. `help.md` holds its text.
 
@@ -17,7 +17,7 @@ The real launcher has the same look and uses real data.
 
 ## Where things moved
 
-- Past Logs, their notes, Open Folder and Pack are in Settings, Launcher Settings.
+- Past Logs, their notes, Open Folder and Pack are in Settings, on their own tab (Past Logs).
 - The Mark This Moment button, its hotkey and the marks file are gone.
 - Capture options, the preset and the memory dump are in Settings, Advanced Settings. That tab shows only in Debug Mode (Ctrl+Shift+D).
 - Theme and accent color are in Launcher Settings. They apply at once and the launcher remembers them.

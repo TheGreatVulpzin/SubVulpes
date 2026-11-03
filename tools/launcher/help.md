@@ -28,7 +28,9 @@ Select **Save** to write the changes to `config.txt`. **Revert changes** brings 
 ## Requires restart
 The launcher saves the setting. The server uses it after the next start.
 ## Launcher Settings
-These settings apply at once. Choose the theme and the accent color here. Each run of the server in Debug Mode saves its own log. The **Past Logs** list shows them.
+These settings apply at once. Choose the theme and the accent color here. 
+## Past Logs
+Each run of the server in Debug Mode saves its own log. This page lists them. Select a log to read or write its notes. **Pack the Selected Log** makes one zip to send.
 ## Advanced Settings
 This page shows when **Debug Mode** is on. Use it to record more data about a run.
 
@@ -52,7 +54,7 @@ Select a plugin, open the **Settings** tab and select **Save**. A setting that s
 ## The console log
 The file `logs\server.log` has all lines of the last run. Use the save icon in the console to copy it with the password removed.
 ## Past Logs
-In Debug Mode, each run makes its own folder in `logs`. Open **Launcher Settings** to see the list. Write a note for a log, then pack it into one zip to send it.
+In Debug Mode, each run makes its own folder in `logs`. Open **Settings**, then **Past Logs**. Write a note for a log, then pack it into one zip to send it.
 ## Crash reports
 The server can save a dump when it crashes or freezes. Turn it on in **Advanced Settings**. Send the dump with the log.
 

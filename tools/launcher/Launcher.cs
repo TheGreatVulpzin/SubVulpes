@@ -8,12 +8,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Media;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -504,7 +502,7 @@ namespace SubVulpes
             string[] part = spec.Split(':');
             ShowPage(part[0]);
             int sub = part.Length > 1 ? int.Parse(part[1]) : 0;
-            if (part[0] == SettingsPageName) { if (sub == 2) SetDebug(true); ShowSub(sub); }
+            if (part[0] == SettingsPageName) { if (sub == 3) SetDebug(true); ShowSub(sub); }
             if (part[0] == "Plugins") ShowPluginSub(sub);
         }
 
@@ -1553,7 +1551,7 @@ namespace SubVulpes
             if (keyData == (Keys.Control | Keys.Shift | Keys.D)) {
                 SetDebug(!debugModeBox.On);
                 ShowPage(SettingsPageName);
-                ShowSub(debugModeBox.On ? 2 : 1);
+                ShowSub(debugModeBox.On ? 3 : 1);
 
                 return true;
             }

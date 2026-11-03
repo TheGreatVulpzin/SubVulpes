@@ -553,13 +553,11 @@ namespace SubVulpes.Ui
     class AreaChart : Card
     {
         public double[] Values = new double[0];
-        public int RightPad = 28;
         public AreaChart() : base("Tick rate", "", "") { Margin = new Padding(0); }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; Frame(g, Width, Height, Parent);
             TextRenderer.DrawText(g, Title, UI.F(8.5f, FontStyle.Regular), new Point(14, 12), UI.T.Muted, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, "ticks/s", UI.F(8.5f, FontStyle.Regular), new Point(Width - 56 - RightPad, 12), UI.T.Muted, TextFormatFlags.NoPadding);
             int left = 46, right = Width - 20, top = 40, bottom = Height - 34; double lo = 58, hi = 63;
             foreach (double v in Values) { lo = Math.Min(lo, Math.Floor(v)); hi = Math.Max(hi, Math.Ceiling(v)); }
             if (right - left < 40 || bottom - top < 20) return;

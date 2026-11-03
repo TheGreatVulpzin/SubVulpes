@@ -60,10 +60,10 @@ namespace SubVulpes
             host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             host.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
-            string[] names = { "Server Settings", "Launcher Settings", "Advanced Settings" };
+            string[] names = { "Server Settings", "Launcher Settings", "Past Logs", "Advanced Settings" };
             settingsBarPanel = SettingsBar();
             var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
-            Control[] subs = { ServerSettingsPage(), LauncherSettingsPage(), AdvancedSettingsPage() };
+            Control[] subs = { ServerSettingsPage(), LauncherSettingsPage(), TestsPage(), AdvancedSettingsPage() };
             for (int i = names.Length - 1; i >= 0; i--) {
                 var tab = new TabLabel(names[i]) { Selected = i == 0, Sub = true };
                 int index = i;
@@ -91,13 +91,13 @@ namespace SubVulpes
             // Only the server settings wait for the Save button. The other pages apply each change at once.
             settingsBarPanel.Visible = index == 0;
             settingsHost.RowStyles[2].Height = index == 0 ? 58 : 0;
-            if (index == 1) LoadTests();
+            if (index == 2) LoadTests();
         }
 
         void SetDebugMode(bool enabled)
         {
-            subTabs[2].Visible = enabled;
-            if (!enabled && subPages[2].Visible) ShowSub(1);
+            subTabs[3].Visible = enabled;
+            if (!enabled && subPages[3].Visible) ShowSub(1);
         }
 
         void SetDebug(bool enabled)
@@ -188,16 +188,6 @@ namespace SubVulpes
             if (badge != null) cell = Inline(input, new Badge(badge) { Margin = new Padding(12, 2, 0, 0) });
             cell.Anchor = AnchorStyles.Left;
             t.Controls.Add(cell, 2, row);
-        }
-
-        // A control that spans the whole width, such as a list.
-        static void AddWide(TableLayoutPanel t, Control c, int height)
-        {
-            int row = t.RowCount++;
-            t.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-            c.Dock = DockStyle.Fill;
-            t.Controls.Add(c, 0, row);
-            t.SetColumnSpan(c, 4);
         }
 
         static Control ScrollPage(Action<TableLayoutPanel> build)
@@ -407,8 +397,6 @@ namespace SubVulpes
                 Section(t, "Appearance");
                 AddRow(t, "Theme", null, themeBox, null);
                 AddRow(t, "Accent color", "Used for the active tab, the graph and the highlights.", accentBox, null);
-                Section(t, "Past Logs");
-                AddWide(t, TestsPage(), 340);
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab. Each run then saves its own log folder.", debugModeBox, null);
             });
