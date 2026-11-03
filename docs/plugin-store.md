@@ -31,7 +31,29 @@ This part waits for OverRosa. The original client cannot load mods, so nothing h
 4. **Where the client downloads from.** First from the address of the Workshop (or any address in the entry, such as GitHub). If the entry has no address, the client downloads from the server.
 5. **Download from the server.** It uses its own channel, in chunks, with a limit of speed and a limit of size. It must not use the shared upload limit of the game (`servermaxbytespersecond`), or one new player slows the game for everyone. The launcher setting says the limit. A side port with HTTP is the simple way. The protocol of the game is the hard way.
 6. **Checks.** The client verifies the SHA-256 of each file. A mod holds data only (models, maps, sounds, textures), never code. The client refuses other file types and files over a size limit. A required mod that the player refuses means that the player cannot join. A big download asks the player first.
-7. **Open questions.** The limits of size and type. Whether a mod can replace a file of the base game or only add files. How a mod that changes the map affects the saved world of the server.
+
+### Rules for mods on the client
+
+- **Limits (start values, measure with real assets).** At most 16 MB for a file, 64 MB for a mod and 256 MB for all the mods of one server. Allowed types: the data types that the game reads (models, textures, sounds, map files), the manifest and, later, `.lua` scripts. The client refuses executables, libraries, archives inside archives and any other type. It checks the type by the content and not only by the name.
+- **Paths.** A file path is relative and has no `..`, no drive letter, no link and no reserved Windows name. The client refuses the whole mod if one path is wrong.
+- **A mod may replace a file of the base game, for a session only.** The client does not write into the game folder. It keeps the mod files in its own cache, by hash, and puts them in a layer above the base files while the player is on that server. When the player leaves, the layer goes away and the game is as before. If two mods replace the same file, the order of the server list decides, and the client warns the player.
+- **Mod from the Workshop or custom.** A Workshop mod has a seal (Official or Community). A custom mod of a server shows "From this server" and has no seal.
+
+### Scripts on the client (later, after the server Lua)
+
+A mod may carry Lua scripts for advanced things. A server owner is a stranger to the player, so the script is untrusted code. The rules:
+
+1. Data-only mods come first. Client scripts come in a later version, after the Lua of the server (stage S4) has proven its sandbox.
+2. The script runs in a sandbox. It has no `io`, `os`, `package`, `require`, `load` or `debug`, and no network. It sees only the API that the client exposes.
+3. The API uses capabilities, as the server plugins do. Examples: draw on the screen (HUD), play a sound, read the events of the game. No capability reads the files of the player, the clipboard, other windows or the keys outside the game. No capability takes a screenshot.
+4. The client limits the time and the memory of a script. A script that goes over the limit stops, and the client says so.
+5. The player sees the capabilities of a server mod before the first join, and can refuse the scripts and still play with the data.
+6. A client setting turns all scripts off. The default asks.
+
+### Map mods
+
+A map is a rule of the world. The server simulates the level, so a map that only the client knows would not match the server. Mods of v1 do not change the map. A map comes as a bundle: a plugin or a server file with the same level, and the mod for the client.
+Research first: does the client build the level from a shared seed, or does it read its own map files? (See the idea "Random cities" in `docs/ideas.md`.) The answer decides if a map mod is possible. A different map also needs a different saved world, so a server treats it as a new world.
 
 ## Kinds
 
