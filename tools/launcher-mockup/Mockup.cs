@@ -283,8 +283,9 @@ namespace SubVulpesMockup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var b = new SolidBrush(UI.T.Muted)) g.FillEllipse(b, 2, 2, Width - 5, Height - 5);
-            using (var b = new SolidBrush(UI.T.Panel)) { g.FillEllipse(b, Width / 2f - 1.5f, 5.5f, 3, 3); g.FillRectangle(b, Width / 2f - 1.25f, 10, 2.5f, 6); }
+            using (var p = new Pen(UI.T.Muted, 1.4f)) g.DrawEllipse(p, 2, 2, Width - 5, Height - 5);
+            using (var f = new Font("Georgia", 9f, FontStyle.Bold | FontStyle.Italic, GraphicsUnit.Point))
+                TextRenderer.DrawText(g, "i", f, new Rectangle(0, 0, Width, Height), UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -357,9 +358,8 @@ namespace SubVulpesMockup
                 }
                 else
                 {
-                    g.DrawRectangle(pen, 8, 7, 9, 11);
-                    using (var b = new SolidBrush(UI.T.Console)) g.FillRectangle(b, 11, 10, 10, 12);
-                    g.DrawRectangle(pen, 11, 10, 9, 11);
+                    g.DrawLines(pen, new[] { new Point(8, 17), new Point(8, 7), new Point(17, 7), new Point(17, 10) });
+                    g.DrawRectangle(pen, 11, 11, 9, 10);
                 }
             }
         }
@@ -649,8 +649,7 @@ namespace SubVulpesMockup
 
             console = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f), Padding = new Padding(8) };
             var holder = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0), Tag = "consolebg" };
-            var gutter = new Panel { Dock = DockStyle.Left, Width = 44, Tag = "consolebg" };
-            holder.Controls.Add(console); holder.Controls.Add(gutter); console.BringToFront();
+            holder.Controls.Add(console);
             var expandBtn = new IconButton("expand"); var copyBtn = new IconButton("copy"); var clearBtn = new IconButton("clear"); var saveBtn = new IconButton("save");
             UI.Tips.SetToolTip(expandBtn, "Expand or collapse the console."); UI.Tips.SetToolTip(copyBtn, "Copy all."); UI.Tips.SetToolTip(clearBtn, "Clear the console."); UI.Tips.SetToolTip(saveBtn, "Save the log to a file.");
             clearBtn.Click += delegate { console.Clear(); };
@@ -661,7 +660,9 @@ namespace SubVulpesMockup
                 expandBtn.Glyph = expanded ? "collapse" : "expand"; expandBtn.Invalidate();
             };
             IconButton[] icons = { expandBtn, copyBtn, clearBtn, saveBtn };
-            for (int i = 0; i < icons.Length; i++) { icons[i].Location = new Point(8, 8 + i * 34); gutter.Controls.Add(icons[i]); }
+            // The icons float in the top right corner, the same distance from the top and from the right edge.
+            foreach (var ic in icons) { holder.Controls.Add(ic); ic.BringToFront(); }
+            holder.Resize += delegate { for (int i = 0; i < icons.Length; i++) icons[i].Location = new Point(holder.Width - 8 - (icons.Length - i) * 28 - (icons.Length - 1 - i) * 6, 8); };
             page.Controls.Add(holder, 0, 3);
 
             var cmd = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0), Tag = "panel" };
@@ -850,7 +851,6 @@ namespace SubVulpesMockup
             var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
             var barButtons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
             barButtons.Controls.Add(new FlatButton("Refresh") { Margin = new Padding(0) }); barButtons.Controls.Add(new FlatButton("Install from File…"));
-            var columnsBtn = new FlatButton("Columns"); barButtons.Controls.Add(columnsBtn);
             var pluginSearch = HintBox(260); pluginSearch.Location = new Point(0, 9);
             bar.Controls.Add(barButtons); bar.Controls.Add(pluginSearch);
             detail = new Panel { Dock = DockStyle.Right, Width = 380, Padding = new Padding(16), Tag = "panel", AutoScroll = true };
@@ -866,32 +866,26 @@ namespace SubVulpesMockup
             grid.RowTemplate.Height = 40;
             grid.Columns.Add("n", "Name"); grid.Columns.Add("v", "Version"); grid.Columns.Add("s", "State"); grid.Columns.Add("r", "Risk"); grid.Columns.Add("o", "Source"); grid.Columns.Add("on", "On");
             grid.Columns[0].FillWeight = 160; grid.Columns[1].FillWeight = 70; grid.Columns[2].FillWeight = 110; grid.Columns[3].FillWeight = 70; grid.Columns[4].FillWeight = 80; grid.Columns[5].FillWeight = 50;
-            foreach (var p in plugins) grid.Rows.Add(p.Name, p.Version, p.State, p.Risk, p.Source, "");
-            grid.CellFormatting += delegate (object s, DataGridViewCellFormattingEventArgs e)
+            foreach (DataGridViewColumn col in grid.Columns) col.SortMode = DataGridViewColumnSortMode.Programmatic;
+            int sortCol = -1; bool sortAsc = true;
+            Func<Plugin, int, string> key = delegate (Plugin p, int c)
             {
-                if (e.RowIndex < 0) return; var p = plugins[e.RowIndex];
-                if (e.ColumnIndex == 2) e.CellStyle.ForeColor = p.State == "Active" ? UI.T.Ok : p.State == "Restart needed" ? UI.T.Warn : UI.T.Muted;
-                if (e.ColumnIndex == 3) e.CellStyle.ForeColor = p.Risk == "low" ? UI.T.Ok : p.Risk == "high" ? UI.T.Warn : UI.T.Bad;
+                return c == 0 ? p.Name : c == 1 ? p.Version : c == 2 ? p.State : c == 3 ? (p.Risk == "low" ? "1" : p.Risk == "high" ? "2" : "3") : p.Source;
             };
-            grid.CellPainting += delegate (object s, DataGridViewCellPaintingEventArgs e)
+            Action reload = delegate
             {
-                if (e.RowIndex < 0 || e.ColumnIndex != 5) return;
-                e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
-                Switch.Draw(e.Graphics, new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 20) / 2, 36, 20), plugins[e.RowIndex].On);
-                e.Handled = true;
+                var shown = new List<Plugin>(plugins);
+                if (sortCol >= 0) shown.Sort(delegate (Plugin a, Plugin b) { return (sortAsc ? 1 : -1) * string.Compare(key(a, sortCol), key(b, sortCol), StringComparison.OrdinalIgnoreCase); });
+                var current = sel >= 0 && sel < plugins.Count ? plugins[sel] : null;
+                grid.Rows.Clear();
+                foreach (var p in shown) { int r = grid.Rows.Add(p.Name, p.Version, p.State, p.Risk, p.Source, ""); grid.Rows[r].Tag = p; if (p == current) grid.CurrentCell = grid.Rows[r].Cells[0]; }
+                foreach (DataGridViewColumn col in grid.Columns) col.HeaderCell.SortGlyphDirection = col.Index == sortCol ? (sortAsc ? SortOrder.Ascending : SortOrder.Descending) : SortOrder.None;
             };
-            grid.CellClick += delegate (object s, DataGridViewCellEventArgs e)
+            Action<int, bool> sortBy = delegate (int c, bool asc) { sortCol = c; sortAsc = asc; reload(); };
+            grid.ColumnHeaderMouseClick += delegate (object s, DataGridViewCellMouseEventArgs e)
             {
-                if (e.RowIndex < 0) return;
-                sel = e.RowIndex;
-                if (e.ColumnIndex == 5) { var p = plugins[e.RowIndex]; p.On = !p.On; p.State = p.On ? "Active" : "Disabled"; grid.Rows[e.RowIndex].Cells[2].Value = p.State; grid.InvalidateRow(e.RowIndex); }
-                RenderDetail();
-            };
-            grid.SelectionChanged += delegate { if (grid.CurrentRow != null) { sel = grid.CurrentRow.Index; RenderDetail(); } };
-            grid.CurrentCell = grid.Rows[sel].Cells[0];
-            grid.Columns[3].Visible = false; grid.Columns[4].Visible = false;
-            columnsBtn.Click += delegate
-            {
+                if (e.Button == MouseButtons.Left) { if (e.ColumnIndex < 5) sortBy(e.ColumnIndex, sortCol == e.ColumnIndex ? !sortAsc : true); return; }
+                // Right click on a header: choose the columns and the order, like in Windows Explorer.
                 var menu = Dropdown.Menu(); menu.ShowCheckMargin = true;
                 for (int i = 1; i <= 4; i++)
                 {
@@ -900,8 +894,42 @@ namespace SubVulpesMockup
                     it.Click += delegate { col.Visible = !col.Visible; };
                     menu.Items.Add(it);
                 }
-                menu.Show(columnsBtn, new Point(0, columnsBtn.Height + 2));
+                if (e.ColumnIndex < 5)
+                {
+                    int ci = e.ColumnIndex; menu.Items.Add(new ToolStripSeparator());
+                    var asc = new ToolStripMenuItem("Sort ascending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) }; asc.Click += delegate { sortBy(ci, true); };
+                    var desc = new ToolStripMenuItem("Sort descending") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) }; desc.Click += delegate { sortBy(ci, false); };
+                    menu.Items.Add(asc); menu.Items.Add(desc);
+                }
+                menu.Show(Cursor.Position);
             };
+            grid.CellFormatting += delegate (object s, DataGridViewCellFormattingEventArgs e)
+            {
+                if (e.RowIndex < 0) return; var p = (Plugin)grid.Rows[e.RowIndex].Tag; if (p == null) return;
+                if (e.ColumnIndex == 2) e.CellStyle.ForeColor = p.State == "Active" ? UI.T.Ok : p.State == "Restart needed" ? UI.T.Warn : UI.T.Muted;
+                if (e.ColumnIndex == 3) e.CellStyle.ForeColor = p.Risk == "low" ? UI.T.Ok : p.Risk == "high" ? UI.T.Warn : UI.T.Bad;
+            };
+            grid.CellPainting += delegate (object s, DataGridViewCellPaintingEventArgs e)
+            {
+                if (e.RowIndex < 0 || e.ColumnIndex != 5) return;
+                e.Paint(e.ClipBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+                Switch.Draw(e.Graphics, new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 20) / 2, 36, 20), ((Plugin)grid.Rows[e.RowIndex].Tag).On);
+                e.Handled = true;
+            };
+            grid.CellClick += delegate (object s, DataGridViewCellEventArgs e)
+            {
+                if (e.RowIndex < 0) return;
+                sel = plugins.IndexOf((Plugin)grid.Rows[e.RowIndex].Tag);
+                if (e.ColumnIndex == 5) { var p = plugins[sel]; p.On = !p.On; p.State = p.On ? "Active" : "Disabled"; grid.Rows[e.RowIndex].Cells[2].Value = p.State; grid.InvalidateRow(e.RowIndex); }
+                RenderDetail();
+            };
+            grid.SelectionChanged += delegate
+            {
+                var p = grid.CurrentRow == null ? null : grid.CurrentRow.Tag as Plugin;
+                if (p != null) { sel = plugins.IndexOf(p); RenderDetail(); }
+            };
+            reload();
+            grid.Columns[3].Visible = false; grid.Columns[4].Visible = false;
             page.Controls.Add(grid); page.Controls.Add(drop); page.Controls.Add(sp); page.Controls.Add(detail); page.Controls.Add(bar);
             bar.SendToBack(); grid.BringToFront();
             return page;
