@@ -52,10 +52,17 @@ namespace SubVulpes
             return m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Official" : "Installed";
         }
 
-        // The author of the project is the author of the official plugins when the manifest names nobody.
+        // The author comes from the manifest. Without one, the name stays empty.
         static string AuthorOf(PluginMetadata m)
         {
-            return m.Author.Length > 0 ? m.Author : m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Vulpzin" : "";
+            return m.Author;
+        }
+
+        static string ByLine(string author, string version)
+        {
+            string by = author.Length > 0 ? "by " + author : "";
+            string v = version.Length > 0 ? "v" + version : "";
+            return by.Length > 0 && v.Length > 0 ? by + " · " + v : by + v;
         }
 
         string SourceOfPlugin(PluginMetadata m)
@@ -234,7 +241,6 @@ namespace SubVulpes
                     if (entry.Name.Length == 0) entry.Name = entry.Id;
                     entry.Description = CatalogText(d, "description", 600);
                     entry.Author = CatalogText(d, "author", 48);
-                    if (entry.Author.Length == 0) entry.Author = "Vulpzin";
                     entry.Version = CatalogText(d, "version", 23);
                     entry.Source = CatalogText(d, "source", 16);
                     entry.File = CatalogText(d, "file", 260);
@@ -370,7 +376,7 @@ namespace SubVulpes
             desc.AutoEllipsis = true;
             desc.Size = new Size(420, 20);
             desc.Location = new Point(76, 42);
-            var meta = L("by " + c.Author + (c.Version.Length > 0 ? " · v" + c.Version : ""), false, true);
+            var meta = L(ByLine(c.Author, c.Version), false, true);
             meta.Location = new Point(76, 62);
             var parts = new List<Control> { avatar, name, desc, meta };
             if (c.Source.Length > 0) {
@@ -404,7 +410,7 @@ namespace SubVulpes
             var name = L(c.Name, true, false);
             name.Font = UI.F(16f, FontStyle.Bold);
             name.Location = new Point(88, 50);
-            var meta = L("by " + c.Author + (c.Version.Length > 0 ? " · v" + c.Version : ""), false, true);
+            var meta = L(ByLine(c.Author, c.Version), false, true);
             meta.Location = new Point(88, 86);
             var parts = new List<Control> { back, avatar, name, meta };
             if (c.Source.Length > 0) {

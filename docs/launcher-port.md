@@ -28,11 +28,11 @@ The real launcher has the same look and uses real data.
 - Revert changes loads the saved values again. Reset to defaults resets the port, the upload limit, the mode, the player limit and the round time. It does not touch the name, the welcome text or the password.
 - The Catalog tab reads `catalog.json` in the server folder. There is no online source yet. The file is a list of objects:
   `[{"id": "sv.bans", "name": "Bans", "description": "...", "author": "Vulpzin", "version": "0.1.0", "source": "Official", "file": "plugins-pending/sv.bans.svplugin", "icon": "catalog-images/bans.png", "images": ["catalog-images/one.png", "catalog-images/two.png"]}]`.
-  `source` is Official or Community. `author` is Vulpzin when the entry names nobody. `file`, `icon` and each image are paths in the server folder, or absolute paths. Pictures are PNG or JPEG, at most 5 MB, at most 8 for each plugin.
+  `source` is Official or Community. `author` may be empty. The card then shows no author. `file`, `icon` and each image are paths in the server folder, or absolute paths. Pictures are PNG or JPEG, at most 5 MB, at most 8 for each plugin.
   Install starts the normal review. A card without a package file cannot install.
 - A click on a card opens the page of the plugin: icon, author, description, a large picture and a row of small ones. A click on a small picture changes the large one.
-- A working example is in `docs/examples/launcher-catalog/`. Copy its files to the server folder.
-- The plugin table has an Author column (hidden at first). An official plugin (id starts with `sv.`) without an author shows Vulpzin.
+- An example `catalog.json` is in `docs/examples/launcher-catalog/`. Copy it to the server folder. The pictures that it names are not in the repository. For tests, the playable folder has pictures that are screenshots of the launcher. Real pictures come with the store.
+- The plugin table has an Author column (hidden at first). It shows the author of the manifest, or nothing.
 - A plugin listed in the catalog takes its Source from the catalog.
 - The plugin table has a Source column. A plugin whose id starts with `sv.` is Official. Any other is Installed. Risk and Source are hidden at first. Right-click a column title to choose the columns. The launcher remembers the choice.
 - A plugin risk comes from its runtime and capabilities: native is highest, any capability besides read, storage and config is high, the rest is low.
