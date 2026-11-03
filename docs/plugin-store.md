@@ -182,7 +182,9 @@ A native plugin runs code with full access. So the catalog must be hard to fake.
 7. Give the review window the new look. Keep it for files from outside the repository.
 8. Move the optional plugins to the repository. `sv.permissions` and `sv.admcmd` stay in the server zip.
 
-## Manifest renewal (spec, not started)
+## Manifest renewal (server, installer, pack and launcher done on 2026-11-03)
+
+Done: the server reads and checks the new keys, the installer and `pack.ps1` carry the icon, the tests cover them, and the launcher shows the icon of an installed plugin. Not done: the official manifests (author, license and icon, which change their hashes), the real icons, the comparison of `server_min` (the server program has no version number inside yet), the `entry` runtime, and the Remove action.
 
 The manifest (`docs/plugin-manifest.md`) already has `name`, `description`, `author` and `homepage`. The store needs these new keys. No other key changes. All of them are optional.
 
