@@ -300,7 +300,6 @@ namespace SubVulpes
         const string UpdateInstalledText = "Update Installed!";
         const string NoSpeedText = "- ticks/s";
         const string NoPlayersText = "- players";
-        const int HotkeyId = 1;
         static readonly string[] UpdateFiles = {
             "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt",
             "plugins/plugins.ini", "plugins/native-approvals.ini", "plugins/sv.status/plugin.ini", "plugins/sv.status/status.dll",
@@ -382,12 +381,12 @@ namespace SubVulpes
         CheckBox previewsBox, debugModeBox;
 
 
-        // Overview
-        Label lastTicks, lowTicks, playersText, uptimeText, marksText, presetText, capturesText;
+        // Server page statistics
+        Label lastTicks, lowTicks, playersText, uptimeText;
         SpeedGraph graph;
-        Panel runPanel, endPanel;
-        Label endTitle, endText;
-        TextBox endNotes;
+
+        // Debug page
+        Label presetText;
 
         // Console
         TextBox console;
@@ -419,7 +418,7 @@ namespace SubVulpes
         string testDir;
         DateTime started, lastSpeedLine;
         bool stopping, crashed, frozen;
-        int marks, maxPlayers;
+        int maxPlayers;
         readonly List<double> speeds = new List<double>();
         readonly Timer clock = new Timer { Interval = 1000 };
 
@@ -465,7 +464,10 @@ namespace SubVulpes
                 tabLabels[tabName] = label;
                 tabBar.Controls.Add(label);
             }
-            mainTabs.SelectedIndexChanged += delegate { SyncTabs(); };
+            mainTabs.SelectedIndexChanged += delegate {
+                SyncTabs();
+                if (mainTabs.SelectedTab == pages["Launcher Settings"]) LoadTests();
+            };
             Controls.Add(tabBar);
             SetTextColors(this);
             SetDebugMode(debugModeBox.Checked);
@@ -482,11 +484,7 @@ namespace SubVulpes
             clock.Tick += delegate { OnClock(); };
             clock.Start();
             FormClosing += OnClosing;
-            Load += delegate {
-                RegisterHotKey(Handle, HotkeyId, 0x2 /* MOD_CONTROL */, (int)Keys.F12);
-                CleanOldLauncher();
-            };
-            FormClosed += delegate { UnregisterHotKey(Handle, HotkeyId); };
+            Load += delegate { CleanOldLauncher(); };
         }
 
         string Version()
@@ -562,10 +560,11 @@ namespace SubVulpes
 
         Control ServerPage()
         {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 4 };
+            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5 };
             page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            page.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
             page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var bar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
@@ -580,12 +579,13 @@ namespace SubVulpes
             missingText = new Label { AutoSize = true, Margin = new Padding(3, 0, 3, 8) };
             ShowMissing(configCreated);
             page.Controls.Add(missingText, 0, 1);
+            page.Controls.Add(StatsRow(), 0, 2);
             Control log = ConsolePage();
             log.Dock = DockStyle.Fill;
-            page.Controls.Add(log, 0, 2);
+            page.Controls.Add(log, 0, 3);
             var save = new Button { Text = "Save Log", AutoSize = true, Margin = new Padding(3, 8, 3, 3) };
             save.Click += async delegate { await SaveLog(); };
-            page.Controls.Add(save, 0, 3);
+            page.Controls.Add(save, 0, 4);
             return page;
         }
 
@@ -620,30 +620,34 @@ namespace SubVulpes
             tips.SetToolTip(debugModeBox, "Shows the Debug tab and some advanced log capture options.");
             debugModeBox.CheckedChanged += delegate { SetDebugMode(debugModeBox.Checked); settings.Set("developer", debugModeBox.Checked ? "1" : "0"); settings.Save(); };
             page.Controls.Add(debugModeBox);
+            page.Controls.Add(new Label { Text = "Past Logs", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(3, 16, 3, 4) });
+            Control logs = TestsPage();
+            logs.Size = new Size(780, 320);
+            page.Controls.Add(logs);
             return page;
         }
 
         Control DeveloperPage()
         {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 2 };
+            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3 };
             page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             presetBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260, Margin = new Padding(3, 3, 3, 8) };
             presetBox.Items.AddRange(Presets);
             presetBox.SelectedIndexChanged += delegate { OnPreset(); };
             page.Controls.Add(presetBox, 0, 0);
-            var tabs = new TabControl { Dock = DockStyle.Fill };
-            Control[] views = { OverviewPage(), CapturesPage(), TestsPage() };
-            string[] names = { "Test", "Captures", "Past Logs" };
-            for (int i = 0; i < views.Length; i++) {
-                var tab = new TabPage(names[i]) { Padding = new Padding(8), UseVisualStyleBackColor = true };
-                views[i].Dock = DockStyle.Fill;
-                tab.Controls.Add(views[i]);
-                tabs.TabPages.Add(tab);
-            }
-            tabs.SelectedIndexChanged += delegate { if (tabs.SelectedIndex == 2) LoadTests(); };
-            page.Controls.Add(tabs, 0, 1);
+            Control view = CapturesPage();
+            view.Dock = DockStyle.Fill;
+            page.Controls.Add(view, 0, 1);
+            var bar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
+            var dump = new Button { Text = "Save Memory Dump Now", AutoSize = true };
+            dump.Click += delegate { DumpNow("dump"); };
+            tips.SetToolTip(dump, "Writes server memory to a file.");
+            presetText = new Label { AutoSize = true, ForeColor = SystemColors.ControlText, Anchor = AnchorStyles.Left, Margin = new Padding(12, 8, 3, 3) };
+            bar.Controls.AddRange(new Control[] { dump, presetText });
+            page.Controls.Add(bar, 0, 2);
             return page;
         }
 
@@ -700,60 +704,26 @@ namespace SubVulpes
             serverStatus.Text = playersStatus + " | " + speedStatus;
         }
 
-        // ------------------------------------------------------------ overview
+        // ------------------------------------------------------------ statistics
 
-        Control OverviewPage()
+        Control StatsRow()
         {
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5 };
+            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
             page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-            var cards = new TableLayoutPanel { Dock = DockStyle.Fill, Height = 48, ColumnCount = 5, Margin = new Padding(0, 0, 0, 8) };
-            for (int i = 0; i < 5; i++)
-                cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            var cards = new TableLayoutPanel { Dock = DockStyle.Fill, Height = 32, ColumnCount = 4, Margin = new Padding(0, 0, 0, 4) };
+            for (int i = 0; i < 4; i++)
+                cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
             lastTicks = Card(cards, 0, "Last Minute");
             lowTicks = Card(cards, 1, "Lowest Minute");
             playersText = Card(cards, 2, "Players");
             uptimeText = Card(cards, 3, "Running for");
-            marksText = Card(cards, 4, "Marks");
             page.Controls.Add(cards, 0, 0);
-
-            page.Controls.Add(new Label { Text = "Server Speed per Minute (ticks/s)", AutoSize = true, ForeColor = SystemColors.ControlText, Margin = new Padding(3, 4, 3, 2) }, 0, 1);
-            graph = new SpeedGraph { Dock = DockStyle.Fill, MinimumSize = new Size(0, 120) };
+            page.Controls.Add(new Label { Text = "Server Speed per Minute (ticks/s)", AutoSize = true, Margin = new Padding(3, 4, 3, 2) }, 0, 1);
+            graph = new SpeedGraph { Dock = DockStyle.Fill, MinimumSize = new Size(0, 80) };
             page.Controls.Add(graph, 0, 2);
-
-            // While a test runs: the marks and the dumps. After the stop: the result and the notes.
-            runPanel = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
-            var mark = new Button { Text = "Mark This Moment (Ctrl+F12)", AutoSize = true };
-            var dump = new Button { Text = "Save Memory Dump Now", AutoSize = true };
-            mark.Click += delegate { AddMark(); };
-            dump.Click += delegate { DumpNow("dump"); };
-            tips.SetToolTip(mark, "Writes a timestamp to the test log.");
-            tips.SetToolTip(dump, "Writes server memory to a file.");
-            presetText = new Label { AutoSize = true, ForeColor = SystemColors.ControlText, Anchor = AnchorStyles.Left, Margin = new Padding(12, 8, 3, 3) };
-            runPanel.Controls.AddRange(new Control[] { mark, dump, presetText });
-            page.Controls.Add(runPanel, 0, 3);
-
-            endPanel = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1, Visible = false, Margin = new Padding(0, 8, 0, 0) };
-            endTitle = new Label { AutoSize = true, Font = new Font(Font, FontStyle.Regular) };
-            endText = new Label { AutoSize = true, ForeColor = SystemColors.ControlText, Margin = new Padding(3, 2, 3, 6) };
-            endNotes = new TextBox { Multiline = true, Height = 54, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical };
-            var endBar = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 4, 0, 0) };
-            var pack = new Button { Text = "Pack This Log", AutoSize = true };
-            pack.Click += delegate { SaveNotes(testDir, endNotes.Text); PackTest(testDir); };
-            capturesText = new Label { AutoSize = true, ForeColor = SystemColors.ControlText, Anchor = AnchorStyles.Left, Margin = new Padding(8, 8, 3, 3) };
-            endBar.Controls.AddRange(new Control[] { pack, capturesText });
-            endPanel.Controls.Add(endTitle);
-            endPanel.Controls.Add(endText);
-            endPanel.Controls.Add(new Label { Text = "Notes", AutoSize = true });
-            endPanel.Controls.Add(endNotes);
-            endPanel.Controls.Add(endBar);
-            page.Controls.Add(endPanel, 0, 4);
-
             ResetCards();
             return page;
         }
@@ -775,7 +745,6 @@ namespace SubVulpes
             foreach (var l in new[] { lastTicks, lowTicks, playersText, uptimeText })
                 SetCard(l, "-");
             lastTicks.ForeColor = SystemColors.ControlText;
-            SetCard(marksText, "0");
             speedStatus = NoSpeedText;
             playersStatus = NoPlayersText;
         }
@@ -1642,7 +1611,7 @@ namespace SubVulpes
                 server.ErrorDataReceived += OnOutput;
                 server.Exited += delegate { if (!IsDisposed) BeginInvoke(new Action(OnExited)); };
                 stopping = crashed = frozen = false;
-                marks = maxPlayers = 0;
+                maxPlayers = 0;
                 speeds.Clear();
                 graph.Points.Clear();
                 graph.Invalidate();
@@ -1657,8 +1626,6 @@ namespace SubVulpes
                 server.BeginOutputReadLine();
                 server.BeginErrorReadLine();
                 started = lastSpeedLine = DateTime.Now;
-                runPanel.Visible = true;
-                endPanel.Visible = false;
                 SetState("Starting");
                 message.Text = developerRun ? "This test: logs\\" + stamp : "";
             } catch (Exception ex) {
@@ -1800,7 +1767,6 @@ namespace SubVulpes
             session.Set("end", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             session.Set("minutes", ((int)t.TotalMinutes).ToString());
             session.Set("result", result);
-            session.Set("marks", marks.ToString());
             session.Set("max_players", maxPlayers.ToString());
             if (speeds.Count > 0) {
                 session.Set("speed_min", speeds.Min().ToString("0.0", CultureInfo.InvariantCulture));
@@ -1808,42 +1774,11 @@ namespace SubVulpes
             }
             session.Save();
 
-            runPanel.Visible = false;
-            endPanel.Visible = true;
-            endTitle.Text = "Log summary: " + (int)t.TotalMinutes + " min, " + result;
-            endTitle.ForeColor = SystemColors.ControlText;
-            endText.Text = (speeds.Count > 0
-                                ? "Speed " + speeds.Min().ToString("0", CultureInfo.InvariantCulture) + " to " +
-                                      speeds.Max().ToString("0", CultureInfo.InvariantCulture) + " ticks/s (Normal ~60). "
-                                : "No speed status (<1 minute). ") +
-                           marks + (marks == 1 ? " mark" : " marks") + ". Peak players: " + maxPlayers + ".";
-            endNotes.Text = "";
-            capturesText.Text = Files(testDir).Count + " files, " + FolderSize(testDir);
-            if (debugModeBox.Checked) ShowPage("Debug");
+            AddLine("[launcher] Log saved: " + (int)t.TotalMinutes + " min, " + result + ". It is in Launcher Settings, Past Logs.");
+            LoadTests();
         }
 
-        // ------------------------------------------------------------ marks and dumps
-
-        protected override void WndProc(ref Message m)
-        {
-            if (m.Msg == 0x0312 /* WM_HOTKEY */ && (int)m.WParam == HotkeyId)
-                AddMark();
-            base.WndProc(ref m);
-        }
-
-        void AddMark()
-        {
-            if (server == null || !developerRun)
-                return;
-            marks++;
-            SetCard(marksText, marks.ToString());
-            TimeSpan t = DateTime.Now - started;
-            string up = ((int)t.TotalHours).ToString("00") + ":" + t.Minutes.ToString("00") + ":" + t.Seconds.ToString("00");
-            string line = DateTime.Now.ToString("HH:mm:ss") + " (running for " + up + ")";
-            File.AppendAllText(Path.Combine(testDir, "marks.txt"), line + "\r\n");
-            AddLine("[mark " + up + "] " + marks);
-            SystemSounds.Asterisk.Play();
-        }
+        // ------------------------------------------------------------ memory dumps
 
         [DllImport("dbghelp.dll", SetLastError = true)]
         static extern bool MiniDumpWriteDump(IntPtr process, int processId, Microsoft.Win32.SafeHandles.SafeFileHandle file,
@@ -2373,8 +2308,6 @@ namespace SubVulpes
                 if (answer == DialogResult.Cancel) { e.Cancel = true; return; }
                 if (answer == DialogResult.Yes) SaveSettings();
             }
-            if (developerRun && testDir != null && endPanel.Visible)
-                SaveNotes(testDir, endNotes.Text);
             if (server == null) return;
             e.Cancel = true;
             if (await StopServer()) {
@@ -2393,12 +2326,6 @@ namespace SubVulpes
             }
             return base.ProcessCmdKey(ref message, keyData);
         }
-
-        [DllImport("user32.dll")]
-        static extern bool RegisterHotKey(IntPtr hWnd, int id, int modifiers, int key);
-
-        [DllImport("user32.dll")]
-        static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
         [DllImport("user32.dll")]
         static extern bool SetProcessDPIAware();
