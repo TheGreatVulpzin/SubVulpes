@@ -12,6 +12,7 @@ namespace SubVulpes
     {
         RichTextBox helpDoc;
         int helpIndex;
+        string helpTerm = "";
         readonly List<NavItem> helpNav = new List<NavItem>();
 
         // The topics come from tools/launcher/help.md, built into the program. Each "# " line starts a topic.
@@ -59,8 +60,14 @@ namespace SubVulpes
             search.TextChanged += delegate
             {
                 string term = search.Text.Trim().ToLowerInvariant();
+                helpTerm = term;
                 for (int i = 0; i < helpNav.Count; i++)
                     helpNav[i].Visible = term.Length == 0 || HelpDocs[i][0].ToLowerInvariant().Contains(term) || HelpDocs[i][1].ToLowerInvariant().Contains(term);
+                // The open topic changes when it does not match.
+                if (!helpNav[helpIndex].Visible)
+                    for (int i = 0; i < helpNav.Count; i++)
+                        if (helpNav[i].Visible) { helpIndex = i; break; }
+                RenderHelp();
             };
             var gap = new Panel { Dock = DockStyle.Top, Height = 10, Tag = "panel" };
             nav.Controls.Add(navList);
@@ -95,8 +102,20 @@ namespace SubVulpes
                 else if (line.StartsWith("- ")) HelpInline(box, "•  " + line.Substring(2) + "\n", 6, 16);
                 else HelpInline(box, line + "\n", 6, 0);
             }
+            HighlightHelp();
             box.SelectionStart = 0;
             box.SelectionLength = 0;
+        }
+
+        // Marks the text that the user searched for.
+        void HighlightHelp()
+        {
+            if (helpTerm.Length == 0) return;
+            string text = helpDoc.Text;
+            for (int at = text.IndexOf(helpTerm, StringComparison.OrdinalIgnoreCase); at >= 0; at = text.IndexOf(helpTerm, at + helpTerm.Length, StringComparison.OrdinalIgnoreCase)) {
+                helpDoc.Select(at, helpTerm.Length);
+                helpDoc.SelectionBackColor = Icons.Blend(UI.T.Panel, UI.T.Accent, 0.35);
+            }
         }
 
         static void HelpPut(RichTextBox box, string text, string font, float size, FontStyle style, Color fg, Color bg, int after)

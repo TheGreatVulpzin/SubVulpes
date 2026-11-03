@@ -402,7 +402,7 @@ namespace SubVulpes
             SetDebugMode(debugModeBox.On);
 
             LoadSettings();
-            serverName.SetText(nameBox.Text.Length == 0 ? "SubVulpes" : nameBox.Text);
+            ShowServerName();
             string saved = settings.Get("preset", Presets[0].Name);
             presetBox.SelectedItem = Presets.FirstOrDefault(p => p.Name == saved) ?? Presets[0];
             if (presetBox.SelectedItem == Presets[Presets.Length - 1])
@@ -532,6 +532,16 @@ namespace SubVulpes
         {
             string tone = serverState == "Running" ? "ok" : serverState == "Stopped" ? "muted" : (serverState == "Crashed" || serverState == StoppedUnexpectedly) ? "bad" : "warn";
             stateLabel.Set(serverState, tone);
+            ShowServerName();
+        }
+
+        // The tab bar shows the name of the server, and the player count while the server runs.
+        void ShowServerName()
+        {
+            if (serverName == null || nameBox == null) return;
+            string name = nameBox.Text.Length == 0 ? "SubVulpes" : nameBox.Text;
+            if (server != null && playersStatus != NoPlayersText) name += "  ·  " + playersStatus;
+            serverName.SetText(name);
         }
 
         // ------------------------------------------------------------ captures
@@ -978,14 +988,16 @@ namespace SubVulpes
             }
         }
 
-        async Task InstallPlugin()
+        // The package comes from the catalog, or from a file that the user chooses.
+        async Task InstallPlugin(string given = null)
         {
             if (pluginBusy || updating) return;
-            string zip;
-            using (var dialog = new OpenFileDialog { Filter = "Plugin package (*.svplugin;*.zip)|*.svplugin;*.zip" }) {
-                if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                zip = dialog.FileName;
-            }
+            string zip = given;
+            if (zip == null)
+                using (var dialog = new OpenFileDialog { Filter = "Plugin package (*.svplugin;*.zip)|*.svplugin;*.zip" }) {
+                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                    zip = dialog.FileName;
+                }
             string selectedFolder = folder;
             string outcome = null;
             string script = Path.Combine(selectedFolder, "install_plugin.ps1");
@@ -1555,6 +1567,10 @@ namespace SubVulpes
 
                 return true;
             }
+            if (keyData == Keys.F5) { var read = RefreshPlugins(); return true; }
+            if (keyData == (Keys.Control | Keys.L)) { ClearConsole(); return true; }
+            if (keyData == (Keys.Control | Keys.F)) { ShowPage("Server"); consoleSearch.Box.Focus(); return true; }
+            if (keyData == (Keys.Control | Keys.S) && dirty) { SaveSettings(); return true; }
             return base.ProcessCmdKey(ref message, keyData);
         }
 

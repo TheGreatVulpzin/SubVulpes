@@ -4,9 +4,12 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using SubVulpes.Ui;
 
@@ -47,6 +50,13 @@ namespace SubVulpes
         static string SourceOf(PluginMetadata m)
         {
             return m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Official" : "Installed";
+        }
+
+        string SourceOfPlugin(PluginMetadata m)
+        {
+            // The catalog knows best. Without it, the id decides.
+            var entry = catalog.FirstOrDefault(c => c.Id == m.Id);
+            return entry != null && entry.Source.Length > 0 ? entry.Source : SourceOf(m);
         }
 
         static string StateText(string state)
@@ -102,9 +112,9 @@ namespace SubVulpes
             return selectedPluginId;
         }
 
-        static string SortKey(PluginMetadata p, int column)
+        string SortKey(PluginMetadata p, int column)
         {
-            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateText(p.State) : column == 4 ? SourceOf(p) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
+            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateText(p.State) : column == 4 ? SourceOfPlugin(p) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
         }
 
         void RebuildPlugins()
@@ -119,7 +129,7 @@ namespace SubVulpes
                 shown.Sort((a, b) => (sortAscending ? 1 : -1) * string.Compare(SortKey(a, sortColumn), SortKey(b, sortColumn), StringComparison.OrdinalIgnoreCase));
             pluginGrid.Rows.Clear();
             foreach (var p in shown) {
-                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateText(p.State), RiskOf(p), SourceOf(p), "");
+                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateText(p.State), RiskOf(p), SourceOfPlugin(p), "");
                 pluginGrid.Rows[r].Tag = p;
                 if (p.Id == selectedPluginId) pluginGrid.CurrentCell = pluginGrid.Rows[r].Cells[0];
             }
@@ -164,6 +174,7 @@ namespace SubVulpes
 
         void ShowPluginSub(int k)
         {
+            if (k == 1) { LoadCatalog(); RenderCatalog(); }
             for (int n = 0; n < pluginSubPages.Count; n++) {
                 pluginSubPages[n].Visible = n == k;
                 pluginSubTabs[n].Selected = n == k;
@@ -171,21 +182,159 @@ namespace SubVulpes
             }
         }
 
+        // ------------------------------------------------------------ catalog
+
+        // One plugin of catalog.json. File is the package, as a path in the server folder or an absolute path.
+        sealed class CatalogEntry
+        {
+            public string Id = "", Name = "", Description = "", Author = "", Version = "", Source = "", File = "";
+        }
+
+        readonly List<CatalogEntry> catalog = new List<CatalogEntry>();
+        Panel catalogList;
+        SearchBox catalogSearch;
+        Dropdown catalogKind;
+        string catalogProblem = "";
+
+        static string CatalogText(Dictionary<string, object> d, string key, int maximum)
+        {
+            object v;
+            if (!d.TryGetValue(key, out v) || !(v is string)) return "";
+            string text = ((string)v).Trim();
+            foreach (char c in text) if (c < ' ') return "";
+            return text.Length > maximum ? text.Substring(0, maximum) : text;
+        }
+
+        // Reads catalog.json from the server folder: a list of objects with id, name, description, author, version, source and file.
+        void LoadCatalog()
+        {
+            catalog.Clear();
+            catalogProblem = "";
+            string path = Path.Combine(folder, "catalog.json");
+            if (!System.IO.File.Exists(path)) return;
+            try {
+                var items = new JavaScriptSerializer().DeserializeObject(System.IO.File.ReadAllText(path, Encoding.UTF8)) as object[];
+                if (items == null) throw new IOException("The file must hold a list.");
+                foreach (object item in items) {
+                    var d = item as Dictionary<string, object>;
+                    if (d == null) continue;
+                    var entry = new CatalogEntry { Id = CatalogText(d, "id", 47) };
+                    if (!PluginId(entry.Id)) continue;
+                    entry.Name = CatalogText(d, "name", 48);
+                    if (entry.Name.Length == 0) entry.Name = entry.Id;
+                    entry.Description = CatalogText(d, "description", 160);
+                    entry.Author = CatalogText(d, "author", 48);
+                    entry.Version = CatalogText(d, "version", 23);
+                    entry.Source = CatalogText(d, "source", 16);
+                    entry.File = CatalogText(d, "file", 260);
+                    catalog.Add(entry);
+                }
+            } catch (Exception ex) {
+                catalog.Clear();
+                catalogProblem = "Cannot read catalog.json: " + ex.Message;
+            }
+        }
+
+        static string CatalogPackage(string folder, CatalogEntry entry)
+        {
+            if (entry.File.Length == 0) return null;
+            string full = Path.IsPathRooted(entry.File) ? entry.File : Path.Combine(folder, entry.File);
+            return System.IO.File.Exists(full) ? full : null;
+        }
+
         Control CatalogPage()
         {
             var page = new Panel();
-            var card = new Surface { Dock = DockStyle.Top, Height = 150, Padding = new Padding(24) };
-            var title = L("The plugin catalog is not online yet", true, false);
+            var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
+            catalogSearch = new SearchBox(260) { Location = new Point(0, 8) };
+            catalogKind = new Dropdown(150) { Location = new Point(272, 8) };
+            catalogKind.Items.AddRange(new object[] { "All plugins", "Official", "Community" });
+            catalogKind.SelectedIndex = 0;
+            catalogSearch.TextChanged += delegate { RenderCatalog(); };
+            catalogKind.SelectedIndexChanged += delegate { RenderCatalog(); };
+            bar.Controls.Add(catalogSearch);
+            bar.Controls.Add(catalogKind);
+            catalogList = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            page.Controls.Add(catalogList);
+            page.Controls.Add(bar);
+            bar.SendToBack();
+            catalogList.BringToFront();
+            return page;
+        }
+
+        void RenderCatalog()
+        {
+            if (catalogList == null) return;
+            catalogList.SuspendLayout();
+            catalogList.Controls.Clear();
+            string term = catalogSearch.Text.Trim();
+            string kind = catalogKind.SelectedIndex == 1 ? "Official" : catalogKind.SelectedIndex == 2 ? "Community" : null;
+            var shown = catalog.Where(c => (kind == null || c.Source == kind) &&
+                (term.Length == 0 || c.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 || c.Description.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+            if (shown.Count == 0) catalogList.Controls.Add(EmptyCatalog());
+            // Each card docks at the top, so the first plugin is added last.
+            for (int i = shown.Count - 1; i >= 0; i--) catalogList.Controls.Add(CatalogCard(shown[i]));
+            Skin.Apply(catalogList);
+            catalogList.ResumeLayout();
+        }
+
+        Control EmptyCatalog()
+        {
+            var card = new Surface { Dock = DockStyle.Top, Height = 150 };
+            string why = catalogProblem.Length > 0 ? catalogProblem :
+                catalog.Count > 0 ? "No plugin matches the search." :
+                "Put a file named catalog.json in the server folder to list plugins here. Each plugin has an id, a name, a description, a version, a source and a package file. Or install a plugin from a file.";
+            var title = L(catalog.Count > 0 ? "Nothing to show" : "The catalog is empty", true, false);
             title.Font = UI.F(11f, FontStyle.Bold);
             title.Location = new Point(24, 22);
-            var text = L("Plugins from the catalog will show here with an Install button. For now, install a plugin from a .svplugin or .zip file.", false, true);
-            text.MaximumSize = new Size(560, 0);
+            var text = L(why, false, true);
+            text.MaximumSize = new Size(620, 0);
             text.Location = new Point(24, 54);
-            var install = new FlatButton("Install from File…") { Glyph = "download", Location = new Point(24, 98) };
+            var install = new FlatButton("Install from File…") { Glyph = "download", Location = new Point(24, 100) };
             install.Click += async delegate { await InstallPlugin(); };
             card.Controls.AddRange(new Control[] { title, text, install });
-            page.Controls.Add(card);
-            return page;
+            return card;
+        }
+
+        Control CatalogCard(CatalogEntry c)
+        {
+            var wrap = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(0, 0, 0, 10) };
+            var card = new Surface { Dock = DockStyle.Fill };
+            var avatar = new Avatar(c.Name) { Location = new Point(16, 16) };
+            var name = L(c.Name, true, false);
+            name.Font = UI.F(10.5f, FontStyle.Bold);
+            name.Location = new Point(76, 14);
+            var desc = L(c.Description.Length > 0 ? c.Description : "No description.", false, true);
+            desc.AutoEllipsis = true;
+            desc.AutoSize = false;
+            desc.Size = new Size(420, 20);
+            desc.Location = new Point(76, 42);
+            var meta = L((c.Author.Length > 0 ? c.Author + " · " : "") + "v" + c.Version, false, true);
+            meta.Location = new Point(76, 62);
+            card.Controls.AddRange(new Control[] { avatar, name, desc, meta });
+            if (c.Source.Length > 0) {
+                var chip = new Label { Text = c.Source, AutoSize = true, Padding = new Padding(8, 3, 8, 3), Font = UI.F(9f, FontStyle.Regular), Tag = "chip" };
+                chip.Location = new Point(76 + name.PreferredWidth + 10, 12);
+                card.Controls.Add(chip);
+            }
+            Control action;
+            if (plugins.Any(p => p.Id == c.Id)) {
+                var done = L("✓ Installed", false, false);
+                done.Tag = "ok";
+                action = done;
+            } else {
+                string package = CatalogPackage(folder, c);
+                var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null };
+                if (package == null) UI.Tips.SetToolTip(install, "The package file of this plugin is not on this computer.");
+                install.Click += async delegate { await InstallPlugin(package); };
+                action = install;
+            }
+            card.Controls.Add(action);
+            Action place = delegate { action.Location = new Point(card.Width - action.Width - 18, (card.Height - action.Height) / 2); };
+            card.Resize += delegate { place(); };
+            action.SizeChanged += delegate { place(); };
+            wrap.Controls.Add(card);
+            return wrap;
         }
 
         Control PluginsPage()
@@ -262,6 +411,16 @@ namespace SubVulpes
                 if (e.ColumnIndex == 5) ToggleFromTable(p);
                 else RenderPluginDetail();
             };
+            pluginGrid.CellMouseClick += delegate (object s, DataGridViewCellMouseEventArgs e)
+            {
+                if (e.Button != MouseButtons.Right || e.RowIndex < 0) return;
+                var p = pluginGrid.Rows[e.RowIndex].Tag as PluginMetadata;
+                if (p == null) return;
+                selectedPluginId = p.Id;
+                pluginGrid.CurrentCell = pluginGrid.Rows[e.RowIndex].Cells[0];
+                RenderPluginDetail();
+                PluginRowMenu(p);
+            };
             pluginGrid.SelectionChanged += delegate
             {
                 if (rebuilding) return;
@@ -305,6 +464,24 @@ namespace SubVulpes
                 menu.Items.Add(up);
                 menu.Items.Add(down);
             }
+            menu.Show(Cursor.Position);
+        }
+
+        // Right click on a plugin: the same actions as the switch and the Summary tab.
+        void PluginRowMenu(PluginMetadata p)
+        {
+            var menu = Dropdown.Menu();
+            string id = p.Id;
+            var toggle = new ToolStripMenuItem(p.State == "disabled" ? "Turn on" : "Turn off") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+            var review = new ToolStripMenuItem("Review approval…") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+            var copy = new ToolStripMenuItem("Copy ID") { ForeColor = UI.T.Fg, Padding = new Padding(2, 4, 2, 4) };
+            toggle.Click += delegate { ToggleFromTable(p); };
+            review.Click += async delegate { await ApprovePlugin(id); };
+            copy.Click += delegate { Clipboard.SetText(id); message.Text = "Copied: " + id; };
+            menu.Items.Add(toggle);
+            menu.Items.Add(review);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(copy);
             menu.Show(Cursor.Position);
         }
 
@@ -395,6 +572,11 @@ namespace SubVulpes
             state.MaximumSize = new Size(330, 0);
             state.Margin = new Padding(0, 0, 0, 12);
             flow.Controls.Add(state);
+            if (p.State == "restart") {
+                var restart = new FlatButton("Restart server") { Glyph = "restart", Enabled = server != null && !stopping, Margin = new Padding(0, 0, 0, 12) };
+                restart.Click += async delegate { if (server != null && await StopServer()) StartServer(); };
+                flow.Controls.Add(restart);
+            }
             if (RiskOf(p) == "highest") {
                 var n = L("This plugin has full access to the server. It can read private data, freeze it or crash it.", false, false);
                 n.MaximumSize = new Size(330, 0);

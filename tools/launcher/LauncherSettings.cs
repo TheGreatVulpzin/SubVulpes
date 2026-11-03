@@ -335,7 +335,7 @@ namespace SubVulpes
             SetDirty(false);
             dirtyText.Text = server == null ? "Saved ✓" : "Saved ✓ Restart the server to apply them.";
             dirtyText.ForeColor = UI.T.Ok;
-            serverName.SetText(nameBox.Text.Length == 0 ? "SubVulpes" : nameBox.Text);
+            ShowServerName();
             if (stats != null) stats.Set("Port", portBox.Value.ToString(CultureInfo.InvariantCulture));
         }
 
@@ -412,6 +412,7 @@ namespace SubVulpes
             tabBar.BackColor = UI.T.Bar;
             RenderConsole();
             RenderPluginDetail();
+            RenderCatalog();
             RenderHelp();
             if (!Visible) return;
             // A change of the window size makes the title bar follow the theme.

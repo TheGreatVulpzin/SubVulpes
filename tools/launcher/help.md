@@ -43,6 +43,10 @@ Plugins add features to the server.
 Turn on only plugins that you trust.
 ## The table
 Select a column title to sort. Right-click a title to choose the columns. Risk and Source are hidden at first.
+## Right-click a plugin
+The menu turns the plugin on or off, opens the approval review and copies the id.
+## Catalog
+The Catalog tab lists the plugins of the file `catalog.json` in the server folder. Select **Install** to install one. The approval review still shows first.
 ## Install
 Use `Install from File…` for a `.svplugin` file. The launcher shows what the plugin can do before it installs.
 ## Approval
@@ -65,3 +69,10 @@ Read the last lines in the console. Make sure that no other server uses the same
 The launcher shows Frozen when no speed line comes for a long time. Use **Kill** and start again.
 ## The launcher cannot update
 Check your internet connection. You can also install an update from a `.zip` file in **Launcher Settings**.
+
+# Keyboard
+- **F5** reads the plugins again.
+- **Ctrl+L** clears the console.
+- **Ctrl+F** goes to the console search.
+- **Ctrl+S** saves the server settings.
+- **Ctrl+Shift+D** turns Debug Mode on or off.

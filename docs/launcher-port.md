@@ -26,12 +26,23 @@ The real launcher has the same look and uses real data.
 
 - The Save bar (Save, Revert changes, Reset to defaults) belongs to Server Settings only. Launcher and Advanced settings apply at once, as before.
 - Revert changes loads the saved values again. Reset to defaults resets the port, the upload limit, the mode, the player limit and the round time. It does not touch the name, the welcome text or the password.
-- The Catalog tab has no online source yet. It says so and offers Install from File.
+- The Catalog tab reads `catalog.json` in the server folder. There is no online source yet. The file is a list of objects:
+  `[{"id": "sv.bans", "name": "Bans", "description": "...", "author": "SubVulpes", "version": "0.1.0", "source": "Official", "file": "plugins-pending/sv.bans.svplugin"}]`.
+  `source` is Official or Community. `file` is a package, as a path in the server folder or an absolute path. Install starts the normal review. A card without a package file cannot install.
+- A plugin listed in the catalog takes its Source from the catalog.
 - The plugin table has a Source column. A plugin whose id starts with `sv.` is Official. Any other is Installed. Risk and Source are hidden at first. Right-click a column title to choose the columns. The launcher remembers the choice.
 - A plugin risk comes from its runtime and capabilities: native is highest, any capability besides read, storage and config is high, the rest is low.
 - The plugin approval dialog keeps the standard look. Its tests and its security checks did not change.
 - The Help text is `tools/launcher/help.md`. The build puts it in the program. Each `# ` line starts a topic.
 - The dashboard has 11 rows. Round and Network out are not in the launcher: the server does not report them. The launcher remembers the rows, the graph, the height and the width of the panel.
+
+## Extras
+
+- Right-click a plugin: turn on or off, review approval, copy the id.
+- A plugin that needs a restart has a Restart server button in its Summary tab.
+- The tab bar shows the player count while the server runs.
+- Keys: F5 (read plugins), Ctrl+L (clear console), Ctrl+F (console search), Ctrl+S (save server settings).
+- The Help search marks the words that it finds.
 
 ## Test aids
 
