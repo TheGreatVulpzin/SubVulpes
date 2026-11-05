@@ -78,3 +78,6 @@ Check your internet connection. You can also install an update from a `.zip` fil
 - **Ctrl+F** goes to the console search.
 - **Ctrl+S** saves the server settings.
 - **Ctrl+Shift+D** turns Debug Mode on or off.
+- **Tab** and **Shift+Tab** move between the controls. A dotted line shows the control that has the focus.
+- **Space** or **Enter** presses a button, a tab or a list item. **Space** also turns a switch on or off, and turns the chosen plugin on or off in the plugin list.
+- **Up** and **Down** change a drop-down. **Left** and **Right** change a choice between a few options.

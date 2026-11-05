@@ -34,7 +34,7 @@ namespace SubVulpes
         Control ServerPage()
         {
             LoadDashboard();
-            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5, Dock = DockStyle.Fill, Tag = "panel" };
+            var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 5, Dock = DockStyle.Fill };
             serverLayout = page;
             page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             page.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
@@ -47,19 +47,19 @@ namespace SubVulpes
             page.Controls.Add(ConsoleBar(), 0, 2);
             page.Controls.Add(ConsoleBox(), 0, 3);
             page.Controls.Add(CommandRow(), 0, 4);
-            var surface = new Surface { Padding = new Padding(16, 12, 16, 12) };
-            surface.Controls.Add(page);
-            return surface;
+            // The page has no frame of its own. It sits on the window, like the other pages.
+            page.Padding = new Padding(16, 12, 16, 8);
+            return page;
         }
 
         Control ServerToolbar()
         {
-            var toolbar = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
-            var right = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
-            killButton = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0), Glyph = "bolt", Enabled = false };
-            restartButton = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0), Glyph = "restart", Enabled = false };
-            stopButton = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0), Glyph = "stop", Enabled = false };
-            startStop = new FlatButton("Start") { Kind = "primary", Margin = new Padding(8, 0, 0, 0), Glyph = "play" };
+            var toolbar = new Panel { Dock = DockStyle.Fill };
+            var right = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
+            killButton = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0), Enabled = false };
+            restartButton = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0), Enabled = false };
+            stopButton = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0), Enabled = false };
+            startStop = new FlatButton("Start") { Kind = "primary", Margin = new Padding(8, 0, 0, 0) };
             startStop.Click += delegate { StartServer(); };
             stopButton.Click += async delegate { await StopServer(); };
             restartButton.Click += async delegate { if (server != null && await StopServer()) StartServer(); };
@@ -68,7 +68,7 @@ namespace SubVulpes
             UI.Tips.SetToolTip(restartButton, "Stops the server and starts it again.");
             UI.Tips.SetToolTip(killButton, "Ends the server at once. Use it only if Stop does not work.");
             right.Controls.AddRange(new Control[] { killButton, restartButton, stopButton, startStop });
-            var left = new FlowLayoutPanel { Dock = DockStyle.Left, AutoSize = true, WrapContents = false, Padding = new Padding(0, 4, 0, 0), Tag = "panel" };
+            var left = new FlowLayoutPanel { Dock = DockStyle.Left, AutoSize = true, WrapContents = false, Padding = new Padding(0, 4, 0, 0) };
             stateLabel = new StateLabel { Margin = new Padding(0, 0, 14, 0) };
             missingText = new Label { AutoSize = true, Tag = "warn", Margin = new Padding(0, 9, 0, 0) };
             ShowMissing(configCreated);
@@ -101,7 +101,7 @@ namespace SubVulpes
         // The list of numbers at the left and the graph at the right. The user drags the lines to resize them.
         Control StatsPanel()
         {
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 4, 0, 8), Tag = "panel" };
+            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 4, 0, 8) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, dashWidth));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 9));
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -127,7 +127,7 @@ namespace SubVulpes
             grid.Controls.Add(vgrip, 1, 0);
             grid.Controls.Add(chart, 2, 0);
             ShowGraph(graphShown, grid, vgrip);
-            var dash = new Panel { Dock = DockStyle.Fill, Tag = "panel" };
+            var dash = new Panel { Dock = DockStyle.Fill };
             statsRow = dash;
             var grip = new Grip(false);
             UI.Tips.SetToolTip(grip, "Drag to resize.");
@@ -185,7 +185,7 @@ namespace SubVulpes
 
         Control ConsoleBar()
         {
-            var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 6, 0, 4), Tag = "panel" };
+            var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 6, 0, 4) };
             bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
             bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260));
             bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -212,10 +212,10 @@ namespace SubVulpes
             var copy = new IconButton("copy");
             var clear = new IconButton("clear");
             var save = new IconButton("save");
-            UI.Tips.SetToolTip(expand, "Expand or collapse the console.");
-            UI.Tips.SetToolTip(copy, "Copy all.");
-            UI.Tips.SetToolTip(clear, "Clear the console.");
-            UI.Tips.SetToolTip(save, "Save the log to a file.");
+            expand.Caption = "Expand or collapse the console.";
+            copy.Caption = "Copy all.";
+            clear.Caption = "Clear the console.";
+            save.Caption = "Save the log to a file.";
             clear.Click += delegate { ClearConsole(); };
             copy.Click += delegate { if (console.TextLength > 0) Clipboard.SetText(console.Text); };
             save.Click += async delegate { await SaveLog(); };
@@ -240,7 +240,7 @@ namespace SubVulpes
 
         Control CommandRow()
         {
-            var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0), Tag = "panel" };
+            var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 8, 0, 0) };
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
             commandBox = new TextField(200, false) { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 0, 8, 0) };

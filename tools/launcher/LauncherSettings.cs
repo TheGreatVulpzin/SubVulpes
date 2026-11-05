@@ -118,8 +118,8 @@ namespace SubVulpes
         static TableLayoutPanel RowTable()
         {
             var t = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 4 };
-            t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 240));
-            t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260));
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 16));
             t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20));
             return t;
@@ -162,8 +162,8 @@ namespace SubVulpes
             t.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
             var p = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
             var l = L(title, true, false);
-            l.Font = UI.F(12f, FontStyle.Regular);
-            l.Location = new Point(0, 12);
+            l.Font = UI.F(11f, FontStyle.Bold);
+            l.Location = new Point(0, 14);
             var line = new Panel { Dock = DockStyle.Bottom, Height = 1, Tag = "line" };
             p.Controls.Add(l);
             p.Controls.Add(line);
@@ -171,18 +171,29 @@ namespace SubVulpes
             t.SetColumnSpan(p, 4);
         }
 
-        // A label, a help icon, the field, and a badge when the setting needs a restart.
+        // A label with its help line under it, the field, and a badge when the setting needs a restart.
+        // The help is plain text and not a hover icon, so that a person finds it without searching for it.
         void AddRow(TableLayoutPanel t, string label, string help, Control input, string badge)
         {
             int row = t.RowCount++;
-            t.RowStyles.Add(new RowStyle(SizeType.Absolute, input is TextField ? Math.Max(48, input.Height + 12) : 48));
-            var lab = L(label, true, false);
-            lab.Anchor = AnchorStyles.Left;
-            lab.Margin = new Padding(0, 6, 0, 0);
+            t.RowStyles.Add(new RowStyle(SizeType.Absolute, Math.Max(help != null ? 58 : 48, input is TextField ? input.Height + 12 : 0)));
+            var lab = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 0, 0) };
+            var title = L(label, false, false);
+            lab.Controls.Add(title);
+            if (help != null)
+            {
+                var note = L(help, false, true);
+                note.Font = UI.F(8.5f, FontStyle.Regular);
+                note.MaximumSize = new Size(250, 0);
+                note.Margin = new Padding(0, 1, 0, 0);
+                lab.Controls.Add(note);
+            }
             t.Controls.Add(lab, 0, row);
-            if (help != null) t.Controls.Add(new HelpIcon(help) { Anchor = AnchorStyles.Left }, 1, row);
             input.Anchor = AnchorStyles.Left;
             input.Margin = new Padding(0);
+            input.AccessibleName = label;
+            var field = input as TextField;
+            if (field != null) field.Box.AccessibleName = label;
             Compact(input);
             Control cell = input;
             if (badge != null) {
@@ -394,7 +405,7 @@ namespace SubVulpes
             checkUpdate.Click += async delegate { await CheckForUpdates(); };
             var update = new FlatButton("Update from .ZIP") { Margin = new Padding(0) };
             update.Click += async delegate { await ChooseUpdate(); };
-            previewsBox = new Switch { On = settings.Get("pre_releases", "0") == "1" };
+            previewsBox = new Switch { On = settings.Get("pre_releases", "0") == "1", AccessibleName = "Include Beta Versions" };
             previewsBox.Changed += delegate { settings.Set("pre_releases", previewsBox.On ? "1" : "0"); settings.Save(); };
             themeBox = Combo(160, "Light", "Dark");
             accentBox = Combo(160, AccentNames);
@@ -411,7 +422,7 @@ namespace SubVulpes
             };
             themeBox.SelectedIndexChanged += look;
             accentBox.SelectedIndexChanged += look;
-            debugModeBox = new Switch { On = settings.Get("developer", "0") == "1" };
+            debugModeBox = new Switch { On = settings.Get("developer", "0") == "1", AccessibleName = "Debug Mode" };
             debugModeBox.Changed += delegate { SetDebug(debugModeBox.On); };
             return ScrollPage(delegate (TableLayoutPanel t)
             {
@@ -434,8 +445,8 @@ namespace SubVulpes
         void ApplyLook()
         {
             int accent = Math.Max(0, Math.Min(accentBox.SelectedIndex, Accents.Length - 1));
-            Theme.Light.Accent = Accents[accent][0];
-            Theme.Dark.Accent = Accents[accent][1];
+            Theme.Light.SetAccent(Accents[accent][0]);
+            Theme.Dark.SetAccent(Accents[accent][1]);
             Skin.Window(this, themeBox.SelectedIndex == 1 ? Theme.Dark : Theme.Light);
             tabBar.BackColor = UI.T.Bar;
             statusBar.BackColor = UI.T.SubBar;

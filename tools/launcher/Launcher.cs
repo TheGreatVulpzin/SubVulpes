@@ -732,7 +732,8 @@ namespace SubVulpes
 
         internal static Color PluginDangerColor(string level)
         {
-            return level == "low" ? Color.DarkGreen : level == "high" ? Color.SaddleBrown : Color.DarkRed;
+            // The colors of the theme, so that the text reads on the dark theme too.
+            return level == "low" ? UI.T.Ok : level == "high" ? UI.T.Warn : UI.T.Bad;
         }
 
         internal static bool CanApprovePlugin(string runtime, bool nativeConfirmed)
@@ -801,7 +802,7 @@ namespace SubVulpes
         internal sealed class PluginApprovalDialog : Form
         {
             internal readonly CheckBox NativeConfirmation;
-            internal readonly Button ApproveButton;
+            internal readonly FlatButton ApproveButton;
             internal readonly bool FullReview;
             readonly PluginMetadata metadata;
 
@@ -811,13 +812,13 @@ namespace SubVulpes
                 FullReview = NeedsFullPluginReview(next, previous);
                 Text = "Plugin Installation";
                 StartPosition = FormStartPosition.CenterParent;
-                Font = SystemFonts.MessageBoxFont;
+                Font = UI.F(9.5f, FontStyle.Regular);
                 ClientSize = new Size(700, 580); MinimumSize = new Size(600, 480);
                 MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; KeyPreview = true;
                 var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(12) };
                 table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
                 for (int i = 0; i < 6; i++) table.RowStyles.Add(new RowStyle(i == 3 ? SizeType.Percent : SizeType.AutoSize, i == 3 ? 100 : 0));
-                table.Controls.Add(new Label { Text = next.DisplayName + " (" + next.Id + ")", AutoSize = true,
+                table.Controls.Add(new Label { Text = next.DisplayName + " (" + next.Id + ")", AutoSize = true, Font = UI.F(12f, FontStyle.Bold),
                     MaximumSize = new Size(650, 0), UseMnemonic = false, Margin = new Padding(3, 3, 3, 8) }, 0, 0);
                 string details = (next.Description.Length == 0 ? "" : next.Description + "\r\n") + "Author: " + (next.Author.Length == 0 ? "Not Stated" : next.Author) +
                     "\r\nRuntime: " + next.Runtime;
@@ -827,32 +828,34 @@ namespace SubVulpes
                 table.Controls.Add(new Label { Text = version + (FullReview ? ". The plugin has new capabilities." :
                     ". The plugin has no new capabilities."), AutoSize = true, MaximumSize = new Size(650, 0), UseMnemonic = false,
                     Margin = new Padding(3, 3, 3, 8) }, 0, 2);
-                var review = new RichTextBox { ReadOnly = true, Dock = DockStyle.Fill, BackColor = SystemColors.Window,
-                    BorderStyle = BorderStyle.FixedSingle, DetectUrls = false, TabIndex = 0, Name = "capabilityReview" };
+                var review = new RichTextBox { ReadOnly = true, Dock = DockStyle.Fill, Tag = "doc",
+                    BorderStyle = BorderStyle.None, DetectUrls = false, TabIndex = 0, Name = "capabilityReview", AccessibleName = "What the plugin can do" };
                 table.Controls.Add(review, 0, 3);
                 NativeConfirmation = new CheckBox { Text = "Allow this plugin to run on my server",
-                    AutoSize = true, Visible = next.Runtime == "native", Checked = false, ForeColor = Color.DarkRed,
+                    AutoSize = true, Visible = next.Runtime == "native", Checked = false, Tag = "warn",
                     Name = "nativeConfirmation", TabIndex = 1, Margin = new Padding(3, 12, 3, 12) };
                 table.Controls.Add(NativeConfirmation, 0, 4);
                 var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, TabIndex = 2 };
-                ApproveButton = new Button { Text = "Install", AutoSize = true, TabIndex = 0, Name = "installAndApprove" };
-                var cancel = new LinkLabel { Text = "Cancel", AutoSize = true, Margin = new Padding(12, 8, 12, 3), TabIndex = 1 };
-                cancel.LinkClicked += delegate { DialogResult = DialogResult.Cancel; Close(); };
+                ApproveButton = new FlatButton("Install") { Kind = "primary", TabIndex = 0, Name = "installAndApprove" };
+                var cancel = new FlatButton("Cancel") { TabIndex = 1, Margin = new Padding(0, 0, 8, 0) };
+                cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
                 ApproveButton.Click += delegate { TryApprove(); };
                 NativeConfirmation.CheckedChanged += delegate { UpdateApprovalState(); };
                 actions.Controls.Add(ApproveButton); actions.Controls.Add(cancel);
                 table.Controls.Add(actions, 0, 5); Controls.Add(table);
+                // The dialog wears the theme of the window, and the title bar follows it.
+                Skin.Window(this, UI.T);
+                HandleCreated += delegate { Skin.Window(this, UI.T); };
                 var oldCaps = new HashSet<string>(previous == null ? new string[0] : previous.Capabilities.Split(','));
                 foreach (PluginDanger danger in next.Dangers.OrderByDescending(d => d.Level == "highest" ? 2 : d.Level == "high" ? 1 : 0)) {
                     review.SelectionColor = PluginDangerColor(danger.Level);
                     review.AppendText((previous != null && danger.Capability != "native" && !oldCaps.Contains(danger.Capability) ? "NEW: " : "") +
                         danger.Capability + " (" + danger.Level + "): " + danger.Text + "\r\n\r\n");
                 }
-                review.SelectionColor = SystemColors.ControlText;
+                review.SelectionColor = UI.T.Fg;
                 review.AppendText(
                     "SHA-256: " + (next.PackageHash.Length == 0 ? next.Hash : next.PackageHash));
                 review.SelectionStart = 0; review.SelectionLength = 0;
-                AcceptButton = ApproveButton;
                 KeyDown += (sender, e) => { if (e.KeyCode == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); } };
                 UpdateApprovalState();
             }

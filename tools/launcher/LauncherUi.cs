@@ -11,26 +11,69 @@ namespace SubVulpes.Ui
 {
     class Theme
     {
-        public Color Bg, Win, Panel, Line, Fg, Muted, Accent, Ok, Warn, Bad, Chip, Console, ConsoleFg, Bar, BarFg, BarMuted, SubBar;
+        // AccentFg is the accent for text. Accent alone is for lines and shapes. OkFill is the fill behind white text.
+        public Color Bg, Win, Panel, Line, Fg, Muted, Accent, AccentFg, Ok, OkFill, Warn, Bad, Chip, Console, ConsoleFg, Bar, BarFg, BarMuted, SubBar;
+        // Warm neutrals go with the orange. Every text color passes a contrast of 4.5 on the window, the panel and the chip.
+        // A new accent color for lines and shapes. The accent for text follows it, darker on the light theme and lighter on the dark one,
+        // until it has a contrast of 4.5 on the window, the panel and the chip.
+        public void SetAccent(Color accent)
+        {
+            Accent = accent;
+            bool light = this == Light;
+            Color text = accent;
+            for (int step = 0; step < 40 && Worst(text) < 4.6; step++)
+                text = Color.FromArgb((int)(text.R + ((light ? 0 : 255) - text.R) * 0.06), (int)(text.G + ((light ? 0 : 255) - text.G) * 0.06), (int)(text.B + ((light ? 0 : 255) - text.B) * 0.06));
+            AccentFg = text;
+        }
+
+        double Worst(Color text)
+        {
+            return Math.Min(Contrast(text, Win), Math.Min(Contrast(text, Panel), Contrast(text, Chip)));
+        }
+
+        public static double Contrast(Color a, Color b)
+        {
+            double la = Luminance(a), lb = Luminance(b);
+            return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+        }
+
+        static double Luminance(Color c)
+        {
+            Func<int, double> channel = v => { double x = v / 255.0; return x <= 0.03928 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4); };
+            return 0.2126 * channel(c.R) + 0.7152 * channel(c.G) + 0.0722 * channel(c.B);
+        }
+
         public static readonly Theme Light = new Theme {
-            Bg = Color.FromArgb(238, 240, 243), Win = Color.FromArgb(246, 247, 249), Panel = Color.White, Line = Color.FromArgb(217, 220, 225),
-            Fg = Color.FromArgb(27, 29, 33), Muted = Color.FromArgb(106, 112, 122), Accent = Color.FromArgb(217, 99, 30),
-            Ok = Color.FromArgb(42, 138, 74), Warn = Color.FromArgb(183, 121, 31), Bad = Color.FromArgb(194, 54, 43),
-            Chip = Color.FromArgb(236, 239, 243), Console = Color.Black, ConsoleFg = Color.FromArgb(212, 215, 220),
-            Bar = Color.FromArgb(222, 226, 232), SubBar = Color.FromArgb(238, 240, 244), BarFg = Color.White, BarMuted = Color.FromArgb(96, 103, 115) };
+            Bg = Color.FromArgb(238, 235, 230), Win = Color.FromArgb(246, 244, 240), Panel = Color.White, Line = Color.FromArgb(220, 215, 207),
+            Fg = Color.FromArgb(32, 29, 26), Muted = Color.FromArgb(104, 97, 89), Accent = Color.FromArgb(217, 99, 30), AccentFg = Color.FromArgb(172, 66, 10),
+            Ok = Color.FromArgb(26, 112, 54), OkFill = Color.FromArgb(26, 112, 54), Warn = Color.FromArgb(136, 84, 6), Bad = Color.FromArgb(176, 38, 28),
+            Chip = Color.FromArgb(238, 234, 228), Console = Color.Black, ConsoleFg = Color.FromArgb(212, 215, 220),
+            Bar = Color.FromArgb(228, 223, 215), SubBar = Color.FromArgb(238, 234, 228), BarFg = Color.White, BarMuted = Color.FromArgb(92, 85, 77) };
         public static readonly Theme Dark = new Theme {
-            Bg = Color.FromArgb(15, 17, 20), Win = Color.FromArgb(26, 29, 34), Panel = Color.FromArgb(33, 37, 43), Line = Color.FromArgb(50, 56, 65),
-            Fg = Color.FromArgb(232, 234, 238), Muted = Color.FromArgb(154, 161, 172), Accent = Color.FromArgb(240, 138, 75),
-            Ok = Color.FromArgb(94, 194, 125), Warn = Color.FromArgb(224, 176, 80), Bad = Color.FromArgb(239, 111, 100),
-            Chip = Color.FromArgb(43, 48, 56), Console = Color.Black, ConsoleFg = Color.FromArgb(201, 204, 210),
-            Bar = Color.FromArgb(40, 45, 53), SubBar = Color.FromArgb(31, 35, 41), BarFg = Color.White, BarMuted = Color.FromArgb(154, 161, 172) };
+            Bg = Color.FromArgb(17, 16, 15), Win = Color.FromArgb(27, 26, 24), Panel = Color.FromArgb(36, 34, 32), Line = Color.FromArgb(58, 55, 51),
+            Fg = Color.FromArgb(236, 233, 228), Muted = Color.FromArgb(165, 158, 150), Accent = Color.FromArgb(240, 138, 75), AccentFg = Color.FromArgb(244, 150, 92),
+            Ok = Color.FromArgb(94, 194, 125), OkFill = Color.FromArgb(36, 128, 68), Warn = Color.FromArgb(224, 176, 80), Bad = Color.FromArgb(239, 111, 100),
+            Chip = Color.FromArgb(47, 44, 41), Console = Color.Black, ConsoleFg = Color.FromArgb(201, 204, 210),
+            Bar = Color.FromArgb(43, 41, 38), SubBar = Color.FromArgb(33, 31, 29), BarFg = Color.White, BarMuted = Color.FromArgb(165, 158, 150) };
     }
 
     static class UI
     {
         public static Theme T = Theme.Light;
         public static readonly ToolTip Tips = new ToolTip { InitialDelay = 250, ShowAlways = true, AutoPopDelay = 12000 };
-        public static Font F(float size, FontStyle style) { return new Font("Segoe UI", size, style, GraphicsUnit.Point); }
+        // Windows stresses text with Semibold. The Bold face is too heavy for a small interface.
+        public static Font F(float size, FontStyle style)
+        {
+            if ((style & FontStyle.Bold) != 0) return new Font("Segoe UI Semibold", size, style & ~FontStyle.Bold, GraphicsUnit.Point);
+            return new Font("Segoe UI", size, style, GraphicsUnit.Point);
+        }
+        // One corner radius for controls, and one for the panels that hold them.
+        public const int Radius = 3, PanelRadius = 4;
+        // The ring of a control that has the keyboard focus. It shows only after a key press, like the system controls.
+        public static void FocusRing(Graphics g, Rectangle r)
+        {
+            using (var pen = new Pen(T.Accent) { DashStyle = DashStyle.Dot }) g.DrawRectangle(pen, r);
+        }
         public static GraphicsPath Round(Rectangle r, int rad)
         {
             var p = new GraphicsPath(); int d = Math.Max(2, rad * 2);
@@ -194,27 +237,42 @@ namespace SubVulpes.Ui
         public FlatButton(string text)
         {
             Text = text; Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular); Height = 34; Margin = new Padding(0, 0, 8, 0);
-            SetStyle(UI.Paint, true);
+            SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            AccessibleRole = AccessibleRole.PushButton; AccessibleName = text;
             Width = TextRenderer.MeasureText(text, Font).Width + 32;
         }
+        protected override void OnTextChanged(EventArgs e) { AccessibleName = Text; base.OnTextChanged(e); }
         protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Return)) { e.Handled = true; OnClick(EventArgs.Empty); }
+            base.OnKeyDown(e);
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Parent != null ? Parent.BackColor : UI.T.Win);
+            Color back = Parent != null ? Parent.BackColor : UI.T.Win;
+            g.Clear(back);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
             Color fill = UI.T.Panel, border = UI.T.Line, fg = UI.T.Fg;
-            if (Kind == "primary") { fill = UI.T.Ok; border = UI.T.Ok; fg = Color.White; }
+            if (Kind == "primary") { fill = UI.T.OkFill; border = UI.T.OkFill; fg = Color.White; }
             else if (Kind == "danger") { border = UI.T.Bad; fg = UI.T.Bad; }
-            if (Kind == "link") { Color back = Parent != null ? Parent.BackColor : UI.T.Win; fill = back; border = back; fg = hover ? UI.T.Bad : UI.T.Muted; }
-            else if (!Enabled) { fill = UI.T.Chip; border = UI.T.Line; fg = UI.T.Muted; }
+            if (Kind == "link") { fill = back; border = back; fg = hover ? UI.T.Bad : UI.T.Muted; }
+            else if (!Enabled) { fill = back; border = Icons.Blend(back, UI.T.Line, 0.7); fg = Icons.Blend(back, UI.T.Muted, 0.75); }
             else if (hover) border = UI.T.Accent;
-            using (var path = UI.Round(r, 6)) using (var b = new SolidBrush(fill)) using (var p = new Pen(border)) { g.FillPath(b, path); g.DrawPath(p, path); }
-            if (glyph == null) { TextRenderer.DrawText(g, Text, Font, r, fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter); return; }
-            int tw = TextRenderer.MeasureText(g, Text, Font, new Size(999, 40), TextFormatFlags.NoPadding).Width, start = (Width - (16 + 6 + tw)) / 2;
-            Icons.Draw(g, glyph, start, (Height - 16) / 2, fg);
-            TextRenderer.DrawText(g, Text, Font, new Rectangle(start + 22, 0, tw + 4, Height), fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var path = UI.Round(r, UI.Radius)) using (var b = new SolidBrush(fill)) using (var p = new Pen(border)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            if (glyph == null) TextRenderer.DrawText(g, Text, Font, r, fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            else
+            {
+                int tw = TextRenderer.MeasureText(g, Text, Font, new Size(999, 40), TextFormatFlags.NoPadding).Width, start = (Width - (16 + 6 + tw)) / 2;
+                Icons.Draw(g, glyph, start, (Height - 16) / 2, fg);
+                TextRenderer.DrawText(g, Text, Font, new Rectangle(start + 22, 0, tw + 4, Height), fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            }
+            if (Focused && ShowFocusCues && Enabled) UI.FocusRing(g, new Rectangle(3, 3, Width - 7, Height - 7));
         }
     }
 
@@ -222,13 +280,32 @@ namespace SubVulpes.Ui
     {
         bool on;
         public event EventHandler Changed;
-        public Switch() { Size = new Size(40, 22); Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        public Switch()
+        {
+            Size = new Size(40, 22); Cursor = Cursors.Hand; SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            AccessibleRole = AccessibleRole.CheckButton;
+        }
         public bool On { get { return on; } set { on = value; Invalidate(); } }
         protected override void OnClick(EventArgs e) { on = !on; Invalidate(); if (Changed != null) Changed(this, EventArgs.Empty); base.OnClick(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && e.KeyCode == Keys.Space) { e.Handled = true; OnClick(EventArgs.Empty); }
+            base.OnKeyDown(e);
+        }
+        // A screen reader reads the switch as a check box, and it needs the checked state.
+        protected override AccessibleObject CreateAccessibilityInstance() { return new SwitchAccess(this); }
+        sealed class SwitchAccess : ControlAccessibleObject
+        {
+            readonly Switch owner;
+            public SwitchAccess(Switch owner) : base(owner) { this.owner = owner; }
+            public override AccessibleStates State { get { return owner.on ? base.State | AccessibleStates.Checked : base.State; } }
+        }
         public static void Draw(Graphics g, Rectangle r, bool isOn)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(isOn ? UI.T.Ok : UI.T.Line)) g.FillPath(b, path);
+            using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(isOn ? UI.T.OkFill : Icons.Blend(UI.T.Line, UI.T.Muted, 0.35))) g.FillPath(b, path);
             int k = r.Height - 6;
             using (var b = new SolidBrush(Color.White)) g.FillEllipse(b, isOn ? r.Right - k - 3 : r.X + 3, r.Y + 3, k, k);
         }
@@ -236,6 +313,7 @@ namespace SubVulpes.Ui
         {
             e.Graphics.Clear(Parent != null ? Parent.BackColor : UI.T.Win);
             Draw(e.Graphics, new Rectangle(0, 0, Width - 1, Height - 1), on);
+            if (Focused && ShowFocusCues) UI.FocusRing(e.Graphics, new Rectangle(-1, -1, Width + 1, Height + 1));
         }
     }
 
@@ -244,7 +322,31 @@ namespace SubVulpes.Ui
         public readonly List<object> Items = new List<object>();
         int sel = -1; bool hot, open;
         public event EventHandler SelectedIndexChanged;
-        public Dropdown(int width) { Width = width; Height = 28; Margin = new Padding(0); Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular); SetStyle(UI.Paint, true); }
+        public Dropdown(int width)
+        {
+            Width = width; Height = 28; Margin = new Padding(0); Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular);
+            SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true; AccessibleRole = AccessibleRole.ComboBox;
+        }
+        protected override bool IsInputKey(Keys keyData) { return keyData == Keys.Up || keyData == Keys.Down || base.IsInputKey(keyData); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        // Up and Down change the choice. Space, Enter, F4 and Alt+Down open the list.
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled) {
+                if (e.KeyCode == Keys.Down && !e.Alt && sel < Items.Count - 1) { SelectedIndex = sel + 1; e.Handled = true; }
+                else if (e.KeyCode == Keys.Up && sel > 0) { SelectedIndex = sel - 1; e.Handled = true; }
+                else if (e.KeyCode == Keys.Space || e.KeyCode == Keys.Return || e.KeyCode == Keys.F4 || (e.Alt && e.KeyCode == Keys.Down)) { e.Handled = true; OnClick(EventArgs.Empty); }
+            }
+            base.OnKeyDown(e);
+        }
+        protected override AccessibleObject CreateAccessibilityInstance() { return new DropdownAccess(this); }
+        sealed class DropdownAccess : ControlAccessibleObject
+        {
+            readonly Dropdown owner;
+            public DropdownAccess(Dropdown owner) : base(owner) { this.owner = owner; }
+            public override string Value { get { return owner.SelectedItem == null ? "" : owner.SelectedItem.ToString(); } }
+        }
         public int SelectedIndex
         {
             get { return sel; }
@@ -268,7 +370,7 @@ namespace SubVulpes.Ui
             for (int i = 0; i < Items.Count; i++)
             {
                 int idx = i;
-                var it = new ToolStripMenuItem(Items[i].ToString()) { ForeColor = i == sel ? UI.T.Accent : UI.T.Fg, Padding = new Padding(2, 5, 2, 5) };
+                var it = new ToolStripMenuItem(Items[i].ToString()) { ForeColor = i == sel ? UI.T.AccentFg : UI.T.Fg, Padding = new Padding(2, 5, 2, 5) };
                 if (i == sel) it.Font = UI.F(9.5f, FontStyle.Bold);
                 it.Click += delegate { SelectedIndex = idx; };
                 menu.Items.Add(it);
@@ -281,7 +383,8 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, 6)) using (var b = new SolidBrush(Enabled ? UI.T.Panel : UI.T.Chip)) using (var p = new Pen(Enabled && (hot || open) ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(r, UI.Radius)) using (var b = new SolidBrush(Enabled ? UI.T.Panel : UI.T.Chip)) using (var p = new Pen(Enabled && (hot || open) ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            if (Focused && ShowFocusCues && Enabled) UI.FocusRing(g, new Rectangle(3, 3, Width - 7, Height - 7));
             string text = sel >= 0 && sel < Items.Count ? Items[sel].ToString() : "";
             TextRenderer.DrawText(g, text, Font, new Rectangle(10, 0, Width - 32, Height), Enabled ? UI.T.Fg : UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
             using (var pen = new Pen(UI.T.Muted, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
@@ -330,7 +433,7 @@ namespace SubVulpes.Ui
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 6)) using (var b = new SolidBrush(Enabled ? UI.T.Panel : UI.T.Chip)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), UI.Radius)) using (var b = new SolidBrush(Enabled ? UI.T.Panel : UI.T.Chip)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
         }
     }
 
@@ -376,7 +479,7 @@ namespace SubVulpes.Ui
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 6)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), UI.Radius)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(Box.Focused ? UI.T.Accent : UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
             Svg.Draw(g, "search", new RectangleF(9, (Height - 15) / 2f, 15, 15), UI.T.Muted);
         }
     }
@@ -392,10 +495,20 @@ namespace SubVulpes.Ui
         }
         public Segmented(params string[] options)
         {
-            Options = options; Height = 32; Cursor = Cursors.Hand; Margin = new Padding(0); SetStyle(UI.Paint, true);
+            Options = options; Height = 32; Cursor = Cursors.Hand; Margin = new Padding(0); SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            AccessibleRole = AccessibleRole.Grouping;
             widths = new int[options.Length]; int total = 0;
             for (int i = 0; i < options.Length; i++) { widths[i] = TextRenderer.MeasureText(options[i], UI.F(9.5f, FontStyle.Regular)).Width + 24; total += widths[i]; }
             Width = total + 4; sel = 1 < options.Length ? 1 : 0;
+        }
+        protected override bool IsInputKey(Keys keyData) { return keyData == Keys.Left || keyData == Keys.Right || base.IsInputKey(keyData); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && e.KeyCode == Keys.Left && sel > 0) { SelectedIndex = sel - 1; e.Handled = true; }
+            else if (Enabled && e.KeyCode == Keys.Right && sel < Options.Length - 1) { SelectedIndex = sel + 1; e.Handled = true; }
+            base.OnKeyDown(e);
         }
         protected override void OnMouseClick(MouseEventArgs e)
         {
@@ -406,15 +519,16 @@ namespace SubVulpes.Ui
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 7)) using (var b = new SolidBrush(UI.T.Chip)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), UI.Radius)) using (var b = new SolidBrush(UI.T.Chip)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
             int x = 2;
             for (int i = 0; i < Options.Length; i++)
             {
                 var r = new Rectangle(x, 2, widths[i], Height - 5);
-                if (i == sel) using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
-                TextRenderer.DrawText(g, Options[i], UI.F(9.5f, FontStyle.Regular), r, i == sel ? UI.T.Accent : UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                if (i == sel) using (var path = UI.Round(r, UI.Radius - 1)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+                TextRenderer.DrawText(g, Options[i], UI.F(9.5f, FontStyle.Regular), r, i == sel ? UI.T.AccentFg : UI.T.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 x += widths[i];
             }
+            if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(1, 1, Width - 3, Height - 3));
         }
     }
 
@@ -424,55 +538,73 @@ namespace SubVulpes.Ui
         readonly string text;
         public Badge(string text)
         {
-            this.text = text; Height = 22; SetStyle(UI.Paint, true);
+            this.text = text; Height = 22; SetStyle(UI.Paint, true); AccessibleRole = AccessibleRole.StaticText; AccessibleName = text;
             Width = 9 + 12 + 6 + TextRenderer.MeasureText(this.text, UI.F(9f, FontStyle.Regular), new Size(999, 30), TextFormatFlags.NoPadding).Width + 11;
         }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Win, UI.T.Accent, 0.14))) g.FillPath(b, path);
-            Svg.Draw(g, "restart", new RectangleF(9, (Height - 12) / 2f, 12, 12), UI.T.Accent);
-            TextRenderer.DrawText(g, text, UI.F(9f, FontStyle.Regular), new Rectangle(27, 0, Width - 27, Height), UI.T.Accent, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), UI.Radius)) using (var b = new SolidBrush(Icons.Blend(UI.T.Win, UI.T.Accent, 0.12))) g.FillPath(b, path);
+            Svg.Draw(g, "restart", new RectangleF(9, (Height - 12) / 2f, 12, 12), UI.T.AccentFg);
+            TextRenderer.DrawText(g, text, UI.F(9f, FontStyle.Regular), new Rectangle(27, 0, Width - 27, Height), UI.T.AccentFg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
+    // A tab. The main tabs have an accent underline. The second level has a thin neutral line. A quiet tab has no line and only changes its text.
     class TabLabel : Control
     {
-        public bool Selected, Sub;
+        public bool Selected, Sub, Quiet;
         public TabLabel(string text)
         {
             Text = text; Font = UI.F(10f, FontStyle.Regular); Cursor = Cursors.Hand; Dock = DockStyle.Left;
-            Width = TextRenderer.MeasureText(text, UI.F(10f, FontStyle.Bold)).Width + 40; SetStyle(UI.Paint, true);
+            Width = Measure(text); SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            AccessibleRole = AccessibleRole.PageTab; AccessibleName = text;
         }
+        static int Measure(string text) { return TextRenderer.MeasureText(text, UI.F(10f, FontStyle.Bold)).Width + 40; }
         public void SetText(string text)
         {
-            Text = text; Width = TextRenderer.MeasureText(text, UI.F(10f, FontStyle.Bold)).Width + 40; Invalidate();
+            Text = text; AccessibleName = text; Width = Measure(text); Invalidate();
+        }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Return)) { e.Handled = true; OnClick(EventArgs.Empty); }
+            base.OnKeyDown(e);
+        }
+        protected override AccessibleObject CreateAccessibilityInstance() { return new TabAccess(this); }
+        sealed class TabAccess : ControlAccessibleObject
+        {
+            readonly TabLabel owner;
+            public TabAccess(TabLabel owner) : base(owner) { this.owner = owner; }
+            public override AccessibleStates State { get { return owner.Selected ? base.State | AccessibleStates.Selected : base.State; } }
         }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.Clear(Parent.BackColor);
-            int line = Sub ? 2 : 3;
+            int line = Quiet ? 0 : Sub ? 2 : 3;
+            Color idle = Sub || Quiet ? UI.T.Muted : UI.T.BarMuted;
             TextRenderer.DrawText(g, Text, Selected ? UI.F(10f, FontStyle.Bold) : Font, new Rectangle(0, 0, Width, Height - line),
-                Selected ? UI.T.Fg : UI.T.BarMuted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            if (Selected) using (var b = new SolidBrush(Sub ? Color.FromArgb(150, UI.T.Accent) : UI.T.Accent)) g.FillRectangle(b, 12, Height - line, Width - 24, line);
+                Selected ? UI.T.Fg : idle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (Selected && line > 0) using (var b = new SolidBrush(Sub ? UI.T.Muted : UI.T.Accent)) g.FillRectangle(b, 12, Height - line, Width - 24, line);
+            if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(2, 2, Width - 5, Height - 5));
         }
     }
 
+    // The state of the server: a colored dot and a word. The color alone never tells the state.
     class StateLabel : Control
     {
         string word = "Running", tone = "ok";
-        public StateLabel() { Height = 34; Fit(); SetStyle(UI.Paint, true); }
+        public StateLabel() { Height = 34; Fit(); SetStyle(UI.Paint, true); AccessibleRole = AccessibleRole.StaticText; AccessibleName = word; }
         // Tone is ok (green), warn (orange), bad (red) or muted (gray).
-        public void Set(string text, string toneName) { word = text; tone = toneName; Fit(); Invalidate(); }
-        void Fit() { Width = 30 + TextRenderer.MeasureText(word, UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 14; }
+        public void Set(string text, string toneName) { word = text; tone = toneName; AccessibleName = text; Fit(); Invalidate(); }
+        void Fit() { Width = 22 + TextRenderer.MeasureText(word, UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 8; }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             Color c = tone == "ok" ? UI.T.Ok : tone == "warn" ? UI.T.Warn : tone == "bad" ? UI.T.Bad : UI.T.Muted;
-            var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, r.Height / 2)) using (var b = new SolidBrush(Color.FromArgb(38, c))) g.FillPath(b, path);
-            using (var b = new SolidBrush(c)) g.FillEllipse(b, 13, r.Height / 2 - 5, 10, 10);
-            TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(30, 0, r.Width - 30, r.Height), c, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var b = new SolidBrush(c)) g.FillEllipse(b, 4, Height / 2 - 5, 10, 10);
+            TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(22, 0, Width - 22, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -482,7 +614,7 @@ namespace SubVulpes.Ui
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), 10)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(new Rectangle(0, 0, Width - 1, Height - 1), UI.PanelRadius)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
         }
     }
 
@@ -516,15 +648,29 @@ namespace SubVulpes.Ui
     class IconButton : Control
     {
         public string Glyph; bool hot;
-        public IconButton(string glyph) { Glyph = glyph; Size = new Size(28, 28); Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        public IconButton(string glyph)
+        {
+            Glyph = glyph; Size = new Size(28, 28); Cursor = Cursors.Hand; SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            AccessibleRole = AccessibleRole.PushButton;
+        }
+        // The name for a screen reader and the tooltip are the same words.
+        public string Caption { set { AccessibleName = value; UI.Tips.SetToolTip(this, value); } }
         protected override void OnMouseEnter(EventArgs e) { hot = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hot = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Return)) { e.Handled = true; OnClick(EventArgs.Empty); }
+            base.OnKeyDown(e);
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Console);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, 5)) using (var b = new SolidBrush(Color.FromArgb(hot ? 55 : 20, 255, 255, 255))) using (var p = new Pen(Color.FromArgb(hot ? 110 : 40, 255, 255, 255))) { g.FillPath(b, path); g.DrawPath(p, path); }
-            Svg.Draw(g, Glyph, new RectangleF(6, 6, 16, 16), Color.FromArgb(hot ? 255 : 130, UI.T.ConsoleFg));
+            using (var path = UI.Round(r, UI.Radius)) using (var b = new SolidBrush(Color.FromArgb(hot ? 55 : 20, 255, 255, 255))) using (var p = new Pen(Color.FromArgb(hot ? 110 : 60, 255, 255, 255))) { g.FillPath(b, path); g.DrawPath(p, path); }
+            Svg.Draw(g, Glyph, new RectangleF(6, 6, 16, 16), Color.FromArgb(hot ? 255 : 190, UI.T.ConsoleFg));
+            if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(2, 2, Width - 5, Height - 5));
         }
     }
 
@@ -539,7 +685,7 @@ namespace SubVulpes.Ui
         {
             g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(parent.BackColor);
             if (Flat) return;
-            using (var path = UI.Round(new Rectangle(0, 0, w - 1, h - 1), 8)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(new Rectangle(0, 0, w - 1, h - 1), UI.PanelRadius)) using (var b = new SolidBrush(UI.T.Panel)) using (var p = new Pen(UI.T.Line)) { g.FillPath(b, path); g.DrawPath(p, path); }
         }
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -551,15 +697,19 @@ namespace SubVulpes.Ui
         }
     }
 
+    // The speed of the server for the last 20 minutes. A line on even grid lines, and the current value as text in the corner.
     class AreaChart : Card
     {
         public const int Slots = 20;
         public double[] Values = new double[0];
-        public AreaChart() : base("Tick rate", "", "") { Margin = new Padding(0); }
+        public AreaChart() : base("Tick rate", "", "") { Margin = new Padding(0); AccessibleRole = AccessibleRole.Graphic; AccessibleName = "Tick rate of the last 20 minutes"; }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; Frame(g, Width, Height, Parent);
             TextRenderer.DrawText(g, Title, UI.F(8.5f, FontStyle.Regular), new Point(14, 12), UI.T.Muted, TextFormatFlags.NoPadding);
+            int n = Values.Length;
+            if (n > 0) TextRenderer.DrawText(g, Values[n - 1].ToString("0.0", CultureInfo.InvariantCulture) + " ticks/s", UI.F(10f, FontStyle.Bold),
+                new Rectangle(Width - 160, 8, 146, 20), UI.T.Fg, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             int left = 46, right = Width - 20, top = 40, bottom = Height - 34;
             if (right - left < 40 || bottom - top < 20) return;
             // The scale holds 58 to 64 at least. A lower or higher value widens it. The lines sit at even steps, about one for each 28 pixels.
@@ -572,35 +722,25 @@ namespace SubVulpes.Ui
             // The dashed line is the usual speed of the server.
             if (lo < 61 && hi > 61) {
                 int y61 = bottom - (int)((61 - lo) / (hi - lo) * (bottom - top));
-                using (var pen = new Pen(Color.FromArgb(140, UI.T.Line)) { DashStyle = DashStyle.Dash }) g.DrawLine(pen, left, y61, right, y61);
+                using (var pen = new Pen(Color.FromArgb(160, UI.T.Line)) { DashStyle = DashStyle.Dash }) g.DrawLine(pen, left, y61, right, y61);
             }
             for (double m = lo; m <= hi + 0.001; m += step)
             {
                 int y = bottom - (int)((m - lo) / (hi - lo) * (bottom - top));
-                using (var pen = new Pen(Color.FromArgb(70, UI.T.Line))) g.DrawLine(pen, left, y, right, y);
+                using (var pen = new Pen(Color.FromArgb(110, UI.T.Line))) g.DrawLine(pen, left, y, right, y);
                 TextRenderer.DrawText(g, m.ToString("0", CultureInfo.InvariantCulture), UI.F(8f, FontStyle.Regular), new Rectangle(8, y - 8, left - 14, 16), UI.T.Muted, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
-            int n = Values.Length;
             if (n < 2) return;
             // One slot for each minute, newest on the right. A short history grows from the right and does not stretch.
             var pts = new PointF[n];
             for (int i = 0; i < n; i++) pts[i] = new PointF(right - (n - 1 - i) * (right - left) / (float)(Slots - 1), bottom - (float)((Values[i] - lo) / (hi - lo)) * (bottom - top));
             // The curve may overshoot between points. The clip keeps it inside the plot.
             g.SetClip(new Rectangle(left - 4, top - 3, right - left + 8, bottom - top + 6));
-            using (var fill = new GraphicsPath())
-            {
-                fill.AddCurve(pts, 0.3f); fill.AddLine(pts[n - 1].X, pts[n - 1].Y, pts[n - 1].X, bottom); fill.AddLine(pts[n - 1].X, bottom, pts[0].X, bottom); fill.CloseFigure();
-                using (var br = new LinearGradientBrush(new Rectangle(left, top - 1, right - left, bottom - top + 2), Color.FromArgb(120, UI.T.Accent), Color.FromArgb(0, UI.T.Accent), 90f)) g.FillPath(br, fill);
-            }
-            using (var pen = new Pen(UI.T.Accent, 2.5f) { LineJoin = LineJoin.Round }) g.DrawCurve(pen, pts, 0.3f);
+            using (var pen = new Pen(UI.T.Accent, 2f) { LineJoin = LineJoin.Round }) g.DrawCurve(pen, pts, 0.3f);
             g.ResetClip();
             var last = pts[n - 1];
-            using (var b = new SolidBrush(UI.T.Panel)) g.FillEllipse(b, last.X - 6, last.Y - 6, 12, 12);
-            using (var b = new SolidBrush(UI.T.Accent)) g.FillEllipse(b, last.X - 4, last.Y - 4, 8, 8);
-            string label = Values[n - 1].ToString("0.0", CultureInfo.InvariantCulture);
-            var lr = new Rectangle((int)last.X - 40, Math.Max(4, (int)last.Y - 30), 34, 20);
-            using (var path = UI.Round(lr, 5)) using (var b = new SolidBrush(UI.T.Fg)) g.FillPath(b, path);
-            TextRenderer.DrawText(g, label, UI.F(8.5f, FontStyle.Bold), lr, UI.T.Panel, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var b = new SolidBrush(UI.T.Panel)) g.FillEllipse(b, last.X - 5, last.Y - 5, 10, 10);
+            using (var b = new SolidBrush(UI.T.Accent)) g.FillEllipse(b, last.X - 3.5f, last.Y - 3.5f, 7, 7);
             TextRenderer.DrawText(g, "20 min ago", UI.F(8f, FontStyle.Regular), new Point(left, bottom + 10), UI.T.Muted, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, "now", UI.F(8f, FontStyle.Regular), new Rectangle(right - 40, bottom + 10, 40, 14), UI.T.Muted, TextFormatFlags.Right | TextFormatFlags.NoPadding);
         }
@@ -609,13 +749,25 @@ namespace SubVulpes.Ui
     class GearButton : Control
     {
         bool hot;
-        public GearButton() { Size = new Size(24, 24); Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        public GearButton()
+        {
+            Size = new Size(24, 24); Cursor = Cursors.Hand; SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            AccessibleRole = AccessibleRole.PushButton; AccessibleName = "Dashboard settings";
+        }
         protected override void OnMouseEnter(EventArgs e) { hot = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hot = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Return)) { e.Handled = true; OnClick(EventArgs.Empty); }
+            base.OnKeyDown(e);
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Panel);
-            Svg.Draw(g, "sliders", new RectangleF(3, 3, 18, 18), hot ? UI.T.Accent : UI.T.Muted);
+            Svg.Draw(g, "sliders", new RectangleF(3, 3, 18, 18), hot ? UI.T.AccentFg : UI.T.Muted);
+            if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(0, 0, Width - 1, Height - 1));
         }
     }
 

@@ -1,6 +1,6 @@
 # Launcher design review
 
-Date: 2026-11-05. Status: review only. No launcher code changed.
+Date: 2026-11-05. Status: the review is done, and the first pass of changes is in the launcher (see "Applied on 2026-11-05").
 
 ## Goal
 
@@ -176,3 +176,30 @@ One of them says that no single sign is bad. The absence of a choice is the sign
 - The Server page frame: remove it, or add it to all pages?
 - Should the second and third tab levels use a quieter style?
 - Warm neutrals: yes or no?
+
+## Applied on 2026-11-05
+
+The owner chose: a flatter look, no frame on the Server page, quieter tabs, a small change of color, and pills adjusted.
+
+| Change | Where |
+| --- | --- |
+| Warm neutrals in both themes. Every text color passes a contrast of 4.5. The Start button has its own darker green with white text. | `Theme` in `LauncherUi.cs`, and a test |
+| An accent for text (`AccentFg`) that follows the accent color that the user picks | `Theme.SetAccent`, and a test |
+| One radius: 3 pixels for controls, 4 for panels. The Official and Community tags, the restart badge and the risk tag are square. | `UI.Radius`, `UI.PanelRadius` |
+| The server state is a dot and a word, with no pill | `StateLabel` |
+| Segoe UI Semibold in place of Bold. Setting labels are regular, and section titles are semibold. | `UI.F`, `LauncherSettings.cs` |
+| Help text sits under the label, in small gray text. The "i" icons are gone from the settings. | `AddRow` |
+| No frame on the Server page. Start, Stop, Restart and Kill have no icons. | `LauncherServer.cs` |
+| Three tab styles: accent underline (main), thin gray underline (second level), text only (plugin details) | `TabLabel` |
+| The tick chart is a line with no fill. The current value is text in the corner. | `AreaChart` |
+| The two install dialogs use the theme, flat buttons and the same fonts. The risk colors come from the theme. | `PluginApprovalDialog`, `CommunityCard` |
+| The custom controls answer Space, Enter and the arrow keys, show a dotted focus line after a key press, and have accessible names and roles | `FlatButton`, `Switch`, `Dropdown`, `Segmented`, `TabLabel`, `IconButton`, `NavItem`, and a test |
+| Plugin avatars take one of six tones from the name | `Avatar` |
+| Space turns the chosen plugin on or off in the list | `LauncherPlugins.cs` |
+
+Not done, or not checked:
+
+- The "On" switch stays a rounded pill. Windows switches have that shape.
+- The Official and Community tags are text labels with a flat fill. They are square, but they are not drawn by the launcher.
+- The focus line and the screen reader output were not checked by eye or with a reader. The test checks the key answers and the names.
+- The warm neutral values come from a calculation of contrast and from the owner's taste on the screens. They are easy to change in `Theme`.

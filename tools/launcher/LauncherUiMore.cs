@@ -8,17 +8,30 @@ using System.Windows.Forms;
 
 namespace SubVulpes.Ui
 {
-    // The icon of a plugin on a rounded square. Without a picture, the first letter of its name stands in.
+    // The icon of a plugin on a small square. Without a picture, the first letter of its name stands in, on a tone that the name picks.
     class Avatar : Control
     {
         public Image Picture;
+        static readonly Color[] Tones = { Color.FromArgb(194, 84, 24), Color.FromArgb(24, 120, 110), Color.FromArgb(128, 64, 120), Color.FromArgb(104, 112, 24), Color.FromArgb(58, 88, 128), Color.FromArgb(160, 62, 52) };
         public Avatar(string text) : this(text, 44) { }
-        public Avatar(string text, int size) { Text = text.Length == 0 ? "?" : text; Size = new Size(size, size); SetStyle(UI.Paint, true); }
+        public Avatar(string text, int size)
+        {
+            Text = text.Length == 0 ? "?" : text; Size = new Size(size, size); SetStyle(UI.Paint, true);
+            AccessibleRole = AccessibleRole.Graphic; AccessibleName = "Icon of " + Text;
+        }
+        Color Tone()
+        {
+            int hash = 0;
+            foreach (char c in Text) hash = hash * 31 + c;
+            Color tone = Tones[(hash & 0x7fffffff) % Tones.Length];
+            return UI.T == Theme.Dark ? Icons.Blend(tone, Color.White, 0.4) : tone;
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, Math.Max(10, Width / 5)))
+            Color tone = Tone();
+            using (var path = UI.Round(r, UI.PanelRadius))
             {
                 if (Picture != null)
                 {
@@ -26,9 +39,9 @@ namespace SubVulpes.Ui
                     using (var pen = new Pen(UI.T.Line)) g.DrawPath(pen, path);
                     return;
                 }
-                using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, UI.T.Accent, 0.16))) g.FillPath(b, path);
+                using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, tone, 0.16))) g.FillPath(b, path);
             }
-            TextRenderer.DrawText(g, Text.Substring(0, 1).ToUpperInvariant(), UI.F(Width * 0.32f, FontStyle.Bold), new Rectangle(0, 0, Width, Height), UI.T.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, Text.Substring(0, 1).ToUpperInvariant(), UI.F(Width * 0.32f, FontStyle.Bold), new Rectangle(0, 0, Width, Height), tone, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -41,7 +54,7 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.Clear(Parent.BackColor);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, 8))
+            using (var path = UI.Round(r, UI.PanelRadius))
             {
                 using (var b = new SolidBrush(UI.T.Chip)) g.FillPath(b, path);
                 if (Picture != null)
@@ -64,7 +77,7 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.Clear(Parent.BackColor);
             var r = new Rectangle(1, 1, Width - 3, Height - 3);
-            using (var path = UI.Round(r, 6))
+            using (var path = UI.Round(r, UI.Radius))
             {
                 using (var b = new SolidBrush(UI.T.Chip)) g.FillPath(b, path);
                 if (Picture != null)
@@ -81,20 +94,31 @@ namespace SubVulpes.Ui
         }
     }
 
-    // One entry of the list at the left of the Help page.
     class NavItem : Control
     {
         public bool Selected;
-        public NavItem(string text) { Text = text; Height = 36; Dock = DockStyle.Top; Cursor = Cursors.Hand; SetStyle(UI.Paint, true); }
+        public NavItem(string text)
+        {
+            Text = text; Height = 36; Dock = DockStyle.Top; Cursor = Cursors.Hand; SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            AccessibleRole = AccessibleRole.ListItem; AccessibleName = text;
+        }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Return)) { e.Handled = true; OnClick(EventArgs.Empty); }
+            base.OnKeyDown(e);
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             if (Selected)
             {
-                using (var path = UI.Round(new Rectangle(0, 2, Width - 1, Height - 5), 6)) using (var b = new SolidBrush(UI.T.Chip)) g.FillPath(b, path);
+                using (var path = UI.Round(new Rectangle(0, 2, Width - 1, Height - 5), UI.Radius)) using (var b = new SolidBrush(UI.T.Chip)) g.FillPath(b, path);
                 using (var b = new SolidBrush(UI.T.Accent)) g.FillRectangle(b, 0, 9, 3, Height - 18);
             }
             TextRenderer.DrawText(g, Text, Selected ? UI.F(9.5f, FontStyle.Bold) : UI.F(9.5f, FontStyle.Regular), new Rectangle(14, 0, Width - 20, Height), Selected ? UI.T.Fg : UI.T.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(2, 3, Width - 5, Height - 7));
         }
     }
 
@@ -170,6 +194,8 @@ namespace SubVulpes.Ui
             else if (c is RichTextBox) { c.BackColor = UI.T.Console; c.ForeColor = UI.T.ConsoleFg; }
             else if (c is DataGridView) Grid((DataGridView)c);
             else if (c is Label && tag == "chip") { c.BackColor = UI.T.Chip; c.ForeColor = UI.T.Fg; }
+            else if (c is LinkLabel) { var link = (LinkLabel)c; c.BackColor = Color.Transparent; link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = UI.T.Muted; link.LinkBehavior = LinkBehavior.HoverUnderline; }
+            else if (c is CheckBox) { c.BackColor = Color.Transparent; c.ForeColor = tag == "warn" ? UI.T.Warn : tag == "bad" ? UI.T.Bad : UI.T.Fg; }
             else if (c is Label) { c.BackColor = Color.Transparent; c.ForeColor = tag == "muted" ? UI.T.Muted : tag == "ok" ? UI.T.Ok : tag == "warn" ? UI.T.Warn : tag == "bad" ? UI.T.Bad : UI.T.Fg; }
             else if (c is Panel && tag == "consolebg") c.BackColor = UI.T.Console;
             else if (c is Surface) c.BackColor = UI.T.Panel;

@@ -197,9 +197,10 @@ namespace SubVulpes
                 text.Replace("DANGER\tnative\thighest\tNative code gets full process access.\n", "")
             }) if (LauncherForm.ParsePluginInspection(invalid, true) != null)
                 throw new Exception("An incomplete or unsafe review was accepted.");
-            if (LauncherForm.PluginDangerColor("low") != System.Drawing.Color.DarkGreen ||
-                LauncherForm.PluginDangerColor("high") != System.Drawing.Color.SaddleBrown ||
-                LauncherForm.PluginDangerColor("highest") != System.Drawing.Color.DarkRed)
+            // The risk colors come from the theme, so that they read on both themes. Each level has its own color.
+            if (LauncherForm.PluginDangerColor("low").ToArgb() != SubVulpes.Ui.Theme.Light.Ok.ToArgb() ||
+                LauncherForm.PluginDangerColor("high").ToArgb() != SubVulpes.Ui.Theme.Light.Warn.ToArgb() ||
+                LauncherForm.PluginDangerColor("highest").ToArgb() != SubVulpes.Ui.Theme.Light.Bad.ToArgb())
                 throw new Exception("Review risk colors changed.");
 
             using (var dialog = new LauncherForm.PluginApprovalDialog(next, previous, true)) {
@@ -287,6 +288,7 @@ namespace SubVulpes
             CheckUninstall();
             CheckCommunityCard();
             CheckVersionNames();
+            CheckLook();
             Console.WriteLine("Launcher update, backup, admin password, plugin metadata, Workshop and uninstall checks passed.");
         }
 
@@ -379,6 +381,94 @@ namespace SubVulpes
                 new[] { "2.0.0", "Red" }, new[] { "v3.0.0", "" }, new[] { "nonsense", "" }, new[] { "", "" } };
             foreach (string[] c in cases)
                 if (LauncherForm.VersionName(c[0]) != c[1]) Fail("The version name of " + c[0] + " is " + LauncherForm.VersionName(c[0]) + " and not " + c[1] + ".");
+        }
+
+        // ------------------------------------------------------------ the look
+
+        static double Luminance(System.Drawing.Color c)
+        {
+            Func<int, double> channel = v => { double x = v / 255.0; return x <= 0.03928 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4); };
+            return 0.2126 * channel(c.R) + 0.7152 * channel(c.G) + 0.0722 * channel(c.B);
+        }
+
+        static double Contrast(System.Drawing.Color a, System.Drawing.Color b)
+        {
+            double la = Luminance(a), lb = Luminance(b);
+            return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+        }
+
+        static void Press(System.Windows.Forms.Control control, System.Windows.Forms.Keys key)
+        {
+            var method = control.GetType().GetMethod("OnKeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            method.Invoke(control, new object[] { new System.Windows.Forms.KeyEventArgs(key) });
+        }
+
+        // Every text color passes a contrast of 4.5 on the surfaces that it sits on, in both themes.
+        // The custom controls answer the keyboard and have names for a screen reader.
+        static void CheckLook()
+        {
+            foreach (var theme in new[] { SubVulpes.Ui.Theme.Light, SubVulpes.Ui.Theme.Dark }) {
+                string name = theme == SubVulpes.Ui.Theme.Light ? "light" : "dark";
+                var surfaces = new[] { theme.Win, theme.Panel, theme.Chip };
+                var texts = new[] { theme.Fg, theme.Muted, theme.AccentFg, theme.Ok, theme.Warn, theme.Bad };
+                foreach (var text in texts)
+                    foreach (var surface in surfaces)
+                        if (Contrast(text, surface) < 4.5) Fail("A text color in the " + name + " theme has a contrast under 4.5.");
+                if (Contrast(theme.BarMuted, theme.Bar) < 4.5 || Contrast(theme.Fg, theme.Bar) < 4.5 || Contrast(theme.Muted, theme.SubBar) < 4.5)
+                    Fail("The tab bars of the " + name + " theme have a contrast under 4.5.");
+                if (Contrast(System.Drawing.Color.White, theme.OkFill) < 4.5) Fail("The text on the Start button of the " + name + " theme has a contrast under 4.5.");
+            }
+
+            // A new accent color keeps a readable text color.
+            foreach (var accent in new[] { System.Drawing.Color.FromArgb(37, 99, 235), System.Drawing.Color.FromArgb(22, 163, 74), System.Drawing.Color.FromArgb(219, 39, 119), System.Drawing.Color.FromArgb(217, 99, 30) }) {
+                SubVulpes.Ui.Theme.Light.SetAccent(accent);
+                if (SubVulpes.Ui.Theme.Contrast(SubVulpes.Ui.Theme.Light.AccentFg, SubVulpes.Ui.Theme.Light.Chip) < 4.5) Fail("The accent text on the light theme is too faint.");
+            }
+            SubVulpes.Ui.Theme.Light.SetAccent(System.Drawing.Color.FromArgb(217, 99, 30));
+
+            int clicks = 0;
+            var button = new SubVulpes.Ui.FlatButton("Start");
+            button.Click += delegate { clicks++; };
+            Press(button, System.Windows.Forms.Keys.Space);
+            Press(button, System.Windows.Forms.Keys.Return);
+            Press(button, System.Windows.Forms.Keys.A);
+            if (clicks != 2) Fail("A button must answer Space and Enter, and nothing else.");
+            button.Enabled = false;
+            Press(button, System.Windows.Forms.Keys.Space);
+            if (clicks != 2) Fail("A disabled button answered a key.");
+            if (button.AccessibleName != "Start" || button.AccessibleRole != System.Windows.Forms.AccessibleRole.PushButton) Fail("A button has no accessible name.");
+            button.Text = "Stop";
+            if (button.AccessibleName != "Stop") Fail("The accessible name does not follow the text.");
+
+            var toggle = new SubVulpes.Ui.Switch();
+            Press(toggle, System.Windows.Forms.Keys.Space);
+            if (!toggle.On || toggle.AccessibleRole != System.Windows.Forms.AccessibleRole.CheckButton) Fail("A switch must toggle with Space and read as a check box.");
+
+            var list = new SubVulpes.Ui.Dropdown(120);
+            list.Items.Add("One"); list.Items.Add("Two"); list.Items.Add("Three");
+            list.SelectedIndex = 0;
+            Press(list, System.Windows.Forms.Keys.Down);
+            Press(list, System.Windows.Forms.Keys.Down);
+            Press(list, System.Windows.Forms.Keys.Down);
+            if (list.SelectedIndex != 2) Fail("Down must stop at the last item.");
+            Press(list, System.Windows.Forms.Keys.Up);
+            if (list.SelectedIndex != 1 || list.AccessibleRole != System.Windows.Forms.AccessibleRole.ComboBox) Fail("A drop-down must change with Up and Down.");
+
+            var choice = new SubVulpes.Ui.Segmented("A", "B", "C");
+            choice.SelectedIndex = 0;
+            Press(choice, System.Windows.Forms.Keys.Right);
+            Press(choice, System.Windows.Forms.Keys.Right);
+            Press(choice, System.Windows.Forms.Keys.Right);
+            if (choice.SelectedIndex != 2) Fail("Right must stop at the last option.");
+
+            int picks = 0;
+            var tab = new SubVulpes.Ui.TabLabel("Plugins");
+            tab.Click += delegate { picks++; };
+            Press(tab, System.Windows.Forms.Keys.Return);
+            if (picks != 1 || tab.AccessibleName != "Plugins" || tab.AccessibleRole != System.Windows.Forms.AccessibleRole.PageTab) Fail("A tab must answer Enter and have a name.");
+
+            var icon = new SubVulpes.Ui.IconButton("copy") { Caption = "Copy all." };
+            if (icon.AccessibleName != "Copy all.") Fail("An icon button has no accessible name.");
         }
 
         static void CheckUninstall()

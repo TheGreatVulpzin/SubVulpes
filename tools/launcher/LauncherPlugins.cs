@@ -596,7 +596,7 @@ namespace SubVulpes
             pluginDetail = new Panel { Dock = DockStyle.Right, Width = 380, Padding = new Padding(16), Tag = "panel", AutoScroll = true };
             var gap = new Panel { Dock = DockStyle.Right, Width = 12 };
             var danger = new Panel { Dock = DockStyle.Bottom, Height = 50 };
-            nativeBypass = new Switch { Location = new Point(0, 14) };
+            nativeBypass = new Switch { Location = new Point(0, 14), AccessibleName = "Allow unapproved DLLs temporarily" };
             nativeBypass.Changed += delegate
             {
                 if (nativeBypass.On && MessageBox.Show(this,
@@ -644,6 +644,15 @@ namespace SubVulpes
                 PluginColumnMenu(e.ColumnIndex);
             };
             pluginGrid.CellPainting += PaintPluginCell;
+            pluginGrid.AccessibleName = "Plugins";
+            // Space turns the chosen plugin on or off, like the switch in the last column.
+            pluginGrid.KeyDown += delegate (object s, KeyEventArgs e)
+            {
+                if (e.KeyCode != Keys.Space || selectedPluginId == null) return;
+                PluginMetadata chosen = FindPlugin(selectedPluginId);
+                if (chosen != null) ToggleFromTable(chosen);
+                e.Handled = true;
+            };
             pluginGrid.CellClick += delegate (object s, DataGridViewCellEventArgs e)
             {
                 if (e.RowIndex < 0) return;
@@ -819,7 +828,7 @@ namespace SubVulpes
                 var rf = UI.F(9f, FontStyle.Regular);
                 int rw = TextRenderer.MeasureText(g, risk, rf, new Size(999, 30), TextFormatFlags.NoPadding).Width + 20;
                 var pill = new Rectangle(e.CellBounds.X + 6, my - 11, rw, 22);
-                using (var path = UI.Round(pill, 11)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, rc, 0.16))) g.FillPath(b, path);
+                using (var path = UI.Round(pill, UI.Radius)) using (var b = new SolidBrush(Icons.Blend(UI.T.Panel, rc, 0.16))) g.FillPath(b, path);
                 TextRenderer.DrawText(g, risk, rf, pill, rc, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             } else if (e.ColumnIndex == 6) {
                 Switch.Draw(g, new Rectangle(e.CellBounds.X + 6, e.CellBounds.Y + (e.CellBounds.Height - 20) / 2, 36, 20), p.State != "disabled");
@@ -860,7 +869,7 @@ namespace SubVulpes
             var strip = new Panel { Dock = DockStyle.Top, Height = 38, Tag = "panel" };
             string[] tabNames = { "Summary", "Info", "Settings" };
             for (int i = tabNames.Length - 1; i >= 0; i--) {
-                var tab = new TabLabel(tabNames[i]) { Sub = true, Selected = i == pluginTab };
+                var tab = new TabLabel(tabNames[i]) { Quiet = true, Selected = i == pluginTab };
                 int index = i;
                 tab.Click += delegate { pluginTab = index; RenderPluginDetail(); };
                 strip.Controls.Add(tab);
