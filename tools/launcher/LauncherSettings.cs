@@ -182,7 +182,8 @@ namespace SubVulpes
             lab.Controls.Add(title);
             if (help != null)
             {
-                var note = L(help, false, true);
+                var note = L(help, false, false);
+                note.Tag = "hint";
                 note.Font = UI.F(8.5f, FontStyle.Regular);
                 note.MaximumSize = new Size(250, 0);
                 note.Margin = new Padding(0, 1, 0, 0);
@@ -429,11 +430,11 @@ namespace SubVulpes
                 Section(t, "Server");
                 AddRow(t, "Server folder", null, Inline(folderBox, browseButton, open), null);
                 Section(t, "Updates");
-                AddRow(t, "Check now", "Looks for a newer version on GitHub, or installs an update from a .ZIP file.", Inline(checkUpdate, update), null);
-                AddRow(t, "Include Beta Versions", "Includes beta versions. They can still contain bugs.", previewsBox, null);
+                AddRow(t, "Update server", null, Inline(checkUpdate, update), null);
+                AddRow(t, "Include Beta Versions", null, previewsBox, null);
                 Section(t, "Appearance");
                 AddRow(t, "Theme", null, themeBox, null);
-                AddRow(t, "Accent color", "Used for the active tab, the graph and the highlights.", accentBox, null);
+                AddRow(t, "Accent color", null, accentBox, null);
                 Section(t, "About");
                 AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
                 Section(t, "Debug");

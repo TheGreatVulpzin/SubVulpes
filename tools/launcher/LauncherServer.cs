@@ -56,10 +56,10 @@ namespace SubVulpes
         {
             var toolbar = new Panel { Dock = DockStyle.Fill };
             var right = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
-            killButton = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0), Enabled = false };
-            restartButton = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0), Enabled = false };
-            stopButton = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0), Enabled = false };
-            startStop = new FlatButton("Start") { Kind = "primary", Margin = new Padding(8, 0, 0, 0) };
+            killButton = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0), Glyph = "bolt", Enabled = false };
+            restartButton = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0), Glyph = "restart", Enabled = false };
+            stopButton = new FlatButton("Stop") { Margin = new Padding(8, 0, 0, 0), Glyph = "stop", Enabled = false };
+            startStop = new FlatButton("Start") { Kind = "primary", Margin = new Padding(8, 0, 0, 0), Glyph = "play" };
             startStop.Click += delegate { StartServer(); };
             stopButton.Click += async delegate { await StopServer(); };
             restartButton.Click += async delegate { if (server != null && await StopServer()) StartServer(); };

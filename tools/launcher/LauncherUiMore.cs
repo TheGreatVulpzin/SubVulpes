@@ -196,7 +196,7 @@ namespace SubVulpes.Ui
             else if (c is Label && tag == "chip") { c.BackColor = UI.T.Chip; c.ForeColor = UI.T.Fg; }
             else if (c is LinkLabel) { var link = (LinkLabel)c; c.BackColor = Color.Transparent; link.LinkColor = link.ActiveLinkColor = link.VisitedLinkColor = UI.T.Muted; link.LinkBehavior = LinkBehavior.HoverUnderline; }
             else if (c is CheckBox) { c.BackColor = Color.Transparent; c.ForeColor = tag == "warn" ? UI.T.Warn : tag == "bad" ? UI.T.Bad : UI.T.Fg; }
-            else if (c is Label) { c.BackColor = Color.Transparent; c.ForeColor = tag == "muted" ? UI.T.Muted : tag == "ok" ? UI.T.Ok : tag == "warn" ? UI.T.Warn : tag == "bad" ? UI.T.Bad : UI.T.Fg; }
+            else if (c is Label) { c.BackColor = Color.Transparent; c.ForeColor = tag == "muted" ? UI.T.Muted : tag == "hint" ? Icons.Blend(UI.T.Win, UI.T.Muted, 0.88f) : tag == "ok" ? UI.T.Ok : tag == "warn" ? UI.T.Warn : tag == "bad" ? UI.T.Bad : UI.T.Fg; }
             else if (c is Panel && tag == "consolebg") c.BackColor = UI.T.Console;
             else if (c is Surface) c.BackColor = UI.T.Panel;
             else if (c is TabControl || c is TabPage) c.BackColor = UI.T.Win;

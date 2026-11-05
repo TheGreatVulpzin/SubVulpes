@@ -47,13 +47,13 @@ namespace SubVulpes.Ui
             Bg = Color.FromArgb(238, 235, 230), Win = Color.FromArgb(246, 244, 240), Panel = Color.White, Line = Color.FromArgb(220, 215, 207),
             Fg = Color.FromArgb(32, 29, 26), Muted = Color.FromArgb(104, 97, 89), Accent = Color.FromArgb(217, 99, 30), AccentFg = Color.FromArgb(172, 66, 10),
             Ok = Color.FromArgb(26, 112, 54), OkFill = Color.FromArgb(26, 112, 54), Warn = Color.FromArgb(136, 84, 6), Bad = Color.FromArgb(176, 38, 28),
-            Chip = Color.FromArgb(238, 234, 228), Console = Color.Black, ConsoleFg = Color.FromArgb(212, 215, 220),
+            Chip = Color.FromArgb(238, 234, 228), Console = Color.FromArgb(226, 223, 217), ConsoleFg = Color.FromArgb(38, 35, 32),
             Bar = Color.FromArgb(228, 223, 215), SubBar = Color.FromArgb(238, 234, 228), BarFg = Color.White, BarMuted = Color.FromArgb(92, 85, 77) };
         public static readonly Theme Dark = new Theme {
             Bg = Color.FromArgb(17, 16, 15), Win = Color.FromArgb(27, 26, 24), Panel = Color.FromArgb(36, 34, 32), Line = Color.FromArgb(58, 55, 51),
             Fg = Color.FromArgb(236, 233, 228), Muted = Color.FromArgb(165, 158, 150), Accent = Color.FromArgb(240, 138, 75), AccentFg = Color.FromArgb(244, 150, 92),
             Ok = Color.FromArgb(94, 194, 125), OkFill = Color.FromArgb(36, 128, 68), Warn = Color.FromArgb(224, 176, 80), Bad = Color.FromArgb(239, 111, 100),
-            Chip = Color.FromArgb(47, 44, 41), Console = Color.Black, ConsoleFg = Color.FromArgb(201, 204, 210),
+            Chip = Color.FromArgb(47, 44, 41), Console = Color.FromArgb(34, 32, 30), ConsoleFg = Color.FromArgb(205, 208, 212),
             Bar = Color.FromArgb(43, 41, 38), SubBar = Color.FromArgb(33, 31, 29), BarFg = Color.White, BarMuted = Color.FromArgb(165, 158, 150) };
     }
 
@@ -598,13 +598,13 @@ namespace SubVulpes.Ui
         public StateLabel() { Height = 34; Fit(); SetStyle(UI.Paint, true); AccessibleRole = AccessibleRole.StaticText; AccessibleName = word; }
         // Tone is ok (green), warn (orange), bad (red) or muted (gray).
         public void Set(string text, string toneName) { word = text; tone = toneName; AccessibleName = text; Fit(); Invalidate(); }
-        void Fit() { Width = 22 + TextRenderer.MeasureText(word, UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 8; }
+        void Fit() { Width = 25 + TextRenderer.MeasureText(word, UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 8; }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             Color c = tone == "ok" ? UI.T.Ok : tone == "warn" ? UI.T.Warn : tone == "bad" ? UI.T.Bad : UI.T.Muted;
-            using (var b = new SolidBrush(c)) g.FillEllipse(b, 4, Height / 2 - 5, 10, 10);
-            TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(22, 0, Width - 22, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var b = new SolidBrush(c)) g.FillEllipse(b, 4, Height / 2 - 6, 13, 13);
+            TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(25, 0, Width - 25, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -668,7 +668,7 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(UI.T.Console);
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = UI.Round(r, UI.Radius)) using (var b = new SolidBrush(Color.FromArgb(hot ? 55 : 20, 255, 255, 255))) using (var p = new Pen(Color.FromArgb(hot ? 110 : 60, 255, 255, 255))) { g.FillPath(b, path); g.DrawPath(p, path); }
+            using (var path = UI.Round(r, UI.Radius)) using (var b = new SolidBrush(Color.FromArgb(hot ? 55 : 20, UI.T.ConsoleFg))) using (var p = new Pen(Color.FromArgb(hot ? 110 : 60, UI.T.ConsoleFg))) { g.FillPath(b, path); g.DrawPath(p, path); }
             Svg.Draw(g, Glyph, new RectangleF(6, 6, 16, 16), Color.FromArgb(hot ? 255 : 190, UI.T.ConsoleFg));
             if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(2, 2, Width - 5, Height - 5));
         }
