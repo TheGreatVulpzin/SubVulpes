@@ -109,7 +109,6 @@ namespace SubVulpes
             UI.Tips.SetToolTip(vgrip, "Drag to resize.");
             stats = new StatsList { Flat = true };
             chart = new AreaChart { Flat = true };
-            UI.Tips.SetToolTip(stats, "Tick rate is how many updates the server runs each second. About 60 is normal. Players does not include bots.");
             UI.Tips.SetToolTip(chart, "Average tick rate for each of the last 20 minutes.");
             foreach (string name in StatNames) stats.Set(name, "-");
             foreach (string name in settings.Get("dash_hidden", DefaultHiddenStats).Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)) stats.Hidden.Add(name);

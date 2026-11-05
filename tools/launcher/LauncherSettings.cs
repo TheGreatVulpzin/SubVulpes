@@ -430,7 +430,7 @@ namespace SubVulpes
                 Section(t, "Server");
                 AddRow(t, "Server folder", null, Inline(folderBox, browseButton, open), null);
                 Section(t, "Updates");
-                AddRow(t, "Update server", null, Inline(checkUpdate, update), null);
+                AddRow(t, "", null, Inline(checkUpdate, update), null);
                 AddRow(t, "Include Beta Versions", null, previewsBox, null);
                 Section(t, "Appearance");
                 AddRow(t, "Theme", null, themeBox, null);
@@ -556,8 +556,8 @@ namespace SubVulpes
             presetBox.Items.AddRange(Presets);
             presetBox.SelectedIndexChanged += delegate { OnPreset(); };
             presetText = L("", false, true);
-            profileBox = Option("Records the tick rate of each part of the code, to find slow functions.");
-            timersBox = Option("Writes how long each part of the game takes, once each minute, in the log.");
+            profileBox = Option("Samples the function that the server runs, every millisecond, into profile.txt.");
+            timersBox = Option("Writes the CPU time of each game section in the last tick, once each minute, in the log.");
             packetsBox = Option("Records network traffic, including player names and chat.");
             freezeBox = Option("Automatically dumps the memory when the server freezes for " + FreezeSeconds + " s.");
             dumpType = new Segmented("None", "Small (about 1 MB)", "Full (about 600 MB)");
@@ -568,10 +568,9 @@ namespace SubVulpes
             {
                 Section(t, "Diagnostics");
                 AddRow(t, "Preset", "A set of captures for a run. A change in the options below makes the preset Custom.", presetBox, null);
-                AddRow(t, "Selected", null, presetText, null);
                 Section(t, "Tools");
-                AddRow(t, "Speed profile", "Finds slow code.", profileBox, null);
-                AddRow(t, "Game timers", "Logs how long each part of the game takes, once a minute.", timersBox, null);
+                AddRow(t, "Function Profiler", "Samples the running function every millisecond into profile.txt. Finds slow code.", profileBox, null);
+                AddRow(t, "Section Timers", "Logs the CPU time of each game section in the last tick, once a minute.", timersBox, null);
                 AddRow(t, "Network packet capture", "Records network traffic, including player names and chat.", packetsBox, null);
                 Section(t, "Crash reports");
                 AddRow(t, "Crash dump", "Saved when the server crashes. Send it to the developers.", dumpType, null);

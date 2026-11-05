@@ -221,8 +221,8 @@ namespace SubVulpes
         public string Summary()
         {
             var parts = new List<string>();
-            if (Profile) parts.Add("speed profile");
-            if (Timers) parts.Add("game timers");
+            if (Profile) parts.Add("function profiler");
+            if (Timers) parts.Add("section timers");
             if (Packets) parts.Add("packets");
             if (CrashDump != "none") parts.Add(CrashDump + " crash dump");
             if (FreezeDump) parts.Add("Freeze Dump");
@@ -299,10 +299,10 @@ namespace SubVulpes
 
         static readonly Preset[] Presets = {
             new Preset("Normal",
-                "Records the server speed. Saves a small report if the server crashes or freezes.",
+                "Samples the server code. Saves a small report if the server crashes or freezes.",
                 new Captures { Profile = true, FreezeDump = true }),
             new Preset("Speed Check",
-                "Records the server speed. Also, saves a small report if the server crashes or freezes.",
+                "Samples the server code and logs the game section timers. Saves a small report if the server crashes or freezes.",
                 new Captures { Profile = true, Timers = true, FreezeDump = true }),
             new Preset("Crashhunt",
                 "Records the network packets. Saves a full report if the server crashes or freezes.",
@@ -1615,8 +1615,11 @@ namespace SubVulpes
             if (updating || pluginBusy) { e.Cancel = true; return; }
             SaveDashboard();
             if (closeAfterStop) return;
+            // Yes stops the server and closes. No and Cancel keep the window open.
+            if (server != null && MessageBox.Show(this, "The Server is Running. Do you want to close?", Text, MessageBoxButtons.YesNoCancel) != DialogResult.Yes) { e.Cancel = true; return; }
             if (dirty) {
-                var answer = MessageBox.Show(this, "Hey, there are unsaved settings. Do you want to save them before closing?", Text, MessageBoxButtons.YesNoCancel);
+                // Yes saves and closes, No closes without saving, Cancel stays.
+                var answer = MessageBox.Show(this, "There is unsaved settings. Do you want to save and close?", Text, MessageBoxButtons.YesNoCancel);
                 if (answer == DialogResult.Cancel) { e.Cancel = true; return; }
                 if (answer == DialogResult.Yes) SaveSettings();
             }

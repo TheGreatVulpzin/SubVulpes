@@ -1,7 +1,7 @@
 """Map the samples of the server profiler to function names.
 
 Capture: set SV_SAMPLE=<file> before you start subvulpes_server.exe. A thread reads the
-instruction address of the main thread every millisecond. SV_TIMERS=1 also prints the game timers
+instruction address of the main thread every millisecond. SV_TIMERS=1 also prints the game section timers
 once a minute. Stop the server, then run:
 
     python -I tools/profile/map_samples.py samples.txt build/server/subvulpes_server.map [top]
