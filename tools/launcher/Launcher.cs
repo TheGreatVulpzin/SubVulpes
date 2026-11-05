@@ -299,8 +299,8 @@ namespace SubVulpes
 
         static readonly Preset[] Presets = {
             new Preset("Normal",
-                "Samples the server code. Saves a small report if the server crashes or freezes.",
-                new Captures { Profile = true, FreezeDump = true }),
+                "Saves the log of each run. No other capture.",
+                new Captures { CrashDump = "none" }),
             new Preset("Speed Check",
                 "Samples the server code and logs the game section timers. Saves a small report if the server crashes or freezes.",
                 new Captures { Profile = true, Timers = true, FreezeDump = true }),
@@ -634,9 +634,9 @@ namespace SubVulpes
         Captures ReadCustomCaptures()
         {
             return new Captures {
-                Profile = settings.Get("custom.profile", "1") == "1", Timers = settings.Get("custom.timers", "0") == "1",
-                Packets = settings.Get("custom.packets", "0") == "1", FreezeDump = settings.Get("custom.freeze", "1") == "1",
-                CrashDump = settings.Get("custom.crashdump", "small")
+                Profile = settings.Get("custom.profile", "0") == "1", Timers = settings.Get("custom.timers", "0") == "1",
+                Packets = settings.Get("custom.packets", "0") == "1", FreezeDump = settings.Get("custom.freeze", "0") == "1",
+                CrashDump = settings.Get("custom.crashdump", "none")
             };
         }
 
@@ -1117,7 +1117,8 @@ namespace SubVulpes
                 if (dirty) SaveSettings();
                 if (developerRun) SaveCaptureChoice();
                 string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff");
-                testDir = developerRun ? Path.Combine(logsRoot, stamp) : logsRoot;
+                // Each run keeps its own log folder. Debug Mode only adds the captures.
+                testDir = Path.Combine(logsRoot, stamp);
                 Directory.CreateDirectory(testDir);
                 logFile = Path.Combine(testDir, "server.log");
                 string eventName = @"Local\SubVulpes-stop-" + Guid.NewGuid().ToString("N");
@@ -1141,9 +1142,9 @@ namespace SubVulpes
                 }
                 string testCrash = developerRun ? settings.Get("test_crash", "") : "";
                 if (testCrash != "") env["SV_TEST_CRASH"] = testCrash;
-                if (developerRun) {
+                {
                     var session = new KeyFile(Path.Combine(testDir, "session.ini"));
-                    session.Set("preset", ((Preset)presetBox.SelectedItem).Name);
+                    session.Set("preset", developerRun ? ((Preset)presetBox.SelectedItem).Name : "Log only");
                     session.Set("captures", activeCaptures.Summary());
                     session.Set("start", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                     session.Set("server", ServerVersion());
@@ -1171,7 +1172,7 @@ namespace SubVulpes
                 started = lastSpeedLine = DateTime.Now;
                 stats.Set("Started at", started.ToString("HH:mm"));
                 SetState("Starting");
-                message.Text = developerRun ? "This test: logs\\" + stamp : "";
+                message.Text = "";
             } catch (Exception ex) {
                 if (server != null) { server.Dispose(); server = null; }
                 if (stopEvent != null) { stopEvent.Dispose(); stopEvent = null; }
@@ -1300,7 +1301,6 @@ namespace SubVulpes
                 SetState(crashed ? "Crashed" : StoppedUnexpectedly);
                 result = crashed ? "crash" : StoppedUnexpectedly;
             }
-            if (!developerRun) return;
             TimeSpan t = DateTime.Now - started;
             var session = new KeyFile(Path.Combine(testDir, "session.ini"));
             session.Set("end", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));

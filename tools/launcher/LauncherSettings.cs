@@ -438,7 +438,7 @@ namespace SubVulpes
                 Section(t, "About");
                 AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
                 Section(t, "Debug");
-                AddRow(t, "Debug Mode", "Shows the Advanced Settings tab. Each run then saves its own log folder.", debugModeBox, null);
+                AddRow(t, "Debug Mode", "Shows the Advanced Settings tab, where you choose the captures of each run.", debugModeBox, null);
             });
         }
 
@@ -483,13 +483,17 @@ namespace SubVulpes
             UI.Tips.SetToolTip(testNotes, "Notes of the selected log.");
             page.Controls.Add(testNotes, 0, 1);
             var bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+            var read = new FlatButton("Read Log") { Height = 28 };
+            var delete = new FlatButton("Delete") { Height = 28, Kind = "danger" };
             var pack = new FlatButton("Pack the Selected Log") { Height = 28 };
             var open = new FlatButton("Open Folder") { Height = 28 };
             var save = new FlatButton("Save Notes") { Height = 28, Margin = new Padding(0) };
             pack.Click += delegate { string d = SelectedTest(); if (d != null) { SaveNotes(d, testNotes.Text); PackTest(d); } };
             open.Click += delegate { string d = SelectedTest(); if (d != null) System.Diagnostics.Process.Start("explorer.exe", "\"" + d + "\""); };
             save.Click += delegate { string d = SelectedTest(); if (d != null) SaveNotes(d, testNotes.Text); };
-            bar.Controls.AddRange(new Control[] { pack, open, save });
+            read.Click += delegate { ReadTestLog(SelectedTest()); };
+            delete.Click += delegate { DeleteTest(SelectedTest()); };
+            bar.Controls.AddRange(new Control[] { read, pack, open, save, delete });
             page.Controls.Add(bar, 0, 2);
             return page;
         }
@@ -540,6 +544,49 @@ namespace SubVulpes
             string d = SelectedTest();
             string notes = d == null ? null : Path.Combine(d, "notes.txt");
             testNotes.Text = notes != null && File.Exists(notes) ? File.ReadAllText(notes) : "";
+        }
+
+        // The text of a past log in its own window. A long log shows its last part.
+        void ReadTestLog(string dir)
+        {
+            string file = dir == null ? null : Path.Combine(dir, "server.log");
+            if (file == null || !File.Exists(file)) { MessageBox.Show(this, "This log has no server.log.", Text); return; }
+            const int Limit = 4 * 1024 * 1024;
+            string text;
+            using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                bool cut = stream.Length > Limit;
+                if (cut) stream.Seek(-Limit, SeekOrigin.End);
+                using (var reader = new StreamReader(stream))
+                    text = (cut ? "[Only the last 4 MB are shown.]\n" : "") + reader.ReadToEnd();
+            }
+            using (var form = new Form { Text = Path.GetFileName(dir), StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(900, 560), Font = UI.F(9.5f, FontStyle.Regular) })
+            {
+                var box = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f), DetectUrls = false, WordWrap = false, Text = text, AccessibleName = "Log text" };
+                form.Controls.Add(box);
+                Skin.Window(form, UI.T);
+                form.HandleCreated += delegate { Skin.Window(form, UI.T); };
+                form.ShowDialog(this);
+            }
+        }
+
+        // Deletes the folder of one past log, and its zip. The log of the run that is open stays.
+        void DeleteTest(string dir)
+        {
+            if (dir == null) return;
+            string full = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar);
+            if (!string.Equals(Path.GetDirectoryName(full), Path.GetFullPath(logsRoot).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) return;
+            if (server != null && string.Equals(dir, testDir, StringComparison.OrdinalIgnoreCase)) { MessageBox.Show(this, "This log is in use. Stop the server first.", Text); return; }
+            if (MessageBox.Show(this, "Delete this log? It cannot be restored.", Text, MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            try
+            {
+                AssertUpdatePath(full);
+                Directory.Delete(full, true);
+                string zip = Path.Combine(logsRoot, "test-" + Path.GetFileName(full) + ".zip");
+                if (File.Exists(zip)) File.Delete(zip);
+            }
+            catch (Exception ex) { MessageBox.Show(this, "Cannot delete the log: " + ex.Message, Text); }
+            LoadTests();
         }
 
         static void SaveNotes(string dir, string text)

@@ -58,9 +58,9 @@ Select a plugin, open the **Settings** tab and select **Save**. A setting that s
 
 # Logs
 ## The console log
-The file `logs\server.log` has all lines of the last run. Use the save icon in the console to copy it with the password removed.
+The console shows the lines of the run. Use the save icon in the console to copy it with the password removed.
 ## Past Logs
-In Debug Mode, each run makes its own folder in `logs`. Open **Settings**, then **Past Logs**. Write a note for a log, then pack it into one zip to send it.
+Each run saves its log in its own folder in `logs`. Open **Settings**, then **Past Logs**. Select a log, then read it, write a note, pack it into one zip to send it, or delete it. A deleted log cannot be restored. Debug Mode adds captures to the run, such as a crash dump.
 ## Crash reports
 The server can save a dump when it crashes or freezes. Turn it on in **Advanced Settings**. Send the dump with the log.
 
