@@ -59,6 +59,8 @@ namespace SubVulpes.Ui
 
     static class UI
     {
+        // Buttons, text fields, lists and search boxes share one height, so that a row of them lines up.
+        public const int ControlHeight = 34;
         public static Theme T = Theme.Light;
         public static readonly ToolTip Tips = new ToolTip { InitialDelay = 250, ShowAlways = true, AutoPopDelay = 12000 };
         // Windows stresses text with Semibold. The Bold face is too heavy for a small interface.
@@ -236,7 +238,7 @@ namespace SubVulpes.Ui
         }
         public FlatButton(string text)
         {
-            Text = text; Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular); Height = 34; Margin = new Padding(0, 0, 8, 0);
+            Text = text; Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular); Height = UI.ControlHeight; Margin = new Padding(0, 0, 8, 0);
             SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
             AccessibleRole = AccessibleRole.PushButton; AccessibleName = text;
             Width = TextRenderer.MeasureText(text, Font).Width + 32;
@@ -324,7 +326,7 @@ namespace SubVulpes.Ui
         public event EventHandler SelectedIndexChanged;
         public Dropdown(int width)
         {
-            Width = width; Height = 28; Margin = new Padding(0); Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular);
+            Width = width; Height = UI.ControlHeight; Margin = new Padding(0); Cursor = Cursors.Hand; Font = UI.F(9.5f, FontStyle.Regular);
             SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true; AccessibleRole = AccessibleRole.ComboBox;
         }
         protected override bool IsInputKey(Keys keyData) { return keyData == Keys.Up || keyData == Keys.Down || base.IsInputKey(keyData); }
@@ -415,7 +417,7 @@ namespace SubVulpes.Ui
         public readonly TextBox Box; readonly bool multiline;
         public TextField(int width, bool multiline)
         {
-            this.multiline = multiline; Width = width; Height = multiline ? 56 : 28; Anchor = AnchorStyles.Left; Margin = new Padding(0); SetStyle(UI.Paint, true);
+            this.multiline = multiline; Width = width; Height = multiline ? 56 : UI.ControlHeight; Anchor = AnchorStyles.Left; Margin = new Padding(0); SetStyle(UI.Paint, true);
             Box = new TextBox { BorderStyle = BorderStyle.None, Multiline = multiline, Font = UI.F(9.5f, FontStyle.Regular) };
             Box.GotFocus += delegate { Invalidate(); }; Box.LostFocus += delegate { Invalidate(); };
             Controls.Add(Box); Place();
@@ -466,7 +468,7 @@ namespace SubVulpes.Ui
         public readonly TextBox Box;
         public SearchBox(int width)
         {
-            Width = width; Height = 28; Anchor = AnchorStyles.Left; Margin = new Padding(0); SetStyle(UI.Paint, true);
+            Width = width; Height = UI.ControlHeight; Anchor = AnchorStyles.Left; Margin = new Padding(0); SetStyle(UI.Paint, true);
             Box = new TextBox { Text = "Search…", BorderStyle = BorderStyle.None, Tag = "hint", Font = UI.F(9.5f, FontStyle.Regular) };
             Box.GotFocus += delegate { if (Box.Text == "Search…") { Box.Text = ""; Box.ForeColor = UI.T.Fg; } Invalidate(); };
             Box.LostFocus += delegate { if (Box.Text.Length == 0) { Box.Text = "Search…"; Box.ForeColor = UI.T.Muted; } Invalidate(); };
@@ -495,7 +497,7 @@ namespace SubVulpes.Ui
         }
         public Segmented(params string[] options)
         {
-            Options = options; Height = 32; Cursor = Cursors.Hand; Margin = new Padding(0); SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
+            Options = options; Height = UI.ControlHeight; Cursor = Cursors.Hand; Margin = new Padding(0); SetStyle(UI.Paint | ControlStyles.Selectable, true); TabStop = true;
             AccessibleRole = AccessibleRole.Grouping;
             widths = new int[options.Length]; int total = 0;
             for (int i = 0; i < options.Length; i++) { widths[i] = TextRenderer.MeasureText(options[i], UI.F(9.5f, FontStyle.Regular)).Width + 24; total += widths[i]; }

@@ -128,7 +128,7 @@ namespace SubVulpes
         static void Compact(Control c)
         {
             var button = c as FlatButton;
-            if (button != null) { button.Height = 28; return; }
+            if (button != null) return;
             foreach (Control k in c.Controls) Compact(k);
         }
 
@@ -438,7 +438,7 @@ namespace SubVulpes
                 Section(t, "About");
                 AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
                 Section(t, "Debug");
-                AddRow(t, "Debug Mode", "Shows the Advanced Settings tab, where you choose the captures of each run.", debugModeBox, null);
+                AddRow(t, "Debug Mode", "Shows the Advanced Settings tab.", debugModeBox, null);
             });
         }
 
@@ -483,11 +483,11 @@ namespace SubVulpes
             UI.Tips.SetToolTip(testNotes, "Notes of the selected log.");
             page.Controls.Add(testNotes, 0, 1);
             var bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-            var read = new FlatButton("Read Log") { Height = 28 };
-            var delete = new FlatButton("Delete") { Height = 28, Kind = "danger" };
-            var pack = new FlatButton("Pack the Selected Log") { Height = 28 };
-            var open = new FlatButton("Open Folder") { Height = 28 };
-            var save = new FlatButton("Save Notes") { Height = 28, Margin = new Padding(0) };
+            var read = new FlatButton("Read Log") { };
+            var delete = new FlatButton("Delete") { Kind = "danger" };
+            var pack = new FlatButton("Pack the Selected Log") { };
+            var open = new FlatButton("Open Folder") { };
+            var save = new FlatButton("Save Notes") { Margin = new Padding(0) };
             pack.Click += delegate { string d = SelectedTest(); if (d != null) { SaveNotes(d, testNotes.Text); PackTest(d); } };
             open.Click += delegate { string d = SelectedTest(); if (d != null) System.Diagnostics.Process.Start("explorer.exe", "\"" + d + "\""); };
             save.Click += delegate { string d = SelectedTest(); if (d != null) SaveNotes(d, testNotes.Text); };

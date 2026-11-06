@@ -548,7 +548,7 @@ namespace SubVulpes
             catalogList.Visible = false;
             catalogDetail.SuspendLayout();
             catalogDetail.Controls.Clear();
-            var back = new FlatButton("Back") { Location = new Point(0, 4), Height = 28 };
+            var back = new FlatButton("Back") { Location = new Point(0, 4) };
             back.Click += delegate { RenderCatalog(); };
             var avatar = new Avatar(c.Name, 72) { Location = new Point(0, 48), Picture = CatalogPicture(c.Icon) ?? PluginIcon(c.Id) };
             var name = L(c.Name, true, false);
@@ -1135,7 +1135,7 @@ namespace SubVulpes
                 if (s.Help.Length > 0) { UI.Tips.SetToolTip(lab, s.Help); UI.Tips.SetToolTip(s.Editor, s.Help); }
                 tbl.Controls.Add(s.Editor, 1, row);
                 PluginSetting current = s;
-                var reset = new FlatButton("Default") { Height = 28, Width = 56, Margin = new Padding(0), Anchor = AnchorStyles.Left };
+                var reset = new FlatButton("Default") { Width = 56, Margin = new Padding(0), Anchor = AnchorStyles.Left };
                 reset.Click += delegate { current.Reset = true; SetEditorDefault(current); changed(null, EventArgs.Empty); };
                 tbl.Controls.Add(reset, 2, row);
                 if (s.Editor is Switch) ((Switch)s.Editor).Changed += changed;
