@@ -366,8 +366,8 @@ namespace SubVulpes
             // The tab headers of the control stay hidden. The bar at the top of the window draws the tabs.
             mainTabs = new TabControl { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, SizeMode = TabSizeMode.Fixed, ItemSize = new Size(0, 1), Padding = new Point(0, 0) };
             // The status bar sits at the bottom, in a tone a little stronger than the window. A message fades after a few seconds.
-            message = new Label { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty, BackColor = Color.Transparent };
-            statusBar = new Panel { Dock = DockStyle.Bottom, Height = 28, Padding = new Padding(14, 0, 14, 0), Tag = "subbar", BackColor = UI.T.SubBar };
+            message = new Label { AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty, Padding = new Padding(14, 0, 14, 0), BackColor = Color.Transparent };
+            statusBar = new Panel { Dock = DockStyle.Bottom, Height = 28, Padding = Padding.Empty, Tag = "subbar", BackColor = UI.T.SubBar };
             message.ForeColor = UI.T.Muted;
             statusBar.Controls.Add(message);
             statusBar.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, Tag = "line" });
