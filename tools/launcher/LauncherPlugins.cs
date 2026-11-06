@@ -190,7 +190,8 @@ namespace SubVulpes
             host.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             host.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
+            // The band runs edge to edge under the tab bar and has a line below it, so that it reads as a part of the bar.
+            var strip = new RuledPanel { Dock = DockStyle.Fill, Padding = new Padding(16, 0, 16, 0), Tag = "subbar", Margin = new Padding(0) };
             var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };
             string[] names = { "My Plugins", "Workshop" };
             Control[] subs = { PluginsPage(), CatalogPage() };

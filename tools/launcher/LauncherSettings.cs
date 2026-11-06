@@ -59,7 +59,7 @@ namespace SubVulpes
             host.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             host.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-            var strip = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0), Tag = "subbar", Margin = new Padding(0) };
+            var strip = new RuledPanel { Dock = DockStyle.Fill, Padding = new Padding(16, 0, 16, 0), Tag = "subbar", Margin = new Padding(0) };
             string[] names = { "Server Settings", "Launcher Settings", "Past Logs", "Advanced Settings" };
             settingsBarPanel = SettingsBar();
             var area = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 8, 16, 10) };

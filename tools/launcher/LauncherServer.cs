@@ -358,10 +358,14 @@ namespace SubVulpes
         void KillServer()
         {
             if (server == null) return;
-            if (MessageBox.Show(this, "End the server at once? It cannot save the game.", "Kill", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            if (MessageBox.Show(this, "Do you want to kill the server? This can lead to data loss.", "Kill", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             try {
                 stopping = true;
+                int id = server.Id;
                 server.Kill();
+                // If the process stays alive, taskkill ends it and its children.
+                if (!server.WaitForExit(3000))
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("taskkill.exe", "/F /T /PID " + id) { UseShellExecute = false, CreateNoWindow = true });
             } catch (Exception ex) { message.Text = "Cannot end the server: " + ex.Message; }
         }
     }

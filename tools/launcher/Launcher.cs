@@ -374,7 +374,7 @@ namespace SubVulpes
             var fade = new Timer { Interval = 9000 };
             fade.Tick += delegate { fade.Stop(); message.Text = ""; };
             message.TextChanged += delegate { fade.Stop(); if (message.Text.Length > 0) fade.Start(); };
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1, Padding = new Padding(4) };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1, Padding = Padding.Empty };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             // The tab control draws a frame of its own. It sits a little outside its holder, so that the holder clips the frame.
