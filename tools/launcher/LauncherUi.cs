@@ -624,14 +624,14 @@ namespace SubVulpes.Ui
     class StateLabel : Control
     {
         string word = "Running", tone = "ok";
-        readonly System.Windows.Forms.Timer pulse = new System.Windows.Forms.Timer { Interval = 60 };
+        readonly System.Windows.Forms.Timer pulse = new System.Windows.Forms.Timer { Interval = 50 };
         int phase;
         // The owner repaints what depends on the color, such as the line next to the buttons.
         public event Action Changed;
         public StateLabel()
         {
             Height = 34; Fit(); SetStyle(UI.Paint, true); AccessibleRole = AccessibleRole.StaticText; AccessibleName = word;
-            pulse.Tick += delegate { phase = (phase + 1) % 17; Invalidate(); };
+            pulse.Tick += delegate { phase = (phase + 1) % 70; Invalidate(); };
         }
         // The dot and the line use brighter colors than the text colors of the theme. The word beside the dot carries the meaning.
         public Color ToneColor
@@ -659,8 +659,8 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             Color c = ToneColor;
-            // While the server runs or starts, the dot goes from its color to a lighter one (25% white) and back, once each second.
-            if (pulse.Enabled) c = Icons.Blend(c, Color.White, 0.25 * (1 - Math.Cos(phase / 17.0 * 2 * Math.PI)) / 2);
+            // While the server runs or starts, the dot goes from its color to a lighter one (25% white) and back, once each 3.5 seconds, slow and smooth.
+            if (pulse.Enabled) c = Icons.Blend(c, Color.White, 0.25 * (1 - Math.Cos(phase / 70.0 * 2 * Math.PI)) / 2);
             using (var b = new SolidBrush(c)) g.FillEllipse(b, 4, Height / 2 - 6, 13, 13);
             TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(25, 0, Width - 25, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
