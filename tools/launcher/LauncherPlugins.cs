@@ -67,7 +67,7 @@ namespace SubVulpes
 
         static string ByLine(string author, string version)
         {
-            string by = author.Length > 0 ? "by " + author : "";
+            string by = "by " + (author.Length > 0 ? author : "Unknown");
             string v = version.Length > 0 ? "v" + version : "";
             return by.Length > 0 && v.Length > 0 ? by + " · " + v : by + v;
         }
@@ -504,7 +504,8 @@ namespace SubVulpes
             desc.Location = new Point(76, 54);
             var meta = L(ByLine(c.Author, ""), false, true);
             meta.Font = UI.F(9f, FontStyle.Regular);
-            meta.Location = new Point(76, 32);
+            // The author stands halfway between the name and the description.
+            meta.Location = new Point(76, 10 + name.PreferredHeight + (54 - 10 - name.PreferredHeight - meta.PreferredHeight) / 2);
             var parts = new List<Control> { avatar, name, desc, meta };
             // The version stands next to the seal, or next to the name when there is no seal.
             int after = 76 + name.PreferredWidth + 10;
