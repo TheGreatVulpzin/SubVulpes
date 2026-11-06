@@ -332,7 +332,7 @@ namespace SubVulpes
         ServerName serverName;
         StateLabel stateLabel;
         string serverState = "Stopped", speedStatus = NoSpeedText, playersStatus = NoPlayersText;
-        Label message, missingText;
+        Label message;
         FlatButton startStop, stopButton;
         bool pluginBusy;
 
@@ -485,7 +485,7 @@ namespace SubVulpes
             logFile = Path.Combine(logsRoot, "server.log");
             config = nextConfig;
             configCreated = absent;
-            if (missingText != null) ShowMissing(absent);
+            if (message != null) ShowMissing(absent);
         }
 
         void OpenServerFolder(string path)
@@ -508,7 +508,8 @@ namespace SubVulpes
             var missing = new List<string>();
             if (!Directory.Exists(Path.Combine(folder, "data"))) missing.Add("data/");
             if (configCreated) missing.Add("config.txt has been created.");
-            missingText.Text = missing.Count == 0 ? "" : "Missing: " + string.Join(", ", missing.ToArray());
+            // The note shows in the status bar. The line next to the state is only a color.
+            if (missing.Count > 0) message.Text = "Missing: " + string.Join(", ", missing.ToArray());
         }
 
         void ChooseFolder()

@@ -380,9 +380,9 @@ namespace SubVulpes
         Control CatalogPage()
         {
             var page = new Panel();
-            catalogBar = new Panel { Dock = DockStyle.Top, Height = 44 };
-            catalogSearch = new SearchBox(260) { Location = new Point(0, 8) };
-            catalogKind = new Dropdown(150) { Location = new Point(272, 8) };
+            catalogBar = new Panel { Dock = DockStyle.Top, Height = 46 };
+            catalogSearch = new SearchBox(260) { Location = new Point(0, 6), Height = 34 };
+            catalogKind = new Dropdown(150) { Location = new Point(272, 6), Height = 34 };
             catalogKind.Items.AddRange(new object[] { "All plugins", "Official", "Community" });
             catalogKind.SelectedIndex = 0;
             catalogSearch.TextChanged += delegate { RenderCatalog(); };
@@ -611,15 +611,15 @@ namespace SubVulpes
         Control PluginsPage()
         {
             var page = new Panel();
-            var bar = new Panel { Dock = DockStyle.Top, Height = 44 };
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
+            var bar = new Panel { Dock = DockStyle.Top, Height = 46 };
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 6, 0, 0) };
             var refresh = new FlatButton("Refresh") { Margin = new Padding(0), Glyph = "refresh" };
             var install = new FlatButton("Install from File…") { Glyph = "download" };
             refresh.Click += async delegate { await RefreshPlugins(); };
             install.Click += async delegate { await InstallPlugin(); };
             buttons.Controls.Add(refresh);
             buttons.Controls.Add(install);
-            pluginSearch = new SearchBox(260) { Location = new Point(0, 9) };
+            pluginSearch = new SearchBox(260) { Location = new Point(0, 6), Height = 34 };
             pluginSearch.TextChanged += delegate { RebuildPlugins(); };
             bar.Controls.Add(buttons);
             bar.Controls.Add(pluginSearch);
