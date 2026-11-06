@@ -611,10 +611,12 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.Clear(Parent != null ? Parent.BackColor : UI.T.Win);
             if (From == null || To == null || State == null) return;
-            int x0 = From.Right + 10, x1 = To.Left - 12, y = 4 + 17;
+            // The line ends at the edge of the first button (the panel has room before it). Both ends are soft.
+            int x0 = From.Right + 10, x1 = To.Left + 16, y = 4 + 17;
             if (x1 - x0 < 12) return;
-            Color gray = Icons.Blend(UI.T.Line, UI.T.Muted, 0.25);
-            using (var b = new LinearGradientBrush(new Rectangle(x0, y - 1, x1 - x0, 2), State.ToneColor, gray, 0f)) g.FillRectangle(b, x0, y - 1, x1 - x0, 2);
+            Color back = g.GetNearestColor(Parent != null ? Parent.BackColor : UI.T.Win);
+            Color start = Icons.Blend(back, State.ToneColor, 0.7), end = Icons.Blend(back, UI.T.Line, 0.8);
+            using (var b = new LinearGradientBrush(new Rectangle(x0, y - 1, x1 - x0, 2), start, end, 0f)) g.FillRectangle(b, x0, y - 1, x1 - x0, 2);
         }
     }
 
