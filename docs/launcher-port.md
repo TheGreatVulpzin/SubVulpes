@@ -34,7 +34,7 @@ The real launcher has the same look and uses real data.
 - An example `catalog.json` is in `docs/examples/launcher-catalog/`. Copy it to the server folder. The pictures that it names are not in the repository. For tests, the playable folder has pictures that are screenshots of the launcher. Real pictures come with the store.
 - The plugin table has an Author column (hidden at first). It shows the author of the manifest, or nothing.
 - A plugin listed in the catalog takes its Source from the catalog.
-- The plugin table has a Source column. A plugin whose id starts with `sv.` is Official. Any other is Installed. Risk and Source are hidden at first. Right-click a column title to choose the columns. The launcher remembers the choice.
+- The plugin table has a Source column. A plugin whose id starts with `sv.` is Official. Any other is Local. Risk and Source are hidden at first. Right-click a column title to choose the columns. The launcher remembers the choice.
 - A plugin risk comes from its runtime and capabilities: native is highest, any capability besides read, storage and config is high, the rest is low.
 - The plugin approval dialog keeps the standard look. Its tests and its security checks did not change.
 - The Help text is `tools/launcher/help.md`. The build puts it in the program. Each `# ` line starts a topic.

@@ -45,6 +45,12 @@ namespace SubVulpes
             return string.IsNullOrEmpty(text) ? "" : char.ToUpperInvariant(text[0]) + text.Substring(1);
         }
 
+        // The words of the risk levels. The highest level is native code, which has full access.
+        static string RiskText(string level)
+        {
+            return level == "highest" ? "Full access" : Capital(level);
+        }
+
         static string RiskOf(PluginMetadata m)
         {
             if (m.Runtime == "native") return "highest";
@@ -56,7 +62,7 @@ namespace SubVulpes
         // A plugin whose id starts with "sv." comes from the SubVulpes project.
         static string SourceOf(PluginMetadata m)
         {
-            return m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Official" : "Installed";
+            return m.Id.StartsWith("sv.", StringComparison.Ordinal) ? "Official" : "Local";
         }
 
         // The author comes from the manifest. Without one, the name stays empty.
@@ -851,7 +857,7 @@ namespace SubVulpes
                 TextRenderer.DrawText(g, StateText(p.State), UI.F(9.5f, FontStyle.Regular), new Rectangle(e.CellBounds.X + 20, e.CellBounds.Y, e.CellBounds.Width - 20, e.CellBounds.Height),
                     UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
             } else if (e.ColumnIndex == 3) {
-                string level = RiskOf(p), risk = Capital(level);
+                string level = RiskOf(p), risk = RiskText(level);
                 Color rc = RiskColor(level);
                 var rf = UI.F(9f, FontStyle.Regular);
                 int rw = TextRenderer.MeasureText(g, risk, rf, new Size(999, 30), TextFormatFlags.NoPadding).Width + 20;
@@ -932,7 +938,7 @@ namespace SubVulpes
                 flow.Controls.Add(restart);
             }
             if (RiskOf(p) == "highest") {
-                var n = L("This plugin has full access to the server. It can read private data, freeze it or crash it.", false, false);
+                var n = L("This plugin has full access to the server. It can read private data. It can freeze or crash the server.", false, false);
                 n.MaximumSize = new Size(330, 0);
                 n.Tag = "warn";
                 n.Margin = new Padding(0, 0, 0, 12);
@@ -968,7 +974,7 @@ namespace SubVulpes
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
             string[][] info = {
                 new[] { "ID", p.Id }, new[] { "Version", p.Version }, new[] { "Author", AuthorOf(p).Length > 0 ? AuthorOf(p) : "Not stated" },
-                new[] { "Runtime", Capital(p.Runtime) }, new[] { "Risk", Capital(RiskOf(p)) }, new[] { "Required", p.Required == "1" ? "Yes" : "No" } };
+                new[] { "Runtime", Capital(p.Runtime) }, new[] { "Risk", RiskText(RiskOf(p)) }, new[] { "Required", p.Required == "1" ? "Yes" : "No" } };
             foreach (var kv in info) {
                 int row = tbl.RowCount++;
                 tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
