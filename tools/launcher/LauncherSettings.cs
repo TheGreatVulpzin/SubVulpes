@@ -171,6 +171,17 @@ namespace SubVulpes
             t.SetColumnSpan(p, 4);
         }
 
+        // A row of controls with no label. It starts at the left edge, like the labels of the other rows.
+        void AddWide(TableLayoutPanel t, Control input)
+        {
+            int row = t.RowCount++;
+            t.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            input.Anchor = AnchorStyles.Left;
+            input.Margin = new Padding(0);
+            t.Controls.Add(input, 0, row);
+            t.SetColumnSpan(input, 4);
+        }
+
         // A label with its help line under it, the field, and a badge when the setting needs a restart.
         // The help is plain text and not a hover icon, so that a person finds it without searching for it.
         void AddRow(TableLayoutPanel t, string label, string help, Control input, string badge)
@@ -290,7 +301,8 @@ namespace SubVulpes
             var line = new Panel { Dock = DockStyle.Top, Height = 1, Tag = "line" };
             var reset = new FlatButton("Reset to defaults…") { Kind = "link", Dock = DockStyle.Left };
             reset.Click += delegate { ResetSettings(); };
-            var flow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft };
+            // The bar is 58 px high with a line of 1 px at the top and 8 px of padding. A top padding of 3 puts the buttons at the middle.
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 3, 0, 0) };
             saveButton = new FlatButton("Save") { Kind = "primary", Enabled = false, Margin = new Padding(8, 0, 0, 0) };
             undoButton = new FlatButton("Revert changes") { Enabled = false, Margin = new Padding(8, 0, 0, 0) };
             dirtyText = L("", false, true);
@@ -430,7 +442,7 @@ namespace SubVulpes
                 Section(t, "Server");
                 AddRow(t, "Server folder", null, Inline(folderBox, browseButton, open), null);
                 Section(t, "Updates");
-                AddRow(t, "", null, Inline(checkUpdate, update), null);
+                AddWide(t, Inline(checkUpdate, update));
                 AddRow(t, "Include Beta Versions", null, previewsBox, null);
                 Section(t, "Appearance");
                 AddRow(t, "Theme", null, themeBox, null);
