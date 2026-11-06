@@ -39,6 +39,12 @@ namespace SubVulpes
         // ------------------------------------------------------------ data
 
         // The risk follows the rules of the review: native code is the highest, a plugin that only reads or keeps its own data is low.
+        // The words of a table: "low" is "Low", so that every cell starts with a capital letter.
+        static string Capital(string text)
+        {
+            return string.IsNullOrEmpty(text) ? "" : char.ToUpperInvariant(text[0]) + text.Substring(1);
+        }
+
         static string RiskOf(PluginMetadata m)
         {
             if (m.Runtime == "native") return "highest";
@@ -76,12 +82,13 @@ namespace SubVulpes
         static string StateText(string state)
         {
             switch (state) {
-            case "active": return "Active";
-            case "disabled": return "Disabled";
-            case "failed": return "Failed";
+            // The status says only if the plugin is on. It does not change when the server runs or stops.
+            case "active":
+            case "ready": return "On";
+            case "disabled": return "Off";
+            case "failed": return "Error";
             case "restart": return "Restart needed";
-            case "ready": return "Ready";
-            case "approval": return "Needs approval";
+            case "approval": return "Approval Needed";
             default: return state ?? "";
             }
         }
@@ -632,18 +639,21 @@ namespace SubVulpes
             pluginGrid = Table();
             pluginGrid.Columns.Add("n", "Name");
             pluginGrid.Columns.Add("v", "Version");
-            pluginGrid.Columns.Add("s", "State");
+            pluginGrid.Columns.Add("s", "Status");
             pluginGrid.Columns.Add("r", "Risk");
             pluginGrid.Columns.Add("src", "Source");
             pluginGrid.Columns.Add("au", "Author");
-            pluginGrid.Columns.Add("o", "On");
+            pluginGrid.Columns.Add("o", "");
             pluginGrid.Columns[0].FillWeight = 170;
             pluginGrid.Columns[1].FillWeight = 70;
             pluginGrid.Columns[2].FillWeight = 120;
             pluginGrid.Columns[3].FillWeight = 80;
             pluginGrid.Columns[4].FillWeight = 80;
             pluginGrid.Columns[5].FillWeight = 80;
-            pluginGrid.Columns[6].FillWeight = 50;
+            pluginGrid.Columns[6].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            pluginGrid.Columns[6].Width = 60;
+            // The switch stands at the left of the row. The column keeps its index, so the code that reads it does not change.
+            pluginGrid.Columns[6].DisplayIndex = 0;
             foreach (DataGridViewColumn col in pluginGrid.Columns) col.SortMode = DataGridViewColumnSortMode.Programmatic;
             // The columns the user hid stay hidden. The setting holds the names of the hidden columns.
             string hidden = "," + settings.Get("plugin_hidden", "3,4,5") + ",";
@@ -840,8 +850,8 @@ namespace SubVulpes
                 TextRenderer.DrawText(g, StateText(p.State), UI.F(9.5f, FontStyle.Regular), new Rectangle(e.CellBounds.X + 20, e.CellBounds.Y, e.CellBounds.Width - 20, e.CellBounds.Height),
                     UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
             } else if (e.ColumnIndex == 3) {
-                string risk = RiskOf(p);
-                Color rc = RiskColor(risk);
+                string level = RiskOf(p), risk = Capital(level);
+                Color rc = RiskColor(level);
                 var rf = UI.F(9f, FontStyle.Regular);
                 int rw = TextRenderer.MeasureText(g, risk, rf, new Size(999, 30), TextFormatFlags.NoPadding).Width + 20;
                 var pill = new Rectangle(e.CellBounds.X + 6, my - 11, rw, 22);
@@ -910,7 +920,7 @@ namespace SubVulpes
             d.MaximumSize = new Size(330, 0);
             d.Margin = new Padding(0, 0, 0, 12);
             flow.Controls.Add(d);
-            var state = L("State: " + StateText(p.State) + (p.Reason.Length > 0 ? ". " + p.Reason : ""), false, true);
+            var state = L("Status: " + StateText(p.State) + (p.Reason.Length > 0 ? ". " + p.Reason : ""), false, true);
             state.MaximumSize = new Size(330, 0);
             state.Margin = new Padding(0, 0, 0, 12);
             flow.Controls.Add(state);
@@ -957,7 +967,7 @@ namespace SubVulpes
             tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
             string[][] info = {
                 new[] { "ID", p.Id }, new[] { "Version", p.Version }, new[] { "Author", AuthorOf(p).Length > 0 ? AuthorOf(p) : "Not stated" },
-                new[] { "Runtime", p.Runtime }, new[] { "Risk", RiskOf(p) }, new[] { "Required", p.Required == "1" ? "Yes" : "No" } };
+                new[] { "Runtime", Capital(p.Runtime) }, new[] { "Risk", Capital(RiskOf(p)) }, new[] { "Required", p.Required == "1" ? "Yes" : "No" } };
             foreach (var kv in info) {
                 int row = tbl.RowCount++;
                 tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
