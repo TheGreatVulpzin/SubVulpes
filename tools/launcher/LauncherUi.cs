@@ -633,7 +633,17 @@ namespace SubVulpes.Ui
             Height = 34; Fit(); SetStyle(UI.Paint, true); AccessibleRole = AccessibleRole.StaticText; AccessibleName = word;
             pulse.Tick += delegate { phase = (phase + 1) % 34; Invalidate(); };
         }
-        public Color ToneColor { get { return tone == "ok" ? UI.T.Ok : tone == "warn" ? UI.T.Warn : tone == "bad" ? UI.T.Bad : UI.T.Muted; } }
+        // The dot and the line use brighter colors than the text colors of the theme. The word beside the dot carries the meaning.
+        public Color ToneColor
+        {
+            get
+            {
+                bool dark = UI.T == Theme.Dark;
+                return tone == "ok" ? (dark ? Color.FromArgb(70, 190, 105) : Color.FromArgb(38, 160, 78))
+                     : tone == "warn" ? (dark ? Color.FromArgb(245, 180, 40) : Color.FromArgb(232, 160, 0))
+                     : tone == "bad" ? (dark ? Color.FromArgb(240, 100, 90) : Color.FromArgb(214, 58, 46)) : UI.T.Muted;
+            }
+        }
         // Tone is ok (green), warn (orange), bad (red) or muted (gray). The dot pulses while the server runs or starts.
         public void Set(string text, string toneName)
         {
@@ -649,13 +659,8 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
             Color c = ToneColor;
-            if (pulse.Enabled)
-            {
-                // A soft ring grows from the dot and fades out, once each two seconds.
-                double t = phase / 34.0;
-                float r = 6.5f + (float)(t * 4.0);
-                using (var b = new SolidBrush(Color.FromArgb((int)((1 - t) * 70), c))) g.FillEllipse(b, 10.5f - r, Height / 2f - r, 2 * r, 2 * r);
-            }
+            // While the server runs or starts, the dot goes from its color to a lighter one and back, once each two seconds.
+            if (pulse.Enabled) c = Icons.Blend(c, Color.White, 0.5 * (1 - Math.Cos(phase / 34.0 * 2 * Math.PI)) / 2);
             using (var b = new SolidBrush(c)) g.FillEllipse(b, 4, Height / 2 - 6, 13, 13);
             TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(25, 0, Width - 25, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
