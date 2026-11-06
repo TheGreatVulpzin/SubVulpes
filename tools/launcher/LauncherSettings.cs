@@ -416,7 +416,7 @@ namespace SubVulpes
             open.Click += delegate { System.Diagnostics.Process.Start("explorer.exe", "\"" + folder + "\""); };
             checkUpdate = new FlatButton("Check for Updates");
             checkUpdate.Click += async delegate { await CheckForUpdates(); };
-            var update = new FlatButton("Update from .ZIP") { Margin = new Padding(0) };
+            var update = new FlatButton("Choose .ZIP…") { Margin = new Padding(0) };
             update.Click += async delegate { await ChooseUpdate(); };
             previewsBox = new Switch { On = settings.Get("pre_releases", "0") == "1", AccessibleName = "Include Beta Versions" };
             previewsBox.Changed += delegate { settings.Set("pre_releases", previewsBox.On ? "1" : "0"); settings.Save(); };
@@ -446,9 +446,14 @@ namespace SubVulpes
                 AddRow(t, "Theme", null, themeBox, null);
                 AddRow(t, "Accent color", null, accentBox, null);
                 Section(t, "Version and Updates");
-                AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
+                // The check stands beside the version. The file update has its own row. The beta switch is last.
+                var version = L(AboutVersion(), false, false);
+                version.Margin = new Padding(0, 9, 16, 0);
+                version.Anchor = AnchorStyles.Left;
+                checkUpdate.Margin = new Padding(0);
+                AddRow(t, "Version", null, Inline(version, checkUpdate), null);
+                AddRow(t, "Update from file", null, update, null);
                 AddRow(t, "Include Beta Versions", null, previewsBox, null);
-                AddWide(t, Inline(checkUpdate, update));
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab.", debugModeBox, null);
             });
