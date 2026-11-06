@@ -586,6 +586,8 @@ namespace SubVulpes.Ui
             Color idle = Sub || Quiet ? UI.T.Muted : UI.T.BarMuted;
             TextRenderer.DrawText(g, Text, Selected ? UI.F(10f, FontStyle.Bold) : Font, new Rectangle(0, 0, Width, Height - line),
                 Selected ? UI.T.Fg : idle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            // A sub tab sits on a thin line. The tab draws it under its own width, then the mark of the chosen tab.
+            if (Sub || Quiet) using (var pen = new Pen(UI.T.Line)) g.DrawLine(pen, 0, Height - 1, Width, Height - 1);
             if (Selected && line > 0) using (var b = new SolidBrush(Sub || Quiet ? Icons.Blend(Parent.BackColor, UI.T.Muted, 0.4) : UI.T.Accent)) g.FillRectangle(b, 12, Height - line, Width - 24, line);
             if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(2, 2, Width - 5, Height - 5));
         }
@@ -611,11 +613,21 @@ namespace SubVulpes.Ui
         {
             var g = e.Graphics; g.Clear(Parent != null ? Parent.BackColor : UI.T.Win);
             if (From == null || To == null || State == null) return;
-            // The line ends at the edge of the first button (the panel has room before it). Both ends are soft.
-            int x0 = From.Right + 10, x1 = To.Left + 16, y = 4 + 17;
+            // The line starts a little after the word and ends at the left edge of the first button.
+            // If a note stands beside the state, the line starts after the note.
+            int x0 = From.Left + State.Right + 4, edge = int.MaxValue, y = 4 + 17;
+            foreach (Control k in From.Controls) if (k != State && k.Visible && k.Text.Length > 0) x0 = From.Right + 4;
+            foreach (Control button in To.Controls)
+            {
+                if (!button.Visible) continue;
+                edge = Math.Min(edge, To.Left + button.Left);
+                y = To.Top + button.Top + button.Height / 2;
+            }
+            int x1 = edge == int.MaxValue ? To.Left : edge;
             if (x1 - x0 < 12) return;
+            // The line fades from the color of the state to a faint trace of the line color, so it never looks like a divider.
             Color back = g.GetNearestColor(Parent != null ? Parent.BackColor : UI.T.Win);
-            Color start = Icons.Blend(back, State.ToneColor, 0.7), end = Icons.Blend(back, UI.T.Line, 0.8);
+            Color start = Icons.Blend(back, State.ToneColor, 0.7), end = Icons.Blend(back, UI.T.Line, 0.2);
             using (var b = new LinearGradientBrush(new Rectangle(x0, y - 1, x1 - x0, 2), start, end, 0f)) g.FillRectangle(b, x0, y - 1, x1 - x0, 2);
         }
     }

@@ -486,17 +486,18 @@ namespace SubVulpes
         {
             var wrap = new Panel { Dock = DockStyle.Top, Height = 92, Padding = new Padding(0, 0, 0, 10) };
             var card = new Surface { Dock = DockStyle.Fill, Cursor = Cursors.Hand };
-            var avatar = new Avatar(c.Name) { Location = new Point(16, 16), Picture = CatalogPicture(c.Icon) ?? PluginIcon(c.Id) };
+            var avatar = new Avatar(c.Name) { Location = new Point(16, 19), Picture = CatalogPicture(c.Icon) ?? PluginIcon(c.Id) };
             var name = L(c.Name, true, false);
             name.Font = UI.F(10.5f, FontStyle.Bold);
-            name.Location = new Point(76, 14);
+            name.Location = new Point(76, 10);
             var desc = L(c.Description.Length > 0 ? c.Description : "No description.", false, true);
             desc.AutoSize = false;
             desc.AutoEllipsis = true;
             desc.Size = new Size(420, 20);
-            desc.Location = new Point(76, 42);
+            desc.Location = new Point(76, 54);
             var meta = L(ByLine(c.Author, ""), false, true);
-            meta.Location = new Point(76, 62);
+            meta.Font = UI.F(9f, FontStyle.Regular);
+            meta.Location = new Point(76, 32);
             var parts = new List<Control> { avatar, name, desc, meta };
             // The version stands next to the seal, or next to the name when there is no seal.
             int after = 76 + name.PreferredWidth + 10;
@@ -872,12 +873,15 @@ namespace SubVulpes
             var header = new Panel { Dock = DockStyle.Top, Height = 58, Tag = "panel" };
             var title = L(p.DisplayName, true, false);
             title.Font = UI.F(13f, FontStyle.Bold);
-            title.Location = new Point(56, 5);
             var sub = L(ByLine(AuthorOf(p), ""), false, true);
-            sub.Location = new Point(56, 31);
+            // The name, and the author under it when there is one, stand as one block at the middle of the icon.
+            int block = title.PreferredHeight + (sub.Text.Length > 0 ? sub.PreferredHeight + 2 : 0);
+            int top = 6 + (44 - block) / 2;
+            title.Location = new Point(56, top);
+            sub.Location = new Point(56, top + title.PreferredHeight + 2);
             // The version stands at the right of the name.
             var version = L(p.Version, false, true);
-            version.Location = new Point(56 + title.PreferredWidth + 8, 5 + title.PreferredHeight - version.PreferredHeight - 2);
+            version.Location = new Point(56 + title.PreferredWidth + 8, top + title.PreferredHeight - version.PreferredHeight - 2);
             header.Controls.Add(new Avatar(p.DisplayName) { Location = new Point(0, 6), Picture = PluginIcon(p.Id) });
             header.Controls.Add(title);
             header.Controls.Add(version);
