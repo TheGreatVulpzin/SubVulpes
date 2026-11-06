@@ -254,7 +254,7 @@ namespace SubVulpes
         const string SettingsPageName = "Settings";
         const string IncompleteReviewText = "The plugin review is incomplete. Please try again.";
         const string InvalidReviewText = "The saved review is not valid. Review the plugin again.";
-        const string StoppedUnexpectedly = "Stopped unexpectedly";
+        const string StoppedUnexpectedly = "Crashed";
         const string UpdateInstalledText = "Update Installed!";
         const string NoSpeedText = "- ticks/s";
         const string NoPlayersText = "- players";
