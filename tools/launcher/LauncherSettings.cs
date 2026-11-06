@@ -441,14 +441,14 @@ namespace SubVulpes
             {
                 Section(t, "Server");
                 AddRow(t, "Server folder", null, Inline(folderBox, browseButton, open), null);
-                Section(t, "Updates");
-                AddWide(t, Inline(checkUpdate, update));
-                AddRow(t, "Include Beta Versions", null, previewsBox, null);
+                // From the choices a person makes most often to the ones they rarely need. Debug stands last.
                 Section(t, "Appearance");
                 AddRow(t, "Theme", null, themeBox, null);
                 AddRow(t, "Accent color", null, accentBox, null);
-                Section(t, "About");
+                Section(t, "Version and Updates");
                 AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
+                AddRow(t, "Include Beta Versions", null, previewsBox, null);
+                AddWide(t, Inline(checkUpdate, update));
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab.", debugModeBox, null);
             });
