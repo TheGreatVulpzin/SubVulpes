@@ -389,7 +389,7 @@ namespace SubVulpes
             AddPage("Help", HelpPage());
             Controls.Add(layout);
             Controls.Add(statusBar);
-            tabBar = new Panel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8, 0, 8, 0), BackColor = UI.T.Bar, Tag = "bar" };
+            tabBar = new Panel { Dock = DockStyle.Top, Height = 39, Padding = new Padding(8, 0, 8, 0), BackColor = UI.T.Bar, Tag = "bar" };
             serverName = new ServerName("SubVulpes");
             tabBar.Controls.Add(serverName);
             string[] tabOrder = { "Server", "Plugins", SettingsPageName, "Help" };

@@ -54,7 +54,7 @@ namespace SubVulpes
 
         Control ServerToolbar()
         {
-            var toolbar = new Panel { Dock = DockStyle.Fill };
+            var toolbar = new ToolbarLine { Dock = DockStyle.Fill };
             var right = new FlowLayoutPanel { Dock = DockStyle.Right, AutoSize = true, WrapContents = false, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 4, 0, 0) };
             killButton = new FlatButton("Kill") { Kind = "danger", Margin = new Padding(8, 0, 0, 0), Glyph = "bolt", Enabled = false };
             restartButton = new FlatButton("Restart") { Margin = new Padding(8, 0, 0, 0), Glyph = "restart", Enabled = false };
@@ -69,7 +69,12 @@ namespace SubVulpes
             UI.Tips.SetToolTip(killButton, "Ends the server at once. Use it only if Stop does not work.");
             right.Controls.AddRange(new Control[] { killButton, restartButton, stopButton, startStop });
             var left = new FlowLayoutPanel { Dock = DockStyle.Left, AutoSize = true, WrapContents = false, Padding = new Padding(0, 4, 0, 0) };
-            stateLabel = new StateLabel { Margin = new Padding(0, 0, 14, 0) };
+            // The dot starts at the same edge as the text of the numbers below it.
+            stateLabel = new StateLabel { Margin = new Padding(12, 0, 14, 0) };
+            toolbar.From = left; toolbar.To = right; toolbar.State = stateLabel;
+            stateLabel.Changed += delegate { toolbar.Invalidate(); };
+            left.SizeChanged += delegate { toolbar.Invalidate(); };
+            right.SizeChanged += delegate { toolbar.Invalidate(); };
             missingText = new Label { AutoSize = true, Tag = "warn", Margin = new Padding(0, 9, 0, 0) };
             ShowMissing(configCreated);
             left.Controls.Add(stateLabel);

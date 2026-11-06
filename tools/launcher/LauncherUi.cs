@@ -582,12 +582,39 @@ namespace SubVulpes.Ui
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.Clear(Parent.BackColor);
-            int line = Quiet ? 0 : Sub ? 2 : 3;
+            int line = Quiet || Sub ? 2 : 3;
             Color idle = Sub || Quiet ? UI.T.Muted : UI.T.BarMuted;
             TextRenderer.DrawText(g, Text, Selected ? UI.F(10f, FontStyle.Bold) : Font, new Rectangle(0, 0, Width, Height - line),
                 Selected ? UI.T.Fg : idle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            if (Selected && line > 0) using (var b = new SolidBrush(Sub ? UI.T.Muted : UI.T.Accent)) g.FillRectangle(b, 12, Height - line, Width - 24, line);
+            if (Selected && line > 0) using (var b = new SolidBrush(Sub || Quiet ? Icons.Blend(Parent.BackColor, UI.T.Muted, 0.4) : UI.T.Accent)) g.FillRectangle(b, 12, Height - line, Width - 24, line);
             if (Focused && ShowFocusCues) UI.FocusRing(g, new Rectangle(2, 2, Width - 5, Height - 5));
+        }
+    }
+
+    // A panel with a thin line along its bottom edge. The tab row of the plugin page uses it.
+    class RuledPanel : Panel
+    {
+        public RuledPanel() { SetStyle(ControlStyles.ResizeRedraw, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            using (var pen = new Pen(UI.T.Line)) e.Graphics.DrawLine(pen, 0, Height - 1, Width, Height - 1);
+        }
+    }
+
+    // The toolbar of the Server page. A line in the color of the state joins the state to the buttons and fades to gray.
+    class ToolbarLine : Panel
+    {
+        public Control From, To; public StateLabel State;
+        public ToolbarLine() { SetStyle(UI.Paint | ControlStyles.ResizeRedraw, true); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.Clear(Parent != null ? Parent.BackColor : UI.T.Win);
+            if (From == null || To == null || State == null) return;
+            int x0 = From.Right + 10, x1 = To.Left - 12, y = 4 + 17;
+            if (x1 - x0 < 12) return;
+            Color gray = Icons.Blend(UI.T.Line, UI.T.Muted, 0.25);
+            using (var b = new LinearGradientBrush(new Rectangle(x0, y - 1, x1 - x0, 2), State.ToneColor, gray, 0f)) g.FillRectangle(b, x0, y - 1, x1 - x0, 2);
         }
     }
 
@@ -595,14 +622,38 @@ namespace SubVulpes.Ui
     class StateLabel : Control
     {
         string word = "Running", tone = "ok";
-        public StateLabel() { Height = 34; Fit(); SetStyle(UI.Paint, true); AccessibleRole = AccessibleRole.StaticText; AccessibleName = word; }
-        // Tone is ok (green), warn (orange), bad (red) or muted (gray).
-        public void Set(string text, string toneName) { word = text; tone = toneName; AccessibleName = text; Fit(); Invalidate(); }
+        readonly System.Windows.Forms.Timer pulse = new System.Windows.Forms.Timer { Interval = 60 };
+        int phase;
+        // The owner repaints what depends on the color, such as the line next to the buttons.
+        public event Action Changed;
+        public StateLabel()
+        {
+            Height = 34; Fit(); SetStyle(UI.Paint, true); AccessibleRole = AccessibleRole.StaticText; AccessibleName = word;
+            pulse.Tick += delegate { phase = (phase + 1) % 34; Invalidate(); };
+        }
+        public Color ToneColor { get { return tone == "ok" ? UI.T.Ok : tone == "warn" ? UI.T.Warn : tone == "bad" ? UI.T.Bad : UI.T.Muted; } }
+        // Tone is ok (green), warn (orange), bad (red) or muted (gray). The dot pulses while the server runs or starts.
+        public void Set(string text, string toneName)
+        {
+            word = text; tone = toneName; AccessibleName = text; Fit();
+            bool pulsing = text == "Running" || text == "Starting";
+            if (pulsing != pulse.Enabled) { pulse.Enabled = pulsing; phase = 0; }
+            Invalidate();
+            if (Changed != null) Changed();
+        }
+        protected override void Dispose(bool disposing) { if (disposing) pulse.Dispose(); base.Dispose(disposing); }
         void Fit() { Width = 25 + TextRenderer.MeasureText(word, UI.F(10.5f, FontStyle.Bold), new Size(999, 40), TextFormatFlags.NoPadding).Width + 8; }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.Clear(Parent.BackColor);
-            Color c = tone == "ok" ? UI.T.Ok : tone == "warn" ? UI.T.Warn : tone == "bad" ? UI.T.Bad : UI.T.Muted;
+            Color c = ToneColor;
+            if (pulse.Enabled)
+            {
+                // A soft ring grows from the dot and fades out, once each two seconds.
+                double t = phase / 34.0;
+                float r = 6.5f + (float)(t * 4.0);
+                using (var b = new SolidBrush(Color.FromArgb((int)((1 - t) * 70), c))) g.FillEllipse(b, 10.5f - r, Height / 2f - r, 2 * r, 2 * r);
+            }
             using (var b = new SolidBrush(c)) g.FillEllipse(b, 4, Height / 2 - 6, 13, 13);
             TextRenderer.DrawText(g, word, UI.F(10.5f, FontStyle.Bold), new Rectangle(25, 0, Width - 25, Height), UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }

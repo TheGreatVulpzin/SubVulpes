@@ -494,13 +494,21 @@ namespace SubVulpes
             desc.AutoEllipsis = true;
             desc.Size = new Size(420, 20);
             desc.Location = new Point(76, 42);
-            var meta = L(ByLine(c.Author, c.Version), false, true);
+            var meta = L(ByLine(c.Author, ""), false, true);
             meta.Location = new Point(76, 62);
             var parts = new List<Control> { avatar, name, desc, meta };
+            // The version stands next to the seal, or next to the name when there is no seal.
+            int after = 76 + name.PreferredWidth + 10;
             if (c.Source.Length > 0) {
                 var chip = new Label { Text = c.Source, AutoSize = true, Padding = new Padding(8, 3, 8, 3), Font = UI.F(9f, FontStyle.Regular), Tag = "chip" };
-                chip.Location = new Point(76 + name.PreferredWidth + 10, name.Top + (name.PreferredHeight - chip.PreferredSize.Height) / 2);
+                chip.Location = new Point(after, name.Top + (name.PreferredHeight - chip.PreferredSize.Height) / 2);
                 parts.Add(chip);
+                after += chip.PreferredSize.Width + 8;
+            }
+            if (c.Version.Length > 0) {
+                var version = L("v" + c.Version, false, true);
+                version.Location = new Point(after, name.Top + (name.PreferredHeight - version.PreferredHeight) / 2);
+                parts.Add(version);
             }
             card.Controls.AddRange(parts.ToArray());
             // A click on the card opens the page of the plugin.
@@ -530,13 +538,20 @@ namespace SubVulpes
             var name = L(c.Name, true, false);
             name.Font = UI.F(16f, FontStyle.Bold);
             name.Location = new Point(88, 50);
-            var meta = L(ByLine(c.Author, c.Version), false, true);
+            var meta = L(ByLine(c.Author, ""), false, true);
             meta.Location = new Point(88, 86);
             var parts = new List<Control> { back, avatar, name, meta };
+            int after = 88 + name.PreferredWidth + 12;
             if (c.Source.Length > 0) {
                 var chip = new Label { Text = c.Source, AutoSize = true, Padding = new Padding(8, 3, 8, 3), Font = UI.F(9f, FontStyle.Regular), Tag = "chip" };
-                chip.Location = new Point(88 + name.PreferredWidth + 12, 56);
+                chip.Location = new Point(after, 56);
                 parts.Add(chip);
+                after += chip.PreferredSize.Width + 8;
+            }
+            if (c.Version.Length > 0) {
+                var version = L("v" + c.Version, false, true);
+                version.Location = new Point(after, 59);
+                parts.Add(version);
             }
             var desc = L(c.Description.Length > 0 ? c.Description : "No description.", false, c.Description.Length == 0);
             desc.MaximumSize = new Size(720, 0);
@@ -852,21 +867,25 @@ namespace SubVulpes
                 pluginDetail.ResumeLayout();
                 return;
             }
-            var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Width = 340, Padding = new Padding(0, 14, 0, 0), Tag = "panel" };
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Width = 340, Padding = new Padding(0, 22, 0, 0), Tag = "panel" };
             var header = new Panel { Dock = DockStyle.Top, Height = 58, Tag = "panel" };
             var title = L(p.DisplayName, true, false);
             title.Font = UI.F(13f, FontStyle.Bold);
             title.Location = new Point(56, 5);
-            var sub = L(p.Version + (AuthorOf(p).Length > 0 ? " · " + AuthorOf(p) : ""), false, true);
+            var sub = L(ByLine(AuthorOf(p), ""), false, true);
             sub.Location = new Point(56, 31);
+            // The version stands at the right of the name.
+            var version = L(p.Version, false, true);
+            version.Location = new Point(56 + title.PreferredWidth + 8, 5 + title.PreferredHeight - version.PreferredHeight - 2);
             header.Controls.Add(new Avatar(p.DisplayName) { Location = new Point(0, 6), Picture = PluginIcon(p.Id) });
             header.Controls.Add(title);
+            header.Controls.Add(version);
             header.Controls.Add(sub);
             if (pluginTab == 0) SummaryTab(flow, p);
             else if (pluginTab == 1) InfoTab(flow, p);
             else SettingsTab(flow, p);
             pluginDetail.Controls.Add(flow);
-            var strip = new Panel { Dock = DockStyle.Top, Height = 38, Tag = "panel" };
+            var strip = new RuledPanel { Dock = DockStyle.Top, Height = 38, Tag = "panel" };
             string[] tabNames = { "Summary", "Info", "Settings" };
             for (int i = tabNames.Length - 1; i >= 0; i--) {
                 var tab = new TabLabel(tabNames[i]) { Quiet = true, Selected = i == pluginTab };
@@ -892,6 +911,7 @@ namespace SubVulpes
             flow.Controls.Add(state);
             if (p.State == "restart") {
                 var restart = new FlatButton("Restart server") { Glyph = "restart", Enabled = server != null && !stopping, Margin = new Padding(0, 0, 0, 12) };
+                restart.Width = 340;
                 restart.Click += async delegate { if (server != null && await StopServer()) StartServer(); };
                 flow.Controls.Add(restart);
             }
@@ -902,17 +922,26 @@ namespace SubVulpes
                 n.Margin = new Padding(0, 0, 0, 12);
                 flow.Controls.Add(n);
             }
-            var acts = new FlowLayoutPanel { AutoSize = true, Tag = "panel", Margin = new Padding(0, 4, 0, 0) };
-            var update = new FlatButton("Update…");
+            // Two equal columns. Update and Review approval share a row. Uninstall stands in the next row.
+            var rule = new Panel { Width = 340, Height = 1, Tag = "line", Margin = new Padding(0, 4, 0, 14) };
+            flow.Controls.Add(rule);
+            var acts = new TableLayoutPanel { AutoSize = true, ColumnCount = 3, RowCount = 3, Tag = "panel", Margin = new Padding(0) };
+            acts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 166));
+            acts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
+            acts.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 166));
+            acts.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            acts.RowStyles.Add(new RowStyle(SizeType.Absolute, 8));
+            acts.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            var update = new FlatButton("Update…") { Width = 166, Margin = new Padding(0) };
             update.Click += async delegate { await InstallPlugin(); };
-            var review = new FlatButton("Review approval…") { Margin = new Padding(0) };
+            var review = new FlatButton("Review approval…") { Width = 166, Margin = new Padding(0) };
             string id = p.Id;
             review.Click += async delegate { await ApprovePlugin(id); };
-            var remove = new FlatButton("Uninstall…") { Enabled = p.Required != "1" };
+            var remove = new FlatButton("Uninstall…") { Kind = "danger", Width = 166, Margin = new Padding(0), Enabled = p.Required != "1" };
             remove.Click += async delegate { await UninstallPlugin(id); };
-            acts.Controls.Add(update);
-            acts.Controls.Add(review);
-            acts.Controls.Add(remove);
+            acts.Controls.Add(update, 0, 0);
+            acts.Controls.Add(review, 2, 0);
+            acts.Controls.Add(remove, 0, 2);
             flow.Controls.Add(acts);
         }
 
