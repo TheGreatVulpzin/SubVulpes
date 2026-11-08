@@ -84,6 +84,45 @@ int lineintersectlevel(float *from, float *to, int with_objects)
     return 1.0 <= g_intersect.fraction ? 0 : 1;
 }
 
+/* Copies the metadata of the nearest surface, including its material when known. */
+int lineintersectlevelsurface(float *from, float *to, int with_objects)
+{
+    Intersect best;
+    vec3 hit, normal;
+    float t;
+    uint32_t a;
+    int o;
+    memset(&g_intersect, 0, sizeof g_intersect);
+    g_intersect.fraction = 1.0f;
+    g_intersect.material = g_intersect.block_area = g_intersect.block_face = -1;
+    g_intersect.block[0] = g_intersect.block[1] = g_intersect.block[2] = -1;
+    lineintersectlandscape(from, to);
+    best = g_intersect;
+    for (a = 0; a < NUM_AREAS; ++a) {
+        g_intersect = best;
+        g_intersect.material = -1;
+        if (g_areas[a].active && lineintersectarea(&hit.x, &normal.x, &t, a, from, to) && t < best.fraction) {
+            keep_hit(&hit, &normal);
+            g_intersect.fraction = t;
+            best = g_intersect;
+        }
+    }
+    if (with_objects) {
+        for (o = 0; o < NUM_CITYOBJECTS; ++o) {
+            g_intersect = best;
+            if (g_cityobjects[o].active && lineintersectcityobject(&hit.x, &normal.x, &t, o, from, to) && t < best.fraction) {
+                keep_hit(&hit, &normal);
+                g_intersect.fraction = t;
+                g_intersect.block_area = g_intersect.material = g_intersect.block_face = -1;
+                g_intersect.block[0] = g_intersect.block[1] = g_intersect.block[2] = -1;
+                best = g_intersect;
+            }
+        }
+    }
+    g_intersect = best;
+    return best.fraction < 1.0f;
+}
+
 /* The line from -> to against the areas and the city objects (not the landscape). index gets
  * the city object of the hit, or -1. */
 int lineintersectall(float *from, float *to)

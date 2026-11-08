@@ -5,6 +5,7 @@
 #include "sr_runtime.h"
 #include "collide.h"
 #include "buildings.h"
+#include "plugin_level.h"
 #include "server.h"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -539,8 +540,42 @@ static SvResult SV_CALL read_connection(SvOwner owner, SvEntity entity, SvConnec
     return SV_NOT_FOUND;
 }
 
+static SvResult SV_CALL read_surface(SvOwner owner, SvVector from, SvVector to, SvSurfaceHit *hit)
+{
+    Intersect saved;
+    SvSurfaceHit value = {sizeof value};
+    SvResult result;
+    vec3 a = {from.x, from.y, from.z}, b = {to.x, to.y, to.z};
+    float length2;
+    if (context(owner) != SV_OK) return SV_STATE;
+    if (!hit || hit->size < sizeof value) return SV_INVALID;
+    value.hit.size = sizeof value.hit;
+    result = line_check(owner, SV_LINE_LEVEL, &value.hit);
+    if (result != SV_OK) return result;
+    length2 = (to.x-from.x)*(to.x-from.x) + (to.y-from.y)*(to.y-from.y) + (to.z-from.z)*(to.z-from.z);
+    if (!point_ok(from) || !point_ok(to) || !(length2 > 0) || length2 > SV_LINE_LENGTH_MAX * SV_LINE_LENGTH_MAX)
+        return SV_INVALID;
+    value.hit.bone = -1;
+    value.hit.fraction = 1;
+    value.material = value.area = value.face = -1;
+    value.cell[0] = value.cell[1] = value.cell[2] = -1;
+    saved = sr_data_intersect;
+    if (lineintersectlevelsurface(&a.x, &b.x, 1)) {
+        keep_hit(&value.hit, SV_HIT_LEVEL, 0, 0, -1);
+        value.material = sr_data_intersect.material;
+        value.area = sr_data_intersect.block_area;
+        value.face = sr_data_intersect.block_face;
+        memcpy(value.cell, sr_data_intersect.block, sizeof value.cell);
+        value.hit.distance = value.hit.fraction * (float)sqrt((double)length2);
+    }
+    sr_data_intersect = saved;
+    *hit = value;
+    return SV_OK;
+}
+
 const SvGameRead sv_game_read = {
     sizeof(SvGameRead), SV_GAME_READ_VERSION, read_entities,
     read_player, read_human, read_item, read_object, read_account,
-    read_bone, read_inventory, read_world, read_line, read_aim, read_headline, read_within, read_connection
+    read_bone, read_inventory, read_world, read_line, read_aim, read_headline, read_within, read_connection,
+    sv_level_building_count, sv_level_building, sv_level_base, sv_level_area, sv_level_block, read_surface
 };

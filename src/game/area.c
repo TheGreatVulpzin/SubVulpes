@@ -183,6 +183,12 @@ static int area_cellsector(uint32_t area, int x, int y, int z, int *cell)
     return s;
 }
 
+int area_reservecell(uint32_t area, int x, int y, int z)
+{
+    int cell;
+    return area < NUM_AREAS ? area_cellsector(area, x, y, z, &cell) : -1;
+}
+
 static void interior_release(int sector, int y)
 {
     int k = (y >> 1) & 3;

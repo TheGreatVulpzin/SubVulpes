@@ -3,6 +3,7 @@
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
 #include "plugin_made.h"
+#include "plugin_level.h"
 #include "plugin_actions.h"
 #include "sv_game_ai.h"
 #include "sv_game_engine.h"
@@ -23,6 +24,7 @@ static uint64_t reset_sequence;
 /* Gives back what a plugin changed, and ends what it made, when that plugin stops. */
 static void release(SvOwner owner)
 {
+    sv_level_release(owner);
     sv_props_release(owner);
     sv_made_release(owner);
     sv_ai_release_owner(owner);
@@ -70,6 +72,7 @@ int sv_game_start(void)
     ready = reset_pending = 0;
     sv_actions_clear();
     sv_made_clear();
+    sv_level_clear();
     sv_plugins_set_release(release);
     sv_plugins_set_open(open_storage);
     sv_plugins_set_poll(poll);
@@ -96,7 +99,7 @@ void sv_game_reset(void) { ++reset_sequence; reset_pending = 0; sv_actions_clear
 
 SvResult SV_CALL sv_game_request_reset(SvOwner owner)
 {
-    if (!sv_plugins_write_context(owner) || !ready)
+    if (!sv_plugins_write_context(owner) || !ready || reset_pending)
         return SV_STATE;
     reset_pending = 1;
     return SV_OK;

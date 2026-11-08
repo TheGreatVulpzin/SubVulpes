@@ -5,6 +5,8 @@
 
 #define SV_API_GAME_WRITE 2u
 #define SV_GAME_WRITE_VERSION 1u
+#define SV_BLOCK_EDIT_MAX 1024u
+enum { SV_BLOCK_CLEAR = 0, SV_BLOCK_SOLID = 1 };
 
 /* Message kinds: 0 is a server message for every client. Kind 4 reaches only admins, as the replies of the chat commands do. */
 enum { SV_MESSAGE_SERVER = 0, SV_MESSAGE_ADMIN = 4 };
@@ -101,13 +103,18 @@ typedef struct {
      * plugin stops. This call gives one of them up, so it stays in the game after the stop. For a bot give the reference of
      * the player. SV_NOT_FOUND when this plugin did not make the thing, or when it is gone. */
     SvResult (SV_CALL *disown)(SvOwner owner, SvEntity entity);
-    /* Requests one reset at the start of the next server tick. Repeated requests merge into one reset. */
+    /* Requests one reset at the start of the next server tick. SV_STATE while a reset is pending. */
     SvResult (SV_CALL *world_reset)(SvOwner owner);
     /* Kick list access needs network. Addresses use the byte order of SvConnectionState.ip.
      * No method lists addresses. Malformed internal counts return SV_FAILED. */
     SvResult (SV_CALL *kicked_count)(SvOwner owner, uint32_t *count);
     SvResult (SV_CALL *kicked_remove)(SvOwner owner, const uint8_t address[4]);
     SvResult (SV_CALL *kicked_clear)(SvOwner owner);
+    /* Safe callbacks only. Grid coordinates follow the read area table. Material is 0 to 1023 and must exist.
+     * Only empty cells and normal cubes without interiors or city objects can change. Client effect unknown.
+     * Writes restore when the plugin stops. Another owner of this cell or its neighbors gives SV_CONFLICT. */
+    SvResult (SV_CALL *block_set)(SvOwner owner, uint32_t area, int32_t x, int32_t y, int32_t z,
+        uint32_t value, uint32_t material);
 } SvGameWrite;
 #pragma pack(pop)
 

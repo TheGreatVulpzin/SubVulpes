@@ -28,6 +28,9 @@ int main(void)
 {
     _Static_assert(sizeof(void *) == 4, "Build the ABI snapshot for x86");
     _Static_assert(SV_ACCOUNT_SAVE_DISK == 0 && SV_ACCOUNT_SAVE_DISCONNECT == 1, "Keep the account save reason codes");
+    _Static_assert(offsetof(SvGameRead, connection) == 60, "Preserve the read prefix");
+    _Static_assert(offsetof(SvGameWrite, kicked_clear) == 116, "Preserve the write prefix");
+    _Static_assert(sizeof(SvLineHit) == 56, "Preserve line hit ABI");
     RECORD(SvStatus);
     RECORD(SvEvent);
     RECORD(SvTimerEvent);
@@ -90,8 +93,8 @@ int main(void)
     TABLE(SvPlugin, enable, disable, 2);
     TABLE(SvConfig, get_int, get_text, 3);
     TABLE(SvPlugins, refuse, borrow, 4);
-    TABLE(SvGameRead, entities, connection, 14);
-    TABLE(SvGameWrite, message, kicked_clear, 28);
+    TABLE(SvGameRead, entities, surface, 20);
+    TABLE(SvGameWrite, message, block_set, 29);
     TABLE(SvGameProps, find, add, 5);
     TABLE(SvGameAi, threats, seated_target, 11);
     TABLE(SvGameEconomy, company, add_stocks, 4);
@@ -109,5 +112,9 @@ int main(void)
     printf("SvCoreCommandEvent name=%zu arguments=%zu builtin=%zu decision=%zu\n",
         offsetof(SvCoreCommandEvent, name), offsetof(SvCoreCommandEvent, arguments),
         offsetof(SvCoreCommandEvent, builtin), offsetof(SvCoreCommandEvent, decision));
+    RECORD(SvBuildingState);
+    RECORD(SvAreaState);
+    RECORD(SvBlockState);
+    RECORD(SvSurfaceHit);
     return 0;
 }

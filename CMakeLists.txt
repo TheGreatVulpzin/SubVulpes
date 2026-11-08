@@ -305,3 +305,8 @@ if(BUILD_TESTING)
     add_test(NAME package-contents COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
         "${CMAKE_SOURCE_DIR}/tests/package_test.ps1" -BuildDir "${CMAKE_BINARY_DIR}")
 endif()
+
+if(BUILD_TESTING)
+    target_sources(sv-game-test PRIVATE tests/plugin_world_test.c)
+    target_sources(sv-game-read-fixture PRIVATE tests/plugin_world_fixture.c)
+endif()
