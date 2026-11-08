@@ -2,6 +2,8 @@
 #include <string.h>
 #include "sv_plugin.h"
 #include "sv_game_events.h"
+#include "sv_server.h"
+#include "sv_plugins_api.h"
 
 static const SvHost *host;
 static uint32_t random_index, timer_count;
@@ -38,6 +40,32 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
         CHECK(host->every(owner, 1, 10) == SV_OK);
     } else if (!strcmp(arguments, "seen")) {
         CHECK(timer_count == 1);
+    } else if (!strcmp(arguments, "pending")) {
+        CHECK(host->subscribe(owner, 0, NULL) == SV_OK);
+        CHECK(host->subscribe(owner, SV_EVENT_EXT_BIT(1) | SV_EVENT_EXT_BIT(2), event) == SV_OK);
+        CHECK(host->after(owner, 2, 99) == SV_OK);
+        armed = 0;
+    } else if (!strcmp(arguments, "reply")) {
+        CHECK(actor == 0 && host->log(owner, "other owner") == SV_OK);
+    } else if (!strcmp(arguments, "denied")) {
+        const void *table = NULL;
+        const SvPlugins *plugins;
+        const struct {
+            uint32_t size, version;
+            const SvServerControl *server;
+            const SvConsole *console;
+        } *infra;
+        char text[32] = "untouched";
+        uint32_t length = 99;
+        CHECK(host->get_api(owner, SV_API_SERVER_CONTROL, 1, &table) == SV_DENIED && !table);
+        CHECK(host->get_api(owner, SV_API_CONSOLE, 1, &table) == SV_DENIED && !table);
+        CHECK(host->get_api(owner, SV_API_PLUGINS, 1, &table) == SV_OK);
+        plugins = (const SvPlugins *)table;
+        CHECK(plugins->borrow(owner, "test.read.infra", 1, &table) == SV_OK);
+        infra = table;
+        CHECK(infra->server->request(owner, SV_SERVER_SAVE) == SV_DENIED);
+        CHECK(infra->console->execute(owner, "infrareply", text, sizeof text, &length) == SV_DENIED);
+        CHECK(!strcmp(text, "untouched") && length == 99);
     } else {
         return SV_INVALID;
     }

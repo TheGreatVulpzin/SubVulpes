@@ -80,3 +80,5 @@ SvBuildingState size=56
 SvAreaState size=72
 SvBlockState size=28
 SvSurfaceHit size=88
+SvServerControl functions=1 prefix=0 first=request:8 last=request:8
+SvConsole functions=1 prefix=0 first=execute:8 last=execute:8

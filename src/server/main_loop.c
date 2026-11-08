@@ -94,6 +94,9 @@ static void tick(void)
 {
     int i, state;
 
+    sv_game_control_poll();
+    if (sv_game_control_stopping())
+        return;
     if (sv_game_take_reset())
         resetgame();
     sv_control_poll();
@@ -217,7 +220,7 @@ void __cdecl sr_dedicatedserverloop(void)
     sv_log("Server started on port %u.", (unsigned)(uint16_t)sr_bsdsocket.port);
     for (;;) {
 #ifdef SR_STANDALONE
-        if (sv_stop_requested() || sv_plugins_failed())
+        if (sv_stop_requested() || sv_plugins_failed() || sv_game_control_stopping())
             return;
 #endif
         os_sleep(1);
@@ -246,6 +249,8 @@ void __cdecl sr_dedicatedserverloop(void)
             else
                 next = systemtimer();
             tick();
+            if (sv_game_control_stopping())
+                break;
             ++ran;
             now = systemtimer();
         }

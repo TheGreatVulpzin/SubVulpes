@@ -10,6 +10,7 @@ extern "C" {
 
 /* accounts.c */
 void __cdecl sr_loadaccountsserver(void);
+int sv_accounts_save(void);
 
 /* events.c */
 void __cdecl sr_createevent_message(int kind, const char *text, int target, int extra);

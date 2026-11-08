@@ -7,6 +7,7 @@
 #include "sv_plugin.h"
 #include "sv_plugins_api.h"
 #include "sv_game_read.h"
+#include "sv_server.h"
 
 #ifdef FIXTURE_LIBRARY
 #define FIXTURE_ID "test.library"
@@ -68,6 +69,7 @@ static SvResult library_checks(SvOwner owner)
     STEP(host->subscribe(owner, SV_EVENT_TICK, on_event) == SV_DENIED);
     STEP(host->command(owner, "libcmd", SV_COMMAND_PUBLIC, on_command) == SV_DENIED);
     STEP(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_DENIED && !table);
+    STEP(host->get_api(owner, SV_API_CONSOLE, SV_CONSOLE_VERSION, &table) == SV_DENIED && !table);
     STEP(host->subscribe(owner, 0, NULL) == SV_OK);
     STEP(plugins->provide(owner, "test.consumer", 1, &math) == SV_DENIED);
     STEP(plugins->provide(owner, "test.libraryx", 1, &math) == SV_DENIED);

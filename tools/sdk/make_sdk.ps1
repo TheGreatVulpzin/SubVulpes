@@ -16,7 +16,7 @@ $root = "SubVulpes-sdk-$Version"
 
 # The public headers are the files sv_*.h. A new public header changes this count, and the change must be on purpose.
 $headers = @(Get-ChildItem -LiteralPath (Join-Path $repo 'src\plugins') -Filter 'sv_*.h' -File | Sort-Object Name)
-if ($headers.Count -ne 15) { throw "The SDK expects 15 public headers and found $($headers.Count)." }
+if ($headers.Count -ne 16) { throw "The SDK expects 16 public headers and found $($headers.Count)." }
 
 $files = [ordered]@{}
 foreach ($header in $headers) { $files["include/$($header.Name)"] = $header.FullName }

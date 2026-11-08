@@ -14,17 +14,26 @@
 #include "plugin_game_events.h"
 #include "events.h"
 #include "sr_runtime.h"
+#include "sr_server.h"
+#include "sv_server.h"
 #include <string.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 static int ready, reset_pending;
 static uint64_t reset_sequence;
+static uint32_t control_pending;
+static SvOwner control_owner;
+static int control_stopping, control_restarting;
 
 /* Gives back what a plugin changed, and ends what it made, when that plugin stops. */
 static void release(SvOwner owner)
 {
     sv_level_release(owner);
+    if (control_owner == owner) {
+        control_pending = 0;
+        control_owner = 0;
+    }
     sv_props_release(owner);
     sv_made_release(owner);
     sv_ai_release_owner(owner);
@@ -70,6 +79,8 @@ void sv_systems_install(void)
 int sv_game_start(void)
 {
     ready = reset_pending = 0;
+    control_pending = control_owner = 0;
+    control_stopping = control_restarting = 0;
     sv_actions_clear();
     sv_made_clear();
     sv_level_clear();
@@ -89,6 +100,8 @@ int sv_game_start(void)
 void sv_game_stop(void)
 {
     ready = reset_pending = 0;
+    control_pending = control_owner = 0;
+    control_stopping = control_restarting = 0;
     sv_actions_clear();
     sv_entities_stop();
     sv_network_stop();
@@ -114,6 +127,45 @@ int sv_game_take_reset(void)
 int sv_game_is_ready(void) { return ready; }
 uint64_t sv_game_reset_sequence(void) { return reset_sequence; }
 
+static SvResult SV_CALL request_control(SvOwner owner, uint32_t request)
+{
+    if (!sv_plugins_write_context(owner) || !ready || control_stopping)
+        return SV_STATE;
+    if (!sv_plugins_has_capability(owner, SV_CAP_SERVER_CONTROL))
+        return SV_DENIED;
+    if (request < SV_SERVER_SAVE || request > SV_SERVER_RESTART)
+        return SV_INVALID;
+    if (control_pending)
+        return SV_STATE;
+    control_pending = request;
+    control_owner = owner;
+    return SV_OK;
+}
+
+uint32_t sv_game_control_poll(void)
+{
+    uint32_t request = control_pending;
+    control_pending = control_owner = 0;
+    if (!ready)
+        return 0;
+    if (request == SV_SERVER_SAVE)
+        sv_log(sv_accounts_save() ? "Account save completed." : "Account save failed.");
+    else if (request == SV_SERVER_STOP)
+        control_stopping = 1;
+    else if (request == SV_SERVER_RESTART) {
+        control_stopping = control_restarting = 1;
+        sv_log("Server restart requested.");
+    }
+    return request;
+}
+
+int sv_game_control_stopping(void) { return control_stopping; }
+int sv_game_control_restarting(void) { return control_restarting; }
+
+static const SvServerControl server_control = {
+    sizeof(SvServerControl), SV_SERVER_CONTROL_VERSION, request_control
+};
+
 /* Each capability has an id, an accepted version range and its current table. */
 typedef struct {
     uint32_t capability, version, minimum;
@@ -131,6 +183,7 @@ static const Capability capabilities[] = {
     { SV_API_ENGINE, SV_GAME_ENGINE_VERSION, 1u, &sv_game_engine },
     { SV_API_SHOP, SV_GAME_SHOP_VERSION, 1u, &sv_game_shop },
     { SV_API_GAME_PROPS, SV_GAME_PROPS_VERSION, 1u, &sv_game_props },
+    { SV_API_SERVER_CONTROL, SV_SERVER_CONTROL_VERSION, 1u, &server_control },
 };
 
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api)
@@ -167,6 +220,8 @@ void sv_game_status(SvStatus *status)
 /* A reply to a player: a message of the admin kind, as the replies of the chat commands. */
 void sv_game_tell(uint64_t actor, const char *text)
 {
+    if (!actor && sv_plugins_console_reply(text))
+        return;
     int32_t index = sv_entity_resolve(SV_ENTITY_PLAYER, actor);
     if (index >= 0 && text && strlen(text) <= 63)
         createevent_message_to(4, text, index);

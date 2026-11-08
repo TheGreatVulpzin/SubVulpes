@@ -34,6 +34,8 @@ void test_physics_bounds(void);
 void test_plugin_world(void);
 void test_plugin_world_stopped(void);
 int plugin_cost_run(void);
+void infra_host_check(void);
+void infra_host_cleanup_check(void);
 
 #define CHECK(test) do { if (!(test)) { \
     fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #test); exit(1); \
@@ -1424,7 +1426,14 @@ static int checked_command(const char *text)
 static void connection_checks(void)
 {
     Connection saved = sr_connections[SR_MAX_CONNECTION - 1];
+    int temporary = createplayer();
+    SvEntity stale = sv_entity_at(SV_ENTITY_PLAYER, temporary);
+    char stale_command[80];
     int saved_count = sr_numofconnections, saved_players[SR_MAX_CONNECTION], i;
+    CHECK(temporary > 0 && stale);
+    deleteplayer(temporary);
+    snprintf(stale_command, sizeof stale_command, "connectioncheck stale %llu", (unsigned long long)stale);
+    CHECK(checked_command(stale_command));
     sr_numofconnections = 0;
     CHECK(checked_command("connectioncheck missing"));
     for (i = 0; i < SR_MAX_CONNECTION; ++i) {
@@ -1543,20 +1552,12 @@ static void connection_join_check(void)
     CHECK(!sv_plugins_failed());
 }
 
-static size_t __cdecl failed_account_write(void *data, size_t size, size_t count, void *file)
-{
-    (void)data;
-    (void)size;
-    (void)count;
-    (void)file;
-    return 0;
-}
-
 static void account_save_checks(void)
 {
     SrFileTransfer saved_write = sr_data_file_write;
     int count = sr_numofaccounts, mode = sr_game.gametype, player, other;
     FILE *file;
+    HANDLE blocked;
     SvGameEvent queued;
     int version, key, accounts, ids[2], money;
     char name[32];
@@ -1579,9 +1580,11 @@ static void account_save_checks(void)
     sv_plugins_tick();
     CHECK(checked_command("accountsavecheck bulk"));
     CHECK(checked_command("accountsavecheck clear"));
-    sr_data_file_write = failed_account_write;
+    blocked = CreateFileA("user/server.srk", GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+    CHECK(blocked != INVALID_HANDLE_VALUE);
     saveaccountsserver();
     CHECK(sv_events_pending() == 0);
+    CHECK(CloseHandle(blocked));
     sr_data_file_write = (SrFileTransfer)fwrite;
     CHECK(remove("user/server.srk") == 0 && CreateDirectoryA("user/server.srk", NULL));
     saveaccountsserver();
@@ -1672,6 +1675,7 @@ static void runtime_checks(void)
     CHECK(checked_command("runtimeother arm"));
     sv_plugins_tick();
     CHECK(checked_command("runtimeother seen"));
+    CHECK(checked_command("runtimeother pending"));
     CHECK(sv_plugins_disable("test.runtime") == SV_OK);
     sv_plugins_tick();
     CHECK(sv_plugins_enable("test.runtime") == SV_OK);
@@ -1695,6 +1699,12 @@ int main(int argc, char **argv)
     CHECK(sv_entity_at(0, 0) == 0);
     CHECK(sv_plugins_start());
     sv_plugins_seed(0x12345678u);
+    if (argc == 2 && !strcmp(argv[1], "--infra-cleanup")) {
+        sv_game_ready();
+        infra_host_cleanup_check();
+        sv_plugins_stop();
+        return 0;
+    }
     list_strides();
     player_lifetime();
     body_lifetime();
@@ -1803,6 +1813,7 @@ int main(int argc, char **argv)
     world_reset_checks();
     runtime_checks();
     test_plugin_world();
+    infra_host_check();
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
     CHECK(!sv_game_take_reset());

@@ -3,6 +3,7 @@
 #include "server_version.h"
 #include "plugin_caps.h"
 #include "sv_plugins_api.h"
+#include "sv_server.h"
 #include <float.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -43,6 +44,31 @@ static int started, stopping, failed;
 /* 1 while a plugin runs a decision inside the simulation. Nothing that changes the game or the host may run then. */
 static int in_simulation;
 static HANDLE profile_lock = INVALID_HANDLE_VALUE;
+static SvResult SV_CALL console_execute(SvOwner owner, const char *line, char *out,
+    uint32_t capacity, uint32_t *length);
+static const SvConsole console_api = {sizeof(SvConsole), SV_CONSOLE_VERSION, console_execute};
+static char *console_text;
+static uint32_t console_capacity, console_length;
+static SvOwner console_target;
+static int console_truncated;
+
+int sv_plugins_console_reply(const char *text)
+{
+    size_t length, available, copied;
+    if (!console_text || current != console_target || GetCurrentThreadId() != server_thread || !text)
+        return 0;
+    length = strnlen(text, SV_CONSOLE_TEXT_MAX + 1);
+    available = console_capacity - 1u - console_length;
+    copied = length < available ? length : available;
+    memcpy(console_text + console_length, text, copied);
+    console_length += (uint32_t)copied;
+    if (length < available)
+        console_text[console_length++] = '\n';
+    else
+        console_truncated = 1;
+    console_text[console_length] = 0;
+    return 1;
+}
 
 static SvModule *owner_module(SvOwner owner)
 {
@@ -248,6 +274,12 @@ static SvResult SV_CALL host_get_api(SvOwner owner, uint32_t capability, uint32_
     /* A library has no game behavior. The functions that it offers use the game tables of the plugin that calls them. */
     if (modules[owner - 1].library_role)
         return SV_DENIED;
+    if (capability == SV_API_CONSOLE) {
+        if (!SV_VERSION_ACCEPTED(version, 1u, SV_CONSOLE_VERSION))
+            return SV_INCOMPATIBLE;
+        *api = &console_api;
+        return SV_OK;
+    }
     return sv_game_api(capability, version, api);
 }
 
@@ -260,7 +292,8 @@ static SvResult SV_CALL host_log(SvOwner owner, const char *text)
         return SV_INVALID;
     if (strpbrk(text, "\r\n"))
         return SV_INVALID;
-    sv_log("[%s] %s", module->id, text);
+    if (!sv_plugins_console_reply(text))
+        sv_log("[%s] %s", module->id, text);
     return SV_OK;
 }
 
@@ -509,6 +542,57 @@ static void leave(unsigned control)
     unsigned unused;
     current = 0;
     _controlfp_s(&unused, control, _MCW_EM | _MCW_RC | _MCW_PC);
+}
+
+static SvResult SV_CALL console_execute(SvOwner owner, const char *line, char *out,
+    uint32_t capacity, uint32_t *length)
+{
+    char name[SV_PLUGIN_ID_SIZE], arguments[256];
+    const char *split;
+    size_t size;
+    uint32_t i;
+    if (!sv_plugins_write_context(owner) || console_text)
+        return SV_STATE;
+    if (!sv_plugins_has_capability(owner, SV_CAP_CONSOLE) || modules[owner - 1].library_role)
+        return SV_DENIED;
+    if (!line || !out || !length || !capacity || capacity > SV_CONSOLE_TEXT_MAX + 1u ||
+        strnlen(line, SV_CONSOLE_LINE_MAX + 1u) > SV_CONSOLE_LINE_MAX || strpbrk(line, "\r\n"))
+        return SV_INVALID;
+    if (*line == '/')
+        ++line;
+    split = strchr(line, ' ');
+    size = split ? (size_t)(split - line) : strlen(line);
+    if (!size || size >= sizeof name || (split && strlen(split + 1) >= sizeof arguments))
+        return SV_INVALID;
+    memcpy(name, line, size);
+    name[size] = 0;
+    strcpy(arguments, split ? split + 1 : "");
+    out[0] = 0;
+    *length = 0;
+    for (i = 0; i < SV_PLUGIN_COMMAND_MAX; ++i) {
+        Command command = commands[i];
+        SvResult result;
+        unsigned control;
+        if (!command.owner || strcmp(command.name, name))
+            continue;
+        if (modules[command.owner - 1].state != SV_MODULE_ACTIVE || modules[command.owner - 1].doom)
+            return SV_STATE;
+        console_text = out;
+        console_capacity = capacity;
+        console_length = 0;
+        console_target = command.owner;
+        console_truncated = 0;
+        control = enter(command.owner - 1);
+        result = command.callback(command.owner, 0, arguments);
+        leave(control);
+        current = owner;
+        *length = console_length;
+        console_text = NULL;
+        console_target = 0;
+        return console_truncated ? SV_LIMIT : result;
+    }
+    /* Game commands require a player. Management commands cannot unload the caller here. */
+    return SV_DENIED;
 }
 
 static void deactivate(uint32_t index, SvModuleState state, const char *reason)

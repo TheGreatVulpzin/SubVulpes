@@ -91,7 +91,7 @@ run(RUNNER, ['lifecycle'], profile(fixture, caps='config'), mode='wall', contain
 # Libraries (N35, N38): the API between plugins, the dependency rule, the version rule and the stop order.
 ROLE = 'role=library\n'
 pair = {'test.library': 'enabled', 'test.consumer': 'enabled'}
-output = run(RUNNER, ['library'], profile(pair, dependencies={'test.consumer': 'test.library@1.2'}, extra={'test.library': ROLE}),
+output = run(RUNNER, ['library'], profile(pair, dependencies={'test.consumer': 'test.library@1.2'}, extra={'test.library': ROLE}, caps=ALL_CAPS + ',console'),
     contains=['[test.library] test.library enabled', '[test.consumer] test.consumer enabled', '[test.consumer] consumer sum 5',
               '[test.consumer] library add', 'test.consumer disabled', 'PASS'],
     absent=['fixture step failed', '[test.library] library add'])

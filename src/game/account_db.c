@@ -1,4 +1,7 @@
 /* Account names and account files. */
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 #include "player.h"
 #include "plugin_entities.h"
 #include "plugin_game_events.h"
@@ -10,6 +13,7 @@
 #include "logic.h"
 #include "server.h"
 #include "sr_os.h"
+#include "sr_server.h"
 
 #define g_parser sr_data_parser
 #define g_sysinfo sr_data_sysinfo
@@ -76,30 +80,84 @@ int createaccount(int player)
     return i;
 }
 
-void saveaccountsserver(void)
+static int account_write(HANDLE file, const void *data, DWORD size)
 {
-    int version = 3, i, saved = 1;
-    g_parser.file = os_fopen("user/server.srk", "wb");
-    if (!g_parser.file)
-        return;
-    saved &= game_fwrite(&version, 4, 1, g_parser.file) == 1;
-    saved &= game_fwrite(&sr_account_key, 4, 1, g_parser.file) == 1;
-    saved &= game_fwrite(&sr_numofaccounts, 4, 1, g_parser.file) == 1;
-    for (i = 0; i < sr_numofaccounts; ++i) {
-        Account *a = &sr_accounts[i];
-        saved &= game_fwrite(&a->id[0], 4, 1, g_parser.file) == 1;
-        saved &= game_fwrite(&a->id[1], 4, 1, g_parser.file) == 1;
-        saved &= game_fwrite(a->name, 1, 32, g_parser.file) == 32;
-        saved &= game_fwrite(&a->money, 4, 1, g_parser.file) == 1;
-        saved &= game_fwrite(&a->playtime, 4, 1, g_parser.file) == 1;
-        saved &= game_fwrite(&a->look_a, 4, 1, g_parser.file) == 1;
-        saved &= game_fwrite(&a->look_b, 4, 1, g_parser.file) == 1;
-        saved &= game_fwrite(&a->look_c, 4, 1, g_parser.file) == 1;
+    DWORD written = 0;
+    return WriteFile(file, data, size, &written, NULL) && written == size;
+}
+
+int sv_accounts_save(void)
+{
+    static LONG sequence;
+    HANDLE directory, file = INVALID_HANDLE_VALUE;
+    BY_HANDLE_FILE_INFORMATION info;
+    DWORD attributes;
+    uint32_t header[3];
+    char temporary[96];
+    int count = sr_numofaccounts, i, attempt, saved = 0;
+    if ((unsigned)count > 65535u)
+        return 0;
+    /* Keep the directory in place until the replacement ends. */
+    directory = CreateFileA("user", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    if (directory == INVALID_HANDLE_VALUE)
+        return 0;
+    if (!GetFileInformationByHandle(directory, &info) ||
+        !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+        goto done;
+    attributes = GetFileAttributesA("user/server.srk");
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        if (GetLastError() != ERROR_FILE_NOT_FOUND)
+            goto done;
+    } else if (attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) {
+        goto done;
     }
-    if (os_fclose(g_parser.file) != 0)
+    for (attempt = 0; attempt < 32; ++attempt) {
+        snprintf(temporary, sizeof temporary, "user/server.srk.%lu.%lu.tmp",
+            (unsigned long)GetCurrentProcessId(), (unsigned long)InterlockedIncrement(&sequence));
+        file = CreateFileA(temporary, GENERIC_WRITE, 0, NULL, CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+        if (file != INVALID_HANDLE_VALUE)
+            break;
+        if (GetLastError() != ERROR_FILE_EXISTS && GetLastError() != ERROR_ALREADY_EXISTS)
+            goto done;
+    }
+    if (file == INVALID_HANDLE_VALUE)
+        goto done;
+    header[0] = 3;
+    header[1] = sr_account_key;
+    header[2] = (uint32_t)count;
+    saved = account_write(file, header, sizeof header);
+    for (i = 0; saved && i < count; ++i) {
+        const Account *account = &sr_accounts[i];
+        unsigned char record[60];
+        memcpy(record, account->id, 8);
+        memcpy(record + 8, account->name, 32);
+        memcpy(record + 40, &account->money, 4);
+        memcpy(record + 44, &account->playtime, 4);
+        memcpy(record + 48, &account->look_a, 4);
+        memcpy(record + 52, &account->look_b, 4);
+        memcpy(record + 56, &account->look_c, 4);
+        saved = account_write(file, record, sizeof record);
+    }
+    if (saved)
+        saved = FlushFileBuffers(file) != 0;
+    if (!CloseHandle(file))
         saved = 0;
     if (saved)
+        saved = MoveFileExA(temporary, "user/server.srk", MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    if (!saved)
+        DeleteFileA(temporary);
+done:
+    CloseHandle(directory);
+    if (saved)
         sv_game_event_account_save(0, SV_ACCOUNT_SAVE_DISK);
+    return saved;
+}
+
+void saveaccountsserver(void)
+{
+    (void)sv_accounts_save();
 }
 
 void saveaccountsclient(void)
