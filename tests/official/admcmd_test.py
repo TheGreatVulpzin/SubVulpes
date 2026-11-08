@@ -108,12 +108,12 @@ console herobrine Guest
 console admprobe state Guest
 expect log "ADM_STATE Guest health=100 team=5"
 console players
-expect log "0 Root [owner]"
-expect log "1 Guest [guest]"
+expect log "acc 0  id:0  Root [owner]"
+expect log "acc 1  id:1  Guest [guest]"
 console who
-expect log "2 GuestTwo"
+expect log "acc 2  id:2  GuestTwo"
 console id GuestT
-expect log "2 GuestTwo [guest]"
+expect log "acc 2  id:2  GuestTwo [guest]"
 console id estTwo
 console id 2
 console id Guest
@@ -125,6 +125,11 @@ console give admin Guest
 tick 1
 expect prop player.admin Guest 1
 console admprobe bot
+console players
+expect no-log "TestBot"
+expect log "bots hidden. Use /players all."
+console players all
+expect log "id:3  TestBot [bot]"
 console heal TestBot
 expect log "heal done."
 console team 3 TestBot
@@ -155,14 +160,14 @@ spawn player Target
 tick 1
 console perm set Root owner
 console where Target
-expect log "Target: 13.00 20.00 30.00"
+expect log "Target: 13.0 20.0 30.0"
 console bring Target Root
 console admprobe state Target
 expect log "ADM_POSITION Target 12.00 20.00 30.00"
-console tp Target Root
+console tp Root Target
 console admprobe state Root
 expect log "ADM_POSITION Root 14.00 20.00 30.00"
-console goto Root Target
+console goto Target Root
 console admprobe state Target
 expect log "ADM_POSITION Target 16.00 20.00 30.00"
 console freeze Target
@@ -195,6 +200,91 @@ console round reset
 expect log "round done."
 """)
 
+# The thing that moves comes first and the place second: /tp [PLAYER] PLAYER, and /tp [PLAYER] X Y Z.
+run("teleport", """
+spawn player Root
+spawn player Target
+tick 1
+console perm set Root owner
+console tp Root 100 50 -20.5
+console admprobe state Root
+expect log "ADM_POSITION Root 100.00 50.00 -20.50"
+console tp Root ~ ~5 ~-10
+console admprobe state Root
+expect log "ADM_POSITION Root 100.00 55.00 -30.50"
+console tp Target 1 2 3
+console admprobe state Target
+expect log "ADM_POSITION Target 1.00 2.00 3.00"
+say Root /tp Target
+console admprobe state Root
+expect log "ADM_POSITION Root 3.00 2.00 3.00"
+say Root /tp 10 20 30
+console admprobe state Root
+expect log "ADM_POSITION Root 10.00 20.00 30.00"
+console tp Root 40000 0 0
+expect log "That place is outside the world."
+console tp Root 1 2 x
+expect log "Use: /tp [PLAYER] X Y Z"
+console admprobe state Root
+expect log "ADM_POSITION Root 10.00 20.00 30.00"
+console tp 1 2 3
+expect log "tp failed: invalid input."
+""")
+
+# A plain number is an account number. Only id:N is a slot. A number never falls back to a slot.
+run("targets", """
+spawn player Root
+spawn player Guest
+tick 1
+leave Root
+spawn player Late
+tick 1
+set human.health Late 20
+console heal 0
+expect log "Account 0 is not online."
+expect prop human.health Late 20
+console heal 2
+expect prop human.health Late 100
+set human.health Late 20
+console heal id:0
+expect prop human.health Late 100
+set human.health Guest 20
+console heal 1
+expect prop human.health Guest 100
+console heal id:9
+expect log "No player has ID 9."
+console heal id:x
+expect log "Bad player ID."
+console heal 99999
+console tp 7 Late
+expect log "Account 7 is not online."
+console players
+expect log "acc 2  id:0  Late [guest]"
+expect log "acc 1  id:1  Guest [guest]"
+""")
+
+# /delh ends the body of a real player. The player stays, with no body, and can respawn.
+run("delh", """
+spawn player Root
+spawn player Target
+tick 1
+console perm set Root owner
+expect entities humans 2
+console delh Target
+expect log "delh done."
+expect entities humans 1
+expect entities players 2
+console heal Target
+expect log "heal failed: target or world is not ready."
+console delh Target
+expect log "delh failed: target or world is not ready."
+say Root /delh Root
+expect entities humans 1
+console admprobe bot
+console delh TestBot
+expect log "delh done."
+""")
+
 heavy = """
 spawn player Root
 tick 1
@@ -220,7 +310,7 @@ spawn player Asteroid
 tick 1
 console perm set Root owner
 console heal Ast
-expect log "Ambiguous player name."
+expect log "Several players match."
 console heal Missing
 expect log "heal failed: target or service not found."
 """

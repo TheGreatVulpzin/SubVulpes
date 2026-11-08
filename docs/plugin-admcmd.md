@@ -1,6 +1,6 @@
 # Admin Commands
 
-Working ID: `sv.admcmd`. Version: `0.1.0`. This native plugin starts enabled.
+Working ID: `sv.admcmd`. Version: `0.2.0`. This native plugin starts enabled.
 The manifest holds the ID, display name and version. The host uses that ID for its storage namespace.
 The plugin needs read, write, properties, configuration and plugin services.
 It uses only the public API. It needs no game assets or internal record layouts.
@@ -14,7 +14,12 @@ A malformed or incompatible permission service refuses access. It does not selec
 The local console can use commands with an explicit target.
 `/give admin` needs the permission service and its assignment rules too.
 
-A target accepts a player ID, exact name, name prefix or contained text, in that order.
+A target accepts `id:N` (the slot of the connection, which changes at each join), a plain number, an exact name, a name prefix or contained text, in that order.
+A plain number is the account number of a player who is online now. It stays the same across sessions. It is the number that the game shows in `/players` and takes in `/give` and `/ban`. It is not the account ID of the client, which stays private.
+A number never falls back to a slot. If no online player has that account, the command answers `Account N is not online.` and changes nothing.
+A bot has no account. Reach a bot with `id:N` or by name.
+The commands of the game (`/kick`, `/ban1`, `/give N`) keep their own slot rules. This plugin does not change them.
+This replaces the rule of version 0.1.0, where a plain number was a slot.
 Names ignore case. Quotes permit spaces. An ambiguous name returns the matching names.
 For commands with a value, put the target after that value: `/arm 2 Alex`, `/team 1 Alex`.
 Without an optional target, the command affects its caller.
@@ -36,7 +41,10 @@ The ban plugin has separate rules for the level of a target.
 | /team N [PLAYER] | Set team 0 to 5 |
 | /heavy [PLAYER], /heavydude [PLAYER] | Multiply the 15 bone masses by 100000, once per body |
 | /tp | Move the caller to the aim hit, at most 2000 units away and one unit above it |
-| /tp DEST [PLAYER], /goto DEST [PLAYER] | Move the player beside the destination player |
+| /tp B, /goto B | Move the caller beside player B |
+| /tp A B | Move player A beside player B. The thing that moves comes first, as in Minecraft. Version 0.1.0 took the destination first |
+| /tp X Y Z | Move the caller to the place |
+| /tp A X Y Z | Move player A to the place |
 | /bring PLAYER [DEST] | Move the player beside DEST, or beside the caller when DEST is absent |
 | /tpall [DEST] | Move other players beside DEST or the caller. Report skipped bodies |
 | /freeze PLAYER, /unfreeze PLAYER | Hold or release the body's root position each tick |
@@ -46,17 +54,20 @@ The ban plugin has separate rules for the level of a target.
 | /give admin PLAYER | Queue the account group from the admin_group setting |
 | /turn ACCOUNT [PLAYER] | Copy the saved name and three look selectors. Keep other player data |
 | /herobrine [PLAYER] | Set look selector 2 to 3 |
-| /players | List IDs, names and groups |
-| /who | List IDs and names |
-| /id NAME | Show the ID and group of a matching player |
-| /where [PLAYER] | Show the body's coordinates |
+| /players [all] | List real players as `acc N  id:S  name [group]`. A bot has no account. `all` adds the bots. The last line counts the hidden bots |
+| /who [all] | The same list without the groups |
+| /id PLAYER | Show the account number, the slot and the group of a matching player |
+| /where [PLAYER] | Show the body's coordinates in the form that `/tp` takes, for example `Alex: 120.5 6.0 -48.2` |
 | /say TEXT | Send a server message to everybody |
 | /round reset | Queue the round reset |
 | /clear [PLAYER] | Send 20 blank private lines to the target or caller |
+| /delh [PLAYER] | End the body of the player, or of the human on the aim line within 100 units. A bot goes away with its body. Never the caller |
 | /help, /bmhelp | Show commands and common forms |
 
 All commands except heal need a living body when their action uses one.
-Teleports need a body on foot. Freeze takes a seated target out of its vehicle first.
+A place of `/tp` is X, Y and Z. A value can be `~` (the current value) or `~N` (the current value plus N). Each value must be from -32768 to 32768.
+The game does not check walls at the place, so the place can be inside a wall.
+A teleport takes a seated target out of its vehicle first, as freeze does.
 Inventory commands keep existing items. A full hand or pocket refuses the request.
 A failed kit removes its new items and keeps the previous inventory.
 The completed items, vehicles and bots stay after the plugin stops.
@@ -96,7 +107,7 @@ The public mass range now reaches 50000000, so every accepted heavy result fits.
 
 The public API does not expose company base positions, so `/gobase` remains open.
 The train system owns vehicle types 12 and 13, so vehicle creation stops at 11.
-`/delh` cannot remove a real player's body through R7. `/deactivate` has no supported game effect.
+`/deactivate` has no supported game effect.
 These commands are absent from this plugin.
 
 The SDK scenarios check every command, all six weapons, the kit contents and optional targets.

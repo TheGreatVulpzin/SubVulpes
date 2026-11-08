@@ -27,6 +27,8 @@ SvResult of_init(Official *ctx, const SvHost *host, SvOwner owner, uint32_t caps
     GET(SV_API_CONFIG, SvConfig, config, SV_CONFIG_VERSION, get_text)
     GET(SV_API_PLUGINS, SvPlugins, plugins, SV_PLUGINS_VERSION, find)
 #undef GET
+    ctx->has_account_number = ctx->read && ctx->read->size >=
+        offsetof(SvGameRead, account_number) + sizeof ctx->read->account_number && ctx->read->account_number;
     return SV_OK;
 }
 
@@ -118,6 +120,35 @@ static int name_matches(const char *display, const char *name, int pass)
         (pass == 2 && strstr(lower, needle));
 }
 
+int32_t of_account(Official *ctx, const SvPlayerState *player)
+{
+    uint32_t number;
+    if (!ctx->has_account_number || player->is_bot || !player->account) return -1;
+    return ctx->read->account_number(ctx->owner, player->account, &number) == SV_OK ? (int32_t)number : -1;
+}
+
+/* The account number is the number of the game commands, not the account ID of the client. A number never falls back to a slot. */
+static SvResult find_account(Official *ctx, SvEntity actor, int32_t number, SvPlayerState *out)
+{
+    SvEntity page[256];
+    uint32_t count, next, i;
+    if (!ctx->has_account_number) {
+        of_tell(ctx, actor, "This server has no account numbers. Use id:N or a name.");
+        return SV_INCOMPATIBLE;
+    }
+    if (ctx->read->entities(ctx->owner, SV_ENTITY_PLAYER, 0, page, 256, &count, &next) != SV_OK)
+        return SV_STATE;
+    for (i = 0; i < count; ++i) {
+        SvPlayerState state = { sizeof state };
+        if (ctx->read->player(ctx->owner, page[i], &state) == SV_OK && of_account(ctx, &state) == number) {
+            *out = state;
+            return SV_OK;
+        }
+    }
+    of_tell(ctx, actor, "Account %d is not online.", number);
+    return SV_NOT_FOUND;
+}
+
 SvResult of_target(Official *ctx, SvEntity actor, const char *name, SvPlayerState *out)
 {
     SvEntity page[256], found = 0;
@@ -125,10 +156,18 @@ SvResult of_target(Official *ctx, SvEntity actor, const char *name, SvPlayerStat
     int32_t slot;
     int pass;
     if (!name || !*name) return SV_INVALID;
-    if (of_number(name, 0, 255, &slot)) {
-        if (of_slot(ctx, SV_ENTITY_PLAYER, (uint32_t)slot, &found) != SV_OK) return SV_NOT_FOUND;
+    if (!strncmp(name, "id:", 3)) {
+        if (!of_number(name + 3, 0, 255, &slot)) {
+            of_tell(ctx, actor, "Bad player ID. Use id:N with N from 0 to 255.");
+            return SV_INVALID;
+        }
+        if (of_slot(ctx, SV_ENTITY_PLAYER, (uint32_t)slot, &found) != SV_OK) {
+            of_tell(ctx, actor, "No player has ID %d.", slot);
+            return SV_NOT_FOUND;
+        }
         return ctx->read->player(ctx->owner, found, out);
     }
+    if (of_number(name, 0, 65534, &slot)) return find_account(ctx, actor, slot, out);
     if (ctx->read->entities(ctx->owner, SV_ENTITY_PLAYER, 0, page, 256, &count, &next) != SV_OK)
         return SV_STATE;
     for (pass = 0; pass < 3; ++pass) {
@@ -143,7 +182,7 @@ SvResult of_target(Official *ctx, SvEntity actor, const char *name, SvPlayerStat
         }
         if (matches == 1) return ctx->read->player(ctx->owner, found, out);
         if (matches > 1) {
-            of_tell(ctx, actor, "Ambiguous player name. Use a full name or ID.");
+            of_tell(ctx, actor, "Several players match. Use the full name, an account number or id:N.");
             for (i = 0; i < count; ++i) {
                 SvPlayerState state = { sizeof state };
                 if (ctx->read->player(ctx->owner, page[i], &state) == SV_OK && name_matches(state.name, name, pass))

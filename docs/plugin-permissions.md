@@ -1,6 +1,6 @@
 # Permission System
 
-Working ID: `sv.permissions`. Version: `0.1.0`. This native plugin starts enabled.
+Working ID: `sv.permissions`. Version: `0.2.0`. This native plugin starts enabled.
 The manifest holds its ID, display name and version. CMake supplies those values to its entry point.
 The host uses that ID for its private storage folder. The public service name is `SV_PERMISSIONS_API` in `sv_permissions.h`.
 The plugin needs read, write, properties, storage, configuration and plugin services. It does not request network access.
@@ -33,7 +33,8 @@ The core sends that command's admin replies privately to the player as normal me
 ## Commands
 
 Use `/perm` or `/pm`. Use `/group` or `/grp`.
-A target accepts a current player slot, an exact name, a prefix or a contained word, in that order.
+A target accepts `id:N` (the slot of the connection), a plain number (the account number of a player who is online now), an exact name, a prefix or a contained word, in that order.
+A plain number never falls back to a slot. The account number is the number that `/players`, `/give` and `/ban` of the game show. It is not the account ID of the client.
 Names ignore case. An ambiguous target returns a list. Quotes permit a name with spaces.
 
 | Command | Node |

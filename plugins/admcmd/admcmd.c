@@ -1,6 +1,7 @@
 #include "../common/permissions.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static Official api;
@@ -59,6 +60,7 @@ static SvResult move(const SvPlayerState *player, SvVector position)
     SvHumanState human = { sizeof human };
     SvResult result = body(player, &human);
     unsigned i;
+    if (result == SV_OK && human.vehicle) result = api.write->vehicle_exit(api.owner, player->human, 1);
     if (result == SV_OK) result = api.write->teleport(api.owner, player->human, position);
     if (result == SV_OK)
         for (i = 0; i < 256; ++i)
@@ -140,24 +142,132 @@ static SvResult heavy(const SvPlayerState *player)
     return result;
 }
 
+/* One line for a player: "acc N  id:S  Name [group]". A bot has no account and no group. */
+static void describe_player(SvEntity actor, uint32_t slot, const SvPlayerState *player, int detailed)
+{
+    SvPermissionGroup group = { sizeof group };
+    char who[96] = "";
+    int32_t account = of_account(&api, player);
+    if (account >= 0) snprintf(who, sizeof who, "acc %d  ", account);
+    if (player->is_bot) of_tell(&api, actor, "%sid:%u  %s [bot]", who, slot, player->name);
+    else if (detailed && of_group(&api, player->entity, &group) == SV_OK)
+        of_tell(&api, actor, "%sid:%u  %s [%s]", who, slot, player->name, group.name);
+    else of_tell(&api, actor, "%sid:%u  %s", who, slot, player->name);
+}
+
+/* A filter selects one player. With no filter the list holds real players. "all" adds the bots. */
 static void list_players(SvEntity actor, const char *filter, int detailed)
 {
-    uint32_t slot;
+    uint32_t slot, shown = 0, hidden = 0;
+    int all = filter && !strcmp(filter, "all");
     for (slot = 0; slot < 256; ++slot) {
         SvEntity entity;
         SvPlayerState player = { sizeof player };
-        SvPermissionGroup group = { sizeof group };
         if (of_slot(&api, SV_ENTITY_PLAYER, slot, &entity) != SV_OK ||
             api.read->player(api.owner, entity, &player) != SV_OK) continue;
-        if (filter && *filter) {
+        if (filter && *filter && !all) {
             SvPlayerState selected = { sizeof selected };
             if (of_target(&api, actor, filter, &selected) != SV_OK) return;
             if (selected.entity != entity) continue;
+        } else if (player.is_bot && !all) {
+            ++hidden;
+            continue;
         }
-        if (detailed && of_group(&api, entity, &group) == SV_OK)
-            of_tell(&api, actor, "%u %s [%s]%s", slot, player.name, group.name, player.is_bot ? " bot" : "");
-        else of_tell(&api, actor, "%u %s%s", slot, player.name, player.is_bot ? " bot" : "");
+        describe_player(actor, slot, &player, detailed);
+        ++shown;
     }
+    if (filter && *filter && !all) return;
+    if (hidden) of_tell(&api, actor, "%u players, %u bots hidden. Use /players all.", shown, hidden);
+    else of_tell(&api, actor, "%u listed.", shown);
+}
+
+/* Reads one coordinate. "~" keeps the current value and "~N" adds N. 1 is good, 0 is not a number, -1 is out of range. */
+static int coordinate(const char *text, float current, float *out)
+{
+    const char *digits = text + (text[0] == '~');
+    char *end;
+    double value;
+    if (text[0] == '~' && !*digits) { *out = current; return 1; }
+    if (!*digits || *digits == ' ') return 0;
+    value = strtod(digits, &end);
+    if (*end || end == digits || !(value > -1e9 && value < 1e9)) return 0;
+    if (text[0] == '~') value += current;
+    if (!(value >= -32768.0 && value <= 32768.0)) return -1;
+    *out = (float)value;
+    return 1;
+}
+
+/* /tp: the thing that moves comes first and the place second, as in Minecraft. */
+static SvResult teleport_command(SvEntity actor, const Arguments *args)
+{
+    SvPlayerState mover = { sizeof mover }, destination = { sizeof destination };
+    SvHumanState human = { sizeof human }, place = { sizeof place };
+    SvVector position;
+    SvResult result;
+    int words = args->count, first = words == 4 ? 1 : 0;
+    result = target(actor, words == 0 || words == 1 || words == 3 ? "" : args->word[0], &mover);
+    if (result != SV_OK) return result;
+    if (words == 0) {
+        SvLineHit hit = { sizeof hit };
+        if (body(&mover, &human) != SV_OK) return SV_STATE;
+        result = api.read->aim(api.owner, mover.human, 2000, SV_LINE_ALL, &hit);
+        if (result != SV_OK) return result;
+        if (hit.kind == SV_HIT_NONE) return SV_NOT_FOUND;
+        position = hit.position; position.y += 1;
+        return move(&mover, position);
+    }
+    if (words == 1 || words == 2) {
+        result = of_target(&api, actor, args->word[words - 1], &destination);
+        if (result != SV_OK) return result;
+        if (body(&destination, &place) != SV_OK) return SV_STATE;
+        position = place.position; position.x += 2;
+        return move(&mover, position);
+    }
+    if (body(&mover, &human) != SV_OK) return SV_STATE;
+    {
+        int x = coordinate(args->word[first], human.position.x, &position.x);
+        int y = coordinate(args->word[first + 1], human.position.y, &position.y);
+        int z = coordinate(args->word[first + 2], human.position.z, &position.z);
+        if (x == 0 || y == 0 || z == 0) {
+            of_tell(&api, actor, "Use: /tp [PLAYER] X Y Z, or /tp [PLAYER] PLAYER. A place can use ~ for the current value.");
+            return SV_INVALID;
+        }
+        if (x < 0 || y < 0 || z < 0) {
+            of_tell(&api, actor, "That place is outside the world. Each value must be from -32768 to 32768.");
+            return SV_INVALID;
+        }
+    }
+    return move(&mover, position);
+}
+
+/* /delh PLAYER ends the body of a player. A bot goes away with its body. With no name, the target is the human on the aim line of
+ * the caller, up to 100 units. The caller is never the target. */
+static SvResult delete_body(SvEntity actor, const char *name)
+{
+    SvPlayerState player = { sizeof player }, caller = { sizeof caller };
+    SvHumanState mine = { sizeof mine }, other = { sizeof other };
+    SvLineHit hit = { sizeof hit };
+    SvResult result;
+    if (name && *name) {
+        result = of_target(&api, actor, name, &player);
+        if (result != SV_OK) return result;
+        if (player.entity == actor) return SV_INVALID;
+    } else {
+        if (!actor) return SV_INVALID;
+        result = api.read->player(api.owner, actor, &caller);
+        if (result == SV_OK) result = body(&caller, &mine);
+        if (result != SV_OK) return SV_STATE;
+        result = api.read->aim(api.owner, caller.human, 100, SV_LINE_HUMANS, &hit);
+        if (result != SV_OK) return result;
+        if (hit.kind != SV_HIT_HUMAN) return SV_NOT_FOUND;
+        result = api.read->human(api.owner, hit.entity, &other);
+        if (result != SV_OK) return result;
+        if (!other.player) return api.write->human_remove(api.owner, hit.entity);
+        result = api.read->player(api.owner, other.player, &player);
+        if (result != SV_OK) return result;
+    }
+    if (player.is_bot) return api.write->npc_remove(api.owner, player.entity);
+    return player.human ? api.write->human_remove(api.owner, player.human) : SV_STATE;
 }
 
 static SvResult run(const char *name, SvEntity actor, const Arguments *args)
@@ -175,13 +285,15 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
         of_tell(&api, actor, "unfreeze say round clear who id help. Optional target last.");
         of_tell(&api, actor, "arm/kit 1=AK47 2=M16 3=Magnum 4=MP5 5=Uzi 6=9mm");
         of_tell(&api, actor, "arm N [PLAYER]: weapon. kit N [PLAYER]: full loadout.");
-        of_tell(&api, actor, "tp DEST [PLAYER]; bring PLAYER [DEST]; heal [PLAYER|all]");
+        of_tell(&api, actor, "tp [PLAYER] PLAYER|X Y Z; bring PLAYER [DEST]; heal [PLAYER|all]");
+        of_tell(&api, actor, "A player is an account number, id:N or a name.");
         of_tell(&api, actor, "give money PLAYER N; give admin PLAYER; round reset");
         return SV_OK;
     }
     if (!strcmp(name, "players") || !strcmp(name, "who") || !strcmp(name, "id")) {
         list_players(actor, first, strcmp(name, "who") != 0); return SV_OK;
     }
+    if (!strcmp(name, "delh")) return delete_body(actor, first);
     if (!strcmp(name, "clear")) {
         result = target(actor, first, &player);
         if (result != SV_OK) return result;
@@ -225,23 +337,10 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
         of_tell(&api, actor, "%s: %u changed, %u skipped.", name, changed, failed);
         return SV_OK;
     }
-    if (!strcmp(name, "tp") || !strcmp(name, "goto") || !strcmp(name, "bring")) {
-        if (!strcmp(name, "bring")) {
-            if (of_target(&api, actor, first, &player) != SV_OK || target(actor, last, &destination) != SV_OK)
-                return SV_NOT_FOUND;
-        } else {
-            if (target(actor, last, &player) != SV_OK) return SV_NOT_FOUND;
-            if (!*first) {
-                SvLineHit hit = { sizeof hit };
-                if (body(&player, &human) != SV_OK) return SV_STATE;
-                result = api.read->aim(api.owner, player.human, 2000, SV_LINE_ALL, &hit);
-                if (result != SV_OK) return result;
-                if (hit.kind == SV_HIT_NONE) return SV_NOT_FOUND;
-                position = hit.position; position.y += 1;
-                return move(&player, position);
-            }
-            if (of_target(&api, actor, first, &destination) != SV_OK) return SV_NOT_FOUND;
-        }
+    if (!strcmp(name, "tp") || !strcmp(name, "goto")) return teleport_command(actor, args);
+    if (!strcmp(name, "bring")) {
+        if (of_target(&api, actor, first, &player) != SV_OK || target(actor, last, &destination) != SV_OK)
+            return SV_NOT_FOUND;
         if (body(&destination, &place) != SV_OK) return SV_STATE;
         position = place.position; position.x += 2;
         return move(&player, position);
@@ -265,7 +364,7 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
     if (!strcmp(name, "team")) return of_set(&api, "player.team", player.entity, number);
     if (!strcmp(name, "where")) {
         result = body(&player, &human);
-        if (result == SV_OK) of_tell(&api, actor, "%s: %.2f %.2f %.2f", player.name,
+        if (result == SV_OK) of_tell(&api, actor, "%s: %.1f %.1f %.1f", player.name,
             human.position.x, human.position.y, human.position.z);
         return result;
     }
@@ -381,11 +480,11 @@ static SvResult command(const char *name, int minimum, int maximum, SvEntity act
     { (void)owner; return command(#name, low, high, actor, args); }
 COMMAND(god, 0, 1) COMMAND(heal, 0, 1) COMMAND(kill, 0, 1) COMMAND(item, 1, 2)
 COMMAND(vehicle, 1, 2) COMMAND(arm, 1, 2) COMMAND(kit, 1, 2) COMMAND(team, 1, 2)
-COMMAND(heavy, 0, 1) COMMAND(tp, 0, 2) COMMAND(goto, 1, 2) COMMAND(bring, 1, 2)
+COMMAND(heavy, 0, 1) COMMAND(tp, 0, 4) COMMAND(goto, 1, 4) COMMAND(bring, 1, 2)
 COMMAND(npc, 0, 1) COMMAND(sound, 1, 2) COMMAND(give, 2, 3) COMMAND(turn, 1, 2)
-COMMAND(herobrine, 0, 1) COMMAND(help, 0, 0) COMMAND(players, 0, 0) COMMAND(where, 0, 1)
+COMMAND(herobrine, 0, 1) COMMAND(help, 0, 0) COMMAND(players, 0, 1) COMMAND(where, 0, 1)
 COMMAND(tpall, 0, 1) COMMAND(freeze, 1, 1) COMMAND(unfreeze, 1, 1) COMMAND(say, 0, 0)
-COMMAND(round, 1, 1) COMMAND(clear, 0, 1) COMMAND(who, 0, 0) COMMAND(id, 1, 1)
+COMMAND(round, 1, 1) COMMAND(clear, 0, 1) COMMAND(who, 0, 1) COMMAND(id, 1, 1) COMMAND(delh, 0, 1)
 #undef COMMAND
 
 static SvResult SV_CALL event(SvOwner owner, const SvEvent *event)
@@ -440,7 +539,8 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
         { "bring", cmd_bring }, { "npc", cmd_npc }, { "sound", cmd_sound }, { "give", cmd_give }, { "turn", cmd_turn },
         { "herobrine", cmd_herobrine }, { "help", cmd_help }, { "bmhelp", cmd_help }, { "players", cmd_players },
         { "where", cmd_where }, { "tpall", cmd_tpall }, { "freeze", cmd_freeze }, { "unfreeze", cmd_unfreeze },
-        { "say", cmd_say }, { "round", cmd_round }, { "clear", cmd_clear }, { "who", cmd_who }, { "id", cmd_id }
+        { "say", cmd_say }, { "round", cmd_round }, { "clear", cmd_clear }, { "who", cmd_who }, { "id", cmd_id },
+        { "delh", cmd_delh }
     };
     uint32_t i;
     SvResult result = of_init(&api, host, owner, OF_CAP(SV_API_GAME_READ) | OF_CAP(SV_API_GAME_WRITE) |
