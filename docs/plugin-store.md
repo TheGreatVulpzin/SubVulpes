@@ -235,6 +235,38 @@ The manifest (`docs/plugin-manifest.md`) already has `name`, `description`, `aut
 
 Old plugins keep working. A manifest without the new keys stays valid.
 
+## Official plugins outside the launcher (plan of 2026-11-08)
+
+The owner wants the official plugins to ship and update apart from the launcher and the server. The launcher finds a newer version and installs it. The user can choose a version.
+
+**Decisions.**
+
+- The server zip keeps `sv.permissions` and `sv.admcmd`. A server with no admin commands is not usable, and the first start must not need a network. The release workflow puts the newest signed package of each one into the zip, so the copy in the zip is current on the day of the release.
+- `sv.status`, the jukebox and the test room leave the zip. The launcher offers `sv.status` the first time it opens the Plugins page.
+- After the first install, every official plugin is a normal Workshop plugin. The launcher updates all of them in the same way.
+- Version 1.0 promises that ABI 1 does not break (see the version policy). Until then an update can break a native plugin. The fields `server_min` and `min_api` are the guard.
+
+**What exists (read from the code on 2026-11-08).**
+
+- An official package from the Workshop installs and gets its approval with no review window (`InstallPlugin` in `Launcher.cs`). The hash of the signed index is the proof. An official update does not show Approval Needed.
+- The launcher reads the index only when the Plugins page opens for the first time, and when the user presses reload (`RefreshStore`). It does not check at start.
+- The index has one version for each plugin. `ParseStoreIndex` reads one `version` and one `package` for an id.
+- The launcher does not read `min_api` or `server_min` from the index. The host refuses the plugin when it loads, but the launcher offers an install that cannot run.
+
+**Work.**
+
+1. **Index.** Add an optional list `versions` to each entry: version, package file, hash, size, `server_min`, `min_api` and channel. The fields of format 1 stay, so an older launcher still works and shows the newest version. `tools/build_index.py` in the Workshop repository writes the list from the releases of each plugin that it can find, and keeps the last good packages.
+2. **Launcher.** Read `versions`, hide a version that the server cannot use, and add a version choice beside Update. A choice of an older version is a downgrade. It asks first, and it keeps the data of the plugin in `user\plugins`.
+3. **Launcher.** Check the index at start in the background, once each day, and when the user presses reload. Show a number on the Plugins tab and an Update button on the row. Never install by itself without the user's choice. A setting turns the automatic install of official updates on, off by default.
+4. **Workshop repository.** Move the source of `sv.permissions`, `sv.admcmd` and `sv.status` to `official/plugins/` with a `build.ps1`, as the jukebox does. The main repository keeps their tests.
+5. **Release workflow.** `release.yml` downloads the newest signed packages of the two core plugins from `dist`, checks the seal and the hash, and puts them in the zip with `plugins/native-approvals.ini`. If `dist` has no valid package, it builds them from the source of the tag, as it does today. A release never waits for the Workshop.
+6. **Order of builds.** The Workshop Action checks each manifest with the newest server release. A new manifest key therefore needs the server release first, and the plugin after it. State this in the Workshop `CONTRIBUTING.md`.
+
+**Risks.**
+
+- A bad plugin update reaches every server that checks. The seal stops a forged package. It does not stop a bug. Keep the older versions in the index, so a user can go back.
+- The two core plugins in the zip and in the Workshop must not differ in a way that breaks the approval file. The workflow checks the hash of the packed DLL against the approval line, as `make_package.ps1` does now.
+
 ## Answers of 2026-11-03
 
 - **License.** The repository and the official content use GPL-3.0, as the project does. A community item declares its license in the manifest (`license=`). The CI refuses an item without one.
