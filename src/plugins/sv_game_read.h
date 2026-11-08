@@ -115,6 +115,33 @@ typedef struct {
     uint32_t flags, address_id, network_id;
 } SvConnectionState;
 
+/* Level indices last until the next reset. Building indices match the shop catalog. */
+#define SV_BUILDING_MAX 4096u
+#define SV_BASE_COUNT 5u
+#define SV_AREA_COUNT 4u
+enum { SV_BUILDING_OTHER = 0, SV_BUILDING_BASE, SV_BUILDING_SHOP, SV_BUILDING_HOSPITAL,
+    SV_BUILDING_DEALERSHIP };
+typedef struct {
+    uint32_t size, index, kind;
+    int32_t native_type, team;
+    SvVector position, box_min, box_max;
+} SvBuildingState;
+typedef struct {
+    uint32_t size, index;
+    int32_t blocks_x, blocks_y, blocks_z;
+    float block_size;
+    SvVector origin, axes[3];
+} SvAreaState;
+typedef struct {
+    uint32_t size, word, interior_word;
+    uint16_t materials[8];
+} SvBlockState;
+typedef struct {
+    uint32_t size;
+    SvLineHit hit;
+    int32_t material, area, cell[3], face;
+} SvSurfaceHit;
+
 typedef struct {
     uint32_t size, version;
     SvResult (SV_CALL *entities)(SvOwner owner, uint32_t kind, uint32_t cursor,
@@ -146,6 +173,17 @@ typedef struct {
     /* IP bytes use dotted address order. Port uses host order. Spectate keeps the game value (-1 means none).
      * SV_NOT_FOUND for a bot or a player without a connection. Without network, the IP is zero and SV_CONNECTION_MASKED is set. */
     SvResult (SV_CALL *connection)(SvOwner owner, SvEntity player, SvConnectionState *state);
+    /* Safe callbacks only. A count from 0 to SV_BUILDING_MAX. */
+    SvResult (SV_CALL *building_count)(SvOwner owner, uint32_t *count);
+    SvResult (SV_CALL *building)(SvOwner owner, uint32_t index, SvBuildingState *state);
+    /* Team 0 to 4. SV_NOT_FOUND when the level has no box for this base. */
+    SvResult (SV_CALL *base)(SvOwner owner, uint32_t team, SvBuildingState *state);
+    SvResult (SV_CALL *area)(SvOwner owner, uint32_t index, SvAreaState *state);
+    /* Grid coordinates in the area, not world coordinates. An empty cell has word 0. */
+    SvResult (SV_CALL *block)(SvOwner owner, uint32_t area, int32_t x, int32_t y, int32_t z, SvBlockState *state);
+    /* A level line with the same bounds as line. Material -1 means unknown (landscape or city object).
+     * Copies the closest surface before restoring the collision scratch record. */
+    SvResult (SV_CALL *surface)(SvOwner owner, SvVector from, SvVector to, SvSurfaceHit *hit);
     /* The number of an account, as the game commands show it: the value of /players and the target of /give and /ban.
      * It is the position of the account in the account list. The game never removes an account, so the number stays the same
      * after a restart. It is not the account ID that the client sends, which stays private. SV_NOT_FOUND for a stale

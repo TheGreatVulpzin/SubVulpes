@@ -35,6 +35,7 @@ int area_getnextsector(void);
 void area_marksector(uint32_t area, int x, int y, int z);
 int area_createchunk(uint32_t area, int cx, int cy, int cz);
 int area_createsector(uint32_t area, uint32_t chunk, int sx, int sy, int sz);
+int area_reservecell(uint32_t area, int x, int y, int z);
 void area_setblock(uint32_t area, int x, int y, int z, uint32_t word);
 void area_setblockcolor(uint32_t area, int x, int y, int z, uint32_t color);
 void area_interior_setblock(uint32_t area, int x, int y, int z, uint32_t word);

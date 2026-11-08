@@ -31,6 +31,8 @@ _Static_assert(sizeof(SvStatus) == 20, "Preserve status ABI v1");
 _Static_assert(sizeof(SvEvent) == 12, "Preserve event ABI v1");
 _Static_assert(sizeof(SvPlugin) == 92, "Preserve plugin ABI v1");
 void test_physics_bounds(void);
+void test_plugin_world(void);
+void test_plugin_world_stopped(void);
 int plugin_cost_run(void);
 
 #define CHECK(test) do { if (!(test)) { \
@@ -1800,10 +1802,12 @@ int main(int argc, char **argv)
     core_commands_check();
     world_reset_checks();
     runtime_checks();
+    test_plugin_world();
     old = sv_entity_at(SV_ENTITY_PLAYER, 0);
     sv_plugins_stop();
     CHECK(!sv_game_take_reset());
     CHECK(sv_entity_resolve(SV_ENTITY_PLAYER, old) == -1);
+    test_plugin_world_stopped();
     types_restored_check();
     made_stopped_check();
     /* After the stop no plugin wants a record, and the queue is empty. */

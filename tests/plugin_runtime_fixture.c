@@ -46,7 +46,11 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
 
 static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
 {
+    const void *table = (const void *)1;
     CHECK(api && api->size >= sizeof *api);
+    CHECK(api->get_api(owner, 1, 1, &table) == SV_DENIED && table == NULL);
+    table = (const void *)1;
+    CHECK(api->get_api(owner, 2, 1, &table) == SV_DENIED && table == NULL);
     host = api;
     random_index = timer_count = 0;
     armed = 0;

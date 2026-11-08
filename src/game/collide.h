@@ -11,6 +11,7 @@ int lineintersectlandscape(float *from, float *to);
 int circleintersectlandscape(float *pos, float *rot, float radius);
 int sphereintersectlevel(float *pos, float radius);
 int lineintersectlevel(float *from, float *to, int with_objects);
+int lineintersectlevelsurface(float *from, float *to, int with_objects);
 int lineintersectall(float *from, float *to);
 int circleintersectlevel(float *pos, float *rot, float radius);
 int sphereintersectobject(int obj, float *pos, float radius);

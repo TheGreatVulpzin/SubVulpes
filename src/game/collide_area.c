@@ -202,6 +202,9 @@ static int line_block(vec3 *hit, vec3 *normal, float *t, uint32_t area, const in
     }
     to_world(hit, normal, a);
     set_hit_block(area, at, word);
+    g_intersect.material = g_intersect.block_face >= 0 && g_intersect.block_face < 8 ?
+        (interior ? area_interior_getblocktexture(area, at[0], at[1], at[2], g_intersect.block_face) :
+                    area_getblocktexture(area, at[0], at[1], at[2], g_intersect.block_face)) : -1;
     return 1;
 }
 
@@ -228,6 +231,7 @@ static int line_cell(vec3 *hit, vec3 *normal, float *t, uint32_t area, const int
                                         (float *)&e->x) != 0) {
             to_world(hit, normal, a);
             set_hit_block(area, cell, 0);
+            g_intersect.material = g_intersect.block_face = -1;
             g_intersect.index = type;
             return 1;
         }

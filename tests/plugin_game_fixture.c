@@ -1036,7 +1036,7 @@ static SvResult SV_CALL reset_command(SvOwner owner, uint64_t actor, const char 
     (void)arguments;
     CHECK(game->world(owner, &before) == SV_OK);
     CHECK(change->world_reset(owner + 1) == SV_STATE);
-    CHECK(change->world_reset(owner) == SV_OK && change->world_reset(owner) == SV_OK);
+    CHECK(change->world_reset(owner) == SV_OK && change->world_reset(owner) == SV_STATE);
     CHECK(game->world(owner, &after) == SV_OK && after.reset_sequence == before.reset_sequence);
     return SV_OK;
 }
@@ -1721,6 +1721,8 @@ static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event)
     return SV_OK;
 }
 
+SvResult world_fixture_enable(const SvHost *host, SvOwner owner);
+
 static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
 {
     SvWorldState world = { sizeof world };
@@ -1749,6 +1751,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
         uint32_t value = 123;
         CHECK(host->random(owner, &value) == SV_STATE && value == 123);
     }
+    CHECK(world_fixture_enable(host, owner) == SV_OK);
     CHECK(host->command(owner, "admin", SV_COMMAND_PUBLIC, echo_command) == SV_INVALID);
     CHECK(host->command(owner, "connectioncheck", SV_COMMAND_LOCAL, connection_command) == SV_OK);
     CHECK(host->command(owner, "corecheck", SV_COMMAND_LOCAL, core_check) == SV_OK);
