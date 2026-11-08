@@ -76,6 +76,34 @@ An invalid context returns `SV_STATE`.
 Errors leave the output unchanged.
 The query changes no game state, sends no packet and needs no restart.
 
+## Possession (N45)
+
+`possess(owner, player, bot)` appends a method to `SvGameAi`, capability 3, version 1.
+It gives a real player the body of a bot. It needs a safe callback on the server thread and a ready world.
+A player that is a bot returns `SV_DENIED`. A stale or wrong-kind reference returns `SV_NOT_FOUND`.
+Both bodies must be consistent and alive, on foot, with the player account and the teams in range. Any other state returns `SV_STATE`.
+A second possession for the same player while one is active returns `SV_CONFLICT`.
+
+The call swaps the body links of the two players and sets the team of the new body to the team of the player.
+It rolls back before it publishes if a link does not hold, and it returns `SV_FAILED`.
+The old body of the player stays in the world without an owner. The bot has no body after the call.
+The host sends the update events for both players and both bodies.
+The possession ends when the plugin stops or the world resets. The host then gives the bodies back if they still match.
+No method ends a possession before that (N66).
+The original client was not tested. The camera of the client follows the human of the update event. Client effect unknown.
+
+## Known limits
+
+These limits come from the design, not from a defect. Each one has a row in the need list of [legacy modules](../legacy-modules.md).
+
+- A driver route is a closed loop. No method reads the road graph, so a plugin cannot find a route from A to B (N63, N64).
+- Chase mode switches four effects together: a higher target speed, a larger lateral limit, a lane change and no stop at red lights (N65).
+- `street_near` gives one position and has no filter (N67).
+- A bot has no method to aim at a point or an entity. The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68).
+- A possession has no reverse call (N66).
+- Passenger aim takes a player as the target, in seats 1 to 3 (N61).
+- Most writes return to the first value when the plugin stops. Things that a plugin creates, such as a possession, follow their own rule. Read each section.
+
 ## Owner decisions
 
 - Is half-speed walking acceptable while a bot aims? The existing game uses that speed for mode 2.
