@@ -115,6 +115,10 @@ typedef struct {
      * Writes restore when the plugin stops. Another owner of this cell or its neighbors gives SV_CONFLICT. */
     SvResult (SV_CALL *block_set)(SvOwner owner, uint32_t area, int32_t x, int32_t y, int32_t z,
         uint32_t value, uint32_t material);
+    /* Ends the body of a real player, or a body that has no player. The body leaves its vehicle first. The items in its slots
+     * leave them. The player stays and has no body, as after a death. No death tax runs. The body of a bot gives SV_DENIED:
+     * use npc_remove. Safe callbacks only. SV_NOT_FOUND for a stale or wrong-kind reference. */
+    SvResult (SV_CALL *human_remove)(SvOwner owner, SvEntity human);
 } SvGameWrite;
 #pragma pack(pop)
 

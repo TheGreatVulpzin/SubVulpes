@@ -499,6 +499,10 @@ static int change_npc(SvOwner owner)
     STEP(change->speak(owner, bob_human, "hello there", 2) == SV_OK);
     STEP(put(owner, pid_health, bob_human, -5) == SV_OK);
     STEP(change->speak(owner, bob_human, "I am dead", 1) == SV_STATE);
+    /* human_remove ends the body of a real player. The body of a bot stays with npc_remove. */
+    STEP(change->human_remove(owner + 1, npc_human) == SV_STATE);
+    STEP(change->human_remove(owner, npc_player) == SV_NOT_FOUND && change->human_remove(owner, 0) == SV_NOT_FOUND);
+    STEP(change->human_remove(owner, npc_human) == SV_DENIED && game->human(owner, npc_human, &hs) == SV_OK);
     STEP(change->npc_remove(owner, npc_human) == SV_NOT_FOUND);
     STEP(change->npc_remove(owner, player) == SV_DENIED);
     STEP(change->npc_remove(owner, npc_player) == SV_OK);
@@ -1149,7 +1153,7 @@ static int props_checks(SvOwner owner)
     STEP(props->info(owner, id, NULL) == SV_INVALID && props->info(owner, id, &small) == SV_INVALID);
     STEP(props->info(owner + 1, id, &info) == SV_STATE);
     STEP(props->info(owner, id, &info) == SV_OK && info.id == id && info.entity_kind == SV_ENTITY_HUMAN &&
-         info.type == SV_PROP_INT && info.count == 1 && info.min == -100.0 && info.max == 100.0 &&
+         info.type == SV_PROP_INT && info.count == 1 && info.min == -100.0 && info.max == 1000.0 &&
          !strcmp(info.name, "human.health") && info.ops == (SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD));
     for (id = 1; props->info(owner, id, &info) == SV_OK; ++id) {
         STEP(info.id == id);
@@ -1175,13 +1179,16 @@ static int props_checks(SvOwner owner)
     /* Add to a number: the sum must stay in the range, and an error changes nothing. */
     v.i = 5;
     STEP(props->add(owner, pid_health, human, 0, v) == SV_OK && props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 85);
-    v.i = 100;
+    v.i = 1000;
     STEP(props->add(owner, pid_health, human, 0, v) == SV_INVALID && props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 85);
     v.i = INT32_MAX;
     STEP(props->add(owner, pid_health, human, 0, v) == SV_INVALID);
     v.i = INT32_MIN;
     STEP(props->add(owner, pid_health, human, 0, v) == SV_INVALID);
-    v.i = -5;
+    /* A health above 100 is allowed up to 1000 (N29). */
+    v.i = 100;
+    STEP(props->add(owner, pid_health, human, 0, v) == SV_OK && props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 185);
+    v.i = -105;
     STEP(props->add(owner, pid_health, human, 0, v) == SV_OK && props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     /* A row that a plugin area added: a world property, with no entity. */
     STEP(props->find(owner, "test.world", &id) == SV_OK && props->info(owner, id, &info) == SV_OK && info.entity_kind == 0 &&
@@ -1318,8 +1325,9 @@ static SvResult write_checks(SvOwner owner)
     CHECK(put(owner, pid_godmode, player, 2) == SV_INVALID);
     CHECK(put(owner, pid_godmode, human, 1) == SV_NOT_FOUND);
     CHECK(put(owner, pid_godmode, player, 1) == SV_OK);
-    CHECK(put(owner, pid_health, human, 101) == SV_INVALID);
+    CHECK(put(owner, pid_health, human, 1001) == SV_INVALID);
     CHECK(put(owner, pid_health, human, -101) == SV_INVALID);
+    CHECK(put(owner, pid_health, human, 1000) == SV_OK);
     CHECK(put(owner, pid_health, player, 5) == SV_NOT_FOUND);
     CHECK(put(owner, pid_health, human, 80) == SV_OK);
     memcpy(&bad.x, &nan_bits, sizeof bad.x);

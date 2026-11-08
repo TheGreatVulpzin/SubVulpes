@@ -231,7 +231,7 @@ Rows. The range is the range that a `set` or an `add` may leave in the field:
 | `player.godmode` | player | int | get, set | 0 to 1 | |
 | `player.admin` | player | int | get, set | 0 to 1 | A bot is refused (`SV_INVALID`). Each connection of the player follows the flag, as the password login does |
 | `player.team` | player | int | get, set | 0 to 7 | The human of the player follows. The clients get the player update |
-| `human.health` | human | int | get, set, add | -100 to 100 | -100 is the dead value of the game |
+| `human.health` | human | int | get, set, add | -100 to 1000 | -100 is the dead value of the game. The hospital heals up to 100 only, and damage and bleeding have no cap. The packet writer sends at most 117, so a client shows a full bar above that. Client effect unknown |
 | `human.bleeding` | human | int | get, set | 0 to 1 | A bleeding body loses health over time |
 | `human.stun` | human | int | get, set, add | 0 to 3600 | Ticks. The torso is weak while it runs, so the body staggers. The game counts it down by 1 each tick. The upper bound is a choice of this API |
 | `human.protect` | human | int | get, set, add | 0 to 21600 | The spawn protection counter in ticks. 21600 is the longest value that the game gives (6 times 3600) |
@@ -383,6 +383,16 @@ Random calls never call `os_rand()` or change the game random stream. No clock o
 The core supplies its existing game seed before the first world tick. Random calls before that point return `SV_STATE`.
 Replay requires the same seed, plugin IDs, calls and ticks. A native plugin that reads a clock, file or network is outside this contract.
 Only a sandboxed host can enforce the replay contract. No client playtest or replay recording ran.
+
+## Human removal
+
+`SvGameWrite.human_remove` ends the body of a real player, or a body that has no player. It needs the write callback context and a ready world.
+The body leaves its vehicle first. The items in its slots leave them. The game ends the body record and its bonds and sends the normal event.
+The player stays and has no body, as after a death. The host sends the update event of the player. No death tax runs and no team manager changes.
+The body of a bot returns `SV_DENIED`. Remove a bot with `npc_remove`. A stale or wrong-kind reference returns `SV_NOT_FOUND`.
+A body that sits in a vehicle that is not active, or whose player record is not active, returns `SV_STATE` and nothing changes.
+The reference of the body is stale after the call. A plugin must not keep it.
+The original client was not tested. The client of the player gets the normal end-of-body event. Client effect unknown.
 
 ## Core kick list
 

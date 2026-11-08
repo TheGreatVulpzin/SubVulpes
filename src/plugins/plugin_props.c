@@ -279,7 +279,7 @@ static const Prop props[] = {
     { "player.godmode", SV_ENTITY_PLAYER, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, player_godmode, NULL, NULL, NULL },
     { "player.admin", SV_ENTITY_PLAYER, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, player_admin, admin_check, admin_after, NULL },
     { "player.team", SV_ENTITY_PLAYER, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 7, player_team, NULL, team_after, NULL },
-    { "human.health", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, -100, 100, human_health, NULL, NULL, NULL },
+    { "human.health", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, -100, 1000, human_health, NULL, NULL, NULL },
     { "human.bleeding", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, human_bleeding, NULL, NULL, NULL },
     { "human.stun", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 3600, human_stun, NULL, NULL, NULL },
     { "human.protect", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, 21600, human_protect, NULL, NULL, NULL },
