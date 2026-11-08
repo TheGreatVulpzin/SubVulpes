@@ -108,6 +108,11 @@ Do not treat the presence of a test case as a passing result.
 
 ## Limits and owner decisions
 
+The account save request writes the records as they are in memory, as the periodic save does.
+The game copies the balance of each online player into its account only at disconnect and at the end of a round, where `player_calcassets` runs before `saveaccountsserver` (`logic_sim.c`, `player.c`).
+A save request in the middle of a round therefore keeps older balances for online players.
+The owner must decide if the request syncs the balances first, as the round end does.
+
 The owner must define the signal for a requested restart and the launcher response to that signal.
 The launcher currently starts a replacement only after its own Restart action.
 No restart code or automatic restart behavior is assumed.
