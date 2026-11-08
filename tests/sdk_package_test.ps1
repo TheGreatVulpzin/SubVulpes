@@ -42,7 +42,7 @@ try { $names = @($archive.Entries | ForEach-Object FullName) } finally { $archiv
 $prefix = 'SubVulpes-sdk-v0.0.0-sdk-test/'
 Assert ($names.Count -gt 0 -and @($names | Where-Object { -not $_.StartsWith($prefix) }).Count -eq 0) 'An entry is outside the package folder.'
 $relative = @($names | ForEach-Object { $_.Substring($prefix.Length) })
-Assert (@($relative | Where-Object { $_ -clike 'include/sv_*.h' }).Count -eq 15) 'The SDK must carry 15 public headers.'
+Assert (@($relative | Where-Object { $_ -clike 'include/sv_*.h' }).Count -eq 16) 'The SDK must carry 16 public headers.'
 Assert (@($relative | Where-Object { $_ -clike 'include/*' -and $_ -cnotlike 'include/sv_*.h' }).Count -eq 0) 'The include folder holds a file that is not a public header.'
 foreach ($need in @('README.txt', 'VERSION.txt', 'template/hello.c', 'template/plugin.ini', 'template/build.bat', 'template/build.ps1', 'template/CMakeLists.txt',
         'tools/pack.ps1', 'tools/validate_plugin.ps1', 'tools/install_plugin.ps1', 'tools/sv_plugin.cmake', 'docs/plugin-abi.md',

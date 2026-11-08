@@ -31,7 +31,9 @@ const SvCapabilityInfo sv_plugin_caps[SV_CAP_COUNT] = {
     { "props", "high", "Changes player and world properties." },
     { "config", "low", "Reads plugin settings." },
     { "plugins", "high", "Uses APIs from other plugins." },
-    { "network", "high", "Reads the IP addresses of players." }
+    { "network", "high", "Reads the IP addresses of players." },
+    { "server_control", "high", "Saves accounts and requests a controlled server stop." },
+    { "console", "high", "Runs plugin commands as the server console." }
 };
 static const char *const setting_names[] = {
     "type", "live", "admin", "label", "help", "default", "min", "max", "maxlen", "choices"

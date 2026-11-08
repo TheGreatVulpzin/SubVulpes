@@ -1,7 +1,7 @@
 #ifndef SV_PLUGIN_CAPS_H
 #define SV_PLUGIN_CAPS_H
 
-enum { SV_CAP_COUNT = 13 };
+enum { SV_CAP_COUNT = 15 };
 
 typedef struct {
     const char *name, *level, *text;

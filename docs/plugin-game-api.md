@@ -386,3 +386,119 @@ No method lists addresses.
 `kicked_clear` empties the list. A null output or address returns `SV_INVALID`.
 An internal count outside 0 to `SR_MAX_KICKEDIP` returns `SV_FAILED` and changes nothing.
 Without `network`, all three methods return `SV_DENIED` and leave outputs unchanged.
+
+## Server control and console access
+
+The public header `sv_server.h` adds two version 1 tables without changing an existing ABI 1 table.
+Both capabilities have the `high` danger level. Native code retains full process access.
+
+| Manifest capability | Bit | API ID | Table |
+| --- | --- | --- | --- |
+| `server_control` | 13 | 14 | `SvServerControl` |
+| `console` | 14 | 15 | `SvConsole` |
+
+### Server requests
+
+`request(owner, request)` accepts `SV_SERVER_SAVE` or `SV_SERVER_STOP` from a callback on the server thread after the world becomes ready.
+The method checks the current owner and the `server_control` capability at each call.
+It refuses calls during simulation decisions or shutdown with `SV_STATE`.
+A missing capability gives `SV_DENIED`. An unknown request gives `SV_INVALID`.
+
+`SV_OK` means that the host accepted the request. It does not mean that the operation completed.
+The host keeps one pending request across all plugins. A second request gives `SV_STATE`.
+The main loop consumes the request once at the start of a later tick, before callbacks and simulation.
+The host cancels an unconsumed request when its owner stops. A completed file save remains persistent.
+
+`SV_SERVER_SAVE` writes the account file at that safe point.
+Success posts the existing account-save notice with reason `SV_ACCOUNT_SAVE_DISK` and account zero.
+The console records `Account save completed.` or `Account save failed.`.
+Failure leaves the previous file in place. The request has no separate completion callback.
+
+The writer uses a new temporary file in `user/`, checks each complete write, flushes the file and closes it.
+It then replaces `user/server.srk` with `MoveFileExA` and the replace/write-through flags.
+The writer removes its temporary file after a failed save.
+The writer refuses an invalid account count, a reparse directory or a reparse target.
+The file has the existing version 3 format. Integer fields use the Windows x86 little-endian representation.
+
+| File part | Size | Fields in order |
+| --- | --- | --- |
+| Header | 12 bytes | Version `3`, account key, account count. Each field has 32 bits. |
+| Each account | 60 bytes | Two 32-bit IDs, the full 32-byte name, money, play time and three look selectors. Each numeric field has 32 bits. |
+
+The count ranges from 0 through 65,535. The total file size is `12 + 60 * count` bytes.
+This format does not save `ban_time` or other account fields absent from version 3.
+The save includes the account values already held by the core. It does not add a player-balance synchronization pass.
+
+`SV_SERVER_STOP` asks the main loop to leave through the existing controlled shutdown path.
+The plugin callback returns before shutdown starts. A stop request does not add an account save.
+The normal exit convention remains unchanged.
+
+`SV_SERVER_RESTART` is reserved and gives `SV_STATE`.
+The launcher can restart a server through its own Restart button, but it has no server-originated restart convention.
+The owner must choose that convention and its launcher handling before this request can work.
+
+### Console commands
+
+`execute(owner, line, reply, capacity, length)` runs one registered plugin command as console actor zero.
+The caller needs `console`. The command owner runs with its own capability set.
+Console authority satisfies public, administrator and local command permission levels. No player or living body is required.
+The host restores the calling owner after the command returns.
+
+The method accepts a line of 1 through 300 bytes, with an optional leading slash.
+The command name must fit its existing buffer. Arguments contain at most 255 bytes.
+An empty line, an excessive length, a newline, a carriage return or an invalid output argument gives `SV_INVALID`.
+Only registered plugin commands run. An unknown command, a game-owned command or a host management command gives `SV_DENIED`.
+Nested console calls and calls during simulation decisions or shutdown give `SV_STATE`.
+
+The reply buffer capacity includes its final zero byte and ranges from 1 through 4,096 bytes.
+The reply contains at most 4,095 text bytes. `length` excludes the final zero byte.
+The host captures the command owner's `SvHost.log` output and `message_to` replies to actor zero.
+It joins captured messages with newline bytes while capacity remains.
+Replies to real players keep their existing destination.
+
+The method returns the command result when the reply fits.
+`SV_LIMIT` means that the command ran and the reply was truncated. The host terminates the reply even after truncation.
+Callers must not repeat a command solely because its reply was truncated.
+This operation does not subscribe to arbitrary server console lines.
+
+### Existing host timers and random state
+
+`SvHost.after(owner, ticks, id)` schedules one timer. `every` schedules a repeating timer.
+Both methods require a timer subscription and the current callback owner on the server thread.
+The delay ranges from 1 through `UINT32_MAX` ticks. Zero gives `SV_INVALID`.
+Each plugin can hold 32 timers. Reusing an ID replaces that owner's timer.
+The existing full-table result remains `SV_LIMIT` for ABI compatibility.
+
+Timers run before the tick event at a safe point. A one-shot timer runs once.
+Round resets keep timers. Removing the timer subscription or stopping the plugin removes its timers.
+Callbacks can schedule another timer with a delay of at least one tick.
+Wrong owner, wrong phase or a missing timer subscription gives `SV_STATE`.
+
+`SvHost.random(owner, value)` uses state private to that plugin.
+The host combines the game seed with the plugin ID. Activation restarts that stream for the same seed and ID.
+The method never consumes `os_rand()` or the game's Mersenne Twister state.
+A null output gives `SV_INVALID`. A missing seed, wrong owner or unsafe phase gives `SV_STATE`.
+
+### Connection privacy
+
+The existing `connection` read requires `read` and a valid player reference.
+A bot or a player without a connection gives `SV_NOT_FOUND`.
+An invalid output buffer gives `SV_INVALID`. An invalid connection count gives `SV_STATE`.
+
+The `network` capability remains bit 12 with danger level `high`.
+Without it, `ip` contains four zero bytes and `SV_CONNECTION_MASKED` is set.
+With it, `ip` contains the real address and the flag is clear.
+Both callers receive the port, idle ticks, spectate value, `address_id` and `network_id`.
+
+The host derives the 32-bit identifiers with HMAC-SHA256 and a secret 16-byte salt in `user/connection-salt.bin`.
+The address identifier uses all four bytes. The network identifier uses the first three bytes with a separate domain.
+The profile reuses its salt across starts. A malformed salt refuses startup without replacement.
+No API, log or plugin listing returns the salt. Native code remains outside this privacy boundary.
+Identifiers can collide and are not authentication credentials.
+
+The address bytes use normal IPv4 order. The port is a host-order number.
+The focused test sends a real UDP join from `127.0.0.1` through the server receive path.
+It compares the stored address and API bytes with that address, and compares the port with `ntohs`.
+The sender uses unequal port bytes so a missing conversion is observable.
+The original client was not tested.
+

@@ -33,7 +33,7 @@ set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c src/platform/x87_ma
     APPEND PROPERTY OBJECT_DEPENDS "${SV_STORAGE_HEADERS}")
 file(GLOB SV_PLUGIN_HEADERS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/plugins/*.h")
 set_property(SOURCE ${SV_GAME_SOURCES} src/standalone/main.c plugins/status/status.c
-    tests/plugin_fixture.c tests/plugin_api_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c tests/plugin_runtime_fixture.c
+    tests/plugin_fixture.c tests/plugin_api_fixture.c tests/plugin_host_test.c tests/plugin_game_fixture.c tests/plugin_game_test.c tests/plugin_runtime_fixture.c tests/infra_host.c tests/infra_plugin.c
     APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
 set_property(SOURCE src/game/human_body.c src/game/human_arms.c src/game/human_pose.c
     src/game/humans.c src/game/item_physics.c src/game/objects.c src/game/wheels.c tests/physics_bounds.c
@@ -248,14 +248,14 @@ if(BUILD_TESTING)
     target_link_options(sv-codec-test PRIVATE /LARGEADDRESSAWARE)
     set_target_properties(sv-codec-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME codec-bounds COMMAND sv-codec-test)
-    add_executable(sv-game-test tests/plugin_game_test.c tests/plugin_cost.c tests/physics_bounds.c tests/platform_support.c
+    add_executable(sv-game-test tests/plugin_game_test.c tests/plugin_cost.c tests/physics_bounds.c tests/infra_host.c tests/platform_support.c
         src/platform/x87_math.c src/platform/plat_imports.c ${SV_GAME_SOURCES})
     target_include_directories(sv-game-test PRIVATE src/include src/platform src/common src/net src/game src/plugins)
     target_compile_definitions(sv-game-test PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
     target_compile_options(sv-game-test PRIVATE /W4 /WX /utf-8)
     target_link_options(sv-game-test PRIVATE /LARGEADDRESSAWARE)
     set_target_properties(sv-game-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_library(sv-game-read-fixture MODULE tests/plugin_game_fixture.c)
+    add_library(sv-game-read-fixture MODULE tests/plugin_game_fixture.c tests/infra_plugin.c)
     target_include_directories(sv-game-read-fixture PRIVATE src/plugins)
     target_compile_definitions(sv-game-read-fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(sv-game-read-fixture PRIVATE /W4 /WX /utf-8)

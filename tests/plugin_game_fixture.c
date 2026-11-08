@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "sv_game_read.h"
+SvResult infra_plugin_enable(const SvHost *host, SvOwner owner);
+SvResult infra_plugin_simulation(SvOwner owner);
 #include "sv_game_write.h"
 #include "sv_game_props.h"
 #include "sv_game_events.h"
@@ -949,6 +951,13 @@ static SvResult SV_CALL connection_command(SvOwner owner, uint64_t actor, const 
     struct { SvConnectionState state; uint32_t guard; } out = { { sizeof(SvConnectionState) }, 0x12345678u };
     SvConnectionState before;
     (void)actor;
+    if (!strncmp(arguments, "stale ", 6)) {
+        SvEntity stale;
+        CHECK(sscanf(arguments + 6, "%llu", &stale) == 1);
+        CHECK(game->connection(owner, stale, &out.state) == SV_NOT_FOUND);
+        CHECK(out.guard == 0x12345678u);
+        return SV_OK;
+    }
     if (!strncmp(arguments, "ids_", 4)) {
         SvConnectionState again = { sizeof again };
         CHECK(game->connection(owner, player, &out.state) == SV_OK);
@@ -1442,6 +1451,7 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
         return SV_OK;
     }
     if (event->kind == SV_EVENT_DAMAGE) {
+        CHECK(infra_plugin_simulation(owner) == SV_OK);
         /* A decision inside the simulation. The amounts 77, 55, 66, 67, 88 and 5 are the ones that the test program uses. The
          * record is writable, and new_amount is the only field that the fixture writes. */
         SvDamageEvent *damage = (SvDamageEvent *)event;
@@ -1721,6 +1731,7 @@ static SvResult SV_CALL enable(const SvHost *api, SvOwner owner)
     if (!api || api->size < sizeof *api || api->abi != SV_PLUGIN_ABI)
         return SV_INCOMPATIBLE;
     host = api; plugin_owner = owner;
+    CHECK(infra_plugin_enable(api, owner) == SV_OK);
     network_allowed = GetEnvironmentVariableA("SV_TEST_NETWORK", mode, sizeof mode) == 1 && mode[0] == '1';
     runtime_probe = GetEnvironmentVariableA("SV_GAME_READ_RUNTIME", mode, sizeof mode) == 1 && mode[0] == '1';
     CHECK(host->get_api(owner, SV_API_GAME_READ, SV_GAME_READ_VERSION, &table) == SV_OK);

@@ -76,3 +76,5 @@ SvConnectionState flags=20 address_id=24 network_id=28
 SV_EVENT_TIMER kind=2147483649 bit=8589934592
 Core hooks kinds=2147483650,2147483651,2147483652 decisions=0,1,2
 SvCoreCommandEvent name=24 arguments=88 builtin=152 decision=168
+SvServerControl functions=1 prefix=0 first=request:8 last=request:8
+SvConsole functions=1 prefix=0 first=execute:8 last=execute:8

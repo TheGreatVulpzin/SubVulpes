@@ -5,6 +5,8 @@
 #include "sv_game_events.h"
 
 #define SV_CAP_NETWORK (1u << 12)
+#define SV_CAP_SERVER_CONTROL (1u << 13)
+#define SV_CAP_CONSOLE (1u << 14)
 
 #define SV_PLUGIN_MAX 32
 #define SV_PLUGIN_COMMAND_MAX 128
@@ -38,6 +40,11 @@ void sv_game_ready(void);
 void sv_game_reset(void);
 /* Consumes a request before any callbacks or simulation at the next server tick. */
 int sv_game_take_reset(void);
+uint32_t sv_game_control_poll(void);
+int sv_game_control_stopping(void);
+int sv_game_control_restarting(void);
+/* Captures only replies of the command that the console API currently runs. */
+int sv_plugins_console_reply(const char *text);
 SvResult sv_game_api(uint32_t capability, uint32_t version, const void **api);
 int sv_plugins_context(SvOwner owner);
 int sv_plugins_has_capability(SvOwner owner, uint32_t mask);

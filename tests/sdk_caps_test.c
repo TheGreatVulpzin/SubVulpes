@@ -12,6 +12,7 @@
 #include "sv_game_props.h"
 #include "sv_config.h"
 #include "sv_plugins_api.h"
+#include "sv_server.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -41,7 +42,9 @@ static const struct {
     { "props",    1u << 9,  SV_API_GAME_PROPS },
     { "config",   1u << 10, SV_API_CONFIG },
     { "plugins",  1u << 11, SV_API_PLUGINS },
-    { "network",  1u << 12, 0 }
+    { "network",  1u << 12, 0 },
+    { "server_control", 1u << 13, SV_API_SERVER_CONTROL },
+    { "console", 1u << 14, SV_API_CONSOLE }
 };
 
 static int check(const char *path)
@@ -76,7 +79,7 @@ static int check(const char *path)
              strcmp(sv_plugin_caps[i].level, "highest")))
             return 1;
     }
-    puts("All 13 capability bits, API IDs and names match the fixed order.");
+    puts("All capability bits, API IDs and names match the fixed order.");
     return 0;
 }
 

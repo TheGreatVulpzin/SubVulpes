@@ -15,6 +15,7 @@
 #include "sv_game_settings.h"
 #include "sv_game_shop.h"
 #include "sv_game_storage.h"
+#include "sv_server.h"
 
 #define RECORD(type) printf(#type " size=%zu\n", sizeof(type))
 #define TABLE(type, first, last, count) \
@@ -109,5 +110,7 @@ int main(void)
     printf("SvCoreCommandEvent name=%zu arguments=%zu builtin=%zu decision=%zu\n",
         offsetof(SvCoreCommandEvent, name), offsetof(SvCoreCommandEvent, arguments),
         offsetof(SvCoreCommandEvent, builtin), offsetof(SvCoreCommandEvent, decision));
+    TABLE(SvServerControl, request, request, 1);
+    TABLE(SvConsole, execute, execute, 1);
     return 0;
 }

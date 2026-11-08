@@ -70,7 +70,16 @@ static SvResult SV_CALL write_message_to(SvOwner owner, uint32_t kind, SvEntity 
 {
     char buffer[MESSAGE_MAX + 1];
     int32_t index;
-    SvResult result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
+    SvResult result;
+    if (!sv_plugins_write_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!player) {
+        result = copy_text(kind, text, buffer);
+        if (result != SV_OK)
+            return result;
+        return sv_plugins_console_reply(buffer) ? SV_OK : SV_NOT_FOUND;
+    }
+    result = resolve(owner, SV_ENTITY_PLAYER, player, &index);
     if (result != SV_OK)
         return result;
     result = copy_text(kind, text, buffer);
