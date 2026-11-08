@@ -16,7 +16,7 @@ Check and redact logs before sharing them.
 
 ## Changing the plugin API
 
-The plugin API can only grow. Please don't rename, remove or change anything that already exists: a method, a property, a record or a number. Plugins built against ABI 1.0 have to keep working. If there is a reason to do any of that, please explain on the Pull Request.
+The plugin API can only grow. Please don't rename, remove or change anything that already exists: a method, a property, a record or a number. Plugins built against ABI 1 have to keep working. If there is a reason to do any of that, please explain on the Pull Request.
 
 When your change adds to the API:
 
