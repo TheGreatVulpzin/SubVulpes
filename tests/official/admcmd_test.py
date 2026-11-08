@@ -10,18 +10,20 @@ import tempfile
 BUILD = Path(sys.argv[1]).resolve()
 
 
-def run(name, steps, permissions=True):
+def run(name, steps, permissions=True, patchouli=True, soft=()):
     if os.environ.get("SV_ADMCMD_CASE", name) != name:
         return
     with tempfile.TemporaryDirectory(prefix="admcmd-", dir=BUILD / "tests") as folder:
         root = Path(folder)
-        plugins = ["sv.admcmd", "sv.probe", "test.admcmd"]
+        plugins = ["sv.patchouli", "sv.admcmd", "sv.probe", "test.admcmd"]
+        if not patchouli:
+            plugins.remove("sv.patchouli")
         if permissions:
             plugins.append("sv.permissions")
         profile, approvals = ["[plugins]"], ["[native]"]
         for plugin in plugins:
             shutil.copytree(BUILD / "plugins" / plugin, root / "plugins" / plugin)
-            profile.append(plugin + "=" + ("enabled" if plugin == "sv.permissions" else "required"))
+            profile.append(plugin + "=" + ("enabled" if plugin in ("sv.permissions", "sv.patchouli", *soft) else "required"))
             binary = next((root / "plugins" / plugin).glob("*.dll"))
             approvals.append(plugin + "=" + hashlib.sha256(binary.read_bytes()).hexdigest())
         (root / "plugins/plugins.ini").write_text("\n".join(profile) + "\n", encoding="ascii")
@@ -146,7 +148,8 @@ expect prop human.health GuestTwo 100
 console turn 0 Guest
 expect log "turn done."
 console help
-expect log "arm/kit 1=AK47"
+expect log "/arm N [PLAYER] - Give one weapon"
+expect log "/tp [PLAYER] PLAYER|X Y Z"
 say Root /clear
 say Root /clear Guest
 console clear Guest
@@ -388,3 +391,36 @@ console admprobe api
 say Root /heal Guest
 expect prop human.health Guest 100
 """)
+
+# Patchouli owns /help. The console sees every topic. Topics leave when the plugin stops and return when it starts.
+run("help", """
+spawn player Root
+spawn player Guest
+tick 1
+console perm set Root owner
+console help
+expect log "/heal [PLAYER|all] - Set health 100"
+expect log "/delh [PLAYER] - End the body"
+console help tp
+expect log "/tp [PLAYER] PLAYER|X Y Z"
+expect log "Permission: admcmd.tp"
+console help nothing
+expect log "No help for nothing."
+console plugins disable sv.admcmd
+console help
+expect log "No command is available to you."
+console plugins enable sv.admcmd
+console help
+expect log "/kill [PLAYER] - Set health -5"
+say Guest /help
+say Root /help 2
+say Root /page
+""", soft=("sv.admcmd",))
+
+# Without Patchouli the plugin keeps its own short /help.
+run("help-fallback", """
+spawn player Root
+tick 1
+console help
+expect log "arm/kit 1=AK47"
+""", patchouli=False)

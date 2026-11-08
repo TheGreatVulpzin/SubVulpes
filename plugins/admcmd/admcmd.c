@@ -1,4 +1,5 @@
 #include "../common/permissions.h"
+#include "../patchouli/sv_patchouli.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -446,6 +447,66 @@ static const char *failure(SvResult result)
     }
 }
 
+static const struct { const char *command, *usage, *summary; } topic_list[] = {
+    { "god", "[PLAYER]", "Toggle health 100 each tick. Also /imortal" },
+    { "heal", "[PLAYER|all]", "Set health 100, bleeding 0 and stun 0" },
+    { "kill", "[PLAYER]", "Set health -5 and bleeding 1" },
+    { "arm", "N [PLAYER]", "Give one weapon: 1 AK47, 2 M16, 3 Magnum, 4 MP5, 5 Uzi, 6 9mm" },
+    { "kit", "N [PLAYER]", "Give a weapon, four magazines and two bandages" },
+    { "item", "N [PLAYER]", "Give item type 0 to 25 in a free hand" },
+    { "vehicle", "N [PLAYER]", "Make vehicle type 0 to 11 in front of the target. Also /car" },
+    { "team", "N [PLAYER]", "Set team 0 to 5" },
+    { "heavy", "[PLAYER]", "Make the body very heavy, once. Also /heavydude" },
+    { "tp", "[PLAYER] PLAYER|X Y Z", "Move a player. The mover comes first. No arguments: aim hit" },
+    { "goto", "PLAYER", "Move the caller beside a player" },
+    { "bring", "PLAYER [DEST]", "Move a player beside DEST or the caller" },
+    { "tpall", "[DEST]", "Move other players beside DEST or the caller" },
+    { "freeze", "PLAYER", "Hold the body at its position" },
+    { "unfreeze", "PLAYER", "Release a frozen body" },
+    { "npc", "[PLAYER]", "Add a bot in front of the target" },
+    { "sound", "N [PLAYER]", "Play sound 0 to 46 at the aim hit" },
+    { "give", "money|admin PLAYER [N]", "Add money, or give the admin group" },
+    { "turn", "ACCOUNT [PLAYER]", "Copy the name and looks of a saved account" },
+    { "herobrine", "[PLAYER]", "Set look selector 2 to 3" },
+    { "players", "[all]", "List players with account number, slot and group" },
+    { "who", "[all]", "List players without groups" },
+    { "id", "PLAYER", "Show account number, slot and group of a player" },
+    { "where", "[PLAYER]", "Show the coordinates that /tp takes" },
+    { "say", "TEXT", "Send a server message to everybody" },
+    { "round", "reset", "Queue the round reset" },
+    { "clear", "[PLAYER]", "Send 20 blank private lines" },
+    { "delh", "[PLAYER]", "End the body of a player, or of the human you aim at" }
+};
+
+/* The help system is optional. Without it, this plugin answers /help by itself. */
+static int register_topics(SvOwner owner)
+{
+    const void *table = NULL;
+    const SvPatchouli *service;
+    SvPatchouliTopic topic = { sizeof topic };
+    char node[40];
+    uint32_t i;
+    if (api.plugins->borrow(owner, SV_PATCHOULI_API, SV_PATCHOULI_VERSION, &table) != SV_OK || !table) return 0;
+    service = (const SvPatchouli *)table;
+    if (service->size < sizeof *service || service->version != SV_PATCHOULI_VERSION || !service->topic) return 0;
+    for (i = 0; i < sizeof topic_list / sizeof topic_list[0]; ++i) {
+        snprintf(node, sizeof node, "admcmd.%s", topic_list[i].command);
+        topic.command = topic_list[i].command; topic.usage = topic_list[i].usage;
+        topic.summary = topic_list[i].summary; topic.node = node;
+        if (service->topic(owner, &topic) != SV_OK) return 0;
+    }
+    return 1;
+}
+
+static void forget_topics(SvOwner owner)
+{
+    const void *table = NULL;
+    if (api.plugins && api.plugins->size >= offsetof(SvPlugins, borrow) + sizeof api.plugins->borrow &&
+        api.plugins->borrow(owner, SV_PATCHOULI_API, SV_PATCHOULI_VERSION, &table) == SV_OK && table &&
+        ((const SvPatchouli *)table)->size >= sizeof(SvPatchouli))
+        ((const SvPatchouli *)table)->forget(owner);
+}
+
 static SvResult command(const char *name, int minimum, int maximum, SvEntity actor, const char *arguments)
 {
     char node[64], line[256], *rest = line;
@@ -543,20 +604,24 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
         { "delh", cmd_delh }
     };
     uint32_t i;
+    int patchouli;
     SvResult result = of_init(&api, host, owner, OF_CAP(SV_API_GAME_READ) | OF_CAP(SV_API_GAME_WRITE) |
         OF_CAP(SV_API_GAME_PROPS) | OF_CAP(SV_API_CONFIG) | OF_CAP(SV_API_PLUGINS));
     if (result != SV_OK) return result;
     if (api.plugins->size < offsetof(SvPlugins, borrow) + sizeof api.plugins->borrow) return SV_INCOMPATIBLE;
     memset(effects, 0, sizeof effects); pending_npc = 0; reset_sequence = UINT64_MAX;
-    for (i = 0; result == SV_OK && i < sizeof commands / sizeof commands[0]; ++i)
+    patchouli = register_topics(owner);
+    for (i = 0; result == SV_OK && i < sizeof commands / sizeof commands[0]; ++i) {
+        if (patchouli && (!strcmp(commands[i].name, "help") || !strcmp(commands[i].name, "bmhelp"))) continue;
         result = host->command(owner, commands[i].name, SV_COMMAND_PUBLIC, commands[i].callback);
+    }
     if (result == SV_OK) result = host->subscribe(owner, SV_EVENT_TICK, event);
     return result;
 }
 
 static void SV_CALL disable(SvOwner owner)
 {
-    (void)owner; memset(effects, 0, sizeof effects); pending_npc = 0;
+    forget_topics(owner); memset(effects, 0, sizeof effects); pending_npc = 0;
 }
 
 SV_EXPORT SvResult SV_CALL sv_plugin_entry(uint32_t abi, SvPlugin *plugin)

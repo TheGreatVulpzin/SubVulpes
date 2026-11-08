@@ -62,7 +62,7 @@ The ban plugin has separate rules for the level of a target.
 | /round reset | Queue the round reset |
 | /clear [PLAYER] | Send 20 blank private lines to the target or caller |
 | /delh [PLAYER] | End the body of the player, or of the human on the aim line within 100 units. A bot goes away with its body. Never the caller |
-| /help, /bmhelp | Show commands and common forms |
+| /help, /bmhelp | With [Patchouli](plugin-patchouli.md) active, it lists these commands by permission. Without it, the plugin shows a short list itself |
 
 All commands except heal need a living body when their action uses one.
 A place of `/tp` is X, Y and Z. A value can be `~` (the current value) or `~N` (the current value plus N). Each value must be from -32768 to 32768.
