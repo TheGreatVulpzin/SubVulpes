@@ -34,7 +34,8 @@ namespace SubVulpes
             { "read", "Read game data" }, { "write", "Change the game" }, { "storage", "Save its own files" }, { "props", "Change props and objects" },
             { "config", "Read and change server settings" }, { "plugins", "Control other plugins" }, { "ai", "Control the AI characters" },
             { "economy", "Change money" }, { "mission", "Control missions" }, { "settings", "Change the game rules" }, { "engine", "Change engine behavior" },
-            { "shop", "Change the shops" }, { "network", "Send and receive network data" } };
+            { "shop", "Change the shops" }, { "network", "Read the IP addresses of players" },
+            { "server_control", "Save the accounts and stop the server" }, { "console", "Run plugin commands as the server console" } };
 
         // ------------------------------------------------------------ data
 
