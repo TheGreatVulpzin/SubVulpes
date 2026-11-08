@@ -263,6 +263,7 @@ Rows. The range is the range that a `set` or an `add` may leave in the field:
 | `world.wait_time` | world | int | get, set | 60 to 216000 | The ticks of the waiting state of the next round |
 | `world.end_time` | world | int | get, set | 60 to 216000 | The ticks of the end state, before the game resets the round |
 | `account.ban_time` | account | int | get, set, add | 0 to 1000000 | Above 0 the game drops the player of the account at the join and during play. The count falls by 1 for each 36,000 ticks. The value is not saved on disk |
+| `human.despawn` | human | int | get, set | 0 to 3600 | Require health at most -4. Below 2700, the next dead-body tick releases the player. Stop restores the first timer for the same human. See [bot API additions](game/bot-controls.md). |
 
 ### Type rows
 
