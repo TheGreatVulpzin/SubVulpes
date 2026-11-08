@@ -109,9 +109,8 @@ Do not treat the presence of a test case as a passing result.
 ## Limits and owner decisions
 
 The account save request writes the records as they are in memory, as the periodic save does.
-The game copies the balance of each online player into its account only at disconnect and at the end of a round, where `player_calcassets` runs before `saveaccountsserver` (`logic_sim.c`, `player.c`).
-A save request in the middle of a round therefore keeps older balances for online players.
-The owner must decide if the request syncs the balances first, as the round end does.
+In gametypes 3 and 4 the player simulation copies the money of each online player into its account at every tick (`player.c`), with the stocks at their value. So a save in the middle of a round keeps current balances, and the request needs no sync.
+`player_calcassets` is not a sync. It sells the stocks of the player and adds the price of owned vehicles. The game runs it only at the end of a round (`logic_sim.c`), and a save request must not call it.
 
 The owner must define the signal for a requested restart and the launcher response to that signal.
 The launcher currently starts a replacement only after its own Restart action.
