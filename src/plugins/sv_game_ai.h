@@ -36,6 +36,13 @@ typedef struct {
 } SvAiStreetPoint;
 
 typedef struct {
+    uint32_t size;
+    SvAiStreetPoint point;
+    SvVector position, direction;
+    uint32_t next_node;
+} SvAiStreetPosition;
+
+typedef struct {
     uint32_t size, version;
     SvResult (SV_CALL *threats)(SvOwner owner, SvEntity bot, SvAiThreats *out);
     SvResult (SV_CALL *destination)(SvOwner owner, SvEntity bot, SvVector position);
@@ -48,6 +55,9 @@ typedef struct {
     SvResult (SV_CALL *shot_chance)(SvOwner owner, SvEntity bot, uint32_t percent);
     SvResult (SV_CALL *street_route)(SvOwner owner, SvEntity bot, const SvAiStreetPoint *points, uint32_t count);
     SvResult (SV_CALL *seated_target)(SvOwner owner, SvEntity bot, SvEntity player);
+    SvResult (SV_CALL *chase_mode)(SvOwner owner, SvEntity bot, int32_t enabled);
+    SvResult (SV_CALL *street_near)(SvOwner owner, SvVector position, float radius, SvAiStreetPosition *out);
+    SvResult (SV_CALL *possess)(SvOwner owner, SvEntity player, SvEntity bot);
 } SvGameAi;
 #pragma pack(pop)
 

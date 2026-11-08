@@ -31,6 +31,7 @@ FIELD(human_health, sr_humans[i].health)
 FIELD(human_bleeding, sr_humans[i].bleeding)
 FIELD(human_stun, sr_humans[i].stun_timer)
 FIELD(human_protect, sr_humans[i].protect_timer)
+FIELD(human_despawn, sr_humans[i].despawn_timer)
 FIELD(human_bone_velocity, sr_humans[i].bones[s].vel)
 FIELD(human_bone_mass, sr_humans[i].bones[s].mass)
 FIELD(object_velocity, sr_objects[i].vel)
@@ -45,6 +46,30 @@ FIELD(item_ttl, sr_items[i].time_to_live)
 FIELD(object_ttl, sr_objects[i].time_to_live)
 FIELD(object_health, sr_objects[i].health)
 FIELD(account_ban, sr_data_accounts.records[i].ban_time)
+
+static struct {
+    SvOwner owner;
+    SvEntity human;
+    uint64_t reset;
+    int first;
+} despawn_restore[SR_MAX_HUMAN];
+
+static SvResult despawn_check(int32_t index, SvValue value)
+{
+    (void)value;
+    return sr_humans[index].active && sr_humans[index].health <= -4 ? SV_OK : SV_STATE;
+}
+
+static void despawn_note(int32_t index, SvOwner owner)
+{
+    SvEntity human = sv_entity_at(SV_ENTITY_HUMAN, index);
+    if (!despawn_restore[index].owner || despawn_restore[index].human != human ||
+        despawn_restore[index].reset != sv_game_reset_sequence())
+        despawn_restore[index].first = sr_humans[index].despawn_timer;
+    despawn_restore[index].owner = owner;
+    despawn_restore[index].human = human;
+    despawn_restore[index].reset = sv_game_reset_sequence();
+}
 
 /* A row of a table with one value for each type: the record is 0 and the slot is the type. */
 #define TYPE_FIELD(function, expression) \
@@ -287,6 +312,7 @@ static const Prop props[] = {
     { "item.angular_velocity", SV_ENTITY_ITEM, SV_PROP_VECTOR, 1, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0, PUSH_MAX, item_angular_velocity, NULL, NULL, item_spin_add, 0, item_spin_set },
     { "item.frozen", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, item_frozen, frozen_check, frozen_after, NULL },
     { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 50000000, human_bone_mass, NULL, NULL, NULL },
+    { "human.despawn", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, human_despawn, despawn_check, NULL, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };
@@ -512,6 +538,8 @@ static SvResult SV_CALL props_set(SvOwner owner, uint32_t id, SvEntity entity, u
     if (p->check && (result = p->check(record, value)) != SV_OK)
         return result;
     field = p->field(record, slot);
+    if (p->field == human_despawn)
+        despawn_note(record, owner);
     restore_note(p, id, slot, owner, field);
     if (p->type == SV_PROP_INT)
         *(int32_t *)field = value.i;
@@ -561,6 +589,15 @@ static SvResult SV_CALL props_add(SvOwner owner, uint32_t id, SvEntity entity, u
 void sv_props_release(SvOwner owner)
 {
     uint32_t id, slot;
+    int i;
+    for (i = 0; i < SR_MAX_HUMAN; ++i) {
+        if (despawn_restore[i].owner != owner)
+            continue;
+        if (despawn_restore[i].reset == sv_game_reset_sequence() &&
+            sv_entity_resolve(SV_ENTITY_HUMAN, despawn_restore[i].human) == i)
+            sr_humans[i].despawn_timer = despawn_restore[i].first;
+        memset(&despawn_restore[i], 0, sizeof despawn_restore[i]);
+    }
     for (id = 1; id <= ROW_MAX; ++id) {
         const Prop *p = row_at(id);
         if (!p || !p->restore)

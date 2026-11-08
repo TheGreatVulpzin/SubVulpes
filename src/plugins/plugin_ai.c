@@ -6,6 +6,7 @@
 #include "logic.h"
 #include "sr_os.h"
 #include "plugin_lists.h"
+#include "events.h"
 #include <string.h>
 
 typedef struct {
@@ -22,6 +23,21 @@ typedef struct {
 
 static Control controls[SR_MAX_PLAYER];
 static int installed;
+
+static struct {
+    SvOwner owner;
+    SvEntity bot;
+    uint64_t reset;
+    int first, last;
+} chase[SR_MAX_PLAYER];
+
+typedef struct {
+    SvOwner owner;
+    SvEntity player, bot, old_body, body;
+    uint64_t reset;
+} Possession;
+
+static Possession possessions[SR_MAX_PLAYER];
 
 static int finite_value(float value)
 {
@@ -70,6 +86,10 @@ static Control *claim(SvOwner owner, SvEntity bot, int32_t index)
 {
     Control *c = &controls[index];
     if (!live_control(index) || c->owner != owner) {
+        if (live_control(index) && c->aim >= 0 && sr_players[index].is_bot) {
+            sr_players[index].move_mode = 1;
+            sr_players[index].input_buttons &= ~2u;
+        }
         memset(c, 0, sizeof *c);
         c->owner = owner;
         c->bot = bot;
@@ -77,6 +97,15 @@ static Control *claim(SvOwner owner, SvEntity bot, int32_t index)
         c->perception = c->aim = c->chance = -1;
     }
     return c;
+}
+
+static void clear_control(int32_t index)
+{
+    if (live_control(index) && sr_players[index].is_bot && controls[index].aim >= 0) {
+        sr_players[index].move_mode = 1;
+        sr_players[index].input_buttons &= ~2u;
+    }
+    memset(&controls[index], 0, sizeof controls[index]);
 }
 
 SV_LIST_ITEM_CHECK(threat, SvAiThreat, 32);
@@ -204,7 +233,7 @@ static SvResult SV_CALL release(SvOwner owner, SvEntity bot)
     SvResult result = resolve(owner, bot, &index);
     if (result != SV_OK)
         return result;
-    memset(&controls[index], 0, sizeof controls[index]);
+    clear_control(index);
     return SV_OK;
 }
 
@@ -224,6 +253,8 @@ static SvResult set_policy(SvOwner owner, SvEntity bot, int32_t value, int field
     SvResult result = resolve(owner, bot, &index);
     if (result != SV_OK)
         return result;
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
     if ((field == 0 && value != 1 && value != 2) ||
         (field == 1 && value != 0 && value != 1) || (field == 2 && (value < 0 || value > 100)))
         return SV_INVALID;
@@ -283,6 +314,120 @@ static int road_pair_valid(const SvAiStreetPoint *a, const SvAiStreetPoint *b)
         g_city.roads[a->road].ends[a->direction ^ 1] == g_city.roads[b->road].ends[b->direction];
 }
 
+static double distance_squared(SvVector a, SvVector b)
+{
+    double x = (double)a.x - b.x, y = (double)a.y - b.y, z = (double)a.z - b.z;
+    return x * x + y * y + z * z;
+}
+
+static int street_free(SvVector position)
+{
+    int i;
+    for (i = 0; i < SR_MAX_OBJECT; ++i)
+        if (sr_objects[i].active) {
+            vec3 p = sr_objects[i].pos;
+            if (distance_squared(position, (SvVector){p.x, p.y, p.z}) < 256.0)
+                return 0;
+        }
+    for (i = 0; i < SR_MAX_HUMAN; ++i)
+        if (sr_humans[i].active) {
+            vec3 p = sr_humans[i].pos;
+            if (distance_squared(position, (SvVector){p.x, p.y, p.z}) < 16.0)
+                return 0;
+        }
+    return 1;
+}
+
+static SvResult SV_CALL street_near(SvOwner owner, SvVector position, float radius, SvAiStreetPosition *out)
+{
+    SvAiStreetPosition best = {sizeof best};
+    double best_distance;
+    int road, direction, lane, sample, found = 0;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!position_valid(position) || !finite_value(radius) || radius <= 0 || radius > 512 ||
+        !out || out->size < sizeof *out)
+        return SV_INVALID;
+    if (g_city.num_roads < 0 || g_city.num_roads > 512 ||
+        g_city.num_intersections < 0 || g_city.num_intersections > 1024)
+        return SV_FAILED;
+    best_distance = (double)radius * radius;
+    for (road = 0; road < g_city.num_roads; ++road) {
+        const CityRoad *r = &g_city.roads[road];
+        SvAiStreetPoint point = {(uint32_t)road, 0, 0};
+        vec3 start, end;
+        double length, begin, finish, rise, ramp_start, ramp_length, norm, side_norm;
+        int start_extent, end_extent;
+        if (!road_point_valid(&point) || r->width[0] < 0 || r->width[0] > 2 ||
+            r->width[1] < 0 || r->width[1] > 2)
+            return SV_FAILED;
+        start = g_city.intersections[r->ends[0]].pos;
+        end = g_city.intersections[r->ends[1]].pos;
+        if (!position_valid((SvVector){start.x, start.y, start.z}) ||
+            !position_valid((SvVector){end.x, end.y, end.z}) ||
+            !position_valid((SvVector){r->dir.x, r->dir.y, r->dir.z}) ||
+            !position_valid((SvVector){r->side.x, r->side.y, r->side.z}))
+            return SV_FAILED;
+        length = ((double)end.x - start.x) * r->dir.x +
+            ((double)end.y - start.y) * r->dir.y + ((double)end.z - start.z) * r->dir.z;
+        norm = (double)r->dir.x * r->dir.x + (double)r->dir.y * r->dir.y + (double)r->dir.z * r->dir.z;
+        side_norm = (double)r->side.x * r->side.x + (double)r->side.y * r->side.y + (double)r->side.z * r->side.z;
+        start_extent = g_city.intersections[r->ends[0]].extent[r->kind];
+        end_extent = g_city.intersections[r->ends[1]].extent[r->kind + 2];
+        if (norm < 0.999 || norm > 1.001 || side_norm < 0.999 || side_norm > 1.001 ||
+            r->dir.y != 0 || r->side.y != 0 || start_extent < 0 || start_extent > 64 ||
+            end_extent < 0 || end_extent > 64)
+            return SV_FAILED;
+        begin = start_extent * 4.0;
+        finish = length - end_extent * 4.0;
+        rise = (double)end.y - start.y;
+        ramp_length = (rise < 0 ? -rise : rise) * 6.0;
+        /* City ramps use six four-unit tiles for each four-unit height step. */
+        ramp_start = begin + (double)((int)((finish - begin) / 4.0) / 2) * 4.0 - ramp_length * 0.5;
+        if (ramp_length > finish - begin)
+            return SV_FAILED;
+        begin += 8.0;
+        finish -= 8.0;
+        if (finish < begin)
+            continue;
+        for (direction = 0; direction < 2; ++direction)
+            for (lane = 0; lane < r->width[direction]; ++lane) {
+                double shift = (2.0 + lane * 4.0) * (direction ? -1 : 1);
+                double along = ((double)position.x - start.x - shift * r->side.x) * r->dir.x +
+                    ((double)position.y - start.y - shift * r->side.y) * r->dir.y +
+                    ((double)position.z - start.z - shift * r->side.z) * r->dir.z;
+                for (sample = 0; sample < 17; ++sample) {
+                    SvVector candidate;
+                    double distance, height = start.y, ramp, offset = ((sample + 1) / 2) * 8.0;
+                    double at = along + (sample & 1 ? offset : -offset);
+                    if (at < begin) at = begin;
+                    if (at > finish) at = finish;
+                    ramp = at - ramp_start;
+                    if (ramp < 0) ramp = 0;
+                    if (ramp > ramp_length) ramp = ramp_length;
+                    if (ramp_length > 0) height += rise * ramp / ramp_length;
+                    candidate = (SvVector){(float)(start.x + shift * r->side.x + at * r->dir.x),
+                        (float)(height + 1.5),
+                        (float)(start.z + shift * r->side.z + at * r->dir.z)};
+                    distance = distance_squared(position, candidate);
+                    if (!position_valid(candidate) || distance > best_distance || !street_free(candidate))
+                        continue;
+                    best_distance = distance;
+                    best.point = (SvAiStreetPoint){(uint32_t)road, direction, lane};
+                    best.position = candidate;
+                    best.direction = (SvVector){r->dir.x * (direction ? -1 : 1),
+                        r->dir.y * (direction ? -1 : 1), r->dir.z * (direction ? -1 : 1)};
+                    best.next_node = (uint32_t)r->ends[direction ^ 1];
+                    found = 1;
+                }
+            }
+    }
+    if (!found)
+        return SV_NOT_FOUND;
+    *out = best;
+    return SV_OK;
+}
+
 static int seat_state(int32_t index, int driver)
 {
     Human *h;
@@ -300,6 +445,125 @@ static int seat_state(int32_t index, int driver)
     if (driver)
         return h->vehicle_seat == 0 && o->driver == index;
     return h->vehicle_seat >= 1 && h->vehicle_seat <= 3;
+}
+
+static SvResult SV_CALL set_chase(SvOwner owner, SvEntity bot, int32_t enabled)
+{
+    int32_t index;
+    SvResult result = resolve(owner, bot, &index);
+    if (result != SV_OK)
+        return result;
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
+    if (enabled != 0 && enabled != 1)
+        return SV_INVALID;
+    if (!installed || !seat_state(index, 1))
+        return SV_STATE;
+    if (!chase[index].owner || chase[index].bot != bot || chase[index].reset != sv_game_reset_sequence()) {
+        chase[index].first = sr_players[index].ai_chase;
+    } else if (sr_players[index].ai_chase != chase[index].last) {
+        chase[index].first = sr_players[index].ai_chase;
+    }
+    /* A scenario chase remains under game control. */
+    if (!enabled && chase[index].first)
+        return SV_DENIED;
+    chase[index].owner = owner;
+    chase[index].bot = bot;
+    chase[index].reset = sv_game_reset_sequence();
+    chase[index].last = enabled;
+    sr_players[index].ai_chase = enabled;
+    return SV_OK;
+}
+
+static void possession_updates(int player, int bot, int old_body, int body)
+{
+    if (old_body >= 0) createevent_updatehuman(old_body, sr_humans[old_body].player_id);
+    if (body >= 0) createevent_updatehuman(body, sr_humans[body].player_id);
+    if (bot >= 0) createevent_updateplayer(bot);
+    if (player >= 0) createevent_updateplayer(player);
+}
+
+static SvResult SV_CALL possess(SvOwner owner, SvEntity player, SvEntity bot)
+{
+    int32_t receiver, donor;
+    int old_body, body;
+    Possession *lease;
+    SvResult result = resolve(owner, bot, &donor);
+    if (result != SV_OK)
+        return result;
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
+    receiver = sv_entity_resolve(SV_ENTITY_PLAYER, player);
+    if (receiver < 0)
+        return SV_NOT_FOUND;
+    if (sr_players[receiver].is_bot)
+        return SV_DENIED;
+    if (!installed || body_state(receiver) != SV_OK || body_state(donor) != SV_OK)
+        return SV_STATE;
+    old_body = sr_players[receiver].human_id;
+    body = sr_players[donor].human_id;
+    /* An owned body uses the player account. Human.account is only for an orphan. */
+    if (sr_players[receiver].account < 0 || sr_players[receiver].account >= sr_data_accounts.count ||
+        sr_players[receiver].team < 0 || sr_players[receiver].team > 7 ||
+        sr_players[donor].team < 0 || sr_players[donor].team > 7 ||
+        sr_humans[old_body].account != -1 || sr_humans[body].account != -1 ||
+        sr_humans[old_body].team != sr_players[receiver].team ||
+        sr_humans[body].team != sr_players[donor].team ||
+        sr_humans[old_body].health <= 0 || sr_humans[body].health <= 0 ||
+        sr_humans[old_body].vehicle_id != -1 || sr_humans[body].vehicle_id != -1)
+        return SV_STATE;
+    lease = &possessions[receiver];
+    if (lease->owner && lease->reset == sv_game_reset_sequence() && lease->player == player)
+        return SV_CONFLICT;
+    sr_players[receiver].human_id = body;
+    sr_players[donor].human_id = -1;
+    sr_humans[old_body].player_id = -1;
+    sr_humans[body].player_id = receiver;
+    sr_humans[body].team = sr_players[receiver].team;
+    /* Roll back before publishing if a link does not hold. No callback runs between these writes. */
+    if (body_state(receiver) != SV_OK || sr_humans[old_body].player_id != -1 ||
+        sr_players[donor].human_id != -1) {
+        sr_players[receiver].human_id = old_body;
+        sr_players[donor].human_id = body;
+        sr_humans[old_body].player_id = receiver;
+        sr_humans[body].player_id = donor;
+        sr_humans[body].team = sr_players[donor].team;
+        return SV_FAILED;
+    }
+    *lease = (Possession){owner, player, bot, sv_entity_at(SV_ENTITY_HUMAN, old_body),
+        sv_entity_at(SV_ENTITY_HUMAN, body), sv_game_reset_sequence()};
+    possession_updates(receiver, donor, old_body, body);
+    return SV_OK;
+}
+
+static void release_possession(Possession *lease)
+{
+    int player, bot, old_body, body;
+    if (lease->reset != sv_game_reset_sequence())
+        return;
+    player = sv_entity_resolve(SV_ENTITY_PLAYER, lease->player);
+    bot = sv_entity_resolve(SV_ENTITY_PLAYER, lease->bot);
+    old_body = sv_entity_resolve(SV_ENTITY_HUMAN, lease->old_body);
+    body = sv_entity_resolve(SV_ENTITY_HUMAN, lease->body);
+    if (player >= 0 && body >= 0 && sr_players[player].human_id == body &&
+        sr_humans[body].player_id == player) {
+        sr_players[player].human_id = -1;
+        sr_humans[body].player_id = -1;
+    }
+    if (bot >= 0 && sr_players[bot].is_bot && sr_players[bot].human_id == -1 && body >= 0 &&
+        sr_humans[body].player_id == -1 && sr_humans[body].account == -1) {
+        sr_players[bot].human_id = body;
+        sr_humans[body].player_id = bot;
+        sr_humans[body].team = sr_players[bot].team;
+    }
+    if (player >= 0 && sr_players[player].human_id == -1 && old_body >= 0 &&
+        sr_humans[old_body].player_id == -1 && sr_humans[old_body].account == -1 &&
+        sr_humans[old_body].health > 0) {
+        sr_players[player].human_id = old_body;
+        sr_humans[old_body].player_id = player;
+        sr_humans[old_body].team = sr_players[player].team;
+    }
+    possession_updates(player, bot, old_body, body);
 }
 
 static void road_copy(AiWaypoint *out, const SvAiStreetPoint *point, uint32_t previous)
@@ -395,6 +659,8 @@ static SvResult SV_CALL set_seated_target(SvOwner owner, SvEntity bot, SvEntity 
 void sv_ai_install(void)
 {
     memset(controls, 0, sizeof controls);
+    memset(chase, 0, sizeof chase);
+    memset(possessions, 0, sizeof possessions);
     installed = 1;
 }
 
@@ -480,8 +746,16 @@ void sv_ai_after_player(int32_t index)
 {
     if ((uint32_t)index >= SR_MAX_PLAYER || !live_control(index))
         return;
-    if (controls[index].aim == 1) sr_players[index].input_buttons |= 2u;
-    if (controls[index].aim == 0) sr_players[index].input_buttons &= ~2u;
+    if (!sr_players[index].is_bot)
+        return;
+    if (controls[index].aim == 1) {
+        sr_players[index].input_buttons |= 2u;
+        sr_players[index].move_mode = 2;
+    }
+    if (controls[index].aim == 0) {
+        sr_players[index].input_buttons &= ~2u;
+        sr_players[index].move_mode = 1;
+    }
 }
 
 int sv_ai_shot(int32_t index, int passenger)
@@ -517,13 +791,25 @@ int sv_ai_route_next(int32_t index)
 void sv_ai_release_owner(SvOwner owner)
 {
     int i;
-    for (i = 0; i < SR_MAX_PLAYER; ++i)
+    for (i = 0; i < SR_MAX_PLAYER; ++i) {
         if (controls[i].owner == owner)
-            memset(&controls[i], 0, sizeof controls[i]);
+            clear_control(i);
+        if (chase[i].owner == owner) {
+            if (chase[i].reset == sv_game_reset_sequence() &&
+                sv_entity_resolve(SV_ENTITY_PLAYER, chase[i].bot) == i && sr_players[i].is_bot &&
+                sr_players[i].ai_chase == chase[i].last)
+                sr_players[i].ai_chase = chase[i].first;
+            memset(&chase[i], 0, sizeof chase[i]);
+        }
+        if (possessions[i].owner == owner) {
+            release_possession(&possessions[i]);
+            memset(&possessions[i], 0, sizeof possessions[i]);
+        }
+    }
 }
 
 const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
-    set_perception, set_aim, set_chance, set_street_route, set_seated_target
+    set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess
 };

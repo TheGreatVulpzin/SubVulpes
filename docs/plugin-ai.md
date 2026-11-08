@@ -18,10 +18,12 @@ Errors leave game records and output buffers unchanged.
 | `override_input` | Replace four movement axes, buttons, yaw and pitch for 1 to 3600 bot updates. |
 | `release` | Clear the target and input lease. The next update runs the default AI. Repeated release succeeds. |
 | `perception` | Select target body part 1 (torso) or 2 (head). Other indices return `SV_INVALID`. |
-| `aim_mode` | Set input bit 2 after the AI update. Accept only 0 or 1. |
+| `aim_mode` | Accept 0 or 1. After the AI update, 1 sets input mask 2 and player `move_mode` 2. Zero clears the mask and sets mode 1. Release and stop restore mode 1. Mode 2 halves base walking speed. |
 | `shot_chance` | Set the shot chance from 0 to 100 percent. Zero prevents shots. One hundred removes random hesitation. |
 | `street_route` | Set a closed street route of 2 to 64 road points for a seated driver. |
 | `seated_target` | Select the current living body of a player for an armed passenger in seat 1, 2 or 3. |
+| `chase_mode` | Set 0 or 1 for a bot driver. Restore the first value on stop. Refuse a request to clear a chase that the game sets. |
+| `street_near` | Copy one free street position, direction, street point and next node within a radius above 0 and at most 512 units. |
 
 Route coordinates must be finite and within plus or minus 32768 on each axis.
 Invalid coordinates, a null nonempty array or more than 64 points return `SV_INVALID`.
@@ -74,3 +76,5 @@ It requires a live car, a valid passenger seat and a linked gun with one valid m
 Missing equipment or inconsistent seat state returns `SV_STATE`.
 The target setting supplies the selected body part to the existing passenger aim code.
 These methods change no seat link, item parent or vehicle counter.
+
+The bounds, errors, cleanup and client limits of N58, N59, N60 and N27 are in [bot API additions](game/bot-controls.md).
