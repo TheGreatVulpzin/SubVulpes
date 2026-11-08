@@ -146,6 +146,11 @@ typedef struct {
     /* IP bytes use dotted address order. Port uses host order. Spectate keeps the game value (-1 means none).
      * SV_NOT_FOUND for a bot or a player without a connection. Without network, the IP is zero and SV_CONNECTION_MASKED is set. */
     SvResult (SV_CALL *connection)(SvOwner owner, SvEntity player, SvConnectionState *state);
+    /* The number of an account, as the game commands show it: the value of /players and the target of /give and /ban.
+     * It is the position of the account in the account list. The game never removes an account, so the number stays the same
+     * after a restart. It is not the account ID that the client sends, which stays private. SV_NOT_FOUND for a stale
+     * reference. SV_INVALID for a null pointer. */
+    SvResult (SV_CALL *account_number)(SvOwner owner, SvEntity account, uint32_t *number);
 } SvGameRead;
 #pragma pack(pop)
 

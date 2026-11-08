@@ -264,6 +264,18 @@ static SvResult SV_CALL read_account(SvOwner owner, SvEntity entity, SvAccountSt
     return SV_OK;
 }
 
+static SvResult SV_CALL read_account_number(SvOwner owner, SvEntity entity, uint32_t *number)
+{
+    int32_t index;
+    SvResult result = resolve(owner, SV_ENTITY_ACCOUNT, entity, &index);
+    if (result != SV_OK)
+        return result;
+    if (!number)
+        return SV_INVALID;
+    *number = (uint32_t)index;
+    return SV_OK;
+}
+
 static SvResult SV_CALL read_bone(SvOwner owner, SvEntity human, uint32_t bone, SvBoneState *state)
 {
     int32_t index;
@@ -542,5 +554,6 @@ static SvResult SV_CALL read_connection(SvOwner owner, SvEntity entity, SvConnec
 const SvGameRead sv_game_read = {
     sizeof(SvGameRead), SV_GAME_READ_VERSION, read_entities,
     read_player, read_human, read_item, read_object, read_account,
-    read_bone, read_inventory, read_world, read_line, read_aim, read_headline, read_within, read_connection
+    read_bone, read_inventory, read_world, read_line, read_aim, read_headline, read_within, read_connection,
+    read_account_number
 };

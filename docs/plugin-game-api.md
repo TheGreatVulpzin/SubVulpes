@@ -310,6 +310,14 @@ A plugin answers one player with `message_to`. The server filters that event for
 `human.bone_mass` exposes 15 float slots with GET, SET and ADD. The range is 0.5 to 50000000, inclusive.
 Writes change the live bone mass. Invalid slots, nonfinite values and results outside the range fail without a write.
 
+## Account number
+
+`SvGameRead.account_number` gives the number of an account, as the game commands show it. It is the value in `/players`, and the target of `/give` and `/ban`.
+It is the position of the account in the account list. The game never removes an account, so the number stays the same after a restart.
+It is not the account ID that the client sends. That ID is the login of the account and stays private.
+A stale reference returns `SV_NOT_FOUND`. A null output pointer returns `SV_INVALID`. A call from a plugin that is not running returns `SV_STATE`. A failed call leaves the output unchanged.
+A plugin finds the account of a player with `SvPlayerState.account`. To find a player by account number, read each player and compare the numbers.
+
 ## Connection read
 
 `SvGameRead.connection` copies an IPv4 address, port, idle ticks and spectate value into `SvConnectionState`.

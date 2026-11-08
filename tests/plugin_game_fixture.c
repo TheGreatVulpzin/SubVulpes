@@ -267,6 +267,14 @@ static SvResult initial_reads(SvOwner owner)
     CHECK(game->object(owner, object, &o) == SV_OK && o.driver == player);
     CHECK(o.seat_count == 1 && o.occupants[0] == human && !o.occupants[1] && !o.occupants[7]);
     CHECK(game->account(owner, account, &a) == SV_OK && a.money == 1000);
+    {
+        uint32_t number = 99;
+        CHECK(game->account_number(owner, account, &number) == SV_OK && number == 0);
+        number = 99;
+        CHECK(game->account_number(owner, account, NULL) == SV_INVALID);
+        CHECK(game->account_number(owner, player, &number) == SV_NOT_FOUND && number == 99);
+        CHECK(game->account_number(owner + 1, account, &number) == SV_STATE && number == 99);
+    }
     CHECK(game->bone(owner, human, 14, &bone) == SV_OK && bone.bone == 14);
     CHECK(game->bone(owner, human, 15, &bone) == SV_INVALID);
     CHECK(game->inventory(owner, human, 0, &inventory) == SV_OK);
