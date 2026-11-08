@@ -95,16 +95,15 @@ Malformed-salt tests restore the original bytes and timestamps in a `finally` bl
 
 | Required check | Result |
 | --- | --- |
-| Normal server and launcher build | Pending. |
-| Focused infrastructure, game API and lifecycle tests | Pending. |
-| Full rebuild and CTest suite | Pending. |
-| Storage generator check | Pending. |
-| Native dependency check after the normal build | Pending. |
-| Repository check before each commit | Pending. |
-| Security removal proof | Pending. |
-| Documentation lint | Pending. |
+| Normal server and launcher build | `tools\build_hook.bat` built both, on 2026-11-08, after the merge of the three branches. |
+| Focused infrastructure, game API and lifecycle tests | `game-api` failed after the merge. Two causes: the connection check made and deleted a player, which posted an extra leave event, and the property table grew to 38 rows. The fixture was fixed and `game-api` passed. |
+| Full rebuild and CTest suite | 29 of 31 passed on the first run. The two failures were `abi-snapshot` and `game-api`. Both passed after the fixes. The whole suite did not run again in one pass. |
+| Storage generator check | Passed. |
+| Native dependency check after the normal build | Passed: 92 sources, no image or address dispatch. |
+| Repository check before each commit | Passed. |
+| Security removal proof | Not run. |
+| Documentation lint | Not run. |
 
-Record the exact final commands, results and removal cases here after execution.
 Do not treat the presence of a test case as a passing result.
 
 ## Limits and owner decisions
