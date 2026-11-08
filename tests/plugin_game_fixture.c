@@ -1155,7 +1155,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 37);
+    STEP(count == 38);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);
@@ -1639,11 +1639,13 @@ static SvResult game_event(SvOwner owner, const SvEvent *event)
 }
 
 /* The test program posted a spawn, two deaths and a leave. The second death has a human that is gone. */
+/* The first leave event comes from the player that connection_checks makes and deletes, to get a stale reference. It has
+ * no body and tick 0. The four events of post_events follow it. */
 static int event_checks(void)
 {
-    return seen_spawn == 1 && seen_death == 2 && seen_leave == 1 && seen_lost == 0 && seen_other == 0 && seen_n == 4 &&
-        seen_ticks[0] == 11 && seen_ticks[1] == 12 && seen_ticks[2] == 13 && seen_ticks[3] == 14 &&
-        ref_ok[0] == 1 && ref_ok[1] == 1 && ref_ok[2] == -1 && ref_ok[3] == 0;
+    return seen_spawn == 1 && seen_death == 2 && seen_leave == 2 && seen_lost == 0 && seen_other == 0 && seen_n == 5 &&
+        seen_ticks[0] == 0 && seen_ticks[1] == 11 && seen_ticks[2] == 12 && seen_ticks[3] == 13 && seen_ticks[4] == 14 &&
+        ref_ok[0] == -1 && ref_ok[1] == 1 && ref_ok[2] == 1 && ref_ok[3] == -1 && ref_ok[4] == 0;
 }
 
 static SvResult SV_CALL tick(SvOwner owner, const SvEvent *event);

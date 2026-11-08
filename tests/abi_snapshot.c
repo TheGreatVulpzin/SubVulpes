@@ -66,6 +66,7 @@ int main(void)
     RECORD(SvAiThreats);
     RECORD(SvAiInput);
     RECORD(SvAiStreetPoint);
+    RECORD(SvAiStreetPosition);
     RECORD(SvGameAi);
     RECORD(SvCompany);
     RECORD(SvGameEconomy);
@@ -97,7 +98,7 @@ int main(void)
     TABLE(SvGameRead, entities, account_number, 21);
     TABLE(SvGameWrite, message, block_set, 29);
     TABLE(SvGameProps, find, add, 5);
-    TABLE(SvGameAi, threats, seated_target, 11);
+    TABLE(SvGameAi, threats, possess, 14);
     TABLE(SvGameEconomy, company, add_stocks, 4);
     TABLE(SvGameEngine, describe, set, 3);
     TABLE(SvGameMission, slots, cancel, 3);
