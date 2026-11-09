@@ -121,7 +121,7 @@ The setting `notify_target` controls this and defaults to 1. A bot and the calle
 
 ## The log
 
-If the [Logging System](plugin-logging.md) is active, this plugin records every failure there. It also records these commands when they work: `/heavy`, `/give`, `/round`, `/kill`, `/tpall` and `/delh`.
+If the [Aya: Logging System](plugin-ayalog.md) is active, this plugin records every failure there. It also records these commands when they work: `/heavy`, `/give`, `/round`, `/kill`, `/tpall` and `/delh`.
 The line has a fixed form and holds the caller, the target and the result with its number.
 Without that plugin, nothing is recorded and the commands work the same.
 

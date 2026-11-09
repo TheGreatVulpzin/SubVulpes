@@ -1,6 +1,6 @@
-# Logging System
+# Aya: Logging System
 
-Working ID: `sv.logging`. Version: `0.1.0`. This native plugin starts enabled.
+Working ID: `sv.ayalog`. Version: `0.1.0`. This native plugin starts enabled.
 It writes one fixed log line for each action that other plugins record, and it keeps the last 128 lines in memory.
 It needs the read, write, configuration and plugin services. It uses only the public API.
 
@@ -44,7 +44,7 @@ Both settings apply live. A kind that is off is not an error for the caller.
 
 ## For plugin authors
 
-Include `plugins/logging/sv_logging.h`. Find `SV_LOGGING_API` with `SvPlugins.borrow`, in each callback.
+Include `plugins/ayalog/sv_ayalog.h`. Find `SV_LOGGING_API` with `SvPlugins.borrow`, in each callback.
 The version is `SV_LOGGING_VERSION` (1). Check the table size before the call.
 
 | Method | Effect |

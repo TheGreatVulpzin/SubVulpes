@@ -15,7 +15,7 @@ def run(name, steps, permissions=True, patchouli=True, soft=()):
         return
     with tempfile.TemporaryDirectory(prefix="admcmd-", dir=BUILD / "tests") as folder:
         root = Path(folder)
-        plugins = ["sv.patchouli", "sv.logging", "sv.admcmd", "sv.probe", "test.admcmd"]
+        plugins = ["sv.patchouli", "sv.ayalog", "sv.admcmd", "sv.probe", "test.admcmd"]
         if not patchouli:
             plugins.remove("sv.patchouli")
         if permissions:
@@ -23,7 +23,7 @@ def run(name, steps, permissions=True, patchouli=True, soft=()):
         profile, approvals = ["[plugins]"], ["[native]"]
         for plugin in plugins:
             shutil.copytree(BUILD / "plugins" / plugin, root / "plugins" / plugin)
-            profile.append(plugin + "=" + ("enabled" if plugin in ("sv.permissions", "sv.patchouli", "sv.logging", *soft) else "required"))
+            profile.append(plugin + "=" + ("enabled" if plugin in ("sv.permissions", "sv.patchouli", "sv.ayalog", *soft) else "required"))
             binary = next((root / "plugins" / plugin).glob("*.dll"))
             approvals.append(plugin + "=" + hashlib.sha256(binary.read_bytes()).hexdigest())
         (root / "plugins/plugins.ini").write_text("\n".join(profile) + "\n", encoding="ascii")

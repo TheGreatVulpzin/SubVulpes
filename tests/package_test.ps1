@@ -13,6 +13,9 @@ foreach ($name in @('city.sbc', 'block/test.sbl', 'building/test.sbb', 'texture/
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($path)) -Force | Out-Null
     [IO.File]::WriteAllText($path, 'package test fixture')
 }
+# A folder from an earlier run can hold a plugin that was renamed or removed since. Start from nothing.
+$stale = Join-Path $repo "build\package\SubVulpes-server-$version"
+if (Test-Path -LiteralPath $stale) { Remove-Item -LiteralPath $stale -Recurse -Force }
 $package = & $script -Version $version -DataDir $fixture -BuildDir $BuildDir
 $passed = 0
 $prefix = "SubVulpes-server-$version/"

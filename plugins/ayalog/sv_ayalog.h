@@ -1,14 +1,14 @@
-#ifndef SV_LOGGING_H
-#define SV_LOGGING_H
+#ifndef SV_AYALOG_H
+#define SV_AYALOG_H
 
 #include "sv_game.h"
 
-/* Logging System. A plugin records what an administrator did with record(), and the service writes one line in a fixed
+/* Aya: Logging System. A plugin records what an administrator did with record(), and the service writes one line in a fixed
  * format to the server log and keeps the last lines in memory for /logs. Call it only during a host callback, with the
  * owner of the caller. The line looks like this:
  *   ACTION by NAME (acc N) target NAME (acc N) result OK
  *   ACTION by console result FAIL SV_CONFLICT(4) DETAIL */
-#define SV_LOGGING_API "sv.logging"
+#define SV_LOGGING_API "sv.ayalog"
 #define SV_LOGGING_VERSION 1u
 
 enum {
