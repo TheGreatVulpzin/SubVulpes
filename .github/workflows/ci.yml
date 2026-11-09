@@ -23,6 +23,12 @@ jobs:
           git diff --exit-code -- src/include
       - name: Check storage generation
         run: python -I tools/re/gen_storage.py --check
+      - name: Check that the plugin API only grows
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin ${{ github.base_ref }}
+          git show FETCH_HEAD:tests/abi_snapshot.txt > abi_base.txt
+          python -I tools/ci/check_abi_additive.py abi_base.txt tests/abi_snapshot.txt
   windows:
     runs-on: windows-latest
     steps:
@@ -35,3 +41,7 @@ jobs:
         run: tools\build_hook.bat
       - name: Check native server dependencies
         run: python -I tools/ci/check_native.py
+      - name: Run the test suite
+        shell: cmd
+        working-directory: build\server
+        run: ctest -j4 --output-on-failure --timeout 900

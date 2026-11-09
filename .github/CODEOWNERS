@@ -1,0 +1,10 @@
+# The owner reviews every change by default.
+* @TheGreatVulpzin
+
+# The plugin API, its snapshot and the rules that guard it.
+/src/plugins/ @TheGreatVulpzin
+/tests/abi_snapshot.c @TheGreatVulpzin
+/tests/abi_snapshot.txt @TheGreatVulpzin
+/tools/ci/ @TheGreatVulpzin
+/.github/ @TheGreatVulpzin
+/CONTRIBUTING.md @TheGreatVulpzin

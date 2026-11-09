@@ -1,6 +1,6 @@
 # Admin Commands
 
-Working ID: `sv.admcmd`. Version: `0.2.0`. This native plugin starts enabled.
+Working ID: `sv.admcmd`. Version: `0.3.0`. This native plugin starts enabled.
 The manifest holds the ID, display name and version. The host uses that ID for its storage namespace.
 The plugin needs read, write, properties, configuration and plugin services.
 It uses only the public API. It needs no game assets or internal record layouts.
@@ -34,8 +34,7 @@ The ban plugin has separate rules for the level of a target.
 | /god [PLAYER], /imortal [PLAYER] | Toggle health 100 each tick, with no god mode flag |
 | /heal [PLAYER\|all] | Set health 100, bleeding 0 and stun 0. An unreleased body can recover |
 | /kill [PLAYER] | Set health -5 and bleeding 1 |
-| /arm N [PLAYER] | Give one weapon in a free hand |
-| /kit N [PLAYER] | Give the weapon, four magazines and two bandages |
+| /arm [N] [PLAYER] | Give a weapon in a free hand with one loaded magazine and three spare magazines. N 1 to 6, default 2 (M-16) |
 | /item N [PLAYER] | Give item type 0 to 25 in a free hand |
 | /vehicle N [PLAYER], /car N [PLAYER] | Make vehicle type 0 to 11 four units in front of the target's head |
 | /team N [PLAYER] | Set team 0 to 5 |
@@ -62,17 +61,19 @@ The ban plugin has separate rules for the level of a target.
 | /round reset | Queue the round reset |
 | /clear [PLAYER] | Send 20 blank private lines to the target or caller |
 | /delh [PLAYER] | End the body of the player, or of the human on the aim line within 100 units. A bot goes away with its body. Never the caller |
-| /help, /bmhelp | Show commands and common forms |
+| /help, /bmhelp | With [Patchouli](plugin-patchouli.md) active, it lists these commands by permission. Without it, the plugin shows a short list itself |
 
 All commands except heal need a living body when their action uses one.
 A place of `/tp` is X, Y and Z. A value can be `~` (the current value) or `~N` (the current value plus N). Each value must be from -32768 to 32768.
 The game does not check walls at the place, so the place can be inside a wall.
 A teleport takes a seated target out of its vehicle first, as freeze does.
-Inventory commands keep existing items. A full hand or pocket refuses the request.
-A failed kit removes its new items and keeps the previous inventory.
+Inventory commands never remove or replace an item that the target holds.
+`/arm` and `/item` use any free hand. If both hands are full, nothing is given.
+`/arm` gives the parts that fit. A full pocket skips only its spare magazines, and the answer says how many it skipped.
+A failed weapon removes the items that the command made.
 The completed items, vehicles and bots stay after the plugin stops.
 
-## Weapons and kits
+## Weapons
 
 | N | Weapon | Game item type |
 | ---: | --- | ---: |
@@ -83,8 +84,8 @@ The completed items, vehicles and bots stay after the plugin stops.
 | 5 | Uzi | 8 |
 | 6 | 9mm | 10 |
 
-Arm gives the weapon alone. Kit loads one magazine into it and puts three spare magazines in pockets 3 and 4.
-The two bandages use pocket 6. Kit does not replace an occupied hand or pocket.
+Arm loads one magazine into the weapon and puts up to three spare magazines in pockets 3 and 4.
+`/arm` with no number gives the M-16, as the base command does. Use `/item` for a bandage.
 With this plugin active, its `/arm` replaces the inherited core command.
 Item numbers are game types. Type 24 is a key in this server, despite the knife name in the legacy catalog.
 The original client supplies the existing models and sounds.
@@ -110,7 +111,7 @@ The train system owns vehicle types 12 and 13, so vehicle creation stops at 11.
 `/deactivate` has no supported game effect.
 These commands are absent from this plugin.
 
-The SDK scenarios check every command, all six weapons, the kit contents and optional targets.
+The SDK scenarios check every command, all six weapons, the loaded and spare magazines, partial gifts and optional targets.
 They also check bots, partial names, bad targets, missing nodes, numeric bounds and permission fallback.
 Native contract tests check API sizes, incompatible services, command text bounds and the heavy input range.
 See `plugin-official-progress.md` for test results and removal proofs.

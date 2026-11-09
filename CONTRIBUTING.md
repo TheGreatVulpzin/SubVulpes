@@ -22,6 +22,8 @@ When your change adds to the API:
 
 - **Add a row to the need list** in `docs/legacy-modules.md`, or mark the existing row as done.
 - **Put new methods at the end** of their table. Plugins check the table size before they call a method.
+- **Do not make a record bigger.** The server refuses a record that is smaller than its own. A plugin built before your change would get `SV_INVALID`. Add a new record or a new method instead.
+- **Do not change what a method means.** A new error code, a new limit or a new value can surprise a plugin that already works. Add a new method or row. If you cannot, explain why on the Pull Request.
 - **Say how each method behaves.** Does it run in a safe callback or anywhere? What are its bounds? What does it return when it fails (`SV_INVALID`, `SV_DENIED`, `SV_STATE`, `SV_NOT_FOUND`)? Write that in the docs and test each failure.
 - **Undo your writes.** If a method changes the game, the change goes away when the plugin stops.
 - **Copy data out.** Plugins should never get a pointer into the game, a client's account ID or a raw address.
@@ -31,5 +33,7 @@ When your change adds to the API:
 Security checks (permissions, memory, overflow, privacy) also need a removal proof: take the check out and show that a test fails.
 
 Run the full test suite after a fresh rebuild. In the pull request, list what you ran and what you couldn't run.
+
+On every pull request, GitHub runs the checks of the repository, builds the server and runs the whole test suite. A check named `Check that the plugin API only grows` fails if the ABI snapshot loses or changes a line. The first pull request from a new contributor waits until the owner approves the workflows.
 
 The Branch/Pull Request will be reviewed fully and we're going to see if it fits our standards for approval.

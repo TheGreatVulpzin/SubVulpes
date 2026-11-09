@@ -46,6 +46,8 @@ sv_add_plugin(sv-status ID sv.status MANIFEST "${CMAKE_SOURCE_DIR}/plugins/statu
     SOURCES plugins/status/status.c OFFICIAL)
 sv_add_plugin(sv-permissions ID sv.permissions MANIFEST "${CMAKE_SOURCE_DIR}/plugins/permissions/plugin.ini"
     SOURCES plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c OFFICIAL)
+sv_add_plugin(sv-patchouli ID sv.patchouli MANIFEST "${CMAKE_SOURCE_DIR}/plugins/patchouli/plugin.ini"
+    SOURCES plugins/patchouli/patchouli.c plugins/common/official.c plugins/common/permissions.c OFFICIAL)
 sv_add_plugin(sv-admcmd ID sv.admcmd MANIFEST "${CMAKE_SOURCE_DIR}/plugins/admcmd/plugin.ini"
     SOURCES plugins/admcmd/admcmd.c plugins/common/official.c plugins/common/permissions.c OFFICIAL)
 set_property(SOURCE plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c
@@ -54,7 +56,11 @@ set_property(SOURCE plugins/permissions/permissions.c plugins/permissions/groups
 set_property(SOURCE plugins/admcmd/admcmd.c plugins/common/permissions.c plugins/common/official.c
     plugins/permissions/permissions.c tests/official/admcmd_probe.c tests/official/admcmd_unit_test.c
     APPEND PROPERTY OBJECT_DEPENDS
-    "${SV_PLUGIN_HEADERS};${CMAKE_SOURCE_DIR}/plugins/common/permissions.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h;${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h")
+    "${SV_PLUGIN_HEADERS};${CMAKE_SOURCE_DIR}/plugins/patchouli/sv_patchouli.h;${CMAKE_SOURCE_DIR}/plugins/common/permissions.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h;${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h")
+set_property(SOURCE tests/official/patchouli_unit_test.c APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_SOURCE_DIR}/plugins/patchouli/patchouli.c")
+set_property(SOURCE plugins/patchouli/patchouli.c APPEND PROPERTY OBJECT_DEPENDS
+    "${SV_PLUGIN_HEADERS};${CMAKE_SOURCE_DIR}/plugins/patchouli/sv_patchouli.h;${CMAKE_SOURCE_DIR}/plugins/common/permissions.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h;${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h")
 set_property(SOURCE tests/official/admcmd_unit_test.c APPEND PROPERTY OBJECT_DEPENDS
     "${CMAKE_SOURCE_DIR}/plugins/admcmd/admcmd.c")
 # Package inspection uses the installer shipped beside the server.
@@ -184,11 +190,19 @@ if(BUILD_TESTING)
     add_executable(admcmd-unit-test tests/official/admcmd_unit_test.c plugins/common/official.c plugins/common/permissions.c)
     target_include_directories(admcmd-unit-test PRIVATE src/plugins)
     target_compile_definitions(admcmd-unit-test PRIVATE _CRT_SECURE_NO_WARNINGS
-        SV_OFFICIAL_ID="sv.admcmd" SV_OFFICIAL_VERSION="0.2.0")
+        SV_OFFICIAL_ID="sv.admcmd" SV_OFFICIAL_VERSION="0.3.0")
     target_compile_options(admcmd-unit-test PRIVATE /W4 /WX /utf-8)
     set_target_properties(admcmd-unit-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME admcmd-contracts COMMAND admcmd-unit-test)
     set_tests_properties(admcmd-contracts PROPERTIES TIMEOUT 10)
+    add_executable(patchouli-unit-test tests/official/patchouli_unit_test.c plugins/common/official.c plugins/common/permissions.c)
+    target_include_directories(patchouli-unit-test PRIVATE src/plugins)
+    target_compile_definitions(patchouli-unit-test PRIVATE _CRT_SECURE_NO_WARNINGS
+        SV_OFFICIAL_ID="sv.patchouli" SV_OFFICIAL_VERSION="0.1.0")
+    target_compile_options(patchouli-unit-test PRIVATE /W4 /WX /utf-8)
+    set_target_properties(patchouli-unit-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME patchouli-contracts COMMAND patchouli-unit-test)
+    set_tests_properties(patchouli-contracts PROPERTIES TIMEOUT 10)
     add_executable(jukebox-instruments-test tests/jukebox_instruments_test.c plugins/jukebox/instruments.c)
     target_include_directories(jukebox-instruments-test PRIVATE plugins/jukebox)
     target_compile_definitions(jukebox-instruments-test PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -224,6 +238,7 @@ if(BUILD_TESTING)
     add_test(NAME abi-snapshot COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/test_abi_snapshot.py" "$<TARGET_FILE:sv-abi-snapshot>"
         "${CMAKE_SOURCE_DIR}/tests/abi_snapshot.txt")
+    add_test(NAME abi-additive COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_abi_additive.py")
     add_test(NAME sdk-runtime-download COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/sdk/test_runtime_download.py")
     add_test(NAME plugin-lifecycle COMMAND "${Python3_EXECUTABLE}"
