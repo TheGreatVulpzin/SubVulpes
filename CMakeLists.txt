@@ -190,7 +190,7 @@ if(BUILD_TESTING)
     add_executable(admcmd-unit-test tests/official/admcmd_unit_test.c plugins/common/official.c plugins/common/permissions.c)
     target_include_directories(admcmd-unit-test PRIVATE src/plugins)
     target_compile_definitions(admcmd-unit-test PRIVATE _CRT_SECURE_NO_WARNINGS
-        SV_OFFICIAL_ID="sv.admcmd" SV_OFFICIAL_VERSION="0.2.0")
+        SV_OFFICIAL_ID="sv.admcmd" SV_OFFICIAL_VERSION="0.3.0")
     target_compile_options(admcmd-unit-test PRIVATE /W4 /WX /utf-8)
     set_target_properties(admcmd-unit-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME admcmd-contracts COMMAND admcmd-unit-test)

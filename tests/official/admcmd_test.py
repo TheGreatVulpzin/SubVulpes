@@ -49,28 +49,35 @@ for selection, item_type in enumerate(range(0, 12, 2), 1):
     weapons += f"""
 say Root /arm {selection} Guest
 console admprobe inventory Guest
-expect log "ADM_ITEM Guest slot=0 type={item_type} children=0"
+expect log "ADM_ITEM Guest slot=0 type={item_type} children=1"
 console admprobe empty Guest
 """
 weapons += """
-console kit 2 Guest
-expect log "kit done."
+console arm 2 Guest
+expect log "arm done."
 console admprobe inventory Guest
 expect log "ADM_ITEM Guest slot=0 type=2 children=1"
 expect log "ADM_ITEM Guest slot=3 type=3 children=0"
 expect log "ADM_ITEM Guest slot=4 type=3 children=0"
-expect count 2 "ADM_ITEM Guest slot=6 type=12 children=0"
 console admprobe empty Guest
 console item 12 Guest
 expect log "item done."
 console admprobe inventory Guest
 expect log "ADM_ITEM Guest slot=0 type=12 children=0"
+console arm 2 Guest
+console admprobe inventory Guest
+expect log "ADM_ITEM Guest slot=1 type=2 children=1"
+console arm 3 Guest
+expect log "arm failed: occupied slot or request already active."
 say Root /arm 1
 console admprobe inventory Root
-expect log "ADM_ITEM Root slot=0 type=0 children=0"
-console item 13 Guest
-console kit 2 Guest
-expect log "kit failed: occupied slot or request already active."
+expect log "ADM_ITEM Root slot=0 type=0 children=1"
+console admprobe empty Root
+say Root /arm
+console admprobe inventory Root
+expect log "ADM_ITEM Root slot=0 type=2 children=1"
+console arm
+expect log "arm failed: invalid input. Use /help."
 """
 run("weapons", weapons)
 
@@ -148,7 +155,7 @@ expect prop human.health GuestTwo 100
 console turn 0 Guest
 expect log "turn done."
 console help
-expect log "/arm N [PLAYER] - Give one weapon"
+expect log "/arm [N] [PLAYER] - Weapon with 4 magazines"
 expect log "/tp [PLAYER] PLAYER|X Y Z"
 say Root /clear
 say Root /clear Guest
@@ -317,7 +324,7 @@ expect log "Several players match."
 console heal Missing
 expect log "heal failed: target or service not found."
 """
-for command, lower, upper in [("arm", 1, 6), ("kit", 1, 6), ("item", 0, 25), ("vehicle", 0, 11),
+for command, lower, upper in [("arm", 1, 6), ("item", 0, 25), ("vehicle", 0, 11),
                               ("team", 0, 5), ("sound", 0, 46), ("turn", 0, 65535)]:
     for value in (lower - 1, upper + 1, "99999999999999999999999999999", "1x"):
         bounds += f"console {command} {value} Root\n"
@@ -338,7 +345,7 @@ console heal AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 expect count 2 "heal failed: invalid input. Use /help."
 console arm
 expect count 6 "arm failed: invalid input. Use /help."
-expect count 2 "arm: use /help for the command form."
+expect count 1 "arm: use /help for the command form."
 expect count 2 "heal: use /help for the command form."
 """
 run("bounds", bounds)
@@ -354,22 +361,22 @@ say Root /heal Guest
 expect prop human.health Guest 100
 say Root /arm 1 Guest
 console admprobe inventory Guest
-expect log "ADM_ITEM Guest slot=0 type=0 children=0"
+expect log "ADM_ITEM Guest slot=0 type=0 children=1"
 console give admin Guest
 expect log "give failed: target or service not found."
 """, permissions=False)
 
-run("kit-rollback", """
+# A full pocket skips only its magazines. The weapon and the loaded magazine stay.
+run("arm-partial", """
 spawn player Root
 tick 1
-console admprobe block Root
-console kit 1 Root
-expect log "kit failed: occupied slot or request already active."
+console admprobe pockets Root
+console arm 1 Root
+expect log "arm done."
+expect log "Gave AK-47 to Root with 1 loaded and 0 spare magazines."
+expect log "Skipped 3 magazines: no room."
 console admprobe inventory Root
-expect count 2 "ADM_ITEM Root slot=6 type=12 children=0"
-expect no-log "ADM_ITEM Root slot=0"
-expect no-log "ADM_ITEM Root slot=3"
-expect no-log "ADM_ITEM Root slot=4"
+expect log "ADM_ITEM Root slot=0 type=0 children=1"
 """)
 
 run("optional", """
@@ -422,5 +429,5 @@ run("help-fallback", """
 spawn player Root
 tick 1
 console help
-expect log "arm/kit 1=AK47"
+expect log "arm 1=AK47"
 """, patchouli=False)

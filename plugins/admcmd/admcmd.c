@@ -83,38 +83,71 @@ static SvResult ahead(const SvPlayerState *player, float distance, SvVector *out
     return result;
 }
 
-static SvResult give_item(const SvPlayerState *player, uint32_t type, int kit)
+static const char *const weapon_name[6] = { "AK-47", "M-16", "Magnum", "MP5", "Uzi", "9mm" };
+
+static void discard(SvEntity item)
+{
+    if (!item) return;
+    api.write->item_detach(api.owner, item);
+    api.write->item_remove(api.owner, item);
+}
+
+/* Finds a hand with no item. Returns 0 and sets the result when both hands are full or the read fails. */
+static int free_hand(const SvPlayerState *player, uint32_t *hand, SvResult *result)
+{
+    SvInventoryState inventory = { sizeof inventory };
+    uint32_t i;
+    for (i = 0; i < 2; ++i) {
+        *result = api.read->inventory(api.owner, player->human, i, &inventory);
+        if (*result != SV_OK) return 0;
+        if (!inventory.count) { *hand = i; return 1; }
+    }
+    *result = SV_CONFLICT;
+    return 0;
+}
+
+/* One item in a free hand. It never replaces an item that the target holds. */
+static SvResult give_item(const SvPlayerState *player, uint32_t type)
 {
     SvHumanState human = { sizeof human };
-    SvInventoryState inventory = { sizeof inventory };
-    SvEntity made[7] = { 0 };
+    SvEntity item = 0;
+    uint32_t hand = 0;
     SvResult result = body(player, &human);
-    uint32_t hand, i, count = kit ? 7u : 1u;
-    if (result != SV_OK) return result;
-    for (hand = 0; hand < 2; ++hand) {
-        result = api.read->inventory(api.owner, player->human, hand, &inventory);
-        if (result != SV_OK) return result;
-        if (!inventory.count) break;
-    }
-    if (hand == 2) return SV_CONFLICT;
-    for (i = 0; i < count; ++i) {
-        uint32_t item_type = !i ? type : i < 5 ? type + 1 : 12;
-        result = api.write->item_create(api.owner, item_type, human.position, &made[i]);
-        if (result != SV_OK) break;
-        if (i == 1) result = api.write->item_attach(api.owner, made[0], made[i]);
-        else {
-            uint32_t slot = !i ? hand : i < 5 ? 3 + (i - 2) / 2 : 6;
-            result = api.write->item_equip(api.owner, made[i], player->human, slot);
-        }
-        if (result != SV_OK) break;
-    }
-    if (result != SV_OK) {
-        for (i = count; i > 0; --i) if (made[i - 1]) {
-            api.write->item_detach(api.owner, made[i - 1]);
-            api.write->item_remove(api.owner, made[i - 1]);
-        }
-    } else for (i = 0; i < count; ++i) api.write->disown(api.owner, made[i]);
+    if (result != SV_OK || !free_hand(player, &hand, &result)) return result;
+    result = api.write->item_create(api.owner, type, human.position, &item);
+    if (result == SV_OK) result = api.write->item_equip(api.owner, item, player->human, hand);
+    if (result == SV_OK) api.write->disown(api.owner, item);
+    else discard(item);
     return result;
+}
+
+/* A weapon in a free hand, one loaded magazine and up to three spare magazines in pockets 3 and 4.
+ * A part that does not fit is skipped and the others stay. A failed weapon removes everything made here. */
+static SvResult give_weapon(SvEntity actor, const SvPlayerState *player, uint32_t number)
+{
+    SvHumanState human = { sizeof human };
+    SvEntity weapon = 0, magazine;
+    uint32_t type = (number - 1) * 2, hand = 0, i, loaded = 0, spare = 0;
+    SvResult result = body(player, &human);
+    if (result != SV_OK || !free_hand(player, &hand, &result)) return result;
+    result = api.write->item_create(api.owner, type, human.position, &weapon);
+    if (result == SV_OK) result = api.write->item_equip(api.owner, weapon, player->human, hand);
+    if (result != SV_OK) { discard(weapon); return result; }
+    for (i = 0; i < 4; ++i) {
+        magazine = 0;
+        result = api.write->item_create(api.owner, type + 1, human.position, &magazine);
+        if (result == SV_OK)
+            result = !i ? api.write->item_attach(api.owner, weapon, magazine)
+                        : api.write->item_equip(api.owner, magazine, player->human, i < 3 ? 3u : 4u);
+        if (result != SV_OK) { discard(magazine); continue; }
+        api.write->disown(api.owner, magazine);
+        if (!i) loaded = 1; else ++spare;
+    }
+    api.write->disown(api.owner, weapon);
+    of_tell(&api, actor, "Gave %s to %s with %u loaded and %u spare magazines.", weapon_name[number - 1],
+            player->name, loaded, spare);
+    if (loaded + spare < 4) of_tell(&api, actor, "Skipped %u magazines: no room.", 4 - loaded - spare);
+    return SV_OK;
 }
 
 static SvResult heavy(const SvPlayerState *player)
@@ -281,11 +314,11 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
     int32_t number = 0;
     SvVector position;
     if (!strcmp(name, "help")) {
-        of_tell(&api, actor, "god heal kill item vehicle arm kit team heavy tp goto bring");
+        of_tell(&api, actor, "god heal kill item vehicle arm team heavy tp goto bring");
         of_tell(&api, actor, "npc sound give turn herobrine players where tpall freeze");
         of_tell(&api, actor, "unfreeze say round clear who id help. Optional target last.");
-        of_tell(&api, actor, "arm/kit 1=AK47 2=M16 3=Magnum 4=MP5 5=Uzi 6=9mm");
-        of_tell(&api, actor, "arm N [PLAYER]: weapon. kit N [PLAYER]: full loadout.");
+        of_tell(&api, actor, "arm 1=AK47 2=M16 3=Magnum 4=MP5 5=Uzi 6=9mm");
+        of_tell(&api, actor, "arm [N] [PLAYER]: weapon and 4 magazines. item N [PLAYER].");
         of_tell(&api, actor, "tp [PLAYER] PLAYER|X Y Z; bring PLAYER [DEST]; heal [PLAYER|all]");
         of_tell(&api, actor, "A player is an account number, id:N or a name.");
         of_tell(&api, actor, "give money PLAYER N; give admin PLAYER; round reset");
@@ -346,11 +379,14 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
         position = place.position; position.x += 2;
         return move(&player, position);
     }
-    if (!strcmp(name, "item") || !strcmp(name, "arm") || !strcmp(name, "kit") || !strcmp(name, "vehicle") ||
+    if (!strcmp(name, "arm") && !args->count) {
+        number = 2;
+        result = target(actor, "", &player);
+    } else if (!strcmp(name, "item") || !strcmp(name, "arm") || !strcmp(name, "vehicle") ||
         !strcmp(name, "team") || !strcmp(name, "sound") || !strcmp(name, "turn")) {
         int32_t low = 0, high = 0;
         if (!strcmp(name, "item")) high = 25;
-        else if (!strcmp(name, "arm") || !strcmp(name, "kit")) { low = 1; high = 6; }
+        else if (!strcmp(name, "arm")) { low = 1; high = 6; }
         else if (!strcmp(name, "vehicle")) high = 11;
         else if (!strcmp(name, "team")) high = 5;
         else if (!strcmp(name, "sound")) high = 46;
@@ -409,8 +445,8 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
         return SV_OK;
     }
     if (!strcmp(name, "heavy")) return heavy(&player);
-    if (!strcmp(name, "item")) return give_item(&player, (uint32_t)number, 0);
-    if (!strcmp(name, "arm") || !strcmp(name, "kit")) return give_item(&player, (uint32_t)(number - 1) * 2, !strcmp(name, "kit"));
+    if (!strcmp(name, "item")) return give_item(&player, (uint32_t)number);
+    if (!strcmp(name, "arm")) return give_weapon(actor, &player, (uint32_t)number);
     if (!strcmp(name, "npc")) {
         if (pending_npc) return SV_CONFLICT;
         pending_npc = player.entity; return SV_OK;
@@ -451,8 +487,7 @@ static const struct { const char *command, *usage, *summary; } topic_list[] = {
     { "god", "[PLAYER]", "Toggle health 100 each tick. Also /imortal" },
     { "heal", "[PLAYER|all]", "Set health 100, bleeding 0 and stun 0" },
     { "kill", "[PLAYER]", "Set health -5 and bleeding 1" },
-    { "arm", "N [PLAYER]", "Give one weapon: 1 AK47, 2 M16, 3 Magnum, 4 MP5, 5 Uzi, 6 9mm" },
-    { "kit", "N [PLAYER]", "Give a weapon, four magazines and two bandages" },
+    { "arm", "[N] [PLAYER]", "Weapon with 4 magazines: 1 AK47 2 M16 3 Magnum 4 MP5 5 Uzi 6 9mm" },
     { "item", "N [PLAYER]", "Give item type 0 to 25 in a free hand" },
     { "vehicle", "N [PLAYER]", "Make vehicle type 0 to 11 in front of the target. Also /car" },
     { "team", "N [PLAYER]", "Set team 0 to 5" },
@@ -540,7 +575,7 @@ static SvResult command(const char *name, int minimum, int maximum, SvEntity act
     static SvResult SV_CALL cmd_##name(SvOwner owner, uint64_t actor, const char *args) \
     { (void)owner; return command(#name, low, high, actor, args); }
 COMMAND(god, 0, 1) COMMAND(heal, 0, 1) COMMAND(kill, 0, 1) COMMAND(item, 1, 2)
-COMMAND(vehicle, 1, 2) COMMAND(arm, 1, 2) COMMAND(kit, 1, 2) COMMAND(team, 1, 2)
+COMMAND(vehicle, 1, 2) COMMAND(arm, 0, 2) COMMAND(team, 1, 2)
 COMMAND(heavy, 0, 1) COMMAND(tp, 0, 4) COMMAND(goto, 1, 4) COMMAND(bring, 1, 2)
 COMMAND(npc, 0, 1) COMMAND(sound, 1, 2) COMMAND(give, 2, 3) COMMAND(turn, 1, 2)
 COMMAND(herobrine, 0, 1) COMMAND(help, 0, 0) COMMAND(players, 0, 1) COMMAND(where, 0, 1)
@@ -595,7 +630,7 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
 {
     static const struct { const char *name; SvCommandFn callback; } commands[] = {
         { "god", cmd_god }, { "imortal", cmd_god }, { "heal", cmd_heal }, { "kill", cmd_kill },
-        { "item", cmd_item }, { "vehicle", cmd_vehicle }, { "car", cmd_vehicle }, { "arm", cmd_arm }, { "kit", cmd_kit },
+        { "item", cmd_item }, { "vehicle", cmd_vehicle }, { "car", cmd_vehicle }, { "arm", cmd_arm },
         { "team", cmd_team }, { "heavy", cmd_heavy }, { "heavydude", cmd_heavy }, { "tp", cmd_tp }, { "goto", cmd_goto },
         { "bring", cmd_bring }, { "npc", cmd_npc }, { "sound", cmd_sound }, { "give", cmd_give }, { "turn", cmd_turn },
         { "herobrine", cmd_herobrine }, { "help", cmd_help }, { "bmhelp", cmd_help }, { "players", cmd_players },

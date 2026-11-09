@@ -30,7 +30,7 @@ All commands need the admin flag, a living player and, where noted, a body on fo
 | `/item N` | Make item type 0 to 26 and put it in a free hand. A knife (24) starts in attack state. Fail without cost when there is no free hand or item. | N6 |
 | `/vehicle N` | Make vehicle type 0 to 13 four units in front of the head, color 0. Do not seat the player. | N7 |
 | `/arm N [PLAYER]` | Select one of six weapons and give it in a free hand. | N6 |
-| `/kit N [PLAYER]` | Give the selected weapon, four magazines and two bandages. | N6 |
+| `/kit N [PLAYER]` | Give the selected weapon, four magazines and two bandages. Removed from `sv.admcmd` 0.3.0 by the owner: `/arm` gives the weapon with its magazines, and `/item` gives a bandage. | N6 |
 | `/heavydude` | Multiply the 15 physical values of the body by 100000, once. A joke command. | N19 |
 | `/delh` | Delete the nearest human on the aim line, up to 100 units, never the caller. | N10, N8 |
 | `/team N` | Set team 0 to 5 and send the update. | N3 |

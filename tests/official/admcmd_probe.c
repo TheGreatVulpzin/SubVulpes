@@ -50,6 +50,20 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
         }
         return SV_OK;
     }
+    if (!strcmp(operation, "pockets")) {
+        /* Fill pockets 3 and 4 until the game refuses another item. */
+        unsigned pocket, i;
+        for (pocket = 3; pocket < 5; ++pocket)
+            for (i = 0; i < 12; ++i) {
+                SvEntity item;
+                CHECK(api.write->item_create(owner, 12, human.position, &item) == SV_OK);
+                if (api.write->item_equip(owner, item, player.human, pocket) != SV_OK) {
+                    api.write->item_remove(owner, item);
+                    break;
+                }
+            }
+        return SV_OK;
+    }
     if (!strcmp(operation, "state")) {
         SvBoneState bone = { sizeof bone };
         CHECK(api.read->bone(owner, player.human, 14, &bone) == SV_OK);
