@@ -255,6 +255,16 @@ namespace SubVulpes
             public long Size;
             public bool Remote;
             public readonly List<string> Images = new List<string>(), ImageRemote = new List<string>();
+            // Every version that the index lists, newest first. The fields above describe the newest one.
+            public readonly List<StoreVersion> Versions = new List<StoreVersion>();
+        }
+
+        // One version of a plugin in the Workshop index.
+        internal sealed class StoreVersion
+        {
+            public string Version = "", PackageFile = "", Sha256 = "", ServerMin = "", Channel = "stable";
+            public long Size;
+            public int MinApi = 1;
         }
 
         readonly List<CatalogEntry> catalog = new List<CatalogEntry>();
@@ -449,16 +459,18 @@ namespace SubVulpes
         {
             PluginMetadata installed = plugins.FirstOrDefault(p => p.Id == c.Id);
             if (pendingInstalls.Any(x => x[3] == c.Id)) return L("Installs at the next start", false, true);
+            StoreVersion best = BestVersion(c);
             if (installed != null) {
-                // An installed plugin shows its state, an Update button when the Workshop has a newer version, and Uninstall.
+                // An installed plugin shows its state, an Update button when the Workshop has a newer version that this server can run,
+                // a choice of version, and Uninstall.
                 var row = new Panel { Tag = "panel" };
                 var uninstall = new FlatButton("Uninstall") { Enabled = installed.Required != "1", Width = ActionWidth };
                 string id = c.Id;
                 uninstall.Click += async delegate { await UninstallPlugin(id); ReshowCatalog(c); };
                 int left;
-                if (c.Remote && NewerVersion(c.Version, installed.Version)) {
+                if (c.Remote && best != null && NewerVersion(best.Version, installed.Version)) {
                     var update = new FlatButton("Update") { Glyph = "download", Location = new Point(0, 0), Width = ActionWidth };
-                    update.Click += async delegate { await InstallFromStore(c); ReshowCatalog(c); };
+                    update.Click += async delegate { await InstallFromStore(c, best); ReshowCatalog(c); };
                     row.Controls.Add(update);
                     left = update.Width;
                 } else {
@@ -473,13 +485,25 @@ namespace SubVulpes
                 }
                 uninstall.Location = new Point(left + 12, 0);
                 row.Controls.Add(uninstall);
-                row.Size = new Size(uninstall.Right, uninstall.Height);
+                int right = uninstall.Right;
+                FlatButton choose = VersionButton(c, installed);
+                if (choose != null) { choose.Location = new Point(right + 12, 0); row.Controls.Add(choose); right = choose.Right; }
+                row.Size = new Size(right, uninstall.Height);
                 return row;
             }
             if (c.Remote) {
-                var get = new FlatButton("Install") { Glyph = "download", Width = ActionWidth };
-                get.Click += async delegate { await InstallFromStore(c); ReshowCatalog(c); };
-                return get;
+                var get = new FlatButton("Install") { Glyph = "download", Width = ActionWidth, Enabled = best != null };
+                if (best == null) UI.Tips.SetToolTip(get, "No version of this plugin runs on this server.");
+                get.Click += async delegate { await InstallFromStore(c, best); ReshowCatalog(c); };
+                FlatButton pick = VersionButton(c, null);
+                if (pick == null) return get;
+                var pair = new Panel { Tag = "panel" };
+                get.Location = new Point(0, 0);
+                pick.Location = new Point(get.Width + 12, 0);
+                pair.Controls.Add(get);
+                pair.Controls.Add(pick);
+                pair.Size = new Size(pick.Right, get.Height);
+                return pair;
             }
             string package = CatalogPackage(c);
             var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null, Width = ActionWidth };

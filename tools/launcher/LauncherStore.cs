@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -22,6 +23,11 @@ namespace SubVulpes
         const long StoreIndexLimit = 2 * 1024 * 1024, StorePackageLimit = 70L * 1024 * 1024, StoreIconLimit = 131072, StoreImageLimit = 2 * 1024 * 1024;
         static readonly Regex StorePath = new Regex(@"\A(icons|thumbs|images|packages)/[A-Za-z0-9][A-Za-z0-9._+-]{0,119}\z");
         static readonly Regex Sha256Text = new Regex(@"\A[0-9a-f]{64}\z");
+        static readonly Regex PluginVersionText = new Regex(@"\A[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]{1,16})?\z");
+        static readonly Regex ServerMinText = new Regex(@"\A[0-9]+(\.[0-9]+){0,7}\z");
+        // The plugin API that this launcher and its server know. A version that needs a higher one is hidden.
+        const int SupportedPluginApi = 1;
+        const int StoreVersionsMax = 24;
 
         readonly List<CatalogEntry> storeEntries = new List<CatalogEntry>();
         readonly List<string[]> pendingInstalls = new List<string[]>();   // path, SHA-256, source, id
@@ -219,6 +225,18 @@ namespace SubVulpes
                 e.PackageFile = file;
                 e.Sha256 = hash;
                 e.Size = size;
+                // The fields above are the newest version. The optional list adds the older ones. An older launcher ignores it.
+                var newest = ReadStoreVersion(d, e.Version, file, hash, size, e.Channel);
+                if (newest != null) e.Versions.Add(newest);
+                object more;
+                if (d.TryGetValue("versions", out more) && more is object[])
+                    foreach (object item2 in (object[])more) {
+                        StoreVersion v = ReadStoreVersionItem(item2 as Dictionary<string, object>);
+                        if (v != null && e.Versions.Count < StoreVersionsMax && !e.Versions.Any(x => x.Version == v.Version)) e.Versions.Add(v);
+                    }
+                e.Versions.Sort((a, b) => SafeCompare(b.Version, a.Version));
+                // An entry whose newest version has an odd number still installs, as before.
+                if (e.Versions.Count == 0) e.Versions.Add(new StoreVersion { Version = e.Version, PackageFile = file, Sha256 = hash, Size = size, Channel = e.Channel });
                 string icon = CatalogText(d, "icon", 200);
                 if (StorePath.IsMatch(icon) && icon.StartsWith("icons/")) { e.IconRemote = icon; e.Icon = StoreFilePath(cache, icon); }
                 object images;
@@ -230,6 +248,105 @@ namespace SubVulpes
                 list.Add(e);
             }
             return list;
+        }
+
+        static int SafeCompare(string left, string right)
+        {
+            try { return ReleaseUpdate.CompareVersions(left, right); } catch (Exception) { return string.CompareOrdinal(left, right); }
+        }
+
+        // The version of the newest package, with the minimums that the top level of the entry may carry.
+        static StoreVersion ReadStoreVersion(Dictionary<string, object> d, string version, string file, string hash, long size, string channel)
+        {
+            string serverMin = CatalogText(d, "server_min", 23);
+            int minApi;
+            if (!PluginVersionText.IsMatch(version) || !ReadMinApi(d, out minApi) || (serverMin.Length > 0 && !ServerMinText.IsMatch(serverMin))) return null;
+            return new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel };
+        }
+
+        // One item of the list `versions`: version, file, sha256, size, and the optional server_min, min_api and channel.
+        static StoreVersion ReadStoreVersionItem(Dictionary<string, object> d)
+        {
+            if (d == null) return null;
+            string version = CatalogText(d, "version", 23), file = CatalogText(d, "file", 200), hash = CatalogText(d, "sha256", 64);
+            string channel = CatalogText(d, "channel", 16), serverMin = CatalogText(d, "server_min", 23);
+            long size;
+            int minApi;
+            try { size = Convert.ToInt64(d["size"]); } catch (Exception) { return null; }
+            if (channel.Length == 0) channel = "stable";
+            if (!PluginVersionText.IsMatch(version) || !StorePath.IsMatch(file) || !file.StartsWith("packages/") || !Sha256Text.IsMatch(hash) ||
+                size <= 0 || size > StorePackageLimit || !ReadMinApi(d, out minApi) || (serverMin.Length > 0 && !ServerMinText.IsMatch(serverMin))) return null;
+            return new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel };
+        }
+
+        // min_api is a whole number from 1 to 99. Without it the plugin needs API 1.
+        static bool ReadMinApi(Dictionary<string, object> d, out int value)
+        {
+            object raw;
+            value = 1;
+            if (!d.TryGetValue("min_api", out raw)) return true;
+            try { value = Convert.ToInt32(raw); } catch (Exception) { return false; }
+            return value >= 1 && value <= 99;
+        }
+
+        // The digit groups at the start of a version, as the host reads them. A suffix such as -rc.1 does not count.
+        static int[] VersionGroups(string text)
+        {
+            Match m = Regex.Match(text ?? "", @"^v?([0-9]+(?:\.[0-9]+){0,7})");
+            if (!m.Success) return null;
+            string[] parts = m.Groups[1].Value.Split('.');
+            var groups = new int[8];
+            for (int i = 0; i < parts.Length; i++) { long n; if (!long.TryParse(parts[i], out n) || n > int.MaxValue) return null; groups[i] = (int)n; }
+            return groups;
+        }
+
+        // True when the server is older than the minimum. A server with no readable version (a development build) accepts any plugin.
+        internal static bool ServerBelow(string server, string minimum)
+        {
+            int[] have = VersionGroups(server), want = VersionGroups(minimum);
+            if (have == null || want == null) return false;
+            for (int i = 0; i < 8; i++) if (have[i] != want[i]) return have[i] < want[i];
+            return false;
+        }
+
+        // A version that this server can run, and that the user wants to see. A beta shows only when Include Beta Versions is on.
+        internal static bool VersionUsable(StoreVersion v, string server, bool betas)
+        {
+            if (v.MinApi > SupportedPluginApi) return false;
+            if (v.Channel != "stable" && !betas) return false;
+            return v.ServerMin.Length == 0 || !ServerBelow(server, v.ServerMin);
+        }
+
+        internal static List<StoreVersion> UsableVersions(CatalogEntry c, string server, bool betas)
+        {
+            return c.Versions.Where(v => VersionUsable(v, server, betas)).ToList();
+        }
+
+        // The newest version that this server can run, or nothing.
+        internal static StoreVersion BestVersion(CatalogEntry c, string server, bool betas)
+        {
+            return UsableVersions(c, server, betas).FirstOrDefault();
+        }
+
+        // The number of the server in this folder, such as v0.2.0. Empty when version.txt is missing.
+        string ServerNumber()
+        {
+            try {
+                string v = Path.Combine(folder, "version.txt");
+                return System.IO.File.Exists(v) ? (System.IO.File.ReadLines(v).FirstOrDefault() ?? "").Trim() : "";
+            } catch (Exception) { return ""; }
+        }
+
+        StoreVersion BestVersion(CatalogEntry c) { return BestVersion(c, ServerNumber(), previewsBox != null && previewsBox.On); }
+
+        internal static bool IsDowngrade(string installed, string chosen) { return NewerVersion(installed, chosen); }
+
+        // The check runs at most once in 24 hours. A saved time that is unreadable or in the future counts as due.
+        internal static bool PluginCheckDue(string last, DateTime nowUtc)
+        {
+            DateTime when;
+            if (!DateTime.TryParse(last ?? "", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out when)) return true;
+            return when > nowUtc || nowUtc - when >= TimeSpan.FromHours(24);
         }
 
         // The last catalog that passed the signature check, from the cache. Nothing when the cache is empty or the seal fails.
@@ -244,11 +361,12 @@ namespace SubVulpes
         }
 
         // Loads the saved catalog at once, then asks the Workshop for a new one.
-        async Task RefreshStore()
+        async Task<bool> RefreshStore(bool quiet = false)
         {
-            if (storeBusy) return;
+            if (storeBusy) return false;
             storeBusy = true;
             storeAsked = true;
+            bool fresh = false;
             string cache = StoreCacheFolder(), problem = "", json = null;
             try {
                 byte[] index = null, seal = null;
@@ -261,6 +379,9 @@ namespace SubVulpes
                         System.IO.File.WriteAllBytes(Path.Combine(cache, "index.json"), index);
                         System.IO.File.WriteAllBytes(Path.Combine(cache, "index.json.sig"), seal);
                         json = Encoding.UTF8.GetString(index);
+                        fresh = true;
+                        settings.Set("plugin_check", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                        settings.Save();
                     } else problem = "The signature of the Workshop catalog does not match. The launcher refuses it.";
                 }
                 if (json == null) json = ReadStoreCache(cache);
@@ -270,9 +391,11 @@ namespace SubVulpes
                 problem = "Cannot read the Workshop catalog: " + ex.Message;
             } finally { storeBusy = false; }
             storeProblem = problem;
-            if (problem.Length > 0) message.Text = problem;
+            if (problem.Length > 0 && !quiet) message.Text = problem;
             if (catalogList != null && catalogList.Visible) { LoadCatalog(); RenderCatalog(); }
             var pictures = PrefetchStorePictures();
+            UpdateBadge();
+            return fresh;
         }
 
         // The icons that the list needs. They load once and stay in the cache.
@@ -305,27 +428,112 @@ namespace SubVulpes
             try { return ReleaseUpdate.CompareVersions(candidate, installed) > 0; } catch (Exception) { return false; }
         }
 
-        async Task InstallFromStore(CatalogEntry c)
+        async Task InstallFromStore(CatalogEntry c, StoreVersion chosen = null)
         {
             if (pluginBusy || updating || storeBusy || !c.Remote) return;
-            string target = StoreFilePath(StoreCacheFolder(), c.PackageFile);
+            StoreVersion v = chosen ?? BestVersion(c);
+            if (v == null) { message.Text = "No version of " + c.Name + " runs on this server."; return; }
+            string target = StoreFilePath(StoreCacheFolder(), v.PackageFile);
             storeBusy = true;
-            message.Text = "Downloading " + c.Name + "...";
+            message.Text = "Downloading " + c.Name + " " + v.Version + "...";
             try {
-                await Task.Run(() => { StoreDownload(c.PackageFile, target, c.Size); VerifyStorePackage(target, c.Size, c.Sha256); });
+                await Task.Run(() => { StoreDownload(v.PackageFile, target, v.Size); VerifyStorePackage(target, v.Size, v.Sha256); });
             } catch (Exception ex) {
                 message.Text = "Cannot download " + c.Name + ": " + ex.Message;
                 return;
             } finally { storeBusy = false; }
             if (server != null) {
                 pendingInstalls.RemoveAll(x => x[3] == c.Id);
-                pendingInstalls.Add(new[] { target, c.Sha256, c.Source, c.Id });
+                pendingInstalls.Add(new[] { target, v.Sha256, c.Source, c.Id });
                 SavePendingInstalls();
-                message.Text = c.Name + " installs at the next start of the server.";
+                message.Text = c.Name + " " + v.Version + " installs at the next start of the server.";
                 if (catalogList != null && catalogList.Visible) RenderCatalog();
                 return;
             }
-            await InstallPlugin(target, c.Sha256, c.Source);
+            await InstallPlugin(target, v.Sha256, c.Source);
+        }
+
+        // The button that lists the versions this server can run. An older version asks first. The data of the plugin stays.
+        FlatButton VersionButton(CatalogEntry c, PluginMetadata installed)
+        {
+            List<StoreVersion> usable = UsableVersions(c, ServerNumber(), previewsBox != null && previewsBox.On);
+            if (!c.Remote || usable.Count < 2) return null;
+            var button = new FlatButton("Version") { Width = ActionWidth };
+            button.Click += delegate {
+                var menu = new ContextMenuStrip();
+                foreach (StoreVersion v in usable) {
+                    StoreVersion pick = v;
+                    bool same = installed != null && installed.Version == v.Version;
+                    var item = new ToolStripMenuItem(v.Version + (same ? " (installed)" : "") + (v.Channel != "stable" ? " (" + v.Channel + ")" : "")) { Enabled = !same };
+                    item.Click += async delegate { await ChooseVersion(c, pick, installed); ReshowCatalog(c); };
+                    menu.Items.Add(item);
+                }
+                menu.Show(button, new Point(0, button.Height));
+            };
+            return button;
+        }
+
+        async Task ChooseVersion(CatalogEntry c, StoreVersion v, PluginMetadata installed)
+        {
+            if (installed != null && IsDowngrade(installed.Version, v.Version) &&
+                MessageBox.Show(this, "Go back to " + c.Name + " " + v.Version + "? The data of the plugin stays in user\\plugins.", "Older version",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            await InstallFromStore(c, v);
+        }
+
+        // ------------------------------------------------------------ the update check
+
+        // The plugins that are installed and that the index offers in a newer version that this server can run.
+        List<CatalogEntry> UpdatableEntries()
+        {
+            string server = ServerNumber();
+            bool betas = previewsBox != null && previewsBox.On;
+            var list = new List<CatalogEntry>();
+            foreach (CatalogEntry c in storeEntries) {
+                PluginMetadata have = plugins.FirstOrDefault(p => p.Id == c.Id);
+                StoreVersion best = BestVersion(c, server, betas);
+                if (c.Remote && have != null && best != null && NewerVersion(best.Version, have.Version)) list.Add(c);
+            }
+            return list;
+        }
+
+        // A number on the Plugins tab: how many installed plugins have an update.
+        void UpdateBadge()
+        {
+            if (IsDisposed || !tabLabels.ContainsKey("Plugins")) return;
+            int count = UpdatableEntries().Count;
+            tabLabels["Plugins"].SetText(count > 0 ? "Plugins (" + count + ")" : "Plugins");
+        }
+
+        // At the start, and then once a day, the launcher reads the Workshop index in the background. A failure is silent.
+        async Task StartupPluginCheck()
+        {
+            try {
+                await Task.Delay(2500);
+                if (IsDisposed) return;
+                if (plugins.Count == 0 && server == null && !pluginBusy && System.IO.File.Exists(Path.Combine(folder, "subvulpes_server.exe"))) {
+                    string before = message.Text;
+                    await RefreshPlugins();
+                    if (message.Text.StartsWith("Cannot list plugins")) message.Text = before;
+                }
+                if (PluginCheckDue(settings.Get("plugin_check", ""), DateTime.UtcNow)) await RefreshStore(true);
+                else if (storeEntries.Count == 0) {
+                    string saved = ReadStoreCache(StoreCacheFolder());
+                    if (saved != null) storeEntries.AddRange(ParseStoreIndex(saved, StoreCacheFolder()));
+                }
+                UpdateBadge();
+                await AutoInstallOfficial();
+            } catch (Exception) { }
+        }
+
+        // With the setting on, an official plugin installs its update by itself. A server that runs waits for its next start.
+        async Task AutoInstallOfficial()
+        {
+            if (autoOfficialBox == null || !autoOfficialBox.On) return;
+            foreach (CatalogEntry c in UpdatableEntries().Where(e => e.Source == "Official").ToList()) {
+                if (IsDisposed || pluginBusy || updating) break;
+                await InstallFromStore(c);
+            }
         }
 
         // The installs that wait for a server that runs are in a small file, so a closed launcher keeps them.

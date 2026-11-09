@@ -141,6 +141,34 @@ The Action reads `plugins/<id>/plugin.ini`, builds the package, computes the SHA
 | `package` | The file, its SHA-256 and its size. The launcher checks both after the download. |
 | `icon`, `thumbs`, `images` | Paths in `dist`. A thumbnail is small and light. An image loads only when the user opens the plugin page. |
 
+### The list of versions
+
+An entry may carry an optional list `versions`. The fields at the top of the entry (`version`, `package`, `server_min`, `channel`) describe the newest version, as before, so a launcher that does not know the list still works and shows the newest version.
+
+```json
+"versions": [
+  { "version": "0.2.0", "file": "packages/sv.bans-0.2.0.svplugin", "sha256": "<64 hex digits>", "size": 48213, "server_min": "0.3.0", "min_api": 1, "channel": "stable" },
+  { "version": "0.1.0", "file": "packages/sv.bans-0.1.0.svplugin", "sha256": "<64 hex digits>", "size": 47100 }
+]
+```
+
+| Field | Rule |
+| --- | --- |
+| `version` | Three groups of digits, with an optional suffix such as `-rc.1`. |
+| `file`, `sha256`, `size` | A path under `packages/`, the SHA-256 and the size of the package, at most 70 MiB. The launcher checks both after the download. |
+| `server_min` | Optional. Digits and dots, as in the manifest. A server that is older than this does not see the version. A suffix of the server version does not count, so `0.3.0-rc.1` meets `0.3.0`. A server with no readable version accepts any. |
+| `min_api` | Optional. A whole number from 1 to 99, and 1 when it is absent. The launcher knows API 1. It hides a version that needs a higher number. |
+| `channel` | Optional: `stable` (the default), `beta` or `experimental`. The launcher hides the others unless Include Beta Versions is on. |
+
+The launcher reads at most 24 versions of an entry and skips an item that breaks a rule. It lists them newest first. The top level wins when the same number appears twice. An entry with no list has one version, the top level.
+
+## What the launcher does with the versions
+
+- **Install and Update** use the newest version that the running server can run. If none can run, Install is off and says so.
+- **Version** is a button beside Uninstall. It lists the versions that the server can run. Choosing an older one is a downgrade: the launcher asks first, and the data of the plugin stays in `user\plugins`. An official package installs with no review window, as before.
+- **The check.** At the start, and then at most once in 24 hours, the launcher reads the index in the background. A failed network is silent, and the time of the check is kept only after a good read (`plugin_check` in `launcher.ini`). A number on the Plugins tab shows how many installed plugins have an update.
+- **Automatic install.** The setting "Official plugin updates" (`auto_official` in `launcher.ini`) is off by default. When it is on, an official plugin installs its update by itself. A running server never restarts: the update waits for its next start. A community plugin never installs by itself.
+
 The local `catalog.json` of today is the same list without the new fields. The launcher uses the downloaded index as the file that it caches. `file` becomes `package.file`.
 
 ## What the launcher does

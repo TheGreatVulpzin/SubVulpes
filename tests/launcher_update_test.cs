@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace SubVulpes
@@ -285,6 +287,7 @@ namespace SubVulpes
             CheckPluginMetadata();
             CheckPluginApproval();
             CheckStore();
+            CheckStoreVersions();
             CheckUninstall();
             CheckCommunityCard();
             CheckVersionNames();
@@ -360,6 +363,72 @@ namespace SubVulpes
                     File.WriteAllBytes(file, new byte[] { 1, 2, 3 });
                 }
             } finally { Directory.Delete(dir, true); }
+        }
+
+        // The list of versions: parsing, the rules that hide a version, the best version, the daily check and the downgrade rule.
+        static void CheckStoreVersions()
+        {
+            string h = new string('a', 64), h2 = new string('b', 64), h3 = new string('c', 64);
+            Func<string, string, string, string> item = (version, extra, hash) =>
+                "{\"version\":\"" + version + "\",\"file\":\"packages/sv.one-" + version + "-native.svplugin\",\"sha256\":\"" + hash + "\",\"size\":100" + extra + "}";
+            string head = "{\"id\":\"sv.one\",\"name\":\"One\",\"version\":\"0.3.0\",\"kind\":\"plugin\",\"source\":\"Official\",\"server_min\":\"0.3.0\"," +
+                "\"package\":{\"file\":\"packages/sv.one-0.3.0-native.svplugin\",\"sha256\":\"" + h + "\",\"size\":300},\"versions\":[";
+            string versions = item("0.3.0", ",\"server_min\":\"0.3.0\"", h2) + "," +   // the newest again: the top level wins
+                item("0.2.0", "", h2) + "," + item("0.1.0", ",\"server_min\":\"0.1.5\"", h3) + "," +
+                item("0.4.0", ",\"min_api\":2", h) + "," +          // needs a newer plugin API
+                item("0.2.5", ",\"channel\":\"beta\"", h2) + "," +   // a beta
+                item("bad", "", h) + "," +                           // not a version
+                item("0.2.1", "", "xyz") + "," +                     // a bad hash
+                item("0.2.2", ",\"min_api\":0", h) + "," +           // a bad min_api
+                item("0.2.3", ",\"server_min\":\"x\"", h) + "]}";    // a bad server_min
+            var list = LauncherForm.ParseStoreIndex("{\"format\":1,\"plugins\":[" + head + versions + "]}", "C:\\cache");
+            if (list.Count != 1) Fail("The entry with versions was lost.");
+            LauncherForm.CatalogEntry one = list[0];
+            string order = string.Join(",", one.Versions.Select(v => v.Version).ToArray());
+            if (order != "0.4.0,0.3.0,0.2.5,0.2.0,0.1.0") Fail("The versions are wrong or not newest first: " + order);
+            LauncherForm.StoreVersion top = one.Versions.First(v => v.Version == "0.3.0");
+            if (top.Size != 300 || top.Sha256 != h || top.ServerMin != "0.3.0") Fail("The top level did not win for the newest version.");
+            if (one.Version != "0.3.0" || one.Size != 300) Fail("The old fields of the entry changed.");
+
+            // Which versions a server can run. The suffix of a server version does not count. A development build accepts any.
+            Func<string, bool, string> usable = (server, betas) =>
+                string.Join(",", LauncherForm.UsableVersions(one, server, betas).Select(v => v.Version).ToArray());
+            if (usable("0.2.0", false) != "0.2.0,0.1.0") Fail("Usable on 0.2.0: " + usable("0.2.0", false));
+            if (usable("0.2.0", true) != "0.2.5,0.2.0,0.1.0") Fail("Usable on 0.2.0 with betas: " + usable("0.2.0", true));
+            if (usable("0.3.0-rc.1", false) != "0.3.0,0.2.0,0.1.0") Fail("An rc must meet its own version: " + usable("0.3.0-rc.1", false));
+            if (usable("v0.3.1", false) != "0.3.0,0.2.0,0.1.0") Fail("Usable on v0.3.1: " + usable("v0.3.1", false));
+            if (usable("", false) != "0.3.0,0.2.0,0.1.0") Fail("A development build must accept any server_min: " + usable("", false));
+            if (usable("0.1.0", false) != "0.2.0") Fail("Usable on 0.1.0: " + usable("0.1.0", false));
+            if (LauncherForm.BestVersion(one, "0.2.0", false).Version != "0.2.0" || LauncherForm.BestVersion(one, "0.2.0", true).Version != "0.2.5")
+                Fail("The best version is wrong.");
+            string future = "{\"id\":\"sv.four\",\"name\":\"Four\",\"version\":\"0.5.0\",\"kind\":\"plugin\",\"source\":\"Official\",\"server_min\":\"0.5.0\"," +
+                "\"package\":{\"file\":\"packages/sv.four-0.5.0-native.svplugin\",\"sha256\":\"" + h + "\",\"size\":50}}";
+            LauncherForm.CatalogEntry later = LauncherForm.ParseStoreIndex("{\"format\":1,\"plugins\":[" + future + "]}", "C:\\cache")[0];
+            if (LauncherForm.BestVersion(later, "0.2.0", false) != null) Fail("A server that cannot run any version got one.");
+            if (!LauncherForm.ServerBelow("0.2.0", "0.3.0") || LauncherForm.ServerBelow("0.3.0", "0.3.0") || LauncherForm.ServerBelow("0.3.0-rc.1", "0.3.0") ||
+                LauncherForm.ServerBelow("0.10.0", "0.9.0") || LauncherForm.ServerBelow("", "0.3.0") || LauncherForm.ServerBelow("garbage", "0.3.0") ||
+                !LauncherForm.ServerBelow("0.2", "0.2.1"))
+                Fail("The server version rule is wrong.");
+
+            // An entry with no list has one version. An odd newest number still installs, as before.
+            string plain = "{\"id\":\"sv.two\",\"name\":\"Two\",\"version\":\"0.1.0\",\"kind\":\"plugin\",\"source\":\"Official\"," +
+                "\"package\":{\"file\":\"packages/sv.two-0.1.0-native.svplugin\",\"sha256\":\"" + h + "\",\"size\":50}}";
+            var odd = LauncherForm.ParseStoreIndex("{\"format\":1,\"plugins\":[" + plain + "," + plain.Replace("sv.two", "sv.three").Replace("\"0.1.0\"", "\"0.1\"") + "]}", "C:\\cache");
+            if (odd.Count != 2 || odd[0].Versions.Count != 1 || odd[0].Versions[0].PackageFile != odd[0].PackageFile) Fail("An entry without a list lost its version.");
+            if (odd[1].Versions.Count != 1 || odd[1].Versions[0].Version != "0.1") Fail("An odd version number lost its entry.");
+
+            // The check runs once in 24 hours. A bad or future time counts as due.
+            DateTime now = new DateTime(2026, 11, 9, 12, 0, 0, DateTimeKind.Utc);
+            Func<double, string> ago = hours => now.AddHours(-hours).ToString("o", CultureInfo.InvariantCulture);
+            if (!LauncherForm.PluginCheckDue("", now) || !LauncherForm.PluginCheckDue(null, now) || !LauncherForm.PluginCheckDue("garbage", now)) Fail("A missing time must be due.");
+            if (LauncherForm.PluginCheckDue(ago(23), now)) Fail("A check 23 hours ago was due.");
+            if (!LauncherForm.PluginCheckDue(ago(24), now) || !LauncherForm.PluginCheckDue(ago(30), now)) Fail("A check 24 hours ago was not due.");
+            if (!LauncherForm.PluginCheckDue(ago(-1), now)) Fail("A time in the future must be due.");
+
+            // An older version is a downgrade and asks first.
+            if (!LauncherForm.IsDowngrade("0.3.0", "0.2.0") || LauncherForm.IsDowngrade("0.2.0", "0.3.0") || LauncherForm.IsDowngrade("0.2.0", "0.2.0") ||
+                LauncherForm.IsDowngrade("0.3.0", "bad"))
+                Fail("The downgrade rule is wrong.");
         }
 
         // The short card of a community plugin: Install stays off until the user allows the plugin to run.

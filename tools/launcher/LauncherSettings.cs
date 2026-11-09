@@ -30,7 +30,7 @@ namespace SubVulpes
         // Launcher settings
         TextField folderBox;
         FlatButton browseButton, checkUpdate;
-        Switch previewsBox, debugModeBox;
+        Switch previewsBox, debugModeBox, autoOfficialBox;
         Dropdown themeBox, accentBox;
 
         // Advanced settings
@@ -419,7 +419,9 @@ namespace SubVulpes
             var update = new FlatButton("Update from .ZIP") { Margin = new Padding(0) };
             update.Click += async delegate { await ChooseUpdate(); };
             previewsBox = new Switch { On = settings.Get("pre_releases", "0") == "1", AccessibleName = "Include Beta Versions" };
-            previewsBox.Changed += delegate { settings.Set("pre_releases", previewsBox.On ? "1" : "0"); settings.Save(); };
+            previewsBox.Changed += delegate { settings.Set("pre_releases", previewsBox.On ? "1" : "0"); settings.Save(); UpdateBadge(); };
+            autoOfficialBox = new Switch { On = settings.Get("auto_official", "0") == "1", AccessibleName = "Install Official Plugin Updates Automatically" };
+            autoOfficialBox.Changed += delegate { settings.Set("auto_official", autoOfficialBox.On ? "1" : "0"); settings.Save(); };
             themeBox = Combo(160, "Light", "Dark");
             accentBox = Combo(160, AccentNames);
             themeBox.SelectedIndex = settings.Get("theme", "light") == "dark" ? 1 : 0;
@@ -451,6 +453,7 @@ namespace SubVulpes
                 AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
                 AddRow(t, "Updates", null, Inline(checkUpdate, update), null);
                 AddRow(t, "Include Beta Versions", null, previewsBox, null);
+                AddRow(t, "Official plugin updates", "Installs updates of official plugins by itself. A running server gets them at its next start. Off by default.", autoOfficialBox, null);
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab.", debugModeBox, null);
             });

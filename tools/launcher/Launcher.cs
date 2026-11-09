@@ -427,6 +427,7 @@ namespace SubVulpes
             clock.Start();
             FormClosing += OnClosing;
             Load += delegate { CleanOldLauncher(); };
+            Shown += delegate { var check = StartupPluginCheck(); };
         }
 
         // The name of a version, such as Kit for 0.2.0. The table is tools/release/version-names.csv, inside the program.
