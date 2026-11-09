@@ -1,5 +1,5 @@
-# Writes the approval file of the official plugins: one line for each plugin of plugins/official.ini, with the SHA-256
-# of its built DLL. The server package carries the file, so the official plugins start without a manual approval.
+# Write the DLL hashes of the plugins in the embedded list.
+# The server package carries these approvals for the first start.
 param([Parameter(Mandatory=$true)][string]$Official,
       [Parameter(Mandatory=$true)][string]$PluginsDir,
       [Parameter(Mandatory=$true)][string]$Output)
@@ -9,11 +9,11 @@ Set-StrictMode -Version Latest
 $ids = [ordered]@{}
 foreach ($line in Get-Content -LiteralPath $Official) {
     if ($line -cmatch '^([a-z0-9][a-z0-9_.-]{0,46})=(enabled|disabled|required)$') {
-        if ($ids.Contains($Matches[1]) -or $Matches[1].Contains('..')) { throw 'official.ini repeats a plugin or holds a bad identifier.' }
+        if ($ids.Contains($Matches[1]) -or $Matches[1].Contains('..')) { throw 'The plugin list repeats a plugin or holds a bad identifier.' }
         $ids[$Matches[1]] = $Matches[2]
     }
 }
-if ($ids.Count -eq 0) { throw 'official.ini lists no plugin.' }
+if ($ids.Count -eq 0) { throw 'The plugin list has no plugin.' }
 
 function Assert-X86Dll([byte[]]$bytes) {
     if ($bytes.Length -lt 90 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'The native build output is not a PE file.' }

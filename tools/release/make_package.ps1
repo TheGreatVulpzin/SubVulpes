@@ -33,28 +33,27 @@ $output = Join-Path $repo 'build\package'
 $package = Join-Path $output $name
 $zip = Join-Path $output "$name.zip"
 $checksum = "$zip.sha256"
-# The official plugins come from plugins/official.ini. Each one needs its built manifest and DLL.
-$official = [ordered]@{}
-foreach ($line in Get-Content -LiteralPath (Join-Path $repo 'plugins\official.ini')) {
-    if ($line -cmatch '^([a-z0-9][a-z0-9_.-]{0,46})=(enabled|disabled|required)$') {
-        if ($official.Contains($Matches[1]) -or $Matches[1].Contains('..')) { throw 'official.ini repeats a plugin or holds a bad identifier.' }
-        $official[$Matches[1]] = $Matches[2]
-    }
+# The embedded build supplies the manifests, DLLs, profile and approvals.
+. (Join-Path $PSScriptRoot 'embedded_plugins.ps1')
+$embeddedConfig = Read-EmbeddedPlugins
+$official = $embeddedConfig.Plugins
+$embedded = Join-Path $repo 'build\embedded'
+if ([IO.File]::ReadAllText((Join-Path $embedded 'workshop-commit.txt')).Trim() -cne $embeddedConfig.Commit) {
+    throw 'The embedded build does not match the pinned Workshop commit.'
 }
-if ($official.Count -eq 0) { throw 'official.ini lists no plugin.' }
 $sources = [ordered]@{
     'subvulpes_server.exe' = Join-Path $buildPath 'subvulpes_server.exe'
     'subvulpes_launcher.exe' = 'build\launcher\subvulpes_launcher.exe'
     'LEIA-ME.txt' = 'tools\release\LEIA-ME.txt'
     'readme.txt' = 'tools\release\newspaper.txt'
-    'plugins/plugins.ini' = 'plugins\plugins.ini'
-    'plugins/native-approvals.ini' = Join-Path $buildPath 'plugins\native-approvals.ini'
+    'plugins/plugins.ini' = Join-Path $embedded 'plugins.ini'
+    'plugins/native-approvals.ini' = Join-Path $embedded 'native-approvals.ini'
     'install_plugin.ps1' = 'tools\plugins\install_plugin.ps1'
 }
 $directories = @('data', 'data/block', 'data/building', 'data/texture', 'data/weapon', 'plugins')
 $libraries = @{}
 foreach ($id in $official.Keys) {
-    $built = Join-Path $buildPath "plugins\$id"
+    $built = Join-Path $embedded $id
     $manifestFile = "$built\plugin.ini"
     if (-not (Test-Path -LiteralPath $manifestFile -PathType Leaf)) { throw "Build or source file is missing: $built\plugin.ini" }
     $library = (Select-String -LiteralPath $manifestFile -Pattern '^library=(.+)$' | Select-Object -First 1).Matches[0].Groups[1].Value.Trim()
@@ -81,7 +80,7 @@ $approvalText = [IO.File]::ReadAllText($sources['plugins/native-approvals.ini'])
 if ($approvalText -cne ($approvalLines -join "`n")) { throw 'The official native approval does not match the built official plugins.' }
 $profileText = [IO.File]::ReadAllText($sources['plugins/plugins.ini']).Replace("`r", '').Trim()
 $expectedProfile = (@('[plugins]') + @($official.Keys | ForEach-Object { "$_=$($official[$_])" })) -join "`n"
-if ($profileText -cne $expectedProfile) { throw 'plugins/plugins.ini does not match plugins/official.ini.' }
+if ($profileText -cne $expectedProfile) { throw 'The embedded profile does not match embedded-plugins.txt.' }
 
 # Copy build outputs, package defaults and checked data files.
 # The package has no config.txt: the launcher creates it with a new admin password.

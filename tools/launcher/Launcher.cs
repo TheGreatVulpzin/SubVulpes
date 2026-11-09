@@ -261,7 +261,7 @@ namespace SubVulpes
         const string NoPlayersText = "- players";
         static readonly string[] UpdateFiles = {
             "subvulpes_server.exe", "subvulpes_launcher.exe", "LEIA-ME.txt", "version.txt",
-            "plugins/plugins.ini", "plugins/native-approvals.ini", "plugins/sv.status/plugin.ini", "plugins/sv.status/status.dll",
+            "plugins/plugins.ini", "plugins/native-approvals.ini",
             "plugins/sv.permissions/plugin.ini", "plugins/sv.permissions/permissions.dll",
             "plugins/sv.patchouli/plugin.ini", "plugins/sv.patchouli/patchouli.dll",
             "plugins/sv.ayalog/plugin.ini", "plugins/sv.ayalog/ayalog.dll",

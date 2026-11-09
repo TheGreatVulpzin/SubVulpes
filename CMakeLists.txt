@@ -69,29 +69,8 @@ set_property(SOURCE tests/official/admcmd_unit_test.c APPEND PROPERTY OBJECT_DEP
     "${CMAKE_SOURCE_DIR}/plugins/admcmd/admcmd.c")
 # Package inspection uses the installer shipped beside the server.
 configure_file(tools/plugins/install_plugin.ps1 "${CMAKE_BINARY_DIR}/install_plugin.ps1" COPYONLY)
-configure_file(plugins/plugins.ini "${CMAKE_BINARY_DIR}/plugins/plugins.ini" COPYONLY)
-# The official list, the declared official plugins and the default profile must agree.
-get_property(SV_OFFICIAL_IDS GLOBAL PROPERTY SV_OFFICIAL_PLUGIN_IDS)
-get_property(SV_OFFICIAL_TARGETS GLOBAL PROPERTY SV_OFFICIAL_PLUGIN_TARGETS)
-file(STRINGS plugins/official.ini SV_OFFICIAL_LINES REGEX "^[a-z0-9][a-z0-9_.-]*=(enabled|disabled|required)$")
-set(SV_OFFICIAL_LISTED "")
-foreach(line IN LISTS SV_OFFICIAL_LINES)
-    string(REGEX REPLACE "=.*$" "" listed_id "${line}")
-    list(APPEND SV_OFFICIAL_LISTED "${listed_id}")
-endforeach()
-list(SORT SV_OFFICIAL_LISTED)
-list(SORT SV_OFFICIAL_IDS)
-if(NOT "${SV_OFFICIAL_LISTED}" STREQUAL "${SV_OFFICIAL_IDS}")
-    message(FATAL_ERROR "plugins/official.ini lists [${SV_OFFICIAL_LISTED}] but CMake declares [${SV_OFFICIAL_IDS}] as official.")
-endif()
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/plugins/official.ini")
-add_custom_target(sv-official-approvals ALL
-    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
-        "${CMAKE_SOURCE_DIR}/tools/plugins/write_official_approvals.ps1"
-        -Official "${CMAKE_SOURCE_DIR}/plugins/official.ini" -PluginsDir "${CMAKE_BINARY_DIR}/plugins"
-        -Output "${CMAKE_BINARY_DIR}/plugins/native-approvals.ini"
-    VERBATIM)
-add_dependencies(sv-official-approvals ${SV_OFFICIAL_TARGETS})
+# Core checks use this fixture profile. Releases use build/embedded/plugins.ini.
+file(WRITE "${CMAKE_BINARY_DIR}/plugins/plugins.ini" "[plugins]\nsv.status=disabled\n")
 
 # The SDK package: the public headers, a template plugin, the tools and the pages of the API.
 set(SV_SDK_VERSION "v0.0.0-dev" CACHE STRING "The version of the SDK package")

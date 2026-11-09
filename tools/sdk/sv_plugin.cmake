@@ -3,7 +3,7 @@
 # Builds a native plugin as a 32-bit DLL, puts it with its plugin.ini in build/plugins/ID, and adds the target
 # TARGET-package. That target makes build/packages/ID-VERSION-native.svplugin with tools/sdk/pack.ps1.
 # The version and the library name come from the manifest, so no value sits in two places.
-# OFFICIAL marks a plugin of the server package. It must also appear in plugins/official.ini.
+# OFFICIAL supplies identity macros for Workshop plugins. The release pin controls package inclusion.
 set(SV_SDK_DIR "${CMAKE_CURRENT_LIST_DIR}")
 # In the SDK package the headers are in ../include. In the source tree they are in src/plugins.
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../include/sv_plugin.h")
