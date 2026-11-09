@@ -217,6 +217,11 @@ void playerai(int player)
             distance = vectorlength(&d);
             aim = (float)x87_atan2(d.x, -d.z);
             pitch_aim = (float)x87_atan2(-d.y, x87_sqrt((double)d.x * d.x + (double)d.z * d.z));
+            /* A plugin policy turns the bot to its aim at once instead of 1/16 of the gap on each update. */
+            if (sv_ai_snap(player)) {
+                p->yaw = aim;
+                p->input_pitch = pitch_aim;
+            }
             if (distance < 32.0f)
                 p->input_axes[3] = 0;
             if (distance < 64.0f && fabs((double)angulardistance(aim, p->yaw)) < 0.125 &&
@@ -265,6 +270,10 @@ void playerai(int player)
             d.z = dotproduct(&normal, &object->rot[2]);
             aim = (float)x87_atan2(d.x, -d.z);
             pitch_aim = (float)x87_atan2(-d.y, x87_sqrt((double)d.x * d.x + (double)d.z * d.z));
+            if (sv_ai_snap(player)) {
+                p->yaw = aim;
+                p->input_pitch = pitch_aim;
+            }
             gun = h->inventory[0].items[0];
             mag = sr_items[gun].children[0];
             if (distance < 64.0f && fabs((double)angulardistance(aim, p->yaw)) < 0.125 &&

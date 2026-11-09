@@ -1159,7 +1159,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 38);
+    STEP(count == 39);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);

@@ -26,7 +26,7 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | Players and teams | Part | Read, team, admin, god mode, kick, join and leave decisions, connection snapshots with address masking. Open: player input for a human, the roster and limits of a team. |
 | Economy | Yes | Companies, prices, shares, stocks. Open: a decision before a purchase, taxes. |
 | Missions and rounds | Part | Slots, start, cancel, completion guard, world state, timers and round reset. Open: mission events, change of the game mode while the server runs. |
-| NPC decisions | Yes | Threats, destination, waypoints, target, input, perception, aim, shot chance, street route, seated target. Open: a query of the road graph (N27). |
+| NPC decisions | Yes | Threats, destination, waypoints, target, input, perception, aim, shot chance, street route, seated target, chase mode, street query, road graph reads, aim snap. |
 | Humans | Part | Health, bleeding, stun, protection, bones, bone mass, teleport, looks, name, speech, collapse threshold. Open: a decision on spawn and respawn, delete the body of a real player (N8). |
 | Items and inventory | Yes | Create, remove, equip, attach, detach, time to live, ammunition, item types. Open: decisions for pick up, drop and use. |
 | Weapons and bullets | Part | Type rows, shot event, tracer and hit visuals. Open: one weapon with its own values (the rows are for the whole type). No explosion, fire or smoke event exists in the game. |

@@ -15,7 +15,7 @@ typedef struct {
     uint64_t reset;
     uint32_t ticks;
     SvAiInput input;
-    int32_t perception, aim, chance;
+    int32_t perception, aim, chance, snap;
     uint32_t road_count, road_next;
     SvAiStreetPoint roads[SV_AI_WAYPOINTS_MAX];
     int seated;
@@ -94,7 +94,7 @@ static Control *claim(SvOwner owner, SvEntity bot, int32_t index)
         c->owner = owner;
         c->bot = bot;
         c->reset = sv_game_reset_sequence();
-        c->perception = c->aim = c->chance = -1;
+        c->perception = c->aim = c->chance = c->snap = -1;
     }
     return c;
 }
@@ -255,8 +255,8 @@ static SvResult set_policy(SvOwner owner, SvEntity bot, int32_t value, int field
         return result;
     if (!sv_plugins_write_context(owner))
         return SV_STATE;
-    if ((field == 0 && value != 1 && value != 2) ||
-        (field == 1 && value != 0 && value != 1) || (field == 2 && (value < 0 || value > 100)))
+    if ((field == 0 && value != 1 && value != 2) || ((field == 1 || field == 3) && value != 0 && value != 1) ||
+        (field == 2 && (value < 0 || value > 100)))
         return SV_INVALID;
     if (!installed || body_state(index) != SV_OK)
         return SV_STATE;
@@ -264,6 +264,7 @@ static SvResult set_policy(SvOwner owner, SvEntity bot, int32_t value, int field
     if (field == 0) c->perception = value;
     if (field == 1) c->aim = value;
     if (field == 2) c->chance = value;
+    if (field == 3) c->snap = value;
     return SV_OK;
 }
 
@@ -280,6 +281,11 @@ static SvResult SV_CALL set_aim(SvOwner owner, SvEntity bot, int32_t enabled)
 static SvResult SV_CALL set_chance(SvOwner owner, SvEntity bot, uint32_t percent)
 {
     return set_policy(owner, bot, percent <= 100 ? (int32_t)percent : -1, 2);
+}
+
+static SvResult SV_CALL set_snap(SvOwner owner, SvEntity bot, int32_t enabled)
+{
+    return set_policy(owner, bot, enabled, 3);
 }
 
 /* Check every index that ai_playercar uses before a controlled driver runs. */
@@ -445,6 +451,67 @@ static int seat_state(int32_t index, int driver)
     if (driver)
         return h->vehicle_seat == 0 && o->driver == index;
     return h->vehicle_seat >= 1 && h->vehicle_seat <= 3;
+}
+
+/* 1 when the street map has counts that the car AI accepts. */
+static int city_counts_valid(void)
+{
+    return g_city.num_roads >= 0 && g_city.num_roads <= 512 &&
+        g_city.num_intersections >= 0 && g_city.num_intersections <= 1024;
+}
+
+static SvResult SV_CALL read_road(SvOwner owner, uint32_t index, SvAiRoad *out)
+{
+    const CityRoad *r;
+    SvAiRoad copy;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!out || out->size < sizeof *out)
+        return SV_INVALID;
+    if (!city_counts_valid())
+        return SV_FAILED;
+    if (index >= (uint32_t)g_city.num_roads)
+        return SV_NOT_FOUND;
+    r = &g_city.roads[index];
+    memset(&copy, 0, sizeof copy);
+    copy.size = sizeof copy;
+    copy.count = (uint32_t)g_city.num_roads;
+    copy.ends[0] = r->ends[0];
+    copy.ends[1] = r->ends[1];
+    copy.kind = r->kind;
+    copy.lanes[0] = r->width[0];
+    copy.lanes[1] = r->width[1];
+    copy.direction = (SvVector){r->dir.x, r->dir.y, r->dir.z};
+    copy.side = (SvVector){r->side.x, r->side.y, r->side.z};
+    *out = copy;
+    return SV_OK;
+}
+
+static SvResult SV_CALL read_intersection(SvOwner owner, uint32_t index, SvAiIntersection *out)
+{
+    const CityIntersection *c;
+    SvAiIntersection copy;
+    int j;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!out || out->size < sizeof *out)
+        return SV_INVALID;
+    if (!city_counts_valid())
+        return SV_FAILED;
+    if (index >= (uint32_t)g_city.num_intersections)
+        return SV_NOT_FOUND;
+    c = &g_city.intersections[index];
+    memset(&copy, 0, sizeof copy);
+    copy.size = sizeof copy;
+    copy.count = (uint32_t)g_city.num_intersections;
+    copy.position = (SvVector){c->pos.x, c->pos.y, c->pos.z};
+    for (j = 0; j < 4; ++j) {
+        copy.roads[j] = c->roads[j];
+        copy.extent[j] = c->extent[j];
+        copy.light[j] = c->red[j];
+    }
+    *out = copy;
+    return SV_OK;
 }
 
 static SvResult SV_CALL set_chase(SvOwner owner, SvEntity bot, int32_t enabled)
@@ -742,6 +809,11 @@ int32_t sv_ai_perception_part(int32_t index)
     return (uint32_t)index < SR_MAX_PLAYER && live_control(index) ? controls[index].perception : -1;
 }
 
+int sv_ai_snap(int32_t index)
+{
+    return (uint32_t)index < SR_MAX_PLAYER && live_control(index) && controls[index].snap == 1;
+}
+
 void sv_ai_after_player(int32_t index)
 {
     if ((uint32_t)index >= SR_MAX_PLAYER || !live_control(index))
@@ -811,5 +883,6 @@ void sv_ai_release_owner(SvOwner owner)
 const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
-    set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess
+    set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
+    read_road, read_intersection, set_snap
 };

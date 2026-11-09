@@ -42,6 +42,24 @@ typedef struct {
     uint32_t next_node;
 } SvAiStreetPosition;
 
+/* A road of the street map. count is the number of roads. ends are the intersections at the two ends; a street point
+ * with direction 0 runs from ends[0] to ends[1]. kind is 0 for a road along x and 1 along z. lanes are the lanes on
+ * the two sides. direction is the unit vector from ends[0] to ends[1] and side the unit vector across the road. */
+typedef struct {
+    uint32_t size, count;
+    int32_t ends[2], kind, lanes[2];
+    SvVector direction, side;
+} SvAiRoad;
+
+/* An intersection of the street map. count is the number of intersections. roads are the roads at the four sides, -1
+ * for none. extent is how far each road reaches into the intersection. light is the signal for the cars that arrive
+ * on each side: 0 green, 1 yellow, 2 red. A car stops at 1 and 2. */
+typedef struct {
+    uint32_t size, count;
+    SvVector position;
+    int32_t roads[4], extent[4], light[4];
+} SvAiIntersection;
+
 typedef struct {
     uint32_t size, version;
     SvResult (SV_CALL *threats)(SvOwner owner, SvEntity bot, SvAiThreats *out);
@@ -58,6 +76,9 @@ typedef struct {
     SvResult (SV_CALL *chase_mode)(SvOwner owner, SvEntity bot, int32_t enabled);
     SvResult (SV_CALL *street_near)(SvOwner owner, SvVector position, float radius, SvAiStreetPosition *out);
     SvResult (SV_CALL *possess)(SvOwner owner, SvEntity player, SvEntity bot);
+    SvResult (SV_CALL *road)(SvOwner owner, uint32_t index, SvAiRoad *out);
+    SvResult (SV_CALL *intersection)(SvOwner owner, uint32_t index, SvAiIntersection *out);
+    SvResult (SV_CALL *aim_snap)(SvOwner owner, SvEntity bot, int32_t enabled);
 } SvGameAi;
 #pragma pack(pop)
 
@@ -71,5 +92,6 @@ int32_t sv_ai_perception_part(int32_t player);
 void sv_ai_after_player(int32_t player);
 int sv_ai_shot(int32_t player, int passenger);
 int sv_ai_route_next(int32_t player);
+int sv_ai_snap(int32_t player);
 
 #endif

@@ -42,6 +42,7 @@ FIELD(human_damage_taken, *sv_damage_field_human_taken(i))
 FIELD(human_damage_dealt, *sv_damage_field_human_dealt(i))
 FIELD(object_damage_taken, *sv_damage_field_object_taken(i))
 FIELD(item_ammo, sr_items[i].ammo)
+FIELD(item_trigger, sr_items[i].trigger_ticks)
 FIELD(item_ttl, sr_items[i].time_to_live)
 FIELD(object_ttl, sr_objects[i].time_to_live)
 FIELD(object_health, sr_objects[i].health)
@@ -313,6 +314,7 @@ static const Prop props[] = {
     { "item.frozen", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, item_frozen, frozen_check, frozen_after, NULL },
     { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 50000000, human_bone_mass, NULL, NULL, NULL },
     { "human.despawn", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, human_despawn, despawn_check, NULL, NULL },
+    { "item.trigger_ticks", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, item_trigger, NULL, NULL, NULL },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };

@@ -24,6 +24,9 @@ Errors leave game records and output buffers unchanged.
 | `seated_target` | Select the current living body of a player for an armed passenger in seat 1, 2 or 3. |
 | `chase_mode` | Set 0 or 1 for a bot driver. Restore the first value on stop. Refuse a request to clear a chase that the game sets. |
 | `street_near` | Copy one free street position, direction, street point and next node within a radius above 0 and at most 512 units. |
+| `road` | Copy road `index` of the street map: the count, the end intersections, the kind, the lanes and the direction. An index from the count up returns `SV_NOT_FOUND`. |
+| `intersection` | Copy intersection `index`: the count, the position, the road and the extent at each side and the light of each side. An index from the count up returns `SV_NOT_FOUND`. |
+| `aim_snap` | Accept 0 or 1. With 1 the bot turns to its aim at once, on foot and as a passenger. Release and stop clear it. |
 
 Route coordinates must be finite and within plus or minus 32768 on each axis.
 Invalid coordinates, a null nonempty array or more than 64 points return `SV_INVALID`.
