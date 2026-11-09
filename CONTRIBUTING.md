@@ -22,6 +22,8 @@ When your change adds to the API:
 
 - **Add a row to the need list** in `docs/legacy-modules.md`, or mark the existing row as done.
 - **Put new methods at the end** of their table. Plugins check the table size before they call a method.
+- **Do not make a record bigger.** The server refuses a record that is smaller than its own. A plugin built before your change would get `SV_INVALID`. Add a new record or a new method instead.
+- **Do not change what a method means.** A new error code, a new limit or a new value can surprise a plugin that already works. Add a new method or row. If you cannot, explain why on the Pull Request.
 - **Say how each method behaves.** Does it run in a safe callback or anywhere? What are its bounds? What does it return when it fails (`SV_INVALID`, `SV_DENIED`, `SV_STATE`, `SV_NOT_FOUND`)? Write that in the docs and test each failure.
 - **Undo your writes.** If a method changes the game, the change goes away when the plugin stops.
 - **Copy data out.** Plugins should never get a pointer into the game, a client's account ID or a raw address.
