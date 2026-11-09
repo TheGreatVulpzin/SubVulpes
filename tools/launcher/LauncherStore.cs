@@ -240,6 +240,7 @@ namespace SubVulpes
                             // The top level wins for the package. The list may add the changelog and the capabilities.
                             if (same.Changelog.Length == 0) same.Changelog = v.Changelog;
                             if (same.Capabilities.Count == 0) same.Capabilities.AddRange(v.Capabilities);
+                            if (same.Breaking.Length == 0) same.Breaking = v.Breaking;
                         } else if (e.Versions.Count < StoreVersionsMax) e.Versions.Add(v);
                     }
                 e.Versions.Sort((a, b) => SafeCompare(b.Version, a.Version));
@@ -269,7 +270,7 @@ namespace SubVulpes
             string serverMin = CatalogText(d, "server_min", 23);
             int minApi;
             if (!PluginVersionText.IsMatch(version) || !ReadMinApi(d, out minApi) || (serverMin.Length > 0 && !ServerMinText.IsMatch(serverMin))) return null;
-            var v = new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel, Changelog = ReadChangelog(d) };
+            var v = new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel, Changelog = ReadChangelog(d), Breaking = ReadBreaking(d) };
             v.Capabilities.AddRange(ReadCapabilityList(d));
             return v;
         }
@@ -286,7 +287,7 @@ namespace SubVulpes
             if (channel.Length == 0) channel = "stable";
             if (!PluginVersionText.IsMatch(version) || !StorePath.IsMatch(file) || !file.StartsWith("packages/") || !Sha256Text.IsMatch(hash) ||
                 size <= 0 || size > StorePackageLimit || !ReadMinApi(d, out minApi) || (serverMin.Length > 0 && !ServerMinText.IsMatch(serverMin))) return null;
-            var v = new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel, Changelog = ReadChangelog(d) };
+            var v = new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel, Changelog = ReadChangelog(d), Breaking = ReadBreaking(d) };
             v.Capabilities.AddRange(ReadCapabilityList(d));
             return v;
         }
@@ -303,6 +304,20 @@ namespace SubVulpes
                 if (text.Length >= ChangelogMax) break;
             }
             return text.ToString().Trim().Replace("\n", "\r\n");
+        }
+
+        // A version may say what can break in an old server or an old config. Plain text, one line, at most 300 characters.
+        internal const int BreakingMax = 300;
+        static string ReadBreaking(Dictionary<string, object> d)
+        {
+            object raw;
+            if (!d.TryGetValue("breaking", out raw) || !(raw is string)) return "";
+            var text = new StringBuilder();
+            foreach (char c in (string)raw) {
+                text.Append(c < ' ' ? ' ' : c);
+                if (text.Length >= BreakingMax) break;
+            }
+            return text.ToString().Trim();
         }
 
         // The capabilities of an entry or of a version: at most 24 short lower-case names.
@@ -553,6 +568,11 @@ namespace SubVulpes
             box.Clear();
             NoteHeading(box, "What changed in " + v.Version);
             NoteText(box, v.Changelog.Length > 0 ? v.Changelog : "The author wrote no changelog for this version.", UI.T.Fg);
+            if (v.Breaking.Length > 0 && !(have.Length > 0 && IsDowngrade(have, v.Version))) {
+                NoteText(box, "", UI.T.Fg);
+                NoteHeading(box, "This version can break your setup");
+                NoteText(box, v.Breaking, PluginDangerColor("high"));
+            }
             if (have.Length > 0 && IsDowngrade(have, v.Version)) {
                 NoteText(box, "", UI.T.Fg);
                 NoteText(box, "This is an older version than " + have + ". The data of the plugin stays in user\\plugins.", PluginDangerColor("high"));
@@ -617,6 +637,20 @@ namespace SubVulpes
             return list;
         }
 
+        // The newer version of an installed plugin that this server can run, or nothing.
+        StoreVersion UpdateFor(PluginMetadata p)
+        {
+            CatalogEntry c = storeEntries.FirstOrDefault(e => e.Id == p.Id && e.Remote);
+            StoreVersion best = c == null ? null : BestVersion(c);
+            return best != null && NewerVersion(best.Version, p.Version) ? best : null;
+        }
+
+        // The state of a plugin, and a note when the Workshop has a newer version.
+        string StateLabel(PluginMetadata p)
+        {
+            return StateText(p.State) + (UpdateFor(p) != null ? " (New Update)" : "");
+        }
+
         // A number on the Plugins tab: how many installed plugins have an update.
         void UpdateBadge()
         {
@@ -650,10 +684,15 @@ namespace SubVulpes
         async Task AutoInstallOfficial()
         {
             if (autoOfficialBox == null || !autoOfficialBox.On) return;
+            var held = new List<string>();
             foreach (CatalogEntry c in UpdatableEntries().Where(e => e.Source == "Official").ToList()) {
                 if (IsDisposed || pluginBusy || updating) break;
+                // An update that can break an old setup waits for the user.
+                if (BestVersion(c).Breaking.Length > 0) { held.Add(c.Name); continue; }
                 await InstallFromStore(c);
             }
+            if (held.Count > 0 && !IsDisposed)
+                message.Text = string.Join(", ", held.ToArray()) + (held.Count == 1 ? " has an update" : " have updates") + " that can break your setup. Open My Plugins and read the notes before you update.";
         }
 
         // The installs that wait for a server that runs are in a small file, so a closed launcher keeps them.

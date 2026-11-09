@@ -161,6 +161,7 @@ New /unban command.", "capabilities": ["read", "write", "storage"] },
 | `min_api` | Optional. A whole number from 1 to 99, and 1 when it is absent. The launcher knows API 1. It hides a version that needs a higher number. |
 | `channel` | Optional: `stable` (the default), `beta` or `experimental`. The launcher hides the others unless Include Beta Versions is on. |
 | `changelog` | Optional. Plain text of what changed, at most 1200 characters. The install window shows it. |
+| `breaking` | Optional. One line, at most 300 characters, of what can break in an old server or an old config. The install window shows it as a warning. The automatic install of an official plugin skips a version that has it and tells the user. |
 | `capabilities`, `runtime` | Optional. What this version can do, and where it runs. When absent, the launcher uses the fields at the top of the entry. |
 
 The launcher reads at most 24 versions of an entry and skips an item that breaks a rule. It lists them newest first. The top level wins when the same number appears twice. An entry with no list has one version, the top level.
@@ -168,7 +169,7 @@ The launcher reads at most 24 versions of an entry and skips an item that breaks
 ## What the launcher does with the versions
 
 - **Install and Update** use the newest version that the running server can run. If none can run, Install is off and says so.
-- **One window.** Install, Update and Change Version (a button in the My Plugins detail) open the same window. It has a version picker, the changelog of the chosen version and what that version can do. The Workshop list has no version control. The main button says Install, Update or Go back. Going back keeps the data of the plugin in `user\plugins`. The window does not change the approval system: an official package installs with no review window, and a community package still gets its review card after the download.
+- **One window.** Install, Update and Change Version (a button in the My Plugins detail) open the same window. It has a version picker, the changelog of the chosen version and what that version can do. The Workshop list has no version control. The main button says Install, Update or Go back. Going back keeps the data of the plugin in `user\plugins`. Update is off when the Workshop has no newer version, and the status of the plugin reads "(New Update)" when it has one. The window does not change the approval system: an official package installs with no review window, and a community package still gets its review card after the download.
 - **The check.** At the start, and then at most once in 24 hours, the launcher reads the index in the background. A failed network is silent, and the time of the check is kept only after a good read (`plugin_check` in `launcher.ini`). A number on the Plugins tab shows how many installed plugins have an update.
 - **Launcher update.** The window of a launcher update shows the notes of the release before the download.
 - **Automatic install.** The setting "Autoupdate Standard Official Plugins" (`auto_official` in `launcher.ini`) is on by default. When it is on, an official plugin installs its update by itself. A running server never restarts: the update waits for its next start. A community plugin never installs by itself.

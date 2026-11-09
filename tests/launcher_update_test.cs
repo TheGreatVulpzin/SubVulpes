@@ -468,6 +468,18 @@ namespace SubVulpes
                 if (!text.Contains("The author wrote no changelog") || !text.Contains("does not list it") || text.Contains("full access"))
                     Fail("A version with no data shows the wrong text: " + text);
             }
+            // A version may say what can break. The window shows it for a newer or equal version, not for a downgrade.
+            string brokenText = "{\"id\":\"sv.two\",\"name\":\"Two\",\"author\":\"Ann\",\"version\":\"0.5.0\",\"kind\":\"plugin\",\"source\":\"Official\",\"runtime\":\"native\"," +
+                "\"breaking\":\"Old\\nsettings   reset.\",\"package\":{\"file\":\"packages/sv.two-0.5.0.svplugin\",\"sha256\":\"" + h + "\",\"size\":300}," +
+                "\"versions\":[{\"version\":\"0.4.0\",\"file\":\"packages/sv.two-0.4.0.svplugin\",\"sha256\":\"" + h + "\",\"size\":200}]}";
+            LauncherForm.CatalogEntry two = LauncherForm.ParseStoreIndex("{\"format\":1,\"plugins\":[" + brokenText + "]}", "C:\\cache")[0];
+            if (two.Versions[0].Breaking != "Old settings   reset." || two.Versions[1].Breaking != "") Fail("The breaking note was read wrong: " + two.Versions[0].Breaking);
+            using (var box2 = new RichTextBox()) {
+                LauncherForm.RenderVersionNotes(box2, two, two.Versions[0], "0.4.0");
+                if (!box2.Text.Contains("can break your setup") || !box2.Text.Contains("settings   reset.")) Fail("The window hides the breaking note.");
+                LauncherForm.RenderVersionNotes(box2, two, two.Versions[1], "0.5.0");
+                if (box2.Text.Contains("can break your setup")) Fail("A downgrade shows the breaking note.");
+            }
             if (LauncherForm.ChangeVerb("", "0.1.0") != "Install" || LauncherForm.ChangeVerb("0.1.0", "0.2.0") != "Update" ||
                 LauncherForm.ChangeVerb("0.3.0", "0.2.0") != "Go back")
                 Fail("The main button has the wrong word.");

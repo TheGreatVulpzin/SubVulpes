@@ -166,7 +166,7 @@ namespace SubVulpes
 
         string SortKey(PluginMetadata p, int column)
         {
-            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateText(p.State) : column == 4 ? SourceOfPlugin(p) : column == 5 ? AuthorOf(p) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
+            return column == 0 ? p.DisplayName : column == 1 ? p.Version : column == 2 ? StateLabel(p) : column == 4 ? SourceOfPlugin(p) : column == 5 ? AuthorOf(p) : RiskOf(p) == "low" ? "1" : RiskOf(p) == "high" ? "2" : "3";
         }
 
         void RebuildPlugins()
@@ -181,7 +181,7 @@ namespace SubVulpes
                 shown.Sort((a, b) => (sortAscending ? 1 : -1) * string.Compare(SortKey(a, sortColumn), SortKey(b, sortColumn), StringComparison.OrdinalIgnoreCase));
             pluginGrid.Rows.Clear();
             foreach (var p in shown) {
-                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateText(p.State), RiskOf(p), SourceOfPlugin(p), AuthorOf(p), "");
+                int r = pluginGrid.Rows.Add(p.DisplayName, p.Version, StateLabel(p), RiskOf(p), SourceOfPlugin(p), AuthorOf(p), "");
                 pluginGrid.Rows[r].Tag = p;
                 if (p.Id == selectedPluginId) pluginGrid.CurrentCell = pluginGrid.Rows[r].Cells[0];
             }
@@ -264,7 +264,7 @@ namespace SubVulpes
         // One version of a plugin in the Workshop index.
         internal sealed class StoreVersion
         {
-            public string Version = "", PackageFile = "", Sha256 = "", ServerMin = "", Channel = "stable", Changelog = "";
+            public string Version = "", PackageFile = "", Sha256 = "", ServerMin = "", Channel = "stable", Changelog = "", Breaking = "";
             public long Size;
             public int MinApi = 1;
             public readonly List<string> Capabilities = new List<string>();
@@ -871,7 +871,7 @@ namespace SubVulpes
             int my = e.CellBounds.Y + e.CellBounds.Height / 2;
             if (e.ColumnIndex == 2) {
                 using (var b = new SolidBrush(StateColor(p.State))) g.FillEllipse(b, e.CellBounds.X + 6, my - 4, 8, 8);
-                TextRenderer.DrawText(g, StateText(p.State), UI.F(9.5f, FontStyle.Regular), new Rectangle(e.CellBounds.X + 20, e.CellBounds.Y, e.CellBounds.Width - 20, e.CellBounds.Height),
+                TextRenderer.DrawText(g, StateLabel(p), UI.F(9.5f, FontStyle.Regular), new Rectangle(e.CellBounds.X + 20, e.CellBounds.Y, e.CellBounds.Width - 20, e.CellBounds.Height),
                     UI.T.Fg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
             } else if (e.ColumnIndex == 3) {
                 string level = RiskOf(p), risk = RiskText(level);
@@ -944,7 +944,7 @@ namespace SubVulpes
             d.MaximumSize = new Size(330, 0);
             d.Margin = new Padding(0, 0, 0, 12);
             flow.Controls.Add(d);
-            var state = L("Status: " + StateText(p.State) + (p.Reason.Length > 0 ? ". " + p.Reason : ""), false, true);
+            var state = L("Status: " + StateLabel(p) + (p.Reason.Length > 0 ? ". " + p.Reason : ""), false, true);
             state.MaximumSize = new Size(330, 0);
             state.Margin = new Padding(0, 0, 0, 12);
             flow.Controls.Add(state);
@@ -971,8 +971,11 @@ namespace SubVulpes
             acts.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             acts.RowStyles.Add(new RowStyle(SizeType.Absolute, 8));
             acts.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            var update = new FlatButton("Update…") { Width = 166, Margin = new Padding(0) };
-            update.Click += async delegate { await InstallPlugin(); };
+            // Update is on only when the Workshop offers a newer version that this server can run.
+            CatalogEntry store = storeEntries.FirstOrDefault(e => e.Id == p.Id && e.Remote);
+            var update = new FlatButton("Update…") { Width = 166, Margin = new Padding(0), Enabled = UpdateFor(p) != null };
+            if (!update.Enabled) UI.Tips.SetToolTip(update, "No update. This is the newest version that this server can run.");
+            update.Click += async delegate { if (store != null) await ChooseAndInstall(store); };
             var review = new FlatButton("Review approval…") { Width = 166, Margin = new Padding(0) };
             string id = p.Id;
             review.Click += async delegate { await ApprovePlugin(id); };
@@ -982,7 +985,6 @@ namespace SubVulpes
             acts.Controls.Add(review, 0, 2);
             acts.Controls.Add(remove, 2, 2);
             // Change Version opens the window of the install with the versions that this server can run.
-            CatalogEntry store = storeEntries.FirstOrDefault(e => e.Id == id && e.Remote);
             var change = new FlatButton("Change Version…") { Width = 166, Margin = new Padding(0), Enabled = store != null && OtherVersions(store, p.Version) > 0 };
             if (!change.Enabled) UI.Tips.SetToolTip(change, "The Workshop has no other version of this plugin that this server can run.");
             change.Click += async delegate { if (store != null) await ChooseAndInstall(store); };
