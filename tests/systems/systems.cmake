@@ -55,3 +55,18 @@ target_link_options(sv-n-bots-fixture PRIVATE /EXPORT:sv_plugin_entry)
 set_target_properties(sv-n-bots-fixture PROPERTIES PREFIX "" OUTPUT_NAME n-bots-fixture
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 add_test(NAME n-bots-api COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_n_bots.py" "${CMAKE_BINARY_DIR}")
+add_executable(sv-n-roads-test tests/n_roads/main.c tests/systems/world.c
+    tests/platform_support.c src/platform/x87_math.c src/platform/plat_imports.c ${SV_GAME_SOURCES})
+target_include_directories(sv-n-roads-test PRIVATE src/include src/platform src/common src/net src/game src/plugins tests/systems)
+target_compile_definitions(sv-n-roads-test PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
+target_compile_options(sv-n-roads-test PRIVATE /W4 /WX /utf-8)
+target_link_options(sv-n-roads-test PRIVATE /LARGEADDRESSAWARE)
+set_target_properties(sv-n-roads-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+add_library(sv-n-roads-fixture MODULE tests/n_roads/plugin.c)
+target_include_directories(sv-n-roads-fixture PRIVATE src/plugins tests/systems)
+target_compile_definitions(sv-n-roads-fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_options(sv-n-roads-fixture PRIVATE /W4 /WX /utf-8)
+target_link_options(sv-n-roads-fixture PRIVATE /EXPORT:sv_plugin_entry)
+set_target_properties(sv-n-roads-fixture PROPERTIES PREFIX "" OUTPUT_NAME n-roads-fixture
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+add_test(NAME n-roads-api COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_n_roads.py" "${CMAKE_BINARY_DIR}")

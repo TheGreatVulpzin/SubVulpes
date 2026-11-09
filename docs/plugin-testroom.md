@@ -127,7 +127,7 @@ The damage decision, the chat and join decisions, the object and item velocity r
 The name of an item (N43) needs a table row that does not exist yet.
 These methods have no test here:
 
-- `SvGameAi.street_route`. A plugin cannot read the road graph yet (work item R3), so it cannot build a valid route.
+- `SvGameAi.street_route`. A plugin can read the road graph with `road` and `intersection` (N63), but no case builds a route yet.
 - `SvPlugins.provide` and `find` with a real provider. They need a second plugin. The host test covers them.
 - `SvGameProps.add` and the vector rows that no test above uses.
 

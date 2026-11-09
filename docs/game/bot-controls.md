@@ -92,11 +92,62 @@ The possession ends when the plugin stops or the world resets. The host then giv
 No method ends a possession before that (N66).
 The original client was not tested. The camera of the client follows the human of the update event. Client effect unknown.
 
+## Street map reads (N63)
+
+`road(owner, index, out)` and `intersection(owner, index, out)` append two reads to `SvGameAi`, capability 3, version 1.
+They require a host callback on the server thread and a ready world.
+The output size must cover `SvAiRoad` or `SvAiIntersection`. A null or short output returns `SV_INVALID`.
+Graph counts outside 0 to 512 roads or 0 to 1024 intersections return `SV_FAILED`.
+An index from the count up returns `SV_NOT_FOUND`. An invalid context returns `SV_STATE`.
+Errors leave the output unchanged.
+
+A road copies its count, the two end intersections, the kind (0 along x, 1 along z), the lanes on each side,
+the unit direction from the first end to the second and the unit side vector.
+A street point with direction 0 runs from `ends[0]` to `ends[1]`.
+An intersection copies its count, its position, the road at each of the four sides (-1 for none),
+the extent of each road and the light of each side.
+The light is the value that `logicsimulation` writes for the cars that arrive on that side: 0 green, 1 yellow, 2 red.
+A car stops at 1 and 2 unless it is in chase mode. The light changes each tick, so the copy holds for the current tick.
+The reads copy values only. They return no pointer into `sr_data_city`, change no game state and allocate no memory.
+A plugin can walk the graph and build a closed `street_route` from A to B and back.
+
+## Trigger count (N75)
+
+`item.trigger_ticks` appends an integer property with get and set, capability 10, version 1.
+The range is 0 to 3600 ticks. The slot is zero. `add` returns `SV_DENIED`.
+Set requires a safe callback on the server thread and a ready world.
+A stale, inactive or wrong-kind item reference returns `SV_NOT_FOUND`. A bad range or slot returns `SV_INVALID`.
+
+`itemweaponsimulation` counts the ticks that the use bit of a held gun is down and fires when the count equals 2
+(6 for the Magnum), with a round and no cooldown.
+An automatic gun stops the count at that value and fires at each cooldown while the trigger stays down.
+The 9 mm and the Magnum count on, so a held trigger fires once.
+A write of 0 lets a held pistol fire again after 2 ticks (6 for the Magnum).
+A write of 0 on each tick holds the fire of an automatic gun. A value above the need also holds it, because the count
+then never equals the need.
+When the use bit is up, the game sets the count to 0 on each tick. So the effect of a write ends at the next release
+of the trigger, and stop has no value to restore. The host keeps no cleanup record for this row.
+The original client was not tested for the gun of a real player. Client effect unknown.
+
+## Aim snap (N77)
+
+`aim_snap(owner, bot, enabled)` appends a policy method to `SvGameAi`, capability 3, version 1.
+It accepts 0 or 1 for a bot with a consistent body, during a safe callback on the server thread, with a ready world.
+A non-bot returns `SV_DENIED`. A stale or wrong-kind reference returns `SV_NOT_FOUND`.
+A bad value returns `SV_INVALID`. A missing body or missing game hooks return `SV_STATE`.
+
+With 1, `playerai` sets the yaw and pitch of the bot to its aim at the current threat in the same update,
+on foot and as an armed passenger. Without the policy the game turns by 1/16 of the gap on each update,
+and a bot fires only within 0.125 rad. The game still decides each shot: the threat level, the distance,
+the friend and car body checks and the shot chance do not change.
+The policy is part of the bot control lease. Release, plugin stop, slot reuse and world reset clear it.
+The original client was not tested. Client effect unknown.
+
 ## Known limits
 
 These limits come from the design, not from a defect. Each one has a row in the need list of [legacy modules](../legacy-modules.md).
 
-- A driver route is a closed loop. No method reads the road graph, so a plugin cannot find a route from A to B (N63, N64).
+- A driver route is a closed loop. A plugin can read the road graph (N63), but it cannot send a driver from A to B and stop there (N64).
 - Chase mode switches four effects together: a higher target speed, a larger lateral limit, a lane change and no stop at red lights (N65).
 - `street_near` gives one position and has no filter (N67).
 - A bot has no method to aim at a point or an entity. The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68).
