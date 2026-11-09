@@ -1,6 +1,6 @@
 # Street map, trigger and aim snap notes
 
-Branch `feature/roads-trigger-aim`, from `main` at `d9cbbf4`.
+Branch `feature/roads-trigger-aim`, from `main` at `d9cbbf4`, with `main` at `125be0f` merged.
 The bounds, errors and cleanup of each operation are in [bot API additions](../game/bot-controls.md). This page records status and evidence.
 
 ## Needs status
@@ -41,7 +41,8 @@ No test room case covers them yet (N69).
 
 | Check | Result |
 | --- | --- |
-| Full CTest suite after a fresh rebuild (MSVC 14.44, `/wd4127` for warning C4127 of this compiler in older tests) | 32 of 32 passed, with `n-roads-api`, `n-bots-api`, `systems-api` and the ABI snapshot. |
+| Full CTest suite after a fresh rebuild (MSVC 14.44, `/wd4127` for warning C4127 of this compiler in older tests) | 34 of 34 passed, with `n-roads-api`, `n-bots-api`, `systems-api`, the ABI snapshot and `abi-additive`. |
+| `python -I tools/ci/check_abi_additive.py` against the snapshot of `main` | The snapshot only adds. |
 | `python -I tools/ci/check_repo.py` | Clean. |
 
 No in-game test ran for these operations. The tests above run the game code of the weapon and the bot AI without a client.
