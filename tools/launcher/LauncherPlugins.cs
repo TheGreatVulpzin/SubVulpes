@@ -961,7 +961,7 @@ namespace SubVulpes
                 n.Margin = new Padding(0, 0, 0, 12);
                 flow.Controls.Add(n);
             }
-            // Two equal columns. Update and Review approval share a row. Uninstall stands in the next row.
+            // Two equal columns. Update and Change Version share a row. Review approval and Uninstall stand in the next row.
             var rule = new Panel { Width = 340, Height = 1, Tag = "line", Margin = new Padding(0, 4, 0, 14) };
             flow.Controls.Add(rule);
             var acts = new TableLayoutPanel { AutoSize = true, ColumnCount = 3, RowCount = 3, Tag = "panel", Margin = new Padding(0) };
@@ -979,14 +979,14 @@ namespace SubVulpes
             var remove = new FlatButton("Uninstall…") { Kind = "danger", Width = 166, Margin = new Padding(0), Enabled = p.Required != "1" };
             remove.Click += async delegate { await UninstallPlugin(id); };
             acts.Controls.Add(update, 0, 0);
-            acts.Controls.Add(review, 2, 0);
-            acts.Controls.Add(remove, 0, 2);
+            acts.Controls.Add(review, 0, 2);
+            acts.Controls.Add(remove, 2, 2);
             // Change Version opens the window of the install with the versions that this server can run.
             CatalogEntry store = storeEntries.FirstOrDefault(e => e.Id == id && e.Remote);
             var change = new FlatButton("Change Version…") { Width = 166, Margin = new Padding(0), Enabled = store != null && OtherVersions(store, p.Version) > 0 };
             if (!change.Enabled) UI.Tips.SetToolTip(change, "The Workshop has no other version of this plugin that this server can run.");
             change.Click += async delegate { if (store != null) await ChooseAndInstall(store); };
-            acts.Controls.Add(change, 2, 2);
+            acts.Controls.Add(change, 2, 0);
             flow.Controls.Add(acts);
         }
 
