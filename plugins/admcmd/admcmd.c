@@ -92,60 +92,72 @@ static void discard(SvEntity item)
     api.write->item_remove(api.owner, item);
 }
 
-/* Finds a hand with no item. Returns 0 and sets the result when both hands are full or the read fails. */
-static int free_hand(const SvPlayerState *player, uint32_t *hand, SvResult *result)
+/* Slots to try, in order. Slots 0 and 1 are the hands. The rest are pockets. */
+static const uint32_t anywhere[] = { 0, 1, 3, 4, 5, 6, 2 };
+static const uint32_t pockets[] = { 3, 4, 5, 6, 2 };
+
+/* Puts the item in the first slot that takes it. A hand must be empty. A full pocket refuses the item and keeps
+ * what it holds. Returns SV_CONFLICT when no slot takes the item. */
+static SvResult place_item(const SvPlayerState *player, SvEntity item, const uint32_t *order, uint32_t count,
+                           uint32_t *slot)
 {
     SvInventoryState inventory = { sizeof inventory };
     uint32_t i;
-    for (i = 0; i < 2; ++i) {
-        *result = api.read->inventory(api.owner, player->human, i, &inventory);
-        if (*result != SV_OK) return 0;
-        if (!inventory.count) { *hand = i; return 1; }
+    for (i = 0; i < count; ++i) {
+        if (order[i] < 2) {
+            SvResult read = api.read->inventory(api.owner, player->human, order[i], &inventory);
+            if (read != SV_OK) return read;
+            if (inventory.count) continue;
+        }
+        if (api.write->item_equip(api.owner, item, player->human, order[i]) == SV_OK) {
+            *slot = order[i];
+            return SV_OK;
+        }
     }
-    *result = SV_CONFLICT;
-    return 0;
+    return SV_CONFLICT;
 }
 
-/* One item in a free hand. It never replaces an item that the target holds. */
+/* One item in a free hand, or else in a pocket. It never replaces an item that the target holds. */
 static SvResult give_item(const SvPlayerState *player, uint32_t type)
 {
     SvHumanState human = { sizeof human };
     SvEntity item = 0;
-    uint32_t hand = 0;
+    uint32_t slot = 0;
     SvResult result = body(player, &human);
-    if (result != SV_OK || !free_hand(player, &hand, &result)) return result;
+    if (result != SV_OK) return result;
     result = api.write->item_create(api.owner, type, human.position, &item);
-    if (result == SV_OK) result = api.write->item_equip(api.owner, item, player->human, hand);
+    if (result == SV_OK) result = place_item(player, item, anywhere, sizeof anywhere / sizeof anywhere[0], &slot);
     if (result == SV_OK) api.write->disown(api.owner, item);
     else discard(item);
     return result;
 }
 
-/* A weapon in a free hand, one loaded magazine and up to three spare magazines in pockets 3 and 4.
- * A part that does not fit is skipped and the others stay. A failed weapon removes everything made here. */
+/* A weapon in a free hand or a pocket, one loaded magazine and up to three spare magazines in the pockets.
+ * A magazine that does not fit is skipped and the rest stay. A weapon that fits nowhere removes everything made here. */
 static SvResult give_weapon(SvEntity actor, const SvPlayerState *player, uint32_t number)
 {
     SvHumanState human = { sizeof human };
     SvEntity weapon = 0, magazine;
-    uint32_t type = (number - 1) * 2, hand = 0, i, loaded = 0, spare = 0;
+    uint32_t type = (number - 1) * 2, slot = 0, i, loaded = 0, spare = 0;
     SvResult result = body(player, &human);
-    if (result != SV_OK || !free_hand(player, &hand, &result)) return result;
+    if (result != SV_OK) return result;
     result = api.write->item_create(api.owner, type, human.position, &weapon);
-    if (result == SV_OK) result = api.write->item_equip(api.owner, weapon, player->human, hand);
+    if (result == SV_OK) result = place_item(player, weapon, anywhere, sizeof anywhere / sizeof anywhere[0], &slot);
     if (result != SV_OK) { discard(weapon); return result; }
     for (i = 0; i < 4; ++i) {
+        uint32_t magazine_slot;
         magazine = 0;
         result = api.write->item_create(api.owner, type + 1, human.position, &magazine);
         if (result == SV_OK)
             result = !i ? api.write->item_attach(api.owner, weapon, magazine)
-                        : api.write->item_equip(api.owner, magazine, player->human, i < 3 ? 3u : 4u);
+                        : place_item(player, magazine, pockets, sizeof pockets / sizeof pockets[0], &magazine_slot);
         if (result != SV_OK) { discard(magazine); continue; }
         api.write->disown(api.owner, magazine);
         if (!i) loaded = 1; else ++spare;
     }
     api.write->disown(api.owner, weapon);
-    of_tell(&api, actor, "Gave %s to %s with %u loaded and %u spare magazines.", weapon_name[number - 1],
-            player->name, loaded, spare);
+    of_tell(&api, actor, "Gave %s to %s%s with %u loaded and %u spare magazines.", weapon_name[number - 1],
+            player->name, slot < 2 ? "" : " in the inventory", loaded, spare);
     if (loaded + spare < 4) of_tell(&api, actor, "Skipped %u magazines: no room.", 4 - loaded - spare);
     return SV_OK;
 }

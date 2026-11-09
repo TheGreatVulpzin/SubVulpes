@@ -50,13 +50,14 @@ static SvResult SV_CALL command(SvOwner owner, uint64_t actor, const char *argum
         }
         return SV_OK;
     }
-    if (!strcmp(operation, "pockets")) {
-        /* Fill pockets 3 and 4 until the game refuses another item. */
+    if (!strcmp(operation, "pockets") || !strcmp(operation, "magpockets")) {
+        /* Fill pockets 2 to 6 with weapons (pockets) or magazines (magpockets) until the game refuses another one. */
+        uint32_t filler = strcmp(operation, "pockets") ? 1 : 0;
         unsigned pocket, i;
-        for (pocket = 3; pocket < 5; ++pocket)
+        for (pocket = 2; pocket < 7; ++pocket)
             for (i = 0; i < 12; ++i) {
                 SvEntity item;
-                CHECK(api.write->item_create(owner, 12, human.position, &item) == SV_OK);
+                CHECK(api.write->item_create(owner, filler, human.position, &item) == SV_OK);
                 if (api.write->item_equip(owner, item, player.human, pocket) != SV_OK) {
                     api.write->item_remove(owner, item);
                     break;

@@ -34,7 +34,7 @@ The ban plugin has separate rules for the level of a target.
 | /god [PLAYER], /imortal [PLAYER] | Toggle health 100 each tick, with no god mode flag |
 | /heal [PLAYER\|all] | Set health 100, bleeding 0 and stun 0. An unreleased body can recover |
 | /kill [PLAYER] | Set health -5 and bleeding 1 |
-| /arm [N] [PLAYER] | Give a weapon in a free hand with one loaded magazine and three spare magazines. N 1 to 6, default 2 (M-16) |
+| /arm [N] [PLAYER] | Give a weapon in a free hand, or else in a pocket, with one loaded magazine and three spare magazines. N 1 to 6, default 2 (M-16) |
 | /item N [PLAYER] | Give item type 0 to 25 in a free hand |
 | /vehicle N [PLAYER], /car N [PLAYER] | Make vehicle type 0 to 11 four units in front of the target's head |
 | /team N [PLAYER] | Set team 0 to 5 |
@@ -68,8 +68,8 @@ A place of `/tp` is X, Y and Z. A value can be `~` (the current value) or `~N` (
 The game does not check walls at the place, so the place can be inside a wall.
 A teleport takes a seated target out of its vehicle first, as freeze does.
 Inventory commands never remove or replace an item that the target holds.
-`/arm` and `/item` use any free hand. If both hands are full, nothing is given.
-`/arm` gives the parts that fit. A full pocket skips only its spare magazines, and the answer says how many it skipped.
+`/arm` and `/item` use a free hand. If both hands are full, the item goes to a pocket. If no slot takes it, nothing is given.
+`/arm` gives the parts that fit. The spare magazines go to the pockets even when the weapon is in a pocket. A full pocket skips only its magazines, and the answer says how many it skipped.
 A failed weapon removes the items that the command made.
 The completed items, vehicles and bots stay after the plugin stops.
 

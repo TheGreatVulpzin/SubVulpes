@@ -68,6 +68,9 @@ console arm 2 Guest
 console admprobe inventory Guest
 expect log "ADM_ITEM Guest slot=1 type=2 children=1"
 console arm 3 Guest
+expect log "Gave Magnum to Guest in the inventory"
+console admprobe pockets Guest
+console arm 4 Guest
 expect log "arm failed: occupied slot or request already active."
 say Root /arm 1
 console admprobe inventory Root
@@ -370,7 +373,7 @@ expect log "give failed: target or service not found."
 run("arm-partial", """
 spawn player Root
 tick 1
-console admprobe pockets Root
+console admprobe magpockets Root
 console arm 1 Root
 expect log "arm done."
 expect log "Gave AK-47 to Root with 1 loaded and 0 spare magazines."
