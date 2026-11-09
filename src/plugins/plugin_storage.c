@@ -145,6 +145,37 @@ static int find(const Entry *entries, const Entry *key)
     return -1;
 }
 
+/* A scanner or indexer can hold a new file for a moment. Try again for a short time on those errors only. */
+static int busy_error(void)
+{
+    DWORD error = GetLastError();
+    return error == ERROR_SHARING_VIOLATION || error == ERROR_ACCESS_DENIED || error == ERROR_LOCK_VIOLATION;
+}
+
+static HANDLE open_temporary(const char *path)
+{
+    unsigned attempt;
+    HANDLE file = INVALID_HANDLE_VALUE;
+    for (attempt = 0; attempt < 10; ++attempt) {
+        file = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_WRITE_THROUGH, NULL);
+        if (file != INVALID_HANDLE_VALUE || !busy_error()) break;
+        Sleep(25);
+    }
+    return file;
+}
+
+static int replace_file(const char *from, const char *to)
+{
+    unsigned attempt;
+    for (attempt = 0; attempt < 10; ++attempt) {
+        if (MoveFileExA(from, to, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) return 1;
+        if (!busy_error()) break;
+        Sleep(25);
+    }
+    return 0;
+}
+
 static SvResult load(Store *store)
 {
     Header header;
@@ -152,9 +183,14 @@ static SvResult load(Store *store)
     LARGE_INTEGER size;
     DWORD got;
     uint32_t i, bytes = 0;
+    unsigned attempt;
     SvResult result = SV_IO;
-    file = CreateFileA(store->file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-        FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    for (attempt = 0; attempt < 10; ++attempt) {
+        file = CreateFileA(store->file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+        if (file != INVALID_HANDLE_VALUE || !busy_error()) break;
+        Sleep(25);
+    }
     if (file == INVALID_HANDLE_VALUE)
         return GetLastError() == ERROR_FILE_NOT_FOUND ? SV_OK : SV_IO;
     if (!regular(file) || !GetFileSizeEx(file, &size) || size.QuadPart < (int64_t)sizeof header ||
@@ -204,8 +240,7 @@ static SvResult save(const Store *store, uint32_t index, const Entry *replacemen
         if (entry->disk.scope && !transient(entry->disk.scope))
             ++header.count;
     }
-    file = CreateFileA(store->temporary, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS,
-        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_WRITE_THROUGH, NULL);
+    file = open_temporary(store->temporary);
     if (file == INVALID_HANDLE_VALUE)
         return SV_IO;
     zero.QuadPart = 0;
@@ -225,7 +260,7 @@ static SvResult save(const Store *store, uint32_t index, const Entry *replacemen
     if (!CloseHandle(file))
         okay = 0;
     if (okay)
-        okay = MoveFileExA(store->temporary, store->file, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+        okay = replace_file(store->temporary, store->file);
     if (!okay) {
         DeleteFileA(store->temporary);
         return SV_IO;

@@ -35,7 +35,7 @@ def oversized_file(path, size):
         stream.truncate(size)
 
 
-with tempfile.TemporaryDirectory(prefix='inspect-', dir=BUILD / 'tests') as temporary:
+with tempfile.TemporaryDirectory(prefix='inspect-', dir=BUILD / 'tests', ignore_cleanup_errors=True) as temporary:
     root = Path(temporary).resolve()
     temp = root / 'tmp'
     temp.mkdir()

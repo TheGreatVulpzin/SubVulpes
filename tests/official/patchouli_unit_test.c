@@ -143,6 +143,29 @@ int main(void)
     }
     reply[0] = 0; CHECK(help_command(1, 1, "") == SV_OK && strstr(reply, "(page 1 of 4)") && strstr(reply, "Next: /page 2"));
     reply[0] = 0; CHECK(help_command(1, 1, "4") == SV_OK && strstr(reply, "/t19 ") && !strstr(reply, "Next:"));
+    /* A full list is never cut: the last of 1000 topics is on the last page. */
+    service_forget(8); topic = make("a", "");
+    for (i = 0; i < 1000; ++i) {
+        snprintf(name, sizeof name, "t%u", i);
+        topic.command = name; CHECK(service_topic(8, &topic) == SV_OK);
+    }
+    reply[0] = 0; CHECK(help_command(1, 1, "167") == SV_OK && strstr(reply, "/t999 ") && strstr(reply, "(page 167 of 167)"));
+    service_forget(8);
+
+    /* A text of the full size fits. A full pager table refuses a new player and keeps the texts of the others. */
+    send_event_leave(1);
+    {
+        static char full[SV_PATCHOULI_TEXT_MAX + 1];
+        memset(full, 'z', sizeof full - 1); full[sizeof full - 1] = 0;
+        CHECK(service_pages(5, 1000, "Full", full) == SV_OK);
+    }
+    for (i = 1; i < PAGER_MAX; ++i) CHECK(service_pages(5, 1000 + i, "Text", "one\ntwo\n") == SV_OK);
+    reply[0] = 0; CHECK(service_pages(5, 5000, "Text", "one\n") == SV_LIMIT && !reply[0]);
+    reply[0] = 0; CHECK(page_command(1, 1000, "1") == SV_OK && strstr(reply, "Full (page 1 of 1)"));
+    reply[0] = 0; CHECK(service_pages(5, 1001, "Again", "three\n") == SV_OK && strstr(reply, "Again (page 1 of 1)"));
+    send_event_leave(1002);
+    CHECK(service_pages(5, 5000, "Text", "one\n") == SV_OK);
+    for (i = 0; i < PAGER_MAX; ++i) pager_clear(&pagers[i]);
     puts("Patchouli contracts passed.");
     return 0;
 }

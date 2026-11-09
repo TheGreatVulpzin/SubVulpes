@@ -5,7 +5,7 @@
 #include <string.h>
 
 #define LINES_PER_PAGE 6u
-#define PAGER_MAX 32u
+#define PAGER_MAX 256u
 
 typedef struct {
     SvOwner owner;
@@ -15,7 +15,8 @@ typedef struct {
 typedef struct {
     SvEntity player;
     uint32_t shown;
-    char title[32], text[SV_PATCHOULI_TEXT_MAX + 1];
+    char title[32];
+    char *text;   /* heap copy, freed when the player leaves or the text changes */
 } Pager;
 
 static Official api;
@@ -113,6 +114,13 @@ static void show(Official *ctx, SvEntity player, const char *title, const char *
     if (page < pages) of_tell(ctx, player, "Next: /page %u", page + 1);
 }
 
+static void pager_clear(Pager *pager)
+{
+    free(pager->text);
+    memset(pager, 0, sizeof *pager);
+}
+
+/* Returns the slot of the player, or a free slot. NULL when every slot is in use. */
 static Pager *pager_for(SvEntity player)
 {
     uint32_t i;
@@ -121,7 +129,19 @@ static Pager *pager_for(SvEntity player)
         if (pagers[i].player == player) return &pagers[i];
         if (!pagers[i].player && !free_slot) free_slot = &pagers[i];
     }
-    return free_slot ? free_slot : &pagers[0];
+    return free_slot;
+}
+
+/* Keeps a copy of the text for the player. A new text replaces the old one. */
+static Pager *pager_store(SvEntity player, const char *title, const char *text)
+{
+    Pager *pager = pager_for(player);
+    char *copy = pager ? _strdup(text) : NULL;
+    if (!copy) return NULL;
+    pager_clear(pager);
+    pager->player = player; pager->text = copy;
+    snprintf(pager->title, sizeof pager->title, "%s", title);
+    return pager;
 }
 
 static SvResult SV_CALL service_pages(SvOwner caller, SvEntity player, const char *title, const char *text)
@@ -132,11 +152,8 @@ static SvResult SV_CALL service_pages(SvOwner caller, SvEntity player, const cha
     if (!caller || !player || !printable(title, 1, 31) || !text || !*text) return SV_INVALID;
     if (strnlen(text, SV_PATCHOULI_TEXT_MAX + 1) > SV_PATCHOULI_TEXT_MAX) return SV_LIMIT;
     if (api.read->player(caller, player, &state) != SV_OK) return SV_NOT_FOUND;
-    pager = pager_for(player);
-    memset(pager, 0, sizeof *pager);
-    pager->player = player;
-    strcpy(pager->title, title);
-    strcpy(pager->text, text);
+    pager = pager_store(player, title, text);
+    if (!pager) return SV_LIMIT;
     ctx.owner = caller;
     pager->shown = 1;
     show(&ctx, player, pager->title, pager->text, 1);
@@ -150,27 +167,23 @@ static int allowed(SvEntity actor, const Topic *topic)
 
 static void show_list(SvEntity actor, uint32_t page)
 {
-    char text[SV_PATCHOULI_TEXT_MAX + 1];
+    /* One line needs at most 160 bytes, so the buffer always holds every topic. */
+    char *text = malloc((size_t)topic_count * 160 + 1);
     size_t used = 0;
     uint32_t i;
+    if (!text) { of_tell(&api, actor, "Help is not available now."); return; }
     text[0] = 0;
     for (i = 0; i < topic_count; ++i) {
-        int wrote;
         if (!allowed(actor, &topics[i])) continue;
-        wrote = snprintf(text + used, sizeof text - used, "/%s %s - %s\n", topics[i].command, topics[i].usage,
-                         topics[i].summary);
-        if (wrote < 0 || (size_t)wrote >= sizeof text - used) break;
-        used += (size_t)wrote;
+        used += (size_t)sprintf(text + used, "/%s %s - %s\n", topics[i].command, topics[i].usage, topics[i].summary);
     }
-    if (!used) { of_tell(&api, actor, "No command is available to you."); return; }
-    if (actor) {
-        Pager *pager = pager_for(actor);
-        memset(pager, 0, sizeof *pager);
-        pager->player = actor;
-        strcpy(pager->title, "Help"); strcpy(pager->text, text);
-        pager->shown = page;
-        show(&api, actor, pager->title, pager->text, page);
+    if (!used) of_tell(&api, actor, "No command is available to you.");
+    else if (actor) {
+        Pager *pager = pager_store(actor, "Help", text);
+        if (pager) { pager->shown = page; show(&api, actor, pager->title, pager->text, page); }
+        else of_tell(&api, actor, "Help is not available now.");
     } else show(&api, 0, "Help", text, 1);
+    free(text);
 }
 
 static void show_topic(SvEntity actor, const char *name)
@@ -213,7 +226,7 @@ static SvResult SV_CALL page_command(SvOwner owner, uint64_t actor, const char *
         of_tell(&api, actor, "Use: /page [NUMBER]"); return SV_OK;
     }
     for (i = 0; i < PAGER_MAX; ++i) {
-        if (pagers[i].player != actor) continue;
+        if (pagers[i].player != actor || !pagers[i].text) continue;
         /* With no number, show the page after the last one shown. */
         if (!page) page = (int32_t)pagers[i].shown + 1;
         if ((uint32_t)page <= (line_count(pagers[i].text) + LINES_PER_PAGE - 1) / LINES_PER_PAGE) pagers[i].shown = (uint32_t)page;
@@ -230,16 +243,18 @@ static SvResult SV_CALL event(SvOwner owner, const SvEvent *base)
     (void)owner;
     if (base->kind == SV_EVENT_LEAVE && base->size >= sizeof(SvGameEvent))
         for (i = 0; i < PAGER_MAX; ++i)
-            if (pagers[i].player == ((const SvGameEvent *)base)->player) memset(&pagers[i], 0, sizeof pagers[i]);
+            if (pagers[i].player == ((const SvGameEvent *)base)->player) pager_clear(&pagers[i]);
     return SV_OK;
 }
 
 static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
 {
+    uint32_t i;
     SvResult result = of_init(&api, host, owner, OF_CAP(SV_API_GAME_READ) | OF_CAP(SV_API_GAME_WRITE) |
         OF_CAP(SV_API_PLUGINS));
     if (result != SV_OK) return result;
-    memset(topics, 0, sizeof topics); memset(pagers, 0, sizeof pagers); topic_count = 0;
+    memset(topics, 0, sizeof topics); topic_count = 0;
+    for (i = 0; i < PAGER_MAX; ++i) pager_clear(&pagers[i]);
     service.size = sizeof service; service.version = SV_PATCHOULI_VERSION;
     service.topic = service_topic; service.forget = service_forget; service.pages = service_pages;
     result = api.plugins->provide(owner, SV_PATCHOULI_API, SV_PATCHOULI_VERSION, &service);
@@ -253,8 +268,10 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
 
 static void SV_CALL disable(SvOwner owner)
 {
+    uint32_t i;
     (void)owner;
-    memset(topics, 0, sizeof topics); memset(pagers, 0, sizeof pagers); topic_count = 0;
+    memset(topics, 0, sizeof topics); topic_count = 0;
+    for (i = 0; i < PAGER_MAX; ++i) pager_clear(&pagers[i]);
 }
 
 SV_EXPORT SvResult SV_CALL sv_plugin_entry(uint32_t abi, SvPlugin *plugin)

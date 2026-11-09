@@ -1,4 +1,4 @@
-# Patchouli: Help and Pages System
+# Patchouli: Help System
 
 Working ID: `sv.patchouli`. Version: `0.1.0`. This native plugin starts enabled.
 It owns `/help` and `/page` for all plugins. It needs read, write and plugin services.
@@ -18,6 +18,7 @@ A command appears in `/help` only if its permission node is empty, or the caller
 `/bmhelp` is the same as `/help`.
 The console sees every topic, with no pages.
 Each player has one text at a time. A new long text replaces the old one. The text goes away when the player leaves.
+The server keeps a copy of each text, and 256 players can hold a text at once. If every slot is in use, `pages` returns `SV_LIMIT`. It never takes the text of another player.
 
 ## For plugin authors
 
@@ -33,10 +34,10 @@ Every function takes the owner of the caller as its first argument.
 
 Topic limits: a command of 1 to 23 lowercase letters, digits, underscores or hyphens (no slash),
 a usage of 0 to 47 printable ASCII bytes, a summary of 1 to 79 bytes and a node of 0 to 39 bytes.
-The same owner and command replace the old topic. At most 192 topics exist.
+The same owner and command replace the old topic. At most 1024 topics exist.
 A bad record returns `SV_INVALID`. A full list returns `SV_LIMIT`.
 
-Page limits: a title of 1 to 31 printable bytes and a text of at most 2048 bytes. Lines end with one newline.
+Page limits: a title of 1 to 31 printable bytes and a text of at most 16384 bytes. Lines end with one newline.
 An empty title or text returns `SV_INVALID`. A longer text returns `SV_LIMIT`.
 A player that is not online returns `SV_NOT_FOUND`.
 The messages of `pages` use the owner of the caller, so the caller needs the write service.

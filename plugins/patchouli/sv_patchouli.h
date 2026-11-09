@@ -3,13 +3,13 @@
 
 #include "sv_game.h"
 
-/* Patchouli: Help and Pages System. It owns /help and /page for all plugins.
+/* Patchouli: Help System. It owns /help and /page for all plugins.
  * A plugin lists its commands with topic() and sends long text with pages().
  * Call these functions only during a host callback, with the owner of the caller. */
 #define SV_PATCHOULI_API "sv.patchouli"
 #define SV_PATCHOULI_VERSION 1u
-#define SV_PATCHOULI_TOPIC_MAX 192u
-#define SV_PATCHOULI_TEXT_MAX 2048u
+#define SV_PATCHOULI_TOPIC_MAX 1024u
+#define SV_PATCHOULI_TEXT_MAX 16384u
 
 #pragma pack(push, 8)
 /* All strings are copied. The command has no slash. The node is a permission node, or empty for a public command. */
