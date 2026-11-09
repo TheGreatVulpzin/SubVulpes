@@ -32,4 +32,6 @@ Security checks (permissions, memory, overflow, privacy) also need a removal pro
 
 Run the full test suite after a fresh rebuild. In the pull request, list what you ran and what you couldn't run.
 
+On every pull request, GitHub runs the checks of the repository, builds the server and runs the whole test suite. A check named `Check that the plugin API only grows` fails if the ABI snapshot loses or changes a line. The first pull request from a new contributor waits until the owner approves the workflows.
+
 The Branch/Pull Request will be reviewed fully and we're going to see if it fits our standards for approval.
