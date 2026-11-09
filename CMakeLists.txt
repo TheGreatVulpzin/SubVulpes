@@ -43,7 +43,7 @@ set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 
 include(tools/sdk/sv_plugin.cmake)
 sv_add_plugin(sv-status ID sv.status MANIFEST "${CMAKE_SOURCE_DIR}/plugins/status/plugin.ini"
-    SOURCES plugins/status/status.c OFFICIAL)
+    SOURCES plugins/status/status.c)
 sv_add_plugin(sv-permissions ID sv.permissions MANIFEST "${CMAKE_SOURCE_DIR}/plugins/permissions/plugin.ini"
     SOURCES plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c OFFICIAL)
 sv_add_plugin(sv-patchouli ID sv.patchouli MANIFEST "${CMAKE_SOURCE_DIR}/plugins/patchouli/plugin.ini"
