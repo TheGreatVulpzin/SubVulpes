@@ -251,20 +251,23 @@ namespace SubVulpes
         internal sealed class CatalogEntry
         {
             public string Id = "", Name = "", Description = "", Author = "", Version = "", Source = "", File = "", Icon = "";
-            public string Channel = "stable", License = "", PackageFile = "", Sha256 = "", IconRemote = "";
+            public string Channel = "stable", License = "", PackageFile = "", Sha256 = "", IconRemote = "", Runtime = "";
             public long Size;
             public bool Remote;
             public readonly List<string> Images = new List<string>(), ImageRemote = new List<string>();
             // Every version that the index lists, newest first. The fields above describe the newest one.
             public readonly List<StoreVersion> Versions = new List<StoreVersion>();
+            // What the entry asks for, as the index lists it. A version may list its own.
+            public readonly List<string> Capabilities = new List<string>();
         }
 
         // One version of a plugin in the Workshop index.
         internal sealed class StoreVersion
         {
-            public string Version = "", PackageFile = "", Sha256 = "", ServerMin = "", Channel = "stable";
+            public string Version = "", PackageFile = "", Sha256 = "", ServerMin = "", Channel = "stable", Changelog = "";
             public long Size;
             public int MinApi = 1;
+            public readonly List<string> Capabilities = new List<string>();
         }
 
         readonly List<CatalogEntry> catalog = new List<CatalogEntry>();
@@ -462,7 +465,7 @@ namespace SubVulpes
             StoreVersion best = BestVersion(c);
             if (installed != null) {
                 // An installed plugin shows its state, an Update button when the Workshop has a newer version that this server can run,
-                // a choice of version, and Uninstall.
+                // and Uninstall. Update opens the window of the install: the version, what changed and what it can do.
                 var row = new Panel { Tag = "panel" };
                 var uninstall = new FlatButton("Uninstall") { Enabled = installed.Required != "1", Width = ActionWidth };
                 string id = c.Id;
@@ -470,7 +473,7 @@ namespace SubVulpes
                 int left;
                 if (c.Remote && best != null && NewerVersion(best.Version, installed.Version)) {
                     var update = new FlatButton("Update") { Glyph = "download", Location = new Point(0, 0), Width = ActionWidth };
-                    update.Click += async delegate { await InstallFromStore(c, best); ReshowCatalog(c); };
+                    update.Click += async delegate { await ChooseAndInstall(c); ReshowCatalog(c); };
                     row.Controls.Add(update);
                     left = update.Width;
                 } else {
@@ -485,25 +488,14 @@ namespace SubVulpes
                 }
                 uninstall.Location = new Point(left + 12, 0);
                 row.Controls.Add(uninstall);
-                int right = uninstall.Right;
-                FlatButton choose = VersionButton(c, installed);
-                if (choose != null) { choose.Location = new Point(right + 12, 0); row.Controls.Add(choose); right = choose.Right; }
-                row.Size = new Size(right, uninstall.Height);
+                row.Size = new Size(uninstall.Right, uninstall.Height);
                 return row;
             }
             if (c.Remote) {
                 var get = new FlatButton("Install") { Glyph = "download", Width = ActionWidth, Enabled = best != null };
                 if (best == null) UI.Tips.SetToolTip(get, "No version of this plugin runs on this server.");
-                get.Click += async delegate { await InstallFromStore(c, best); ReshowCatalog(c); };
-                FlatButton pick = VersionButton(c, null);
-                if (pick == null) return get;
-                var pair = new Panel { Tag = "panel" };
-                get.Location = new Point(0, 0);
-                pick.Location = new Point(get.Width + 12, 0);
-                pair.Controls.Add(get);
-                pair.Controls.Add(pick);
-                pair.Size = new Size(pick.Right, get.Height);
-                return pair;
+                get.Click += async delegate { await ChooseAndInstall(c); ReshowCatalog(c); };
+                return get;
             }
             string package = CatalogPackage(c);
             var install = new FlatButton("Install") { Glyph = "download", Enabled = package != null, Width = ActionWidth };
@@ -989,6 +981,12 @@ namespace SubVulpes
             acts.Controls.Add(update, 0, 0);
             acts.Controls.Add(review, 2, 0);
             acts.Controls.Add(remove, 0, 2);
+            // Change Version opens the window of the install with the versions that this server can run.
+            CatalogEntry store = storeEntries.FirstOrDefault(e => e.Id == id && e.Remote);
+            var change = new FlatButton("Change Version…") { Width = 166, Margin = new Padding(0), Enabled = store != null && OtherVersions(store, p.Version) > 0 };
+            if (!change.Enabled) UI.Tips.SetToolTip(change, "The Workshop has no other version of this plugin that this server can run.");
+            change.Click += async delegate { if (store != null) await ChooseAndInstall(store); };
+            acts.Controls.Add(change, 2, 2);
             flow.Controls.Add(acts);
         }
 

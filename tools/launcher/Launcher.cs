@@ -36,6 +36,7 @@ namespace SubVulpes
         public string tag_name { get; set; }
         public bool draft { get; set; }
         public bool prerelease { get; set; }
+        public string body { get; set; }
         public ReleaseAsset[] assets { get; set; }
         public string DisplayName { get { return string.IsNullOrWhiteSpace(name) ? tag_name : name; } }
     }
@@ -1479,6 +1480,13 @@ namespace SubVulpes
                     return;
                 }
                 releaseName = release.DisplayName;
+                // The user reads the notes of the release before the download.
+                string notes = ReleaseNotes(release.body);
+                bool go;
+                using (var dialog = new ChangeDialog("Update SubVulpes", "From " + (version ?? "").Trim() + " to " + releaseName, null, 0,
+                    i => "Update", (box, i) => RenderReleaseNotes(box, notes), i => true))
+                    go = dialog.ShowDialog(this) == DialogResult.OK;
+                if (!go) { message.Text = "Update cancelled."; return; }
                 message.Text = releaseName;
                 string directory = Path.Combine(logsRoot, "updates", Guid.NewGuid().ToString("N"));
                 zip = await Task.Run(() => ReleaseUpdate.Download(release, directory));

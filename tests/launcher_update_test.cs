@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
 namespace SubVulpes
 {
@@ -288,6 +289,7 @@ namespace SubVulpes
             CheckPluginApproval();
             CheckStore();
             CheckStoreVersions();
+            CheckChangeWindow();
             CheckUninstall();
             CheckCommunityCard();
             CheckVersionNames();
@@ -429,6 +431,68 @@ namespace SubVulpes
             if (!LauncherForm.IsDowngrade("0.3.0", "0.2.0") || LauncherForm.IsDowngrade("0.2.0", "0.3.0") || LauncherForm.IsDowngrade("0.2.0", "0.2.0") ||
                 LauncherForm.IsDowngrade("0.3.0", "bad"))
                 Fail("The downgrade rule is wrong.");
+        }
+
+        // The window of an install, an update and a change of version, and the notes of a launcher update.
+        static void CheckChangeWindow()
+        {
+            string h = new string('a', 64);
+            string longLog = new string('x', 2000);
+            string entryText = "{\"id\":\"sv.one\",\"name\":\"One\",\"author\":\"Ann\",\"version\":\"0.3.0\",\"kind\":\"plugin\",\"source\":\"Official\",\"runtime\":\"native\"," +
+                "\"capabilities\":[\"read\",\"write\",\"Bad Name\",\"read\"]," +
+                "\"package\":{\"file\":\"packages/sv.one-0.3.0.svplugin\",\"sha256\":\"" + h + "\",\"size\":300}," +
+                "\"versions\":[{\"version\":\"0.3.0\",\"file\":\"packages/sv.one-0.3.0.svplugin\",\"sha256\":\"" + h + "\",\"size\":300,\"changelog\":\"Line one.\\nLine two.\\u0007\"}," +
+                "{\"version\":\"0.2.0\",\"file\":\"packages/sv.one-0.2.0.svplugin\",\"sha256\":\"" + h + "\",\"size\":200,\"changelog\":\"Old.\",\"capabilities\":[\"read\"]}," +
+                "{\"version\":\"0.1.0\",\"file\":\"packages/sv.one-0.1.0.svplugin\",\"sha256\":\"" + h + "\",\"size\":100,\"changelog\":\"" + longLog + "\"}]}";
+            LauncherForm.CatalogEntry one = LauncherForm.ParseStoreIndex("{\"format\":1,\"plugins\":[" + entryText + "]}", "C:\\cache")[0];
+            if (string.Join(",", one.Capabilities.ToArray()) != "read,write" || one.Runtime != "native") Fail("The entry lost its capabilities or its runtime.");
+            LauncherForm.StoreVersion newest = one.Versions[0], old = one.Versions[1], oldest = one.Versions[2];
+            if (newest.Changelog != "Line one.\r\nLine two." || string.Join(",", newest.Capabilities.ToArray()) != "read,write") Fail("The newest version has a wrong changelog: " + newest.Changelog);
+            if (old.Changelog != "Old." || string.Join(",", old.Capabilities.ToArray()) != "read") Fail("The older version lost its own fields.");
+            if (oldest.Changelog.Length != LauncherForm.ChangelogMax) Fail("A long changelog was not cut: " + oldest.Changelog.Length);
+
+            // What the window shows for a version.
+            using (var box = new RichTextBox()) {
+                LauncherForm.RenderVersionNotes(box, one, newest, "");
+                string text = box.Text;
+                if (!text.Contains("What changed in 0.3.0") || !text.Contains("Line one.") || !text.Contains("Change the game") ||
+                    !text.Contains("Runs inside the server with full access") || text.Contains("older version"))
+                    Fail("The notes of the newest version are wrong: " + text);
+                LauncherForm.RenderVersionNotes(box, one, old, "0.3.0");
+                text = box.Text;
+                if (!text.Contains("This is an older version than 0.3.0") || !text.Contains("Read game data") || text.Contains("Change the game"))
+                    Fail("The notes of an older version are wrong: " + text);
+                var plain = new LauncherForm.StoreVersion { Version = "0.4.0" };
+                LauncherForm.RenderVersionNotes(box, new LauncherForm.CatalogEntry { Runtime = "lua" }, plain, "");
+                text = box.Text;
+                if (!text.Contains("The author wrote no changelog") || !text.Contains("does not list it") || text.Contains("full access"))
+                    Fail("A version with no data shows the wrong text: " + text);
+            }
+            if (LauncherForm.ChangeVerb("", "0.1.0") != "Install" || LauncherForm.ChangeVerb("0.1.0", "0.2.0") != "Update" ||
+                LauncherForm.ChangeVerb("0.3.0", "0.2.0") != "Go back")
+                Fail("The main button has the wrong word.");
+
+            // The window: the button follows the choice, and the installed version cannot be chosen again.
+            var labels = new List<string> { "0.3.0", "0.2.0 (installed)" };
+            using (var window = new LauncherForm.ChangeDialog("Change version of One", "by Ann", labels, 0, i => i == 0 ? "Update" : "Install",
+                (b, i) => { b.Clear(); b.AppendText("note " + i); }, i => i != 1)) {
+                if (window.Go.Text != "Update" || !window.Go.Enabled || window.Notes.Text != "note 0") Fail("The window starts wrong.");
+                window.Picker.SelectedIndex = 1;
+                if (window.Go.Text != "Install" || window.Go.Enabled || window.Notes.Text != "note 1" || window.PickedIndex != 1)
+                    Fail("The window did not follow the choice.");
+            }
+            using (var notes = new LauncherForm.ChangeDialog("Update SubVulpes", "From v0.2.0 to v0.3.0", null, 0, i => "Update",
+                (b, i) => { b.Clear(); b.AppendText("release notes"); }, i => true)) {
+                if (notes.Picker != null || notes.PickedIndex != 0 || notes.Go.Text != "Update" || notes.Notes.Text != "release notes") Fail("The window of a launcher update is wrong.");
+            }
+
+            // The notes of a release: the intro and the list of changes. The download lines stay on the web page.
+            string body = "Intro line.\n\n**Download:** `x.zip`\nSHA-256: `abc`\n\n**Quick start:** open it.\n\n### Changes\n* One by @a in https://x/pull/1\n\n**Full Changelog**: https://x/compare";
+            string notesText = LauncherForm.ReleaseNotes(body);
+            if (notesText != "Intro line.\r\n\r\n* One by @a in https://x/pull/1") Fail("The release notes are wrong: " + notesText);
+            if (LauncherForm.ReleaseNotes("") != "" || LauncherForm.ReleaseNotes(null) != "") Fail("An empty release has notes.");
+            if (LauncherForm.ReleaseNotes("Only a line.") != "Only a line.") Fail("A release with no sections lost its text.");
+            if (LauncherForm.ReleaseNotes(new string('y', 5000)).Length > 3003) Fail("Long release notes were not cut.");
         }
 
         // The short card of a community plugin: Install stays off until the user allows the plugin to run.

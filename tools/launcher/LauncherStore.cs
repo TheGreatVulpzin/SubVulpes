@@ -214,6 +214,8 @@ namespace SubVulpes
                 e.Channel = CatalogText(d, "channel", 16);
                 if (e.Channel.Length == 0) e.Channel = "stable";
                 e.License = CatalogText(d, "license", 32);
+                e.Runtime = CatalogText(d, "runtime", 8);
+                e.Capabilities.AddRange(ReadCapabilityList(d));
                 object package;
                 var p = d.TryGetValue("package", out package) ? package as Dictionary<string, object> : null;
                 if (p == null) continue;
@@ -232,7 +234,13 @@ namespace SubVulpes
                 if (d.TryGetValue("versions", out more) && more is object[])
                     foreach (object item2 in (object[])more) {
                         StoreVersion v = ReadStoreVersionItem(item2 as Dictionary<string, object>);
-                        if (v != null && e.Versions.Count < StoreVersionsMax && !e.Versions.Any(x => x.Version == v.Version)) e.Versions.Add(v);
+                        if (v == null) continue;
+                        StoreVersion same = e.Versions.FirstOrDefault(x => x.Version == v.Version);
+                        if (same != null) {
+                            // The top level wins for the package. The list may add the changelog and the capabilities.
+                            if (same.Changelog.Length == 0) same.Changelog = v.Changelog;
+                            if (same.Capabilities.Count == 0) same.Capabilities.AddRange(v.Capabilities);
+                        } else if (e.Versions.Count < StoreVersionsMax) e.Versions.Add(v);
                     }
                 e.Versions.Sort((a, b) => SafeCompare(b.Version, a.Version));
                 // An entry whose newest version has an odd number still installs, as before.
@@ -261,10 +269,12 @@ namespace SubVulpes
             string serverMin = CatalogText(d, "server_min", 23);
             int minApi;
             if (!PluginVersionText.IsMatch(version) || !ReadMinApi(d, out minApi) || (serverMin.Length > 0 && !ServerMinText.IsMatch(serverMin))) return null;
-            return new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel };
+            var v = new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel, Changelog = ReadChangelog(d) };
+            v.Capabilities.AddRange(ReadCapabilityList(d));
+            return v;
         }
 
-        // One item of the list `versions`: version, file, sha256, size, and the optional server_min, min_api and channel.
+        // One item of the list `versions`: version, file, sha256, size, and the optional server_min, min_api, channel, changelog and capabilities.
         static StoreVersion ReadStoreVersionItem(Dictionary<string, object> d)
         {
             if (d == null) return null;
@@ -276,7 +286,37 @@ namespace SubVulpes
             if (channel.Length == 0) channel = "stable";
             if (!PluginVersionText.IsMatch(version) || !StorePath.IsMatch(file) || !file.StartsWith("packages/") || !Sha256Text.IsMatch(hash) ||
                 size <= 0 || size > StorePackageLimit || !ReadMinApi(d, out minApi) || (serverMin.Length > 0 && !ServerMinText.IsMatch(serverMin))) return null;
-            return new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel };
+            var v = new StoreVersion { Version = version, PackageFile = file, Sha256 = hash, Size = size, ServerMin = serverMin, MinApi = minApi, Channel = channel, Changelog = ReadChangelog(d) };
+            v.Capabilities.AddRange(ReadCapabilityList(d));
+            return v;
+        }
+
+        // A changelog is plain text with line breaks, at most 1200 characters. Other control characters go away.
+        internal const int ChangelogMax = 1200;
+        static string ReadChangelog(Dictionary<string, object> d)
+        {
+            object raw;
+            if (!d.TryGetValue("changelog", out raw) || !(raw is string)) return "";
+            var text = new StringBuilder();
+            foreach (char c in ((string)raw).Replace("\r\n", "\n").Replace('\r', '\n')) {
+                if (c == '\n' || c == '\t' || c >= ' ') text.Append(c);
+                if (text.Length >= ChangelogMax) break;
+            }
+            return text.ToString().Trim().Replace("\n", "\r\n");
+        }
+
+        // The capabilities of an entry or of a version: at most 24 short lower-case names.
+        static readonly Regex CapabilityName = new Regex(@"\A[a-z][a-z_]{0,23}\z");
+        static List<string> ReadCapabilityList(Dictionary<string, object> d)
+        {
+            var list = new List<string>();
+            object raw;
+            if (d.TryGetValue("capabilities", out raw) && raw is object[])
+                foreach (object item in (object[])raw) {
+                    string name = item as string ?? "";
+                    if (CapabilityName.IsMatch(name) && list.Count < 24 && !list.Contains(name)) list.Add(name);
+                }
+            return list;
         }
 
         // min_api is a whole number from 1 to 99. Without it the plugin needs API 1.
@@ -453,32 +493,112 @@ namespace SubVulpes
             await InstallPlugin(target, v.Sha256, c.Source);
         }
 
-        // The button that lists the versions this server can run. An older version asks first. The data of the plugin stays.
-        FlatButton VersionButton(CatalogEntry c, PluginMetadata installed)
+        // The versions of a plugin that this server can run, other than the one that is installed.
+        int OtherVersions(CatalogEntry c, string have)
         {
-            List<StoreVersion> usable = UsableVersions(c, ServerNumber(), previewsBox != null && previewsBox.On);
-            if (!c.Remote || usable.Count < 2) return null;
-            var button = new FlatButton("Version") { Width = ActionWidth };
-            button.Click += delegate {
-                var menu = new ContextMenuStrip();
-                foreach (StoreVersion v in usable) {
-                    StoreVersion pick = v;
-                    bool same = installed != null && installed.Version == v.Version;
-                    var item = new ToolStripMenuItem(v.Version + (same ? " (installed)" : "") + (v.Channel != "stable" ? " (" + v.Channel + ")" : "")) { Enabled = !same };
-                    item.Click += async delegate { await ChooseVersion(c, pick, installed); ReshowCatalog(c); };
-                    menu.Items.Add(item);
-                }
-                menu.Show(button, new Point(0, button.Height));
-            };
-            return button;
+            return UsableVersions(c, ServerNumber(), previewsBox != null && previewsBox.On).Count(v => v.Version != have);
         }
 
-        async Task ChooseVersion(CatalogEntry c, StoreVersion v, PluginMetadata installed)
+        static string VersionLabel(StoreVersion v, string have)
         {
-            if (installed != null && IsDowngrade(installed.Version, v.Version) &&
-                MessageBox.Show(this, "Go back to " + c.Name + " " + v.Version + "? The data of the plugin stays in user\\plugins.", "Older version",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            await InstallFromStore(c, v);
+            return v.Version + (v.Version == have ? " (installed)" : "") + (v.Channel != "stable" ? " (" + v.Channel + ")" : "");
+        }
+
+        // The text of the main button for a choice of version.
+        internal static string ChangeVerb(string have, string chosen)
+        {
+            if (have.Length == 0) return "Install";
+            return NewerVersion(chosen, have) ? "Update" : IsDowngrade(have, chosen) ? "Go back" : "Install";
+        }
+
+        // The window of an install, an update or a change of version. The user picks a version and reads what changed and what it can do.
+        async Task ChooseAndInstall(CatalogEntry c)
+        {
+            if (pluginBusy || updating || storeBusy || !c.Remote) return;
+            PluginMetadata installed = plugins.FirstOrDefault(p => p.Id == c.Id);
+            string have = installed == null ? "" : installed.Version;
+            List<StoreVersion> usable = UsableVersions(c, ServerNumber(), previewsBox != null && previewsBox.On);
+            if (usable.Count == 0) { message.Text = "No version of " + c.Name + " runs on this server."; return; }
+            int start = usable.FindIndex(v => v.Version != have);
+            if (start < 0) { message.Text = c.Name + " has no other version that this server can run."; return; }
+            List<string> labels = usable.Select(v => VersionLabel(v, have)).ToList();
+            string title = (have.Length == 0 ? "Install " : "Change version of ") + c.Name;
+            string subtitle = ByLine(c.Author, "") + " · " + (c.Source.Length > 0 ? c.Source : "Workshop") + " plugin";
+            using (var dialog = new ChangeDialog(title, subtitle, labels, start, i => ChangeVerb(have, usable[i].Version),
+                (box, i) => RenderVersionNotes(box, c, usable[i], have), i => usable[i].Version != have)) {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                await InstallFromStore(c, usable[dialog.PickedIndex]);
+            }
+        }
+
+        // ------------------------------------------------------------ what the window shows
+
+        static void NoteHeading(RichTextBox box, string text)
+        {
+            box.SelectionFont = UI.F(9.5f, FontStyle.Bold);
+            box.SelectionColor = UI.T.Fg;
+            box.AppendText(text + "\r\n");
+        }
+
+        static void NoteText(RichTextBox box, string text, Color color)
+        {
+            box.SelectionFont = UI.F(9.5f, FontStyle.Regular);
+            box.SelectionColor = color;
+            box.AppendText(text + "\r\n");
+        }
+
+        // The changelog of one version, a warning for an older one, and what the plugin can do.
+        internal static void RenderVersionNotes(RichTextBox box, CatalogEntry c, StoreVersion v, string have)
+        {
+            box.Clear();
+            NoteHeading(box, "What changed in " + v.Version);
+            NoteText(box, v.Changelog.Length > 0 ? v.Changelog : "The author wrote no changelog for this version.", UI.T.Fg);
+            if (have.Length > 0 && IsDowngrade(have, v.Version)) {
+                NoteText(box, "", UI.T.Fg);
+                NoteText(box, "This is an older version than " + have + ". The data of the plugin stays in user\\plugins.", PluginDangerColor("high"));
+            }
+            NoteText(box, "", UI.T.Fg);
+            NoteHeading(box, "What it can do");
+            List<string> caps = v.Capabilities.Count > 0 ? v.Capabilities : c.Capabilities;
+            if (caps.Count == 0) NoteText(box, "The Workshop does not list it. The launcher shows it again after the download.", UI.T.Muted);
+            foreach (string cap in caps) {
+                string what;
+                if (!CapText.TryGetValue(cap, out what)) what = cap;
+                bool low = cap == "read" || cap == "storage" || cap == "config";
+                NoteText(box, "•  " + what, low ? UI.T.Fg : PluginDangerColor("high"));
+            }
+            if (c.Runtime.Length == 0 || c.Runtime == "native")
+                NoteText(box, "•  Runs inside the server with full access", PluginDangerColor("highest"));
+            box.SelectionStart = 0;
+            box.SelectionLength = 0;
+        }
+
+        // The notes of a release: the words before the download line, then the list of changes. The other lines are for the web page.
+        internal static string ReleaseNotes(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return "";
+            string text = body.Replace("\r\n", "\n").Replace('\r', '\n');
+            int download = text.IndexOf("**Download:**", StringComparison.Ordinal);
+            string intro = download >= 0 ? text.Substring(0, download) : text;
+            string changes = "";
+            Match m = Regex.Match(text, @"^#{2,3} Changes\s*$", RegexOptions.Multiline);
+            if (m.Success) {
+                changes = text.Substring(m.Index + m.Length);
+                int log = changes.IndexOf("**Full Changelog**", StringComparison.Ordinal);
+                if (log >= 0) changes = changes.Substring(0, log);
+            }
+            string notes = (intro.Trim() + "\n\n" + changes.Trim()).Trim();
+            if (notes.Length > 3000) notes = notes.Substring(0, 3000).TrimEnd() + "...";
+            return notes.Replace("\n", "\r\n");
+        }
+
+        static void RenderReleaseNotes(RichTextBox box, string notes)
+        {
+            box.Clear();
+            NoteHeading(box, "What changed");
+            NoteText(box, notes.Length > 0 ? notes : "This release has no notes.", UI.T.Fg);
+            box.SelectionStart = 0;
+            box.SelectionLength = 0;
         }
 
         // ------------------------------------------------------------ the update check
@@ -575,6 +695,75 @@ namespace SubVulpes
         {
             using (var card = new CommunityCard(metadata))
                 return card.ShowDialog(this) == DialogResult.OK;
+        }
+
+        // One window for an install, an update, a change of version and an update of the launcher: a choice of version (when there
+        // is one), the notes of the choice, and one main button that follows the choice.
+        internal sealed class ChangeDialog : Form
+        {
+            internal readonly FlatButton Go;
+            internal readonly Dropdown Picker;
+            internal readonly RichTextBox Notes;
+            readonly Func<int, string> verb;
+            readonly Func<int, bool> allowed;
+            readonly Action<RichTextBox, int> render;
+
+            internal int PickedIndex { get { return Picker == null || Picker.SelectedIndex < 0 ? 0 : Picker.SelectedIndex; } }
+
+            internal ChangeDialog(string title, string subtitle, List<string> choices, int selected, Func<int, string> verb,
+                Action<RichTextBox, int> render, Func<int, bool> allowed)
+            {
+                this.verb = verb; this.render = render; this.allowed = allowed;
+                Text = title;
+                StartPosition = FormStartPosition.CenterParent;
+                Font = UI.F(9.5f, FontStyle.Regular);
+                ClientSize = new Size(520, 470);
+                FormBorderStyle = FormBorderStyle.FixedDialog;
+                MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; KeyPreview = true;
+                var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(14) };
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                for (int i = 0; i < 5; i++) table.RowStyles.Add(new RowStyle(i == 3 ? SizeType.Percent : SizeType.AutoSize, i == 3 ? 100 : 0));
+                var heading = new Label { Text = title, AutoSize = true, UseMnemonic = false, Font = UI.F(12f, FontStyle.Bold), Margin = new Padding(3, 3, 3, 2) };
+                var sub = new Label { Text = subtitle, AutoSize = true, MaximumSize = new Size(480, 0), UseMnemonic = false, Margin = new Padding(3, 0, 3, 10), Tag = "muted" };
+                var pick = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
+                if (choices != null && choices.Count > 0) {
+                    Picker = new Dropdown(260);
+                    Picker.Items.AddRange(choices.Cast<object>().ToArray());
+                    Picker.SelectedIndex = Math.Max(0, Math.Min(selected, choices.Count - 1));
+                    Picker.AccessibleName = "Version";
+                    var label = new Label { Text = "Version", AutoSize = true, UseMnemonic = false, Margin = new Padding(3, 8, 12, 0) };
+                    pick.Controls.Add(label);
+                    pick.Controls.Add(Picker);
+                }
+                Notes = new RichTextBox { ReadOnly = true, Dock = DockStyle.Fill, Tag = "doc", BorderStyle = BorderStyle.None, DetectUrls = false, TabStop = false, AccessibleName = "What changed and what the plugin can do" };
+                var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, 10, 0, 0) };
+                Go = new FlatButton("Install") { Kind = "primary" };
+                var cancel = new FlatButton("Cancel") { Margin = new Padding(0, 0, 8, 0) };
+                cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+                Go.Click += delegate { if (Go.Enabled) { DialogResult = DialogResult.OK; Close(); } };
+                actions.Controls.Add(Go);
+                actions.Controls.Add(cancel);
+                table.Controls.Add(heading, 0, 0);
+                table.Controls.Add(sub, 0, 1);
+                table.Controls.Add(pick, 0, 2);
+                table.Controls.Add(Notes, 0, 3);
+                table.Controls.Add(actions, 0, 4);
+                Controls.Add(table);
+                Skin.Window(this, UI.T);
+                HandleCreated += delegate { Skin.Window(this, UI.T); };
+                KeyDown += (sender, e) => { if (e.KeyCode == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); } };
+                if (Picker != null) Picker.SelectedIndexChanged += delegate { ShowChoice(); };
+                ShowChoice();
+            }
+
+            void ShowChoice()
+            {
+                int i = PickedIndex;
+                Go.Text = verb(i);
+                Go.Enabled = allowed(i);
+                Go.Invalidate();
+                render(Notes, i);
+            }
         }
 
         internal sealed class CommunityCard : Form

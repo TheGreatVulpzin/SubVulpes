@@ -147,7 +147,8 @@ An entry may carry an optional list `versions`. The fields at the top of the ent
 
 ```json
 "versions": [
-  { "version": "0.2.0", "file": "packages/sv.bans-0.2.0.svplugin", "sha256": "<64 hex digits>", "size": 48213, "server_min": "0.3.0", "min_api": 1, "channel": "stable" },
+  { "version": "0.2.0", "file": "packages/sv.bans-0.2.0.svplugin", "sha256": "<64 hex digits>", "size": 48213, "server_min": "0.3.0", "min_api": 1, "channel": "stable", "changelog": "Bans last after a restart.
+New /unban command.", "capabilities": ["read", "write", "storage"] },
   { "version": "0.1.0", "file": "packages/sv.bans-0.1.0.svplugin", "sha256": "<64 hex digits>", "size": 47100 }
 ]
 ```
@@ -159,15 +160,18 @@ An entry may carry an optional list `versions`. The fields at the top of the ent
 | `server_min` | Optional. Digits and dots, as in the manifest. A server that is older than this does not see the version. A suffix of the server version does not count, so `0.3.0-rc.1` meets `0.3.0`. A server with no readable version accepts any. |
 | `min_api` | Optional. A whole number from 1 to 99, and 1 when it is absent. The launcher knows API 1. It hides a version that needs a higher number. |
 | `channel` | Optional: `stable` (the default), `beta` or `experimental`. The launcher hides the others unless Include Beta Versions is on. |
+| `changelog` | Optional. Plain text of what changed, at most 1200 characters. The install window shows it. |
+| `capabilities`, `runtime` | Optional. What this version can do, and where it runs. When absent, the launcher uses the fields at the top of the entry. |
 
 The launcher reads at most 24 versions of an entry and skips an item that breaks a rule. It lists them newest first. The top level wins when the same number appears twice. An entry with no list has one version, the top level.
 
 ## What the launcher does with the versions
 
 - **Install and Update** use the newest version that the running server can run. If none can run, Install is off and says so.
-- **Version** is a button beside Uninstall. It lists the versions that the server can run. Choosing an older one is a downgrade: the launcher asks first, and the data of the plugin stays in `user\plugins`. An official package installs with no review window, as before.
+- **One window.** Install, Update and Change Version (a button in the My Plugins detail) open the same window. It has a version picker, the changelog of the chosen version and what that version can do. The Workshop list has no version control. The main button says Install, Update or Go back. Going back keeps the data of the plugin in `user\plugins`. The window does not change the approval system: an official package installs with no review window, and a community package still gets its review card after the download.
 - **The check.** At the start, and then at most once in 24 hours, the launcher reads the index in the background. A failed network is silent, and the time of the check is kept only after a good read (`plugin_check` in `launcher.ini`). A number on the Plugins tab shows how many installed plugins have an update.
-- **Automatic install.** The setting "Official plugin updates" (`auto_official` in `launcher.ini`) is off by default. When it is on, an official plugin installs its update by itself. A running server never restarts: the update waits for its next start. A community plugin never installs by itself.
+- **Launcher update.** The window of a launcher update shows the notes of the release before the download.
+- **Automatic install.** The setting "Autoupdate Standard Official Plugins" (`auto_official` in `launcher.ini`) is on by default. When it is on, an official plugin installs its update by itself. A running server never restarts: the update waits for its next start. A community plugin never installs by itself.
 
 The local `catalog.json` of today is the same list without the new fields. The launcher uses the downloaded index as the file that it caches. `file` becomes `package.file`.
 

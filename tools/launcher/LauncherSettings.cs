@@ -420,7 +420,7 @@ namespace SubVulpes
             update.Click += async delegate { await ChooseUpdate(); };
             previewsBox = new Switch { On = settings.Get("pre_releases", "0") == "1", AccessibleName = "Include Beta Versions" };
             previewsBox.Changed += delegate { settings.Set("pre_releases", previewsBox.On ? "1" : "0"); settings.Save(); UpdateBadge(); };
-            autoOfficialBox = new Switch { On = settings.Get("auto_official", "0") == "1", AccessibleName = "Install Official Plugin Updates Automatically" };
+            autoOfficialBox = new Switch { On = settings.Get("auto_official", "1") == "1", AccessibleName = "Autoupdate Standard Official Plugins" };
             autoOfficialBox.Changed += delegate { settings.Set("auto_official", autoOfficialBox.On ? "1" : "0"); settings.Save(); };
             themeBox = Combo(160, "Light", "Dark");
             accentBox = Combo(160, AccentNames);
@@ -452,8 +452,8 @@ namespace SubVulpes
                 checkUpdate.Margin = new Padding(0, 0, 8, 0);
                 AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
                 AddRow(t, "Updates", null, Inline(checkUpdate, update), null);
+                AddRow(t, "Autoupdate Standard Official Plugins", null, autoOfficialBox, null);
                 AddRow(t, "Include Beta Versions", null, previewsBox, null);
-                AddRow(t, "Official plugin updates", "Official plugins update by themselves.", autoOfficialBox, null);
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab.", debugModeBox, null);
             });
