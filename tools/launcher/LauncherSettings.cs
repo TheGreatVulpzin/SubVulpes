@@ -453,7 +453,7 @@ namespace SubVulpes
                 AddRow(t, "Version", null, L(AboutVersion(), false, false), null);
                 AddRow(t, "Updates", null, Inline(checkUpdate, update), null);
                 AddRow(t, "Include Beta Versions", null, previewsBox, null);
-                AddRow(t, "Official plugin updates", "Installs updates of official plugins by itself. A running server gets them at its next start. Off by default.", autoOfficialBox, null);
+                AddRow(t, "Official plugin updates", "Official plugins update by themselves.", autoOfficialBox, null);
                 Section(t, "Debug");
                 AddRow(t, "Debug Mode", "Shows the Advanced Settings tab.", debugModeBox, null);
             });
