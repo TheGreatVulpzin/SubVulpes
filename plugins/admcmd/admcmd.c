@@ -1,5 +1,7 @@
 #include "../common/permissions.h"
 #include "../patchouli/sv_patchouli.h"
+#include "../logging/sv_logging.h"
+#include "names.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +17,23 @@ static Effect effects[256];
 static SvEntity pending_npc;
 static uint64_t reset_sequence;
 
-typedef struct { int count; char word[4][64]; } Arguments;
+typedef struct { int count; char word[6][64]; } Arguments;
+
+/* What the last command did, for its answer and for the log. */
+typedef struct {
+    char target[32], detail[96], message[200], partial_detail[48];
+    SvEntity target_entity;
+    int target_is_bot;
+    SvResult partial;   /* a part of a command that failed while the command worked */
+} Report;
+static Report report;
+
+static void note_target(const SvPlayerState *player)
+{
+    snprintf(report.target, sizeof report.target, "%s", player->name);
+    report.target_entity = player->entity;
+    report.target_is_bot = player->is_bot;
+}
 
 static Effect *effect(const SvPlayerState *player)
 {
@@ -34,9 +52,47 @@ static Effect *effect(const SvPlayerState *player)
 
 static SvResult target(SvEntity actor, const char *name, SvPlayerState *out)
 {
-    if (name && *name) return of_target(&api, actor, name, out);
-    return actor ? api.read->player(api.owner, actor, out) : SV_INVALID;
+    SvResult result = name && *name ? of_target(&api, actor, name, out) :
+        actor ? api.read->player(api.owner, actor, out) : SV_INVALID;
+    if (result == SV_OK) note_target(out);
+    return result;
 }
+
+/* A number or a name for a command. Returns 1 when out holds the value. Otherwise it tells the actor and returns 0. */
+static int resolve(SvEntity actor, const NameSet *set, const char *text, int32_t *out)
+{
+    char matches[160];
+    const char *digits = text + (*text == '-');
+    int numeric = *digits != 0;
+    size_t i;
+    if (of_number(text, set->low, set->high, out)) return 1;
+    /* A number outside the range is an error. It must not match a part of a name, such as 7 in ak47. */
+    for (i = 0; digits[i]; ++i) if (digits[i] < '0' || digits[i] > '9') numeric = 0;
+    switch (numeric ? 0 : name_lookup(set, text, out, matches, sizeof matches)) {
+    case 1:
+        return 1;
+    case -1:
+        of_tell(&api, actor, "\"%.30s\" matches several: %s. Be more exact.", text, matches);
+        break;
+    default:
+        if (set->count)
+            of_tell(&api, actor, "\"%.30s\" is not a valid %s. Use a number from %d to %d, or a name. See /names %s.",
+                    text, set->kind, set->low, set->high, set->kind);
+        else
+            of_tell(&api, actor, "\"%.30s\" is not a valid %s. Use a number from %d to %d.", text, set->kind, set->low, set->high);
+    }
+    return 0;
+}
+
+/* The main name of a value, or the number, for the answer. */
+static void detail_of(const NameSet *set, int32_t value)
+{
+    const char *name = name_of(set, value);
+    if (name) snprintf(report.detail, sizeof report.detail, "%s", name);
+    else snprintf(report.detail, sizeof report.detail, "%d", value);
+}
+
+static void usage_line(const char *name, SvEntity actor);
 
 static SvResult body(const SvPlayerState *player, SvHumanState *out)
 {
@@ -156,6 +212,7 @@ static SvResult give_weapon(SvEntity actor, const SvPlayerState *player, uint32_
         if (!i) loaded = 1; else ++spare;
     }
     api.write->disown(api.owner, weapon);
+    snprintf(report.detail, sizeof report.detail, "%s", weapon_name[number - 1]);
     of_tell(&api, actor, "Gave %s to %s%s with %u loaded and %u spare magazines.", weapon_name[number - 1],
             player->name, slot < 2 ? "" : " in the inventory", loaded, spare);
     if (loaded + spare < 4) of_tell(&api, actor, "Skipped %u magazines: no room.", 4 - loaded - spare);
@@ -260,11 +317,13 @@ static SvResult teleport_command(SvEntity actor, const Arguments *args)
         if (result != SV_OK) return result;
         if (hit.kind == SV_HIT_NONE) return SV_NOT_FOUND;
         position = hit.position; position.y += 1;
+        snprintf(report.detail, sizeof report.detail, "the aim point");
         return move(&mover, position);
     }
     if (words == 1 || words == 2) {
         result = of_target(&api, actor, args->word[words - 1], &destination);
         if (result != SV_OK) return result;
+        snprintf(report.detail, sizeof report.detail, "%s", destination.name);
         if (body(&destination, &place) != SV_OK) return SV_STATE;
         position = place.position; position.x += 2;
         return move(&mover, position);
@@ -283,6 +342,7 @@ static SvResult teleport_command(SvEntity actor, const Arguments *args)
             return SV_INVALID;
         }
     }
+    snprintf(report.detail, sizeof report.detail, "%.0f %.0f %.0f", position.x, position.y, position.z);
     return move(&mover, position);
 }
 
@@ -312,8 +372,113 @@ static SvResult delete_body(SvEntity actor, const char *name)
         result = api.read->player(api.owner, other.player, &player);
         if (result != SV_OK) return result;
     }
+    note_target(&player);
     if (player.is_bot) return api.write->npc_remove(api.owner, player.entity);
     return player.human ? api.write->human_remove(api.owner, player.human) : SV_STATE;
+}
+
+/* /car NAME [color=C] [enter] [dist=N] [yaw=N] [PLAYER]. A modifier has an equals sign. The word "enter" stands alone.
+ * The one word that is left is the player. */
+static SvResult vehicle_command(SvEntity actor, const Arguments *args)
+{
+    SvPlayerState player = { sizeof player };
+    SvHumanState human = { sizeof human };
+    SvEntity object = 0;
+    SvVector position = { 0 };
+    int32_t type = 0, color = 0, distance = 4, yaw = 0;
+    int i, enter = 0;
+    const char *who = "";
+    SvResult result;
+    if (!resolve(actor, &vehicle_set, args->word[0], &type)) return SV_INVALID;
+    for (i = 1; i < args->count; ++i) {
+        const char *text = args->word[i];
+        if (!strncmp(text, "color=", 6)) {
+            if (!of_number(text + 6, 0, 5, &color)) { of_tell(&api, actor, "color must be a number from 0 to 5."); return SV_INVALID; }
+        } else if (!strncmp(text, "dist=", 5)) {
+            if (!of_number(text + 5, 2, 30, &distance)) { of_tell(&api, actor, "dist must be a number from 2 to 30."); return SV_INVALID; }
+        } else if (!strncmp(text, "yaw=", 4)) {
+            if (!of_number(text + 4, -180, 180, &yaw)) { of_tell(&api, actor, "yaw must be a number from -180 to 180."); return SV_INVALID; }
+        } else if (!strcmp(text, "enter")) {
+            enter = 1;
+        } else if (strchr(text, '=')) {
+            of_tell(&api, actor, "%.30s is not a modifier. Use color=, dist=, yaw= or enter.", text);
+            return SV_INVALID;
+        } else if (!*who) {
+            who = text;
+        } else {
+            usage_line("vehicle", actor);
+            return SV_INVALID;
+        }
+    }
+    result = target(actor, who, &player);
+    if (result == SV_OK) result = body(&player, &human);
+    if (result == SV_OK) result = ahead(&player, (float)distance, &position);
+    if (result == SV_OK)
+        result = api.write->object_create(api.owner, (uint32_t)type, position, human.axis + (float)yaw * 0.017453292f, color, &object);
+    if (result != SV_OK) return result;
+    detail_of(&vehicle_set, type);
+    snprintf(report.message, sizeof report.message, "Made a %s (color %d) in front of %s.", report.detail, color, player.name);
+    if (enter) {
+        size_t used = strlen(report.message);
+        SvResult seat = api.write->vehicle_enter(api.owner, player.human, object, 0);
+        if (seat == SV_OK)
+            snprintf(report.message + used, sizeof report.message - used, " %s is in the driver seat.", player.name);
+        else {
+            snprintf(report.message + used, sizeof report.message - used, " The seat failed: %s did not get in.", player.name);
+            report.partial = seat;
+            snprintf(report.partial_detail, sizeof report.partial_detail, "vehicle_enter failed");
+        }
+    }
+    return api.write->disown(api.owner, object);
+}
+
+static const NameSet *set_named(const char *text)
+{
+    static const NameSet *const sets[] = { &weapon_set, &item_set, &vehicle_set, &team_set, &sound_set };
+    char lower[24];
+    size_t length = strnlen(text, sizeof lower), i;
+    if (!length || length >= sizeof lower) return NULL;
+    for (i = 0; i <= length; ++i) lower[i] = (char)tolower((unsigned char)text[i]);
+    for (i = 0; i < sizeof sets / sizeof sets[0]; ++i) {
+        size_t kind = strlen(sets[i]->kind);
+        if (!strncmp(sets[i]->kind, lower, length) || (length == kind + 1 && lower[kind] == 's' && !strncmp(sets[i]->kind, lower, kind)))
+            return sets[i];
+    }
+    return NULL;
+}
+
+/* /names KIND lists the number and the names of each value. */
+static SvResult names_command(SvEntity actor, const char *kind)
+{
+    const NameSet *set = set_named(kind);
+    char text[SV_PATCHOULI_TEXT_MAX + 1], title[32], *line;
+    const void *table = NULL;
+    size_t used = 0;
+    uint32_t i, j;
+    if (!set) { usage_line("names", actor); return SV_INVALID; }
+    text[0] = 0;
+    for (i = 0; i < set->count; ++i) {
+        int first = 1;
+        for (j = 0; j < i; ++j) if (set->entries[j].value == set->entries[i].value) first = 0;
+        if (!first) continue;
+        used += (size_t)snprintf(text + used, sizeof text - used, "%d %s", set->entries[i].value, set->entries[i].name);
+        for (j = i + 1; j < set->count; ++j)
+            if (set->entries[j].value == set->entries[i].value)
+                used += (size_t)snprintf(text + used, sizeof text - used, ", %s", set->entries[j].name);
+        used += (size_t)snprintf(text + used, sizeof text - used, "\n");
+    }
+    snprintf(title, sizeof title, "Names of %ss", set->kind);
+    if (actor && api.plugins->borrow(api.owner, SV_PATCHOULI_API, SV_PATCHOULI_VERSION, &table) == SV_OK && table &&
+        ((const SvPatchouli *)table)->size >= sizeof(SvPatchouli) && ((const SvPatchouli *)table)->pages &&
+        ((const SvPatchouli *)table)->pages(api.owner, actor, title, text) == SV_OK)
+        return SV_OK;
+    for (line = text; *line; ) {
+        char *end = strchr(line, '\n');
+        if (end) *end = 0;
+        of_tell(&api, actor, "%s", line);
+        line = end ? end + 1 : line + strlen(line);
+    }
+    return SV_OK;
 }
 
 static SvResult run(const char *name, SvEntity actor, const Arguments *args)
@@ -350,18 +515,25 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
     if (!strcmp(name, "give")) {
         const SvPermissions *service;
         if (strcmp(first, "money") && strcmp(first, "admin")) return SV_INVALID;
-        if (of_target(&api, actor, last, &player) != SV_OK) return SV_NOT_FOUND;
+        result = of_target(&api, actor, last, &player);
+        if (result != SV_OK) return result;
+        note_target(&player);
         if (player.is_bot || !player.account) return SV_INVALID;
         if (!strcmp(first, "money")) {
             if (args->count != 3 || !of_number(args->word[2], 1, 100000000, &number)) return SV_INVALID;
-            return api.write->add_money(api.owner, player.account, number);
+            result = api.write->add_money(api.owner, player.account, number);
+            if (result == SV_OK) snprintf(report.detail, sizeof report.detail, "$%d", number);
+            return result;
         } else {
             char group[SV_CONFIG_TEXT_MAX + 1];
             if (args->count != 2) return SV_INVALID;
             result = of_permissions(&api, &service);
             if (result != SV_OK) return result;
             result = api.config->get_text(api.owner, "admin_group", group, sizeof group);
-            return result == SV_OK ? service->assign(actor, player.entity, group) : result;
+            if (result != SV_OK) return result;
+            result = service->assign(actor, player.entity, group);
+            if (result == SV_OK) snprintf(report.detail, sizeof report.detail, "the group %s", group);
+            return result;
         }
     }
     if (!strcmp(name, "tpall") || (!strcmp(name, "heal") && !strcmp(first, "all"))) {
@@ -380,34 +552,39 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
             } else result = heal(&player);
             if (result == SV_OK) ++changed; else ++failed;
         }
-        of_tell(&api, actor, "%s: %u changed, %u skipped.", name, changed, failed);
+        if (!strcmp(name, "tpall"))
+            snprintf(report.message, sizeof report.message, failed ? "Moved %u players to %s. Skipped %u: no living body." :
+                     "Moved %u players to %s.", changed, report.target, failed);
+        else
+            snprintf(report.message, sizeof report.message, failed ? "Healed %u players. Skipped %u: no living body." :
+                     "Healed %u players.", changed, failed);
         return SV_OK;
     }
     if (!strcmp(name, "tp") || !strcmp(name, "goto")) return teleport_command(actor, args);
     if (!strcmp(name, "bring")) {
-        if (of_target(&api, actor, first, &player) != SV_OK || target(actor, last, &destination) != SV_OK)
-            return SV_NOT_FOUND;
+        result = of_target(&api, actor, first, &player);
+        if (result != SV_OK) return result;
+        result = target(actor, last, &destination);
+        if (result != SV_OK) return result;
+        note_target(&player);
+        snprintf(report.detail, sizeof report.detail, "%s", destination.name);
         if (body(&destination, &place) != SV_OK) return SV_STATE;
         position = place.position; position.x += 2;
         return move(&player, position);
     }
+    if (!strcmp(name, "vehicle")) return vehicle_command(actor, args);
+    if (!strcmp(name, "names")) return names_command(actor, first);
     if (!strcmp(name, "arm") && !args->count) {
         number = 2;
         result = target(actor, "", &player);
-    } else if (!strcmp(name, "item") || !strcmp(name, "arm") || !strcmp(name, "vehicle") ||
-        !strcmp(name, "team") || !strcmp(name, "sound") || !strcmp(name, "turn")) {
-        int32_t low = 0, high = 0;
-        if (!strcmp(name, "item")) high = 25;
-        else if (!strcmp(name, "arm")) { low = 1; high = 6; }
-        else if (!strcmp(name, "vehicle")) high = 11;
-        else if (!strcmp(name, "team")) high = 5;
-        else if (!strcmp(name, "sound")) high = 46;
-        else high = 65535;
-        if (!of_number(first, low, high, &number)) {
-            of_tell(&api, actor, "%s: number must be %d to %d.", name, low, high);
-            return SV_INVALID;
-        }
+    } else if (!strcmp(name, "item") || !strcmp(name, "arm") || !strcmp(name, "team") || !strcmp(name, "sound") ||
+               !strcmp(name, "turn")) {
+        const NameSet *set = !strcmp(name, "item") ? &item_set : !strcmp(name, "arm") ? &weapon_set :
+            !strcmp(name, "team") ? &team_set : !strcmp(name, "sound") ? &sound_set : &account_set;
+        if (!resolve(actor, set, first, &number)) return SV_INVALID;
         result = target(actor, last, &player);
+        if (result == SV_OK && set == &account_set) snprintf(report.detail, sizeof report.detail, "account %d", number);
+        else if (result == SV_OK && set != &weapon_set) detail_of(set, number);
     } else result = target(actor, first, &player);
     if (result != SV_OK) return result;
     if (!strcmp(name, "team")) return of_set(&api, "player.team", player.entity, number);
@@ -444,7 +621,8 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
         if (!state) return SV_LIMIT;
         if (!strcmp(name, "god")) {
             state->immortal = !state->immortal;
-            of_tell(&api, actor, "Immortal %s: %s.", player.name, state->immortal ? "on" : "off");
+            snprintf(report.message, sizeof report.message, "%s is %s.", player.name,
+                     state->immortal ? "now immortal" : "no longer immortal");
             return state->immortal ? of_set(&api, "human.health", player.human, 100) : SV_OK;
         }
         if (!strcmp(name, "freeze") && human.vehicle) {
@@ -463,13 +641,6 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
         if (pending_npc) return SV_CONFLICT;
         pending_npc = player.entity; return SV_OK;
     }
-    if (!strcmp(name, "vehicle")) {
-        SvEntity object = 0;
-        result = ahead(&player, 4, &position);
-        if (result == SV_OK) result = api.write->object_create(api.owner, (uint32_t)number, position, human.axis, 0, &object);
-        if (result == SV_OK) result = api.write->disown(api.owner, object);
-        return result;
-    }
     if (!strcmp(name, "sound")) {
         SvLineHit hit = { sizeof hit };
         result = api.read->aim(api.owner, player.human, 2000, SV_LINE_ALL, &hit);
@@ -480,29 +651,14 @@ static SvResult run(const char *name, SvEntity actor, const Arguments *args)
     return SV_INVALID;
 }
 
-static const char *failure(SvResult result)
-{
-    switch (result) {
-    case SV_INVALID: return "invalid input. Use /help";
-    case SV_STATE: return "target or world is not ready";
-    case SV_LIMIT: return "server resource limit";
-    case SV_CONFLICT: return "occupied slot or request already active";
-    case SV_DENIED: return "permission denied";
-    case SV_NOT_FOUND: return "target or service not found";
-    case SV_INCOMPATIBLE: return "service version is not compatible";
-    case SV_IO: return "data write failed";
-    default: return "host operation failed";
-    }
-}
-
 static const struct { const char *command, *usage, *summary; } topic_list[] = {
     { "god", "[PLAYER]", "Toggle health 100 each tick. Also /imortal" },
     { "heal", "[PLAYER|all]", "Set health 100, bleeding 0 and stun 0" },
     { "kill", "[PLAYER]", "Set health -5 and bleeding 1" },
-    { "arm", "[N] [PLAYER]", "Weapon with 4 magazines: 1 AK47 2 M16 3 Magnum 4 MP5 5 Uzi 6 9mm" },
-    { "item", "N [PLAYER]", "Give item type 0 to 25 in a free hand" },
-    { "vehicle", "N [PLAYER]", "Make vehicle type 0 to 11 in front of the target. Also /car" },
-    { "team", "N [PLAYER]", "Set team 0 to 5" },
+    { "arm", "[N|NAME] [PLAYER]", "Weapon with 4 magazines. Default M-16. Names: /names weapon" },
+    { "item", "N|NAME [PLAYER]", "Give an item in a free hand or a pocket. Names: /names item" },
+    { "vehicle", "NAME [color= enter dist= yaw=] [PLAYER]", "Make a vehicle in front of the target. Also /car" },
+    { "team", "N|NAME [PLAYER]", "Set the team 0 to 5. Names: /names team" },
     { "heavy", "[PLAYER]", "Make the body very heavy, once. Also /heavydude" },
     { "tp", "[PLAYER] PLAYER|X Y Z", "Move a player. The mover comes first. No arguments: aim hit" },
     { "goto", "PLAYER", "Move the caller beside a player" },
@@ -511,7 +667,7 @@ static const struct { const char *command, *usage, *summary; } topic_list[] = {
     { "freeze", "PLAYER", "Hold the body at its position" },
     { "unfreeze", "PLAYER", "Release a frozen body" },
     { "npc", "[PLAYER]", "Add a bot in front of the target" },
-    { "sound", "N [PLAYER]", "Play sound 0 to 46 at the aim hit" },
+    { "sound", "N|NAME [PLAYER]", "Play a sound at the aim hit. Names: /names sound" },
     { "give", "money|admin PLAYER [N]", "Add money, or give the admin group" },
     { "turn", "ACCOUNT [PLAYER]", "Copy the name and looks of a saved account" },
     { "herobrine", "[PLAYER]", "Set look selector 2 to 3" },
@@ -519,6 +675,7 @@ static const struct { const char *command, *usage, *summary; } topic_list[] = {
     { "who", "[all]", "List players without groups" },
     { "id", "PLAYER", "Show account number, slot and group of a player" },
     { "where", "[PLAYER]", "Show the coordinates that /tp takes" },
+    { "names", "weapon|item|vehicle|team|sound", "List the names that a command accepts" },
     { "say", "TEXT", "Send a server message to everybody" },
     { "round", "reset", "Queue the round reset" },
     { "clear", "[PLAYER]", "Send 20 blank private lines" },
@@ -554,32 +711,175 @@ static void forget_topics(SvOwner owner)
         ((const SvPatchouli *)table)->forget(owner);
 }
 
+static void usage_line(const char *name, SvEntity actor)
+{
+    uint32_t i;
+    for (i = 0; i < sizeof topic_list / sizeof topic_list[0]; ++i)
+        if (!strcmp(topic_list[i].command, name)) {
+            of_tell(&api, actor, "Use: /%s %s", name, topic_list[i].usage);
+            return;
+        }
+    of_tell(&api, actor, "Use: /%s", name);
+}
+
+/* One place for the answers. %t is the target, %d the detail and %a the caller. A command with no row says nothing when
+ * it works. A command with a message in the report (a count, a toggle) uses that message in place of the row. */
+static const struct { const char *command, *done, *you; } texts[] = {
+    { "heal", "Healed %t.", "%a healed you." },
+    { "kill", "Killed %t.", "%a killed you." },
+    { "item", "Gave %d to %t.", "%a gave you %d." },
+    { "arm", NULL, "%a gave you a %d." },
+    { "vehicle", NULL, "%a made a vehicle in front of you." },
+    { "team", "Set the team of %t to %d.", "%a set your team to %d." },
+    { "heavy", "Made %t very heavy.", "%a made you very heavy." },
+    { "tp", "Teleported %t to %d.", "%a teleported you to %d." },
+    { "goto", "Teleported %t to %d.", "%a teleported you to %d." },
+    { "bring", "Teleported %t to %d.", "%a teleported you to %d." },
+    { "freeze", "Froze %t.", "%a froze you." },
+    { "unfreeze", "Released %t.", "%a released you." },
+    { "npc", "A bot will appear in front of %t.", NULL },
+    { "sound", "Played the sound %d at the aim point of %t.", NULL },
+    { "give", "Gave %d to %t.", "%a gave you %d." },
+    { "turn", "Changed the look and name of %t to %d.", "%a changed your look." },
+    { "herobrine", "Changed the look of %t.", NULL },
+    { "say", "Sent your message to everybody.", NULL },
+    { "round", "Queued the round reset.", NULL },
+    { "delh", "Ended the body of %t.", "%a ended your body." }
+};
+
+static void actor_name(SvEntity actor, char *out, size_t size)
+{
+    SvPlayerState player = { sizeof player };
+    if (actor && api.read->player(api.owner, actor, &player) == SV_OK) snprintf(out, size, "%s", player.name);
+    else snprintf(out, size, "The console");
+}
+
+static void expand(char *out, size_t size, const char *format, SvEntity actor)
+{
+    size_t used = 0;
+    for (; *format && used + 1 < size; ++format) {
+        const char *text = NULL;
+        char caller[40];
+        if (*format == '%' && (format[1] == 't' || format[1] == 'd' || format[1] == 'a')) {
+            if (format[1] == 't') text = report.target;
+            else if (format[1] == 'd') text = report.detail;
+            else { actor_name(actor, caller, sizeof caller); text = caller; }
+            ++format;
+            used += (size_t)snprintf(out + used, size - used, "%s", text);
+            if (used + 1 > size) used = size - 1;
+        } else out[used++] = *format;
+    }
+    out[used] = 0;
+}
+
+/* The answer of a command that worked, and the notice for the target when somebody else did it. */
+static void announce(const char *name, SvEntity actor)
+{
+    char line[240];
+    uint32_t i;
+    for (i = 0; i < sizeof texts / sizeof texts[0] && strcmp(texts[i].command, name); ++i) {}
+    if (report.message[0]) of_tell(&api, actor, "%s", report.message);
+    else if (i < sizeof texts / sizeof texts[0] && texts[i].done) {
+        expand(line, sizeof line, texts[i].done, actor);
+        of_tell(&api, actor, "%s", line);
+    }
+    if (i < sizeof texts / sizeof texts[0] && texts[i].you && actor && report.target_entity &&
+        report.target_entity != actor && !report.target_is_bot && of_int(&api, "notify_target", 1)) {
+        expand(line, sizeof line, texts[i].you, actor);
+        of_tell(&api, report.target_entity, "%s", line);
+    }
+}
+
+/* A failure in plain words, with what to do. The technical code goes to the log service. */
+static void explain(const char *name, SvResult result, SvEntity actor)
+{
+    const char *who = report.target[0] ? report.target : "The target";
+    int gives = !strcmp(name, "arm") || !strcmp(name, "item");
+    switch (result) {
+    case SV_INVALID:
+        usage_line(name, actor);
+        break;
+    case SV_STATE:
+        of_tell(&api, actor, "%s has no living body. Wait until the player spawns.", who);
+        break;
+    case SV_CONFLICT:
+        if (gives) of_tell(&api, actor, "Nothing was given: both hands and all pockets of %s are full.", who);
+        else if (!strcmp(name, "heavy")) of_tell(&api, actor, "%s is already heavy.", who);
+        else if (!strcmp(name, "npc")) of_tell(&api, actor, "Another bot is already waiting. Try again in a moment.");
+        else of_tell(&api, actor, "A conflicting request is already waiting. Try again in a moment.");
+        break;
+    case SV_LIMIT:
+        of_tell(&api, actor, "The server has no free slot for this.");
+        break;
+    case SV_DENIED:
+        of_tell(&api, actor, "You are not allowed to do this.");
+        break;
+    case SV_NOT_FOUND:
+        if (!strcmp(name, "give")) of_tell(&api, actor, "This needs the Permission System plugin, and it is not running.");
+        else of_tell(&api, actor, "Nothing was found. Aim at the target, or check the name.");
+        break;
+    case SV_INCOMPATIBLE:
+        of_tell(&api, actor, "A plugin that this command needs has the wrong version.");
+        break;
+    case SV_IO:
+        of_tell(&api, actor, "The data could not be saved.");
+        break;
+    default:
+        of_tell(&api, actor, "The game refused this.");
+    }
+}
+
+/* The commands that the log service records when they work. Every failure is recorded. */
+static int dangerous(const char *name)
+{
+    static const char *const names[] = { "heavy", "give", "round", "kill", "tpall", "delh" };
+    size_t i;
+    for (i = 0; i < sizeof names / sizeof names[0]; ++i)
+        if (!strcmp(name, names[i])) return 1;
+    return 0;
+}
+
+static void log_command(const char *name, SvEntity actor, SvResult result)
+{
+    const void *table = NULL;
+    const SvLogging *service;
+    SvLogEntry entry = { sizeof entry };
+    SvResult logged = result != SV_OK ? result : report.partial;
+    if (logged == SV_OK && !dangerous(name)) return;
+    if (api.plugins->borrow(api.owner, SV_LOGGING_API, SV_LOGGING_VERSION, &table) != SV_OK || !table) return;
+    service = (const SvLogging *)table;
+    if (service->size < sizeof *service || service->version != SV_LOGGING_VERSION || !service->record) return;
+    entry.kind = logged == SV_OK ? SV_LOG_ACTION : SV_LOG_FAILURE;
+    entry.action = name; entry.actor = actor; entry.target = report.target_entity; entry.result = logged;
+    entry.detail = logged != SV_OK && report.partial_detail[0] ? report.partial_detail : NULL;
+    service->record(api.owner, &entry);
+}
+
 static SvResult command(const char *name, int minimum, int maximum, SvEntity actor, const char *arguments)
 {
     char node[64], line[256], *rest = line;
     Arguments args = { 0 };
     SvResult result;
-    int parsed;
     snprintf(node, sizeof node, "admcmd.%s", name);
-    if (!of_can(&api, actor, node)) { of_tell(&api, actor, "You do not have permission: %s", node); return SV_OK; }
+    if (!of_can(&api, actor, node)) { of_tell(&api, actor, "You need the permission %s for this.", node); return SV_OK; }
     if (strnlen(arguments, sizeof line) >= sizeof line) { of_tell(&api, actor, "Command text is too long."); return SV_OK; }
+    memset(&report, 0, sizeof report); api.spoke = 0;
     if (!strcmp(name, "say")) {
         result = api.write->message(api.owner, SV_MESSAGE_SERVER, arguments);
     } else {
         strcpy(line, arguments);
-        while (*rest && args.count < 4) {
-            parsed = of_token(&rest, args.word[args.count], sizeof args.word[0]);
-            if (parsed != 1) break;
-            ++args.count;
-        }
+        while (*rest && args.count < 6)
+            if (of_token(&rest, args.word[args.count], sizeof args.word[0]) != 1) break;
+            else ++args.count;
         if (*rest || args.count < minimum || args.count > maximum) {
-            of_tell(&api, actor, "%s: use /help for the command form.", name);
+            usage_line(name, actor);
             result = SV_INVALID;
         }
         else result = run(name, actor, &args);
     }
-    if (result != SV_OK) of_tell(&api, actor, "%s failed: %s.", name, failure(result));
-    else if (strcmp(name, "clear")) of_tell(&api, actor, "%s done.", name);
+    if (result == SV_OK) announce(name, actor);
+    else if (!api.spoke) explain(name, result, actor);
+    log_command(name, actor, result);
     return SV_OK;
 }
 
@@ -587,12 +887,12 @@ static SvResult command(const char *name, int minimum, int maximum, SvEntity act
     static SvResult SV_CALL cmd_##name(SvOwner owner, uint64_t actor, const char *args) \
     { (void)owner; return command(#name, low, high, actor, args); }
 COMMAND(god, 0, 1) COMMAND(heal, 0, 1) COMMAND(kill, 0, 1) COMMAND(item, 1, 2)
-COMMAND(vehicle, 1, 2) COMMAND(arm, 0, 2) COMMAND(team, 1, 2)
+COMMAND(vehicle, 1, 5) COMMAND(arm, 0, 2) COMMAND(team, 1, 2)
 COMMAND(heavy, 0, 1) COMMAND(tp, 0, 4) COMMAND(goto, 1, 4) COMMAND(bring, 1, 2)
 COMMAND(npc, 0, 1) COMMAND(sound, 1, 2) COMMAND(give, 2, 3) COMMAND(turn, 1, 2)
 COMMAND(herobrine, 0, 1) COMMAND(help, 0, 0) COMMAND(players, 0, 1) COMMAND(where, 0, 1)
 COMMAND(tpall, 0, 1) COMMAND(freeze, 1, 1) COMMAND(unfreeze, 1, 1) COMMAND(say, 0, 0)
-COMMAND(round, 1, 1) COMMAND(clear, 0, 1) COMMAND(who, 0, 1) COMMAND(id, 1, 1) COMMAND(delh, 0, 1)
+COMMAND(names, 0, 1) COMMAND(round, 1, 1) COMMAND(clear, 0, 1) COMMAND(who, 0, 1) COMMAND(id, 1, 1) COMMAND(delh, 0, 1)
 #undef COMMAND
 
 static SvResult SV_CALL event(SvOwner owner, const SvEvent *event)
@@ -648,7 +948,7 @@ static SvResult SV_CALL enable(const SvHost *host, SvOwner owner)
         { "herobrine", cmd_herobrine }, { "help", cmd_help }, { "bmhelp", cmd_help }, { "players", cmd_players },
         { "where", cmd_where }, { "tpall", cmd_tpall }, { "freeze", cmd_freeze }, { "unfreeze", cmd_unfreeze },
         { "say", cmd_say }, { "round", cmd_round }, { "clear", cmd_clear }, { "who", cmd_who }, { "id", cmd_id },
-        { "delh", cmd_delh }
+        { "delh", cmd_delh }, { "names", cmd_names }
     };
     uint32_t i;
     int patchouli;

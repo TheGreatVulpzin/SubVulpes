@@ -37,6 +37,7 @@ void of_tell(Official *ctx, SvEntity actor, const char *format, ...)
     char text[512], line[64];
     size_t offset = 0, length, i;
     va_list args;
+    ctx->spoke = 1;
     va_start(args, format);
     vsnprintf(text, sizeof text, format, args);
     va_end(args);
@@ -191,6 +192,7 @@ SvResult of_target(Official *ctx, SvEntity actor, const char *name, SvPlayerStat
             return SV_CONFLICT;
         }
     }
+    of_tell(ctx, actor, "No player matches \"%.40s\". Use /players to see the names.", name);
     return SV_NOT_FOUND;
 }
 

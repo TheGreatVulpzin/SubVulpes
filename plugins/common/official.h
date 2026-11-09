@@ -20,6 +20,7 @@ typedef struct {
     const SvConfig *config;
     const SvPlugins *plugins;
     int has_account_number;
+    int spoke;   /* of_tell sets it. A command clears it, then checks it to avoid a second answer. */
 } Official;
 
 SvResult of_init(Official *ctx, const SvHost *host, SvOwner owner, uint32_t caps);

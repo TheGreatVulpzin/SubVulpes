@@ -15,7 +15,7 @@ def run(name, steps, permissions=True, patchouli=True, soft=()):
         return
     with tempfile.TemporaryDirectory(prefix="admcmd-", dir=BUILD / "tests") as folder:
         root = Path(folder)
-        plugins = ["sv.patchouli", "sv.admcmd", "sv.probe", "test.admcmd"]
+        plugins = ["sv.patchouli", "sv.logging", "sv.admcmd", "sv.probe", "test.admcmd"]
         if not patchouli:
             plugins.remove("sv.patchouli")
         if permissions:
@@ -23,7 +23,7 @@ def run(name, steps, permissions=True, patchouli=True, soft=()):
         profile, approvals = ["[plugins]"], ["[native]"]
         for plugin in plugins:
             shutil.copytree(BUILD / "plugins" / plugin, root / "plugins" / plugin)
-            profile.append(plugin + "=" + ("enabled" if plugin in ("sv.permissions", "sv.patchouli", *soft) else "required"))
+            profile.append(plugin + "=" + ("enabled" if plugin in ("sv.permissions", "sv.patchouli", "sv.logging", *soft) else "required"))
             binary = next((root / "plugins" / plugin).glob("*.dll"))
             approvals.append(plugin + "=" + hashlib.sha256(binary.read_bytes()).hexdigest())
         (root / "plugins/plugins.ini").write_text("\n".join(profile) + "\n", encoding="ascii")
@@ -54,14 +54,14 @@ console admprobe empty Guest
 """
 weapons += """
 console arm 2 Guest
-expect log "arm done."
+expect log "Gave M-16 to Guest with 1 loaded and 3 spare magazines."
 console admprobe inventory Guest
 expect log "ADM_ITEM Guest slot=0 type=2 children=1"
 expect log "ADM_ITEM Guest slot=3 type=3 children=0"
 expect log "ADM_ITEM Guest slot=4 type=3 children=0"
 console admprobe empty Guest
 console item 12 Guest
-expect log "item done."
+expect log "Gave bandage to Guest."
 console admprobe inventory Guest
 expect log "ADM_ITEM Guest slot=0 type=12 children=0"
 console arm 2 Guest
@@ -71,7 +71,7 @@ console arm 3 Guest
 expect log "Gave Magnum to Guest in the inventory"
 console admprobe pockets Guest
 console arm 4 Guest
-expect log "arm failed: occupied slot or request already active."
+expect log "Nothing was given: both hands and all pockets of Guest are full."
 say Root /arm 1
 console admprobe inventory Root
 expect log "ADM_ITEM Root slot=0 type=0 children=1"
@@ -80,7 +80,7 @@ say Root /arm
 console admprobe inventory Root
 expect log "ADM_ITEM Root slot=0 type=2 children=1"
 console arm
-expect log "arm failed: invalid input. Use /help."
+expect log "Use: /arm [N|NAME] [PLAYER]"
 """
 run("weapons", weapons)
 
@@ -143,28 +143,28 @@ expect log "bots hidden. Use /players all."
 console players all
 expect log "id:3  TestBot [bot]"
 console heal TestBot
-expect log "heal done."
+expect log "Healed TestBot."
 console team 3 TestBot
-expect log "team done."
+expect log "Set the team of TestBot to nexaco."
 console give money TestBot 10
-expect log "give failed: invalid input. Use /help."
+expect log "Use: /give money|admin PLAYER [N]"
 console give admin TestBot
-expect log "give failed: invalid input. Use /help."
+expect count 2 "Use: /give money|admin PLAYER [N]"
 console kill GuestTwo
 expect prop human.health GuestTwo -5
 expect prop human.bleeding GuestTwo 1
 console heal GuestTwo
 expect prop human.health GuestTwo 100
 console turn 0 Guest
-expect log "turn done."
+expect log "Changed the look and name of Guest to account 0."
 console help
-expect log "/arm [N] [PLAYER] - Weapon with 4 magazines"
+expect log "/arm [N|NAME] [PLAYER] - Weapon with 4 magazines"
 expect log "/tp [PLAYER] PLAYER|X Y Z"
 say Root /clear
 say Root /clear Guest
 console clear Guest
 console say A public server message.
-expect log "say done."
+expect log "Sent your message to everybody."
 """)
 
 run("motion", """
@@ -194,23 +194,23 @@ tick 1
 console admprobe state Target
 expect log "velocity=4.00,5.00,6.00"
 console tpall Root
-expect log "tpall: 1 changed, 0 skipped."
+expect log "Moved 1 players to Root."
 console npc Root
 console npc Target
-expect log "npc failed: occupied slot or request already active."
+expect log "Another bot is already waiting. Try again in a moment."
 tick 1
 expect entities players 3
 console vehicle 0 Root
-expect log "vehicle done."
+expect log "Made a towncar (color 0) in front of Root."
 expect entities objects 1
 console sound 0 Root
-expect log "sound done."
+expect log "Played the sound magnum at the aim point of Root."
 say Root /tp
 console car 11 Target
-expect log "vehicle done."
+expect log "Made a heli (color 0) in front of Target."
 expect entities objects 2
 console round reset
-expect log "round done."
+expect log "Queued the round reset."
 """)
 
 # The thing that moves comes first and the place second: /tp [PLAYER] PLAYER, and /tp [PLAYER] X Y Z.
@@ -241,7 +241,7 @@ expect log "Use: /tp [PLAYER] X Y Z"
 console admprobe state Root
 expect log "ADM_POSITION Root 10.00 20.00 30.00"
 console tp 1 2 3
-expect log "tp failed: invalid input."
+expect log "Use: /tp [PLAYER] PLAYER|X Y Z"
 """)
 
 # A plain number is an account number. Only id:N is a slot. A number never falls back to a slot.
@@ -284,18 +284,18 @@ tick 1
 console perm set Root owner
 expect entities humans 2
 console delh Target
-expect log "delh done."
+expect log "Ended the body of Target."
 expect entities humans 1
 expect entities players 2
 console heal Target
-expect log "heal failed: target or world is not ready."
+expect log "Target has no living body. Wait until the player spawns."
 console delh Target
-expect log "delh failed: target or world is not ready."
+expect log "Target has no living body. Wait until the player spawns."
 say Root /delh Root
 expect entities humans 1
 console admprobe bot
 console delh TestBot
-expect log "delh done."
+expect log "Ended the body of TestBot."
 """)
 
 heavy = """
@@ -306,13 +306,13 @@ for slot in range(15):
     heavy += f"console probe set human.bone_mass Root 2 {slot}\n"
 heavy += """
 console heavydude Root
-expect log "heavy done."
+expect log "Made Root very heavy."
 console probe get human.bone_mass Root 0
 expect log "PROBE get human.bone_mass Root = 200000.000"
 console probe get human.bone_mass Root 14
 expect count 2 "= 200000.000"
 console heavy Root
-expect log "heavy failed: occupied slot or request already active."
+expect log "Root is already heavy."
 """
 run("heavy", heavy)
 
@@ -325,31 +325,31 @@ console perm set Root owner
 console heal Ast
 expect log "Several players match."
 console heal Missing
-expect log "heal failed: target or service not found."
+expect log "Use /players to see the names."
 """
-for command, lower, upper in [("arm", 1, 6), ("item", 0, 25), ("vehicle", 0, 11),
-                              ("team", 0, 5), ("sound", 0, 46), ("turn", 0, 65535)]:
+for command, kind, lower, upper in [("arm", "weapon", 1, 6), ("item", "item", 0, 25), ("team", "team", 0, 5),
+                                    ("sound", "sound", 0, 46), ("turn", "account number", 0, 65535)]:
     for value in (lower - 1, upper + 1, "99999999999999999999999999999", "1x"):
         bounds += f"console {command} {value} Root\n"
-    bounds += f'expect count 4 "{command} failed: invalid input. Use /help."\n'
-    bounds += f'expect count 4 "{command}: number must be {lower} to {upper}."\n'
+    bounds += f'expect count 4 "is not a valid {kind}. Use a number from {lower} to {upper}"\n'
+for value in (-1, 12, "99999999999999999999999999999", "1x"):
+    bounds += f"console vehicle {value} Root\n"
+bounds += 'expect count 4 "is not a valid vehicle. Use a number from 0 to 11"\n'
 bounds += """
 console give money Root 0
 console give money Root 100000001
-expect count 2 "give failed: invalid input. Use /help."
+expect count 2 "Use: /give money|admin PLAYER [N]"
 console probe set human.bone_mass Root 501 14
 console heavy Root
-expect log "heavy failed: invalid input. Use /help."
+expect log "Use: /heavy [PLAYER]"
 console heal Root extra
-expect count 1 "heal failed: invalid input. Use /help."
+expect count 1 "Use: /heal [PLAYER|all]"
 console arm 1 Root extra extra extra
-expect count 5 "arm failed: invalid input. Use /help."
+expect count 1 "Use: /arm [N|NAME] [PLAYER]"
 console heal AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-expect count 2 "heal failed: invalid input. Use /help."
+expect count 2 "Use: /heal [PLAYER|all]"
 console arm
-expect count 6 "arm failed: invalid input. Use /help."
-expect count 1 "arm: use /help for the command form."
-expect count 2 "heal: use /help for the command form."
+expect log "Use: /arm [N|NAME] [PLAYER]"
 """
 run("bounds", bounds)
 
@@ -366,7 +366,7 @@ say Root /arm 1 Guest
 console admprobe inventory Guest
 expect log "ADM_ITEM Guest slot=0 type=0 children=1"
 console give admin Guest
-expect log "give failed: target or service not found."
+expect log "This needs the Permission System plugin, and it is not running."
 """, permissions=False)
 
 # A full pocket skips only its magazines. The weapon and the loaded magazine stay.
@@ -375,7 +375,6 @@ spawn player Root
 tick 1
 console admprobe magpockets Root
 console arm 1 Root
-expect log "arm done."
 expect log "Gave AK-47 to Root with 1 loaded and 0 spare magazines."
 expect log "Skipped 3 magazines: no room."
 console admprobe inventory Root
@@ -411,6 +410,8 @@ console perm set Root owner
 console help
 expect log "/heal [PLAYER|all] - Set health 100"
 expect log "/delh [PLAYER] - End the body"
+expect log "/logs [COUNT] - Show the last lines"
+expect count 1 "/kill [PLAYER] - Set health -5"
 console help tp
 expect log "/tp [PLAYER] PLAYER|X Y Z"
 expect log "Permission: admcmd.tp"
@@ -418,10 +419,11 @@ console help nothing
 expect log "No help for nothing."
 console plugins disable sv.admcmd
 console help
-expect log "No command is available to you."
+expect count 1 "/kill [PLAYER] - Set health -5"
+expect count 2 "/logs [COUNT] - Show the last lines"
 console plugins enable sv.admcmd
 console help
-expect log "/kill [PLAYER] - Set health -5"
+expect count 2 "/kill [PLAYER] - Set health -5"
 say Guest /help
 say Root /help 2
 say Root /page
@@ -434,3 +436,88 @@ tick 1
 console help
 expect log "arm 1=AK47"
 """, patchouli=False)
+
+# A name stands in for a number. The number still works.
+run("names", """
+spawn player Root
+spawn player Guest
+tick 1
+console perm set Root owner
+console arm uzi Guest
+expect log "Gave Uzi to Guest with 1 loaded and 3 spare magazines."
+console admprobe empty Guest
+console arm AK Guest
+expect log "Gave AK-47 to Guest"
+console admprobe empty Guest
+console arm m Guest
+expect log "matches several: m16, magnum, mp5"
+console item bandage Guest
+expect log "Gave bandage to Guest."
+console item disk Guest
+expect log "matches several:"
+console team pentacom Guest
+expect log "Set the team of Guest to pentacom."
+expect prop player.team Guest 4
+# Nothing is on the aim line here, so the sound fails the same way by name and by number.
+console sound ping Root
+console sound 39 Root
+expect count 2 "sound by console target Root (acc 0) result FAIL SV_NOT_FOUND(6)"
+expect no-log "is not a valid sound"
+console vehicle nosuch Root
+expect log "is not a valid vehicle"
+console names weapon
+expect log "1 ak47, ak-47, ak"
+console names vehicles
+expect log "5 turbos, turbo-s"
+console names team
+expect log "0 goldmen, goldmen-inc"
+console names boats
+expect log "Use: /names weapon|item|vehicle|team|sound"
+""")
+
+# /car takes modifiers. The test world has no seats, so the driver seat fails here and the log says why.
+# A seat that works needs a check in the game.
+run("car", """
+spawn player Root
+spawn player Target
+tick 1
+console perm set Root owner
+console car van color=3 Target
+expect log "Made a van (color 3) in front of Target."
+expect entities objects 1
+console car limo dist=10 yaw=90 enter Target
+expect log "Made a limo (color 0) in front of Target. The seat failed: Target did not get in."
+expect log "vehicle by console target Target (acc 1) result FAIL SV_INVALID(1) vehicle_enter failed"
+expect entities objects 2
+console car van color=9 Target
+expect log "color must be a number from 0 to 5."
+console car van dist=99 Target
+expect log "dist must be a number from 2 to 30."
+console car van yaw=x Target
+expect log "yaw must be a number from -180 to 180."
+console car van size=2 Target
+expect log "size=2 is not a modifier."
+expect entities objects 2
+""")
+
+# The log service writes one fixed line for each failure and for each dangerous action.
+run("logging", """
+spawn player Root
+spawn player Guest
+tick 1
+console perm set Root owner
+console kill Guest
+expect log "kill by console target Guest (acc 1) result OK"
+console heal Missing
+expect log "heal by console result FAIL SV_NOT_FOUND(6)"
+console arm 1 Guest extra extra
+expect log "arm by console result FAIL SV_INVALID(1)"
+console heal Guest
+expect no-log "heal by console target Guest (acc 1) result OK"
+console give money Guest 5
+expect log "give by console target Guest (acc 1) result OK"
+say Root /give money Guest 5
+expect count 1 "give by Root (acc 0) target Guest (acc 1) result OK"
+console logs 3
+expect count 2 "give by Root (acc 0) target Guest (acc 1) result OK"
+""")

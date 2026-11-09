@@ -263,6 +263,7 @@ namespace SubVulpes
             "plugins/plugins.ini", "plugins/native-approvals.ini", "plugins/sv.status/plugin.ini", "plugins/sv.status/status.dll",
             "plugins/sv.permissions/plugin.ini", "plugins/sv.permissions/permissions.dll",
             "plugins/sv.patchouli/plugin.ini", "plugins/sv.patchouli/patchouli.dll",
+            "plugins/sv.logging/plugin.ini", "plugins/sv.logging/logging.dll",
             "plugins/sv.admcmd/plugin.ini", "plugins/sv.admcmd/admcmd.dll",
             "install_plugin.ps1"
         };
