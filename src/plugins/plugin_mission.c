@@ -7,6 +7,7 @@
 #include "economy.h"
 #include "sr_server.h"
 #include "plugin_lists.h"
+#include "scenario.h"
 #include <string.h>
 
 typedef struct { SvOwner owner; SvMissionRef reference; } Binding;
@@ -14,6 +15,12 @@ static Binding bindings[SV_MISSION_TEAMS][SV_MISSION_SLOTS];
 static int installed;
 /* Event 12 stores team * 16 and slot * 2 in the same low byte. */
 enum { CLIENT_MISSION_SLOTS = 8 };
+
+/* A native acquisition that a plugin started. The record names the scenario, not a slot: the game links one slot in
+ * each team, and the completion guard of plugin missions must not apply to its native growth. */
+enum { ACQUISITION_MAX = 16 };
+typedef struct { SvOwner owner; int32_t scenario; uint64_t reset; } Acquisition;
+static Acquisition acquisitions[ACQUISITION_MAX];
 
 static SvResult context(SvOwner owner)
 {
@@ -154,9 +161,53 @@ static SvResult SV_CALL cancel(SvOwner owner, const SvMissionRef *r)
     return SV_OK;
 }
 
+/* Starts the native acquisition of kind 0 (guards in a building) or 1 (a vehicle chase) for every team in the mask.
+ * Each team gets one slot of the same scenario, so the first team that delivers the item ends it for all. */
+static SvResult SV_CALL acquisition(SvOwner owner, uint32_t kind, uint32_t team_mask, SvMissionRef *out)
+{
+    int list[SV_MISSION_TEAMS], n = 0, t, j;
+    int32_t id;
+    Acquisition *record = NULL;
+    if (context(owner) != SV_OK || !sv_plugins_write_context(owner))
+        return SV_STATE;
+    if (kind > 1 || !team_mask || team_mask >= (1u << SV_MISSION_TEAMS) || !out || out->size < sizeof *out)
+        return SV_INVALID;
+    for (t = 0; t < (int)SV_MISSION_TEAMS; ++t)
+        if (team_mask & (1u << t)) {
+            if (scenario_getnextmission(t) >= CLIENT_MISSION_SLOTS)
+                return SV_LIMIT;
+            list[n++] = t;
+        }
+    if (g_scenario.next_id < 0 || g_scenario.next_id == INT32_MAX)
+        return SV_LIMIT;
+    if (!installed || !scenario_free(g_scenario.next_id))
+        return SV_STATE;
+    for (j = 0; j < ACQUISITION_MAX && !record; ++j)
+        if (!acquisitions[j].owner)
+            record = &acquisitions[j];
+    if (!record)
+        return SV_LIMIT;
+    id = g_scenario.next_id;
+    createmission_acquisition((int)kind, n, list);
+    /* The builder found no building with guard spots, no road or no free record. */
+    if (g_scenario.next_id == id)
+        return SV_FAILED;
+    for (j = 0; j < CLIENT_MISSION_SLOTS; ++j)
+        if (team_missions(list[0])[j].active && team_missions(list[0])[j].scenario == id)
+            break;
+    if (j == CLIENT_MISSION_SLOTS)
+        return SV_FAILED;
+    record->owner = owner;
+    record->scenario = id;
+    record->reset = sv_game_reset_sequence();
+    *out = reference((uint32_t)list[0], (uint32_t)j);
+    return SV_OK;
+}
+
 void sv_mission_install(void)
 {
     memset(bindings, 0, sizeof bindings);
+    memset(acquisitions, 0, sizeof acquisitions);
     installed = 1;
 }
 
@@ -226,6 +277,11 @@ void sv_mission_before_tick(void)
                 sv_entity_resolve(SV_ENTITY_ITEM, b->reference.item) != m->item)
                 retire(b, m);
         }
+    /* An acquisition record ends with its scenario or with the world. */
+    for (j = 0; j < ACQUISITION_MAX; ++j)
+        if (acquisitions[j].owner &&
+            (acquisitions[j].reset != sv_game_reset_sequence() || scenario_free(acquisitions[j].scenario)))
+            memset(&acquisitions[j], 0, sizeof acquisitions[j]);
 }
 
 void sv_mission_release_owner(SvOwner owner)
@@ -241,8 +297,15 @@ void sv_mission_release_owner(SvOwner owner)
                 else
                     retire(&bindings[t][j], &team_missions(t)[j]);
             }
+    /* The missions of a stopped plugin end. The guards, the chase car and its driver stay, as on expiry. */
+    for (j = 0; j < ACQUISITION_MAX; ++j)
+        if (acquisitions[j].owner == owner) {
+            if (acquisitions[j].reset == sv_game_reset_sequence() && !scenario_free(acquisitions[j].scenario))
+                scenario_setmissioninactive(acquisitions[j].scenario);
+            memset(&acquisitions[j], 0, sizeof acquisitions[j]);
+        }
 }
 
 const SvGameMission sv_game_mission = {
-    sizeof(SvGameMission), SV_GAME_MISSION_VERSION, read_slots, start, cancel
+    sizeof(SvGameMission), SV_GAME_MISSION_VERSION, read_slots, start, cancel, acquisition
 };

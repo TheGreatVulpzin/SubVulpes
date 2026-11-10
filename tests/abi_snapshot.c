@@ -105,7 +105,7 @@ int main(void)
     TABLE(SvGameAi, threats, sight_range, 26);
     TABLE(SvGameEconomy, company, add_stocks, 4);
     TABLE(SvGameEngine, describe, set, 3);
-    TABLE(SvGameMission, slots, cancel, 3);
+    TABLE(SvGameMission, slots, acquisition, 4);
     TABLE(SvGameSettings, describe, set, 3);
     TABLE(SvGameShop, phone, catalog_replace, 4);
     TABLE(SvGameStorage, get, erase, 3);
