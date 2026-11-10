@@ -1,5 +1,21 @@
 # Official plugin progress
 
+## Workshop source move (2026-11-09)
+
+The official plugin source and tests now live in the [Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins).
+The server package embeds `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.admcmd`, all enabled by default.
+`plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
+`tools/release/embedded-plugins.txt` pins the source and lists the default states.
+The Workshop owns the plugin tests. This repository keeps the API, host, runner, SDK and package tests.
+Validation after the move: the fresh MSVC x86 build and all 24 CTest groups pass.
+The package check passes on repeat after the local Workshop checkout ownership fix.
+Storage, native dependencies and repository checks pass.
+The server zip carries four enabled plugins with matching DLL approvals and no status fixture.
+Eleven plugin groups now run in the Workshop.
+The two inspection groups run alone because their PowerShell process has a 30-second deadline.
+
+The evidence below records the earlier work in this repository.
+
 Work order: Part 1, permissions, admin commands, bans, chat additions, welcome and rules, then audit logs.
 
 | Step | State | Evidence |

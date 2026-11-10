@@ -37,3 +37,11 @@ Run the full test suite after a fresh rebuild. In the pull request, list what yo
 On every pull request, GitHub runs the checks of the repository, builds the server and runs the whole test suite. A check named `Check that the plugin API only grows` fails if the ABI snapshot loses or changes a line. The first pull request from a new contributor waits until the owner approves the workflows.
 
 The Branch/Pull Request will be reviewed fully and we're going to see if it fits our standards for approval.
+
+## Official plugin sources (2026-11-09)
+
+The official plugin source and tests now live in the [Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins).
+This repository keeps the core, public API, host tests, SDK, runner, probe and launcher.
+`plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
+An API change that affects an official plugin needs changes and tests in both repositories.
+Change the release pin in `tools/release/embedded-plugins.txt` with a normal commit here.

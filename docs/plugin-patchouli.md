@@ -1,5 +1,8 @@
 # Patchouli: Help System
 
+Source and tests: [SubVulpes Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins/sv.patchouli).
+Build and test this plugin in the Workshop. This page keeps its behavior and settings.
+
 Working ID: `sv.patchouli`. Version: `0.1.0`. This native plugin starts enabled.
 It owns `/help` and `/page` for all plugins. It needs read, write and plugin services.
 It uses only the public API and no internal record layouts.

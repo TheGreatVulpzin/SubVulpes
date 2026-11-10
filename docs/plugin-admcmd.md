@@ -1,5 +1,8 @@
 # Admin Commands
 
+Source and tests: [SubVulpes Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins/sv.admcmd).
+Build and test this plugin in the Workshop. This page keeps its behavior and settings.
+
 Working ID: `sv.admcmd`. Version: `0.4.0`. This native plugin starts enabled.
 The manifest holds the ID, display name and version. The host uses that ID for its storage namespace.
 The plugin needs read, write, properties, configuration and plugin services.

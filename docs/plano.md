@@ -28,7 +28,7 @@ S3 runtime implementation is in progress. See [S3 evidence](s3.md).
 
 ## S3: Core boundaries and official native plugins
 
-**In progress. S3 remains open.** The first native foundation and default-enabled status module exist.
+**In progress. S3 remains open.** The first native foundation and status fixture exist.
 See [S3 evidence](s3.md), [plugin design](plugins.md) and [system coverage](plugin-api-map.md).
 The coverage catalog defines intended reach. The current status proof does not establish that reach.
 
@@ -68,6 +68,15 @@ Define A10, D11 and D12 first. Their inherited identifiers still have no descrip
 
 The current proof includes 58 native checks plus codec, handle, launcher and installation checks. See [S3 evidence](s3.md) for results and limits.
 These checks do not close the full API coverage requirement or S3.
+
+### Decision of 2026-11-09: Workshop source move
+
+The official plugin source and tests now live in the Workshop. The behavior docs stay in this repository.
+The server package embeds `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.admcmd`, all enabled by default.
+`tools/release/embedded-plugins.txt` pins the Workshop source. The release builds it with the SDK of the current server.
+`plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
+The core tests no longer compile the source of another official plugin.
+See [the completed move](plugin-store.md#the-source-of-the-official-plugins-moves-to-the-workshop-done-on-2026-11-09).
 
 ### State on 2026-10-27
 

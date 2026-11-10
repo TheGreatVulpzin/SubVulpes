@@ -1,5 +1,8 @@
 # Permission System
 
+Source and tests: [SubVulpes Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins/sv.permissions).
+Build and test this plugin in the Workshop. This page keeps its behavior and settings.
+
 Working ID: `sv.permissions`. Version: `0.2.0`. This native plugin starts enabled.
 The manifest holds its ID, display name and version. CMake supplies those values to its entry point.
 The host uses that ID for its private storage folder. The public service name is `SV_PERMISSIONS_API` in `sv_permissions.h`.

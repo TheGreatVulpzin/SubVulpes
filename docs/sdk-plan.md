@@ -1,6 +1,15 @@
 # SDK, test runner, easy approval and script bridge: plan
 
-Status: plan of 2026-10-28. No code exists for it. The owner pulled this work forward from S4 and gave it to the second editor.
+## Workshop source move (2026-11-09)
+
+The official plugin source and tests now live in the [Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins).
+The server package embeds `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.admcmd`, all enabled by default.
+`plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
+`tools/release/embedded-plugins.txt` pins the source and lists the default states.
+The Workshop owns the plugin tests. This repository keeps the API, host, runner, SDK and package tests.
+The evidence below records the earlier work in this repository.
+
+Original plan of 2026-10-28. See [SDK progress](sdk-progress.md) for completed work and the Workshop source move.
 It follows [the plugin platform](plugins.md), [the SDK page](plugin-sdk.md) and [plugin libraries](plugin-libraries.md).
 
 ## Goal
@@ -51,7 +60,7 @@ Update `tools/plugins/install_plugin.ps1` and the launcher parser for the new ke
 
 - A CMake function `sv_add_plugin(NAME ID VERSION SOURCES ...)` makes the target, stages the files, writes the approval entry and builds the ZIP.
 - `tools/sdk/pack.ps1` makes `<id>-<version>-<runtime>.svplugin` from a folder (D4). The installer, the launcher file dialog and the tests accept this extension. The old `.zip` name still installs. It calls `--plugin-validate` and fails on a problem.
-- `plugins/official.ini` lists the official plugins and their default state. `make_package.ps1`, the approval file and `tests/package_test.ps1` read it.
+- `tools/release/embedded-plugins.txt` pins Workshop source and lists the embedded plugins and their default states. The embedded build, package and tests use it.
 - Official plugins get their own version and their own ZIP in the release notes. Tags `plugin-<id>-v<version>` exist only when the owner asks.
 - Move `sv.testroom` to the same path as an example, still out of the server package.
 
@@ -157,11 +166,11 @@ The first editor keeps working on the game API in the main checkout while the se
 | Owner | Files |
 | --- | --- |
 | Second editor (SDK) | `plugin_host.c`, `plugin_files.c`, `plugin_internal.h`, `plugin_control.c`, `plugin_config.c`, the new `runtime*.c`, `tools/sdk/`, `tools/plugins/`, `tools/release/`, `tools/launcher/`, `tests/systems/world.c` and its users, `tests/sdk/`, `CMakeLists.txt`, `docs/sdk*.md`, `docs/plugins.md`, `docs/plugin-sdk.md`, `docs/plano.md` |
-| First editor (API) | `plugin_props.c`, `plugin_read.c`, `plugin_write.c`, `plugin_events.c`, `plugin_game*.c`, `plugin_made.c`, `plugin_collapse.h`, the `sv_game_*.h` headers, the game sources in `src/game` and `src/net`, `plugins/testroom/`, `tests/plugin_game_*.c`, `docs/plugin-game-api.md`, `docs/plugin-events.md`, `docs/plugin-coverage.md`, `docs/legacy-modules.md`, `docs/game/` |
+| First editor (API) | `plugin_props.c`, `plugin_read.c`, `plugin_write.c`, `plugin_events.c`, `plugin_game*.c`, `plugin_made.c`, `plugin_collapse.h`, the `sv_game_*.h` headers, the game sources in `src/game` and `src/net`, `tests/plugin_game_*.c`, `docs/plugin-game-api.md`, `docs/plugin-events.md`, `docs/plugin-coverage.md`, `docs/legacy-modules.md`, `docs/game/` |
 
 - The timers of N41 live in `plugin_host.c`. They wait until the second editor ends M1.
 - A new API method of the first editor has no binding in the Lua and WASM glue until WP7. When `check_bindings.py` exists, the first editor adds the entry in the same commit, or writes the reason "not exposed".
-- The second editor does not move `plugins/testroom/` in WP2. The first editor still owns it.
+- The Workshop now owns the test room. API changes that affect it need Workshop tests.
 - Both editors build in their own worktree, and each one has its own `build/` folder. Two builds at the same time can run out of memory (error 1455). Build one at a time.
 - The owner merges `codex/sdk` into `main`. Files that only one editor changed merge without a conflict.
 
