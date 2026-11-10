@@ -100,7 +100,7 @@ int main(void)
     TABLE(SvGameRead, entities, account_number, 21);
     TABLE(SvGameWrite, message, human_remove, 30);
     TABLE(SvGameProps, find, add, 5);
-    TABLE(SvGameAi, threats, aim_snap, 17);
+    TABLE(SvGameAi, threats, unpossess, 18);
     TABLE(SvGameEconomy, company, add_stocks, 4);
     TABLE(SvGameEngine, describe, set, 3);
     TABLE(SvGameMission, slots, cancel, 3);

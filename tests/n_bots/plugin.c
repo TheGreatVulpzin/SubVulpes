@@ -8,6 +8,7 @@ static const SvGameAi *ai;
 static const SvGameProps *props;
 static SvEntity bot, driver, scenario, normal, stale;
 static SvEntity dead, released, living;
+static SvEntity receiver, donor;
 
 static int death_and_street(SvOwner owner)
 {
@@ -51,6 +52,7 @@ static DWORD WINAPI wrong_thread(void *argument)
     SvOwner owner = *(SvOwner *)argument;
     STEP(ai->aim_mode(owner, bot, 1) == SV_STATE);
     STEP(ai->chase_mode(owner, driver, 1) == SV_STATE);
+    STEP(ai->unpossess(owner, receiver) == SV_STATE);
     {
         SvAiStreetPosition out = {sizeof out};
         STEP(ai->street_near(owner, (SvVector){0}, 16, &out) == SV_STATE);
@@ -86,9 +88,11 @@ static int run(SvOwner owner, const char *text)
             if (!strcmp(p.name, "Aim")) living = p.human;
             if (!strcmp(p.name, "Dead")) dead = p.human;
             if (!strcmp(p.name, "Release")) released = p.human;
+            if (!strcmp(p.name, "Receiver")) receiver = list[i];
+            if (!strcmp(p.name, "Donor")) donor = list[i];
         }
         if (!strcmp(text, "missing")) return 0;
-        STEP(bot && driver && scenario && normal);
+        STEP(bot && driver && scenario && normal && receiver && donor);
         stale = bot ^ ((uint64_t)1 << 32);
         STEP(ai->aim_mode(owner, stale, 1) == SV_NOT_FOUND);
         STEP(ai->chase_mode(owner, stale, 1) == SV_NOT_FOUND);
@@ -128,6 +132,13 @@ static int run(SvOwner owner, const char *text)
         SvAiStreetPosition out = {sizeof out}, saved = out;
         STEP(ai->street_near(owner, (SvVector){80, 5.5f, 2}, 16, &out) == SV_FAILED);
         STEP(!memcmp(&out, &saved, sizeof out));
+    } else if (!strcmp(text, "possess")) {
+        STEP(ai->unpossess(owner, receiver) == SV_NOT_FOUND);
+        STEP(ai->unpossess(owner, receiver ^ ((uint64_t)1 << 32)) == SV_NOT_FOUND);
+        STEP(ai->possess(owner, receiver, donor) == SV_OK);
+    } else if (!strcmp(text, "unpossess")) {
+        STEP(ai->unpossess(owner, receiver) == SV_OK);
+        STEP(ai->unpossess(owner, receiver) == SV_NOT_FOUND);
     } else if (!strcmp(text, "scenario")) {
         STEP(ai->chase_mode(owner, scenario, 0) == SV_DENIED);
         STEP(ai->chase_mode(owner, scenario, 1) == SV_OK);

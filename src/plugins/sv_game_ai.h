@@ -79,6 +79,10 @@ typedef struct {
     SvResult (SV_CALL *road)(SvOwner owner, uint32_t index, SvAiRoad *out);
     SvResult (SV_CALL *intersection)(SvOwner owner, uint32_t index, SvAiIntersection *out);
     SvResult (SV_CALL *aim_snap)(SvOwner owner, SvEntity bot, int32_t enabled);
+    /* Ends a possession that the same plugin made with possess. The player gets the old body back when it is still alive
+     * and has no owner, and the bot gets its body back. The same checks as the stop of the plugin apply. SV_NOT_FOUND
+     * when the player has no possession, SV_DENIED when another plugin made it, SV_STATE outside a safe callback. */
+    SvResult (SV_CALL *unpossess)(SvOwner owner, SvEntity player);
 } SvGameAi;
 #pragma pack(pop)
 

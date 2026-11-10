@@ -28,6 +28,7 @@ static void command(const char *text)
 int main(int argc, char **argv)
 {
     int bot, driver, scenario, dead, dead_human, released, h;
+    int receiver, donor, old_body, donor_body;
     float normal_throttle;
     world_start();
     bot = make_bot("Aim");
@@ -36,6 +37,17 @@ int main(int argc, char **argv)
     dead = make_bot("Dead");
     dead_human = sr_players[dead].human_id;
     released = make_bot("Release");
+    /* A real player with an account and a bot to take the body of. Both bodies are free of accounts. */
+    receiver = make_bot("Receiver");
+    donor = make_bot("Donor");
+    sr_players[receiver].is_bot = 0;
+    sr_data_accounts.count = 1;
+    sr_players[receiver].account = 0;
+    sr_players[receiver].team = sr_players[donor].team = 0;
+    old_body = sr_players[receiver].human_id;
+    donor_body = sr_players[donor].human_id;
+    sr_humans[old_body].account = sr_humans[donor_body].account = -1;
+    sr_humans[old_body].team = sr_humans[donor_body].team = 0;
     sr_humans[dead_human].health = -5;
     sr_humans[dead_human].despawn_timer = 3333;
     sr_humans[sr_players[released].human_id].health = -5;
@@ -67,6 +79,12 @@ int main(int argc, char **argv)
     h = sr_players[released].human_id;
     humansimulation();
     CHECK(sr_players[released].human_id == -1 && sr_humans[h].player_id == -1);
+    command("nbots possess");
+    CHECK(sr_players[receiver].human_id == donor_body && sr_players[donor].human_id == -1);
+    CHECK(sr_humans[donor_body].player_id == receiver && sr_humans[old_body].player_id == -1);
+    command("nbots unpossess");
+    CHECK(sr_players[receiver].human_id == old_body && sr_players[donor].human_id == donor_body);
+    CHECK(sr_humans[old_body].player_id == receiver && sr_humans[donor_body].player_id == donor);
     h = sr_players[driver].human_id;
     command("nbots off");
     sv_ai_after_player(bot);
@@ -146,7 +164,11 @@ int main(int argc, char **argv)
         puts("N_BOTS_RESET_PASS");
         return 0;
     }
+    command("nbots possess");
+    CHECK(sr_players[receiver].human_id == donor_body);
     sv_plugins_stop();
+    CHECK(sr_players[receiver].human_id == old_body && sr_players[donor].human_id == donor_body);
+    CHECK(sr_humans[old_body].player_id == receiver && sr_humans[donor_body].player_id == donor);
     CHECK(sr_players[bot].move_mode == 1);
     CHECK((sr_players[bot].input_buttons & 2u) == 0);
     CHECK(sr_players[driver].ai_chase == 0);

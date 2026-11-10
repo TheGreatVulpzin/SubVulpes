@@ -89,7 +89,12 @@ It rolls back before it publishes if a link does not hold, and it returns `SV_FA
 The old body of the player stays in the world without an owner. The bot has no body after the call.
 The host sends the update events for both players and both bodies.
 The possession ends when the plugin stops or the world resets. The host then gives the bodies back if they still match.
-No method ends a possession before that (N66).
+`unpossess(owner, player)` ends a possession before that. It appends a method to `SvGameAi`, capability 3, version 1.
+It needs a safe callback on the server thread. A stale or wrong-kind reference, or a player with no possession, returns `SV_NOT_FOUND`.
+A possession that another plugin made returns `SV_DENIED`. A possession from before a round reset is gone, so it returns `SV_NOT_FOUND`.
+The call uses the same release as the stop of the plugin. The bot gets its body back when the body has no owner.
+The player gets the old body back when that body is alive and has no owner. The body the player left stays without an owner otherwise.
+The host sends the update events for both players and both bodies.
 The original client was not tested. The camera of the client follows the human of the update event. Client effect unknown.
 
 ## Street map reads (N63)

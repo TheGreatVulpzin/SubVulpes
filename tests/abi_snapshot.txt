@@ -35,7 +35,7 @@ SvAiStreetPoint size=12
 SvAiStreetPosition size=44
 SvAiRoad size=52
 SvAiIntersection size=68
-SvGameAi size=76
+SvGameAi size=80
 SvCompany size=24
 SvGameEconomy size=24
 SvEngineValue size=12
@@ -66,7 +66,7 @@ SvPlugins functions=4 prefix=0 first=refuse:8 last=borrow:20
 SvGameRead functions=21 prefix=0 first=entities:8 last=account_number:88
 SvGameWrite functions=30 prefix=0 first=message:8 last=human_remove:124
 SvGameProps functions=5 prefix=0 first=find:8 last=add:24
-SvGameAi functions=17 prefix=0 first=threats:8 last=aim_snap:72
+SvGameAi functions=18 prefix=0 first=threats:8 last=unpossess:76
 SvGameEconomy functions=4 prefix=0 first=company:8 last=add_stocks:20
 SvGameEngine functions=3 prefix=0 first=describe:8 last=set:16
 SvGameMission functions=3 prefix=0 first=slots:8 last=cancel:16

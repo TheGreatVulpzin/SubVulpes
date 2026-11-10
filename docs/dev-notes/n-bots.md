@@ -11,7 +11,7 @@ The bounds, errors and cleanup of each operation are in [bot API additions](../g
 | N59 | Done | `chase_mode` switches four effects together. N65 asks for separate flags. |
 | N60 | Done | The property `human.despawn`. The plugin author has not confirmed that this field is what the need means. |
 | N27 | Done | `street_near` gives one position. N67 asks for candidates and filters. |
-| N45 | Done | `possess` gives a player the body of a bot. The old body stays without an owner. N66 asks for the reverse call. |
+| N45 | Done | `possess` gives a player the body of a bot. The old body stays without an owner. `unpossess` is the reverse call (N66, done). |
 | N61 | Not started | Waits for the plugin author. |
 
 ## Tests

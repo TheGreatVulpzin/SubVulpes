@@ -633,6 +633,25 @@ static void release_possession(Possession *lease)
     possession_updates(player, bot, old_body, body);
 }
 
+static SvResult SV_CALL unpossess(SvOwner owner, SvEntity player)
+{
+    int32_t receiver;
+    Possession *lease;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready() || !sv_plugins_write_context(owner))
+        return SV_STATE;
+    receiver = sv_entity_resolve(SV_ENTITY_PLAYER, player);
+    if (receiver < 0)
+        return SV_NOT_FOUND;
+    lease = &possessions[receiver];
+    if (!lease->owner || lease->reset != sv_game_reset_sequence() || lease->player != player)
+        return SV_NOT_FOUND;
+    if (lease->owner != owner)
+        return SV_DENIED;
+    release_possession(lease);
+    memset(lease, 0, sizeof *lease);
+    return SV_OK;
+}
+
 static void road_copy(AiWaypoint *out, const SvAiStreetPoint *point, uint32_t previous)
 {
     const CityIntersection *c = &g_city.intersections[g_city.roads[point->road].ends[point->direction]];
@@ -884,5 +903,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap
+    read_road, read_intersection, set_snap, unpossess
 };
