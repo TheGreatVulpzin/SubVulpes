@@ -120,6 +120,14 @@ int main(int argc, char **argv)
     command("nbots on");
     ai_playercar(driver, world_object);
     CHECK(sr_players[driver].input_axes[3] > normal_throttle);
+    /* The parts: lights alone keep the normal speed. Speed with lane change drives faster. All four are the value 1. */
+    command("nbots parts-lights");
+    CHECK(sr_players[driver].ai_chase == AI_CHASE_LIGHTS);
+    command("nbots parts-speed");
+    CHECK(sr_players[driver].ai_chase == (AI_CHASE_SPEED | AI_CHASE_LANE));
+    command("nbots parts-all");
+    CHECK(sr_players[driver].ai_chase == 1);
+    command("nbots on");
     sv_ai_after_player(bot);
     sr_humans[h].vehicle_id = 0x40000000;
     command("nbots bad-seat");

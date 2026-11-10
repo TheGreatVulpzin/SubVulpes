@@ -60,6 +60,9 @@ typedef struct {
     int32_t roads[4], extent[4], light[4];
 } SvAiIntersection;
 
+/* The parts of a chase. chase_mode switches all four together. chase_parts switches any mix. */
+enum { SV_CHASE_SPEED = 1, SV_CHASE_LATERAL = 2, SV_CHASE_LANE = 4, SV_CHASE_LIGHTS = 8, SV_CHASE_ALL = 15 };
+
 typedef struct {
     uint32_t size, version;
     SvResult (SV_CALL *threats)(SvOwner owner, SvEntity bot, SvAiThreats *out);
@@ -83,6 +86,9 @@ typedef struct {
      * and has no owner, and the bot gets its body back. The same checks as the stop of the plugin apply. SV_NOT_FOUND
      * when the player has no possession, SV_DENIED when another plugin made it, SV_STATE outside a safe callback. */
     SvResult (SV_CALL *unpossess)(SvOwner owner, SvEntity player);
+    /* Switches the parts of a chase for a car driver: a mix of SV_CHASE_ bits, or 0 for none. SV_CHASE_ALL is the same
+     * as chase_mode 1. Every other rule is the rule of chase_mode. SV_INVALID for a bit outside SV_CHASE_ALL. */
+    SvResult (SV_CALL *chase_parts)(SvOwner owner, SvEntity bot, uint32_t parts);
 } SvGameAi;
 #pragma pack(pop)
 

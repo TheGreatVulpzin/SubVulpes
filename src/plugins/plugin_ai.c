@@ -7,6 +7,7 @@
 #include "sr_os.h"
 #include "plugin_lists.h"
 #include "events.h"
+#include "ai_car.h"
 #include <string.h>
 
 typedef struct {
@@ -514,7 +515,8 @@ static SvResult SV_CALL read_intersection(SvOwner owner, uint32_t index, SvAiInt
     return SV_OK;
 }
 
-static SvResult SV_CALL set_chase(SvOwner owner, SvEntity bot, int32_t enabled)
+/* Writes Player.ai_chase. value is 0, 1 (all effects) or a mix of the AI_CHASE_ bits. */
+static SvResult chase_set(SvOwner owner, SvEntity bot, int value, int valid)
 {
     int32_t index;
     SvResult result = resolve(owner, bot, &index);
@@ -522,7 +524,7 @@ static SvResult SV_CALL set_chase(SvOwner owner, SvEntity bot, int32_t enabled)
         return result;
     if (!sv_plugins_write_context(owner))
         return SV_STATE;
-    if (enabled != 0 && enabled != 1)
+    if (!valid)
         return SV_INVALID;
     if (!installed || !seat_state(index, 1))
         return SV_STATE;
@@ -532,14 +534,33 @@ static SvResult SV_CALL set_chase(SvOwner owner, SvEntity bot, int32_t enabled)
         chase[index].first = sr_players[index].ai_chase;
     }
     /* A scenario chase remains under game control. */
-    if (!enabled && chase[index].first)
+    if (!value && chase[index].first)
         return SV_DENIED;
     chase[index].owner = owner;
     chase[index].bot = bot;
     chase[index].reset = sv_game_reset_sequence();
-    chase[index].last = enabled;
-    sr_players[index].ai_chase = enabled;
+    chase[index].last = value;
+    sr_players[index].ai_chase = value;
     return SV_OK;
+}
+
+static SvResult SV_CALL set_chase(SvOwner owner, SvEntity bot, int32_t enabled)
+{
+    return chase_set(owner, bot, (int)enabled, enabled == 0 || enabled == 1);
+}
+
+static SvResult SV_CALL set_chase_parts(SvOwner owner, SvEntity bot, uint32_t parts)
+{
+    int value = 0;
+    if (parts == SV_CHASE_ALL) {
+        value = 1;
+    } else {
+        if (parts & SV_CHASE_SPEED) value |= AI_CHASE_SPEED;
+        if (parts & SV_CHASE_LATERAL) value |= AI_CHASE_LATERAL;
+        if (parts & SV_CHASE_LANE) value |= AI_CHASE_LANE;
+        if (parts & SV_CHASE_LIGHTS) value |= AI_CHASE_LIGHTS;
+    }
+    return chase_set(owner, bot, value, parts <= SV_CHASE_ALL);
 }
 
 static void possession_updates(int player, int bot, int old_body, int body)
@@ -903,5 +924,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess
+    read_road, read_intersection, set_snap, unpossess, set_chase_parts
 };

@@ -22,6 +22,12 @@
 #include "vectors.h"
 #include "sv_game_ai.h"
 
+/* True when this chase effect is on for the car. The value 1 (the scenario) turns on all four. */
+static int chase_part(const Player *p, int bit)
+{
+  return p->ai_chase == 1 || (p->ai_chase & bit) != 0;
+}
+
 /* Game globals. */
 #define sr_city sr_data_city
 
@@ -125,7 +131,7 @@ static void near_object(Player *p, const Object *o, const Object *oj, const vec3
   rr.y = (float)(oj->pos.y - o->pos.y);
   sd = (float)fabs((float)((rr.y * o->rot[0].y + o->rot[0].x * rr.x) + o->rot[0].z * rr.z));
   ah = (float)((dc->y * rr.y + dc->x * rr.x) + dc->z * rr.z);
-  if (p->ai_chase && p->lane_cooldown < 1 && ah > 2.0f && sd < 2.0f) {
+  if (chase_part(p, AI_CHASE_LANE) && p->lane_cooldown < 1 && ah > 2.0f && sd < 2.0f) {
     int *lane = &p->waypoints[p->ai_waypoint].lane;
 
     if ((os_rand() & 1) == 0)
@@ -142,7 +148,7 @@ static void near_object(Player *p, const Object *o, const Object *oj, const vec3
     len2 = (float)(vectordistance(&o->pos, &oj->pos) - 8.0);
     if (len2 < 0.0f)
       len2 = 0.0f;
-    if (p->ai_chase && len2 < 16.0f)
+    if (chase_part(p, AI_CHASE_SPEED) && len2 < 16.0f)
       len2 = 16.0f;
     cand = (float)(vectorlength(&oj->vel) + (float)((len2 * 0.5) / 60.0));
     if (cand < *target)
@@ -196,7 +202,7 @@ void ai_playercar(int player, int object)
   }
 
   /* How far the car may be from the line of the road: less the farther it is from the start. */
-  lat = p->ai_chase ? 32.0f : 16.0f;
+  lat = chase_part(p, AI_CHASE_LATERAL) ? 32.0f : 16.0f;
   dd.x = (float)(from.x - o->pos.x);
   dd.y = (float)(from.y - o->pos.y);
   dd.z = (float)(from.z - o->pos.z);
@@ -273,7 +279,7 @@ void ai_playercar(int player, int object)
     ahead = (float)(ahead - 14.0);
 
   /* At the crossing the car takes the next road point (a chase car ignores the lights). */
-  if (ahead < 6.0f && (c->red[side] == 0 || p->ai_chase != 0)) {
+  if (ahead < 6.0f && (c->red[side] == 0 || chase_part(p, AI_CHASE_LIGHTS))) {
     const AiWaypoint *nx = &p->waypoints[p->ai_waypoint + 1];
 
     wp->road = nx->road;
@@ -302,7 +308,7 @@ void ai_playercar(int player, int object)
     const AiWaypoint *nx = &p->waypoints[p->ai_waypoint + 1];
 
     target = (float)(k * 20.0 / 60.0);
-    if (p->ai_chase) {
+    if (chase_part(p, AI_CHASE_SPEED)) {
       target = (float)(k * 30.0 / 60.0);
       if (nx->turn == 0)
         target = (float)(k * 40.0 / 60.0);
@@ -313,7 +319,7 @@ void ai_playercar(int player, int object)
     if (c->red[side] == 0)
       lim = (nx->turn == 0) ? target : (float)(((ahead + 16.0) * 0.5) / 60.0);
   }
-  if (p->ai_chase)
+  if (chase_part(p, AI_CHASE_SPEED))
     lim = (float)(lim * 4.0);
   if (lim < target)
     target = lim;

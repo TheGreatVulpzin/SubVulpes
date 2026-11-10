@@ -139,6 +139,15 @@ static int run(SvOwner owner, const char *text)
     } else if (!strcmp(text, "unpossess")) {
         STEP(ai->unpossess(owner, receiver) == SV_OK);
         STEP(ai->unpossess(owner, receiver) == SV_NOT_FOUND);
+    } else if (!strcmp(text, "parts-lights")) {
+        STEP(ai->chase_parts(owner, driver, 16) == SV_INVALID);
+        STEP(ai->chase_parts(owner, stale, SV_CHASE_LIGHTS) == SV_NOT_FOUND);
+        STEP(ai->chase_parts(owner, normal, SV_CHASE_LIGHTS) == SV_DENIED);
+        STEP(ai->chase_parts(owner, driver, SV_CHASE_LIGHTS) == SV_OK);
+    } else if (!strcmp(text, "parts-speed")) {
+        STEP(ai->chase_parts(owner, driver, SV_CHASE_SPEED | SV_CHASE_LANE) == SV_OK);
+    } else if (!strcmp(text, "parts-all")) {
+        STEP(ai->chase_parts(owner, driver, SV_CHASE_ALL) == SV_OK);
     } else if (!strcmp(text, "scenario")) {
         STEP(ai->chase_mode(owner, scenario, 0) == SV_DENIED);
         STEP(ai->chase_mode(owner, scenario, 1) == SV_OK);
