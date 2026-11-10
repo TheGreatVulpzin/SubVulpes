@@ -71,7 +71,9 @@ try {
         }
         $destination = Join-Path $embedded $id
         New-Item -ItemType Directory -Path $destination | Out-Null
-        Copy-Item -LiteralPath $manifest -Destination $destination
+        # The server package does not carry the icon file. The Workshop shows the icon, so the packaged manifest drops that line.
+        $lines = @(Get-Content -LiteralPath $manifest | Where-Object { $_ -notmatch '^icon=' })
+        [IO.File]::WriteAllLines((Join-Path $destination 'plugin.ini'), [string[]]$lines, [Text.Encoding]::ASCII)
         Copy-Item -LiteralPath (Join-Path $folder $library[0].Matches[0].Groups[1].Value) -Destination $destination
     }
 } finally {
