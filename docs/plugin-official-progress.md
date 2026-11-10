@@ -23,7 +23,7 @@ Work order: Part 1, permissions, admin commands, bans, chat additions, welcome a
 | Part 1: N56, N57 and N51 | Done | Normal build, 25 test groups, nine removal proofs and restored tests passed. |
 | 2.1: sv.permissions | Done | Normal build, all 27 test groups, 49 removal proofs and repository checks passed. |
 | 2.2: sv.admcmd | Done | Normal build, all 29 groups, 36 removal proofs, final focused tests and repository checks passed. |
-| 2.3: sv.bans | Open | Follows admin commands. |
+| 2.3: sv.bans | Built, in the Workshop (0.1.0) | Ban table test passes. The commands and the join check have no in-game test yet. |
 | 2.4: sv.chatadd | Open | Follows bans. |
 | 2.5: sv.motd | Open | Follows chat additions. |
 | 2.6: sv.auditlogs | Open | Follows welcome and rules. |
