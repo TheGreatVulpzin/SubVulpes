@@ -1,6 +1,6 @@
 # Plugin API: coverage, needs and missing features
 
-Date: 2026-10-30. This page counts what the server offers to plugins today, lists the open needs of the catalog, and lists features that the catalog does not name.
+Date: 2026-10-30. Updated on 2026-11-10 for the 0.3.0 release (the rows for humans, collision, block areas, buildings and the open needs). This page counts what the server offers to plugins today, lists the open needs of the catalog, and lists features that the catalog does not name.
 It follows the system table of [system coverage](plugin-api-map.md). The proof for each item is in the test logs and in the page of its area. Nothing here was played with a client except where a line says so.
 
 ## What exists
@@ -27,14 +27,14 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 | Economy | Yes | Companies, prices, shares, stocks. Open: a decision before a purchase, taxes. |
 | Missions and rounds | Part | Slots, start, cancel, completion guard, world state, timers and round reset. Open: mission events, change of the game mode while the server runs. |
 | NPC decisions | Yes | Threats, destination, waypoints, target, input, perception, aim, shot chance, street route, seated target, chase mode, street query, road graph reads, aim snap. |
-| Humans | Part | Health, bleeding, stun, protection, bones, bone mass, teleport, looks, name, speech, collapse threshold. Open: a decision on spawn and respawn, delete the body of a real player (N8). |
+| Humans | Part | Health, bleeding, stun, protection, bones, bone mass, teleport, looks, name, speech, collapse threshold. Open: a decision on spawn and respawn, the body of a real player is removed with `human_remove` (N8, done). |
 | Items and inventory | Yes | Create, remove, equip, attach, detach, time to live, ammunition, item types. Open: decisions for pick up, drop and use. |
 | Weapons and bullets | Part | Type rows, shot event, tracer and hit visuals. Open: one weapon with its own values (the rows are for the whole type). No explosion, fire or smoke event exists in the game. |
 | Objects and vehicles | Part | Create, remove, health, teleport, impulse, seat, engine power, damage scale. Open: seat list, wheel state, helicopter and train control, throttle and steering for a plugin driver. |
 | Physics | Part | Bone mass, bone velocity and object velocity. Open: gravity, particles, bonds. |
-| Collision | Part | Line, aim and sphere (`within`). Open: material at a hit, block cell (N39). |
-| Block areas | No | Nothing yet (N40). |
-| Buildings and city | Part | Shop catalog read and replace, newspaper. Open: floorplans, safe zones, elevators, doors, a read of the building list. |
+| Collision | Yes | Line, aim, sphere (`within`), the surface material at a hit (`surface`) and the block cell (`block`) (N39, done). |
+| Block areas | Part | Reads (`area`, `block`) and `block_set` (clear or solid) with a restore when the plugin stops (N40). Open: the effect on the original client, which nobody has seen. |
+| Buildings and city | Part | Shop catalog read and replace, newspaper. The building list and the bases are read with `building_count`, `building` and `base` (N52, done). Open: floorplans, safe zones, elevators, doors. |
 | Level construction | No | Nothing at the reset boundary yet. |
 | Network and communication | Part | Chat with replace, commands, messages, sounds, join. Open: voice (N47, N48), hiding an entity from some players, a list of the connections. |
 | System services | Part | Settings, storage, logs, metrics in the list, tick timers. Open: a way to run work on a worker thread, a way to hand its result to the server thread. |
@@ -44,16 +44,16 @@ It follows the system table of [system coverage](plugin-api-map.md). The proof f
 
 | Id | Need | Notes |
 | --- | --- | --- |
-| N8 | Delete the body of a real player | Kill with `human.health` meanwhile. |
-| N10, N39 | Material at a hit, block cell | Same query family as `line`. |
+| N8 | Delete the body of a real player, done | `human_remove`. A bot body gives `SV_DENIED`: use `npc_remove`. |
+| N10, N39 | Material at a hit, block cell, done | `surface` and `block`, in the same query family as `line`. |
 | N19 | Bone masses, done | `human.bone_mass`: 15 float slots, GET, SET and ADD, range 0.5 to 50000000. |
 | N26 | Round reset, done | `world_reset` defers and merges reset requests. State and timer rows also exist. |
 | N27 | Road graph query | The data is `g_city.intersections` and `g_city.roads`. |
 | N29 | Human health above 100 | The packet clamps the sent health to 117. |
 | N33 | Account save event, done | `SV_EVENT_ACCOUNT_SAVE` follows a bulk file save or the disconnect update in memory. |
-| N40 | Block edits | Mark "client effect unknown". |
+| N40 | Block edits, done | `block_set`. Client effect unknown: the test room case `block_set` must run in the game. |
 | N41 | Timers and plugin random, done | `SvHost.after`, `every` and `random` use ticks and an independent state. |
-| N45 | Possess a bot | Links on both sides. |
+| N45 | Possess a bot, done | `possess`. N66 asks for the reverse call. |
 | N47, N48 | Voice frames and voice routing | The ring of voice frames and the 8 slots exist in the core. |
 | N51 | Core kick list, done | Count, remove and clear require `network`. No address list exists. |
 | N56 | Core command decision, done | Default, allow and deny preserve inherited prefix matches. |
