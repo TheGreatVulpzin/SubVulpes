@@ -78,6 +78,16 @@ The server package embeds `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.
 The core tests no longer compile the source of another official plugin.
 See [the completed move](plugin-store.md#the-source-of-the-official-plugins-moves-to-the-workshop-done-on-2026-11-09).
 
+### State on 2026-11-10
+
+The server `v0.3.0` (Kit) and the SDK `sdk-v0.3.0` are released. The version order of decision 13 still holds for 1.0.
+The Workshop builds the four embedded plugins, and the release package takes them from the pinned commit.
+Plugins show a changelog, a capability list and a `breaking` note in the launcher. The Workshop index keeps older versions.
+The Workshop test room (`sv.testroom` 0.3.0) has cases for the newer API: level reads, street map, account number,
+health up to 1000, trigger ticks, body removal, bot policies, possession, `block_set`, and guided cases for `/arm` and `/car`.
+None of them ran in the original client yet. The console and server control calls have no case, because the console does not nest inside `/test`.
+The effect of `block_set` on the original client decides if plugins can change maps while the server runs.
+
 ### State on 2026-10-27
 
 Step 1 (framework) is done for the planned cases. Commit `6d26ee8` adds checks for command permission, the command limit,
