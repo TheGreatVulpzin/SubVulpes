@@ -59,6 +59,9 @@ jobs:
         run: |
           set "SV_SERVER_VERSION=%RELEASE_TAG:~1%"
           tools\build_hook.bat
+      - name: Build embedded Workshop plugins
+        shell: pwsh
+        run: ./tools/release/build_embedded.ps1 -Version $env:RELEASE_TAG
       - name: Download and check server data
         id: data
         env:

@@ -44,29 +44,6 @@ set_target_properties(subvulpes-server PROPERTIES OUTPUT_NAME subvulpes_server)
 include(tools/sdk/sv_plugin.cmake)
 sv_add_plugin(sv-status ID sv.status MANIFEST "${CMAKE_SOURCE_DIR}/plugins/status/plugin.ini"
     SOURCES plugins/status/status.c)
-sv_add_plugin(sv-permissions ID sv.permissions MANIFEST "${CMAKE_SOURCE_DIR}/plugins/permissions/plugin.ini"
-    SOURCES plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c OFFICIAL)
-sv_add_plugin(sv-patchouli ID sv.patchouli MANIFEST "${CMAKE_SOURCE_DIR}/plugins/patchouli/plugin.ini"
-    SOURCES plugins/patchouli/patchouli.c plugins/common/official.c plugins/common/permissions.c OFFICIAL)
-sv_add_plugin(sv-ayalog ID sv.ayalog MANIFEST "${CMAKE_SOURCE_DIR}/plugins/ayalog/plugin.ini"
-    SOURCES plugins/ayalog/ayalog.c plugins/common/official.c plugins/common/permissions.c OFFICIAL)
-sv_add_plugin(sv-admcmd ID sv.admcmd MANIFEST "${CMAKE_SOURCE_DIR}/plugins/admcmd/plugin.ini"
-    SOURCES plugins/admcmd/admcmd.c plugins/common/official.c plugins/common/permissions.c OFFICIAL)
-set_property(SOURCE plugins/permissions/permissions.c plugins/permissions/groups.c plugins/common/official.c
-    tests/official/permission_groups_test.c tests/official/permission_probe.c APPEND PROPERTY OBJECT_DEPENDS
-    "${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h;${CMAKE_SOURCE_DIR}/plugins/permissions/groups.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h")
-set_property(SOURCE plugins/admcmd/admcmd.c plugins/common/permissions.c plugins/common/official.c
-    plugins/permissions/permissions.c tests/official/admcmd_probe.c tests/official/admcmd_unit_test.c
-    APPEND PROPERTY OBJECT_DEPENDS
-    "${SV_PLUGIN_HEADERS};${CMAKE_SOURCE_DIR}/plugins/ayalog/sv_ayalog.h;${CMAKE_SOURCE_DIR}/plugins/admcmd/names.h;${CMAKE_SOURCE_DIR}/plugins/patchouli/sv_patchouli.h;${CMAKE_SOURCE_DIR}/plugins/common/permissions.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h;${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h")
-set_property(SOURCE tests/official/patchouli_unit_test.c APPEND PROPERTY OBJECT_DEPENDS
-    "${CMAKE_SOURCE_DIR}/plugins/patchouli/patchouli.c")
-set_property(SOURCE plugins/ayalog/ayalog.c tests/official/ayalog_unit_test.c APPEND PROPERTY OBJECT_DEPENDS
-    "${SV_PLUGIN_HEADERS};${CMAKE_SOURCE_DIR}/plugins/ayalog/sv_ayalog.h;${CMAKE_SOURCE_DIR}/plugins/patchouli/sv_patchouli.h;${CMAKE_SOURCE_DIR}/plugins/common/permissions.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h")
-set_property(SOURCE plugins/patchouli/patchouli.c APPEND PROPERTY OBJECT_DEPENDS
-    "${SV_PLUGIN_HEADERS};${CMAKE_SOURCE_DIR}/plugins/patchouli/sv_patchouli.h;${CMAKE_SOURCE_DIR}/plugins/common/permissions.h;${CMAKE_SOURCE_DIR}/plugins/common/official.h;${CMAKE_SOURCE_DIR}/plugins/permissions/sv_permissions.h")
-set_property(SOURCE tests/official/admcmd_unit_test.c APPEND PROPERTY OBJECT_DEPENDS
-    "${CMAKE_SOURCE_DIR}/plugins/admcmd/admcmd.c")
 # Package inspection uses the installer shipped beside the server.
 configure_file(tools/plugins/install_plugin.ps1 "${CMAKE_BINARY_DIR}/install_plugin.ps1" COPYONLY)
 # Core checks use this fixture profile. Releases use build/embedded/plugins.ini.
@@ -74,13 +51,6 @@ file(WRITE "${CMAKE_BINARY_DIR}/plugins/plugins.ini" "[plugins]\nsv.status=disab
 
 # The SDK package: the public headers, a template plugin, the tools and the pages of the API.
 set(SV_SDK_VERSION "v0.0.0-dev" CACHE STRING "The version of the SDK package")
-
-# The test room is a tool for developers. The server package does not carry it. It is the example of a plugin built with the SDK.
-sv_add_plugin(sv-testroom ID sv.testroom MANIFEST "${CMAKE_SOURCE_DIR}/plugins/testroom/plugin.ini"
-    SOURCES plugins/testroom/testroom.c)
-
-# Optional SDK example. The official profile and server package do not carry it.
-add_subdirectory(plugins/jukebox)
 
 set(SV_LAUNCHER "${CMAKE_SOURCE_DIR}/build/launcher/subvulpes_launcher.exe")
 add_custom_command(OUTPUT "${SV_LAUNCHER}"
@@ -154,73 +124,6 @@ if(BUILD_TESTING)
     set_target_properties(sv-capability-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME capability-bits COMMAND sv-capability-test)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
-    add_executable(permission-groups-test tests/official/permission_groups_test.c plugins/permissions/groups.c plugins/common/official.c)
-    target_include_directories(permission-groups-test PRIVATE src/plugins plugins/permissions)
-    target_compile_definitions(permission-groups-test PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(permission-groups-test PRIVATE /W4 /WX /utf-8)
-    set_target_properties(permission-groups-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME permissions-groups COMMAND permission-groups-test)
-    set_tests_properties(permissions-groups PROPERTIES TIMEOUT 10)
-    sv_add_plugin(sv-permission-probe ID test.permissions
-        MANIFEST "${CMAKE_SOURCE_DIR}/tests/official/permission_probe/plugin.ini"
-        SOURCES tests/official/permission_probe.c plugins/common/official.c)
-    add_test(NAME permissions-sdk COMMAND "${Python3_EXECUTABLE}"
-        "${CMAKE_SOURCE_DIR}/tests/official/permissions_test.py" "${CMAKE_BINARY_DIR}")
-    sv_add_plugin(sv-admcmd-probe ID test.admcmd MANIFEST "${CMAKE_SOURCE_DIR}/tests/official/admcmd_probe/plugin.ini"
-        SOURCES tests/official/admcmd_probe.c plugins/common/official.c)
-    add_test(NAME admcmd-sdk COMMAND "${Python3_EXECUTABLE}"
-        "${CMAKE_SOURCE_DIR}/tests/official/admcmd_test.py" "${CMAKE_BINARY_DIR}")
-    add_executable(admcmd-unit-test tests/official/admcmd_unit_test.c plugins/common/official.c plugins/common/permissions.c)
-    target_include_directories(admcmd-unit-test PRIVATE src/plugins)
-    target_compile_definitions(admcmd-unit-test PRIVATE _CRT_SECURE_NO_WARNINGS
-        SV_OFFICIAL_ID="sv.admcmd" SV_OFFICIAL_VERSION="0.4.0")
-    target_compile_options(admcmd-unit-test PRIVATE /W4 /WX /utf-8)
-    set_target_properties(admcmd-unit-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME admcmd-contracts COMMAND admcmd-unit-test)
-    set_tests_properties(admcmd-contracts PROPERTIES TIMEOUT 10)
-    add_executable(patchouli-unit-test tests/official/patchouli_unit_test.c plugins/common/official.c plugins/common/permissions.c)
-    target_include_directories(patchouli-unit-test PRIVATE src/plugins)
-    target_compile_definitions(patchouli-unit-test PRIVATE _CRT_SECURE_NO_WARNINGS
-        SV_OFFICIAL_ID="sv.patchouli" SV_OFFICIAL_VERSION="0.1.0")
-    target_compile_options(patchouli-unit-test PRIVATE /W4 /WX /utf-8)
-    set_target_properties(patchouli-unit-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME patchouli-contracts COMMAND patchouli-unit-test)
-    set_tests_properties(patchouli-contracts PROPERTIES TIMEOUT 10)
-    add_executable(ayalog-unit-test tests/official/ayalog_unit_test.c plugins/common/official.c plugins/common/permissions.c)
-    target_include_directories(ayalog-unit-test PRIVATE src/plugins)
-    target_compile_definitions(ayalog-unit-test PRIVATE _CRT_SECURE_NO_WARNINGS
-        SV_OFFICIAL_ID="sv.ayalog" SV_OFFICIAL_VERSION="0.1.0")
-    target_compile_options(ayalog-unit-test PRIVATE /W4 /WX /utf-8)
-    set_target_properties(ayalog-unit-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME ayalog-contracts COMMAND ayalog-unit-test)
-    set_tests_properties(ayalog-contracts PROPERTIES TIMEOUT 10)
-    add_executable(jukebox-instruments-test tests/jukebox_instruments_test.c plugins/jukebox/instruments.c)
-    target_include_directories(jukebox-instruments-test PRIVATE plugins/jukebox)
-    target_compile_definitions(jukebox-instruments-test PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(jukebox-instruments-test PRIVATE /W4 /WX /utf-8)
-    set_target_properties(jukebox-instruments-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME jukebox-instruments COMMAND jukebox-instruments-test "${CMAKE_SOURCE_DIR}/plugins/jukebox/instruments.ini")
-    add_executable(jukebox-host-test tests/jukebox_host_test.c)
-    target_include_directories(jukebox-host-test PRIVATE src/plugins)
-    target_compile_definitions(jukebox-host-test PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(jukebox-host-test PRIVATE /W4 /WX /utf-8)
-    set_target_properties(jukebox-host-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_dependencies(jukebox-host-test sv-jukebox)
-    add_test(NAME jukebox-playback COMMAND "${Python3_EXECUTABLE}"
-        "${CMAKE_SOURCE_DIR}/tests/jukebox_playback_test.py" "${CMAKE_BINARY_DIR}")
-    add_test(NAME jukebox-scenario COMMAND "${Python3_EXECUTABLE}"
-        "${CMAKE_SOURCE_DIR}/tests/jukebox_scenario_test.py" "${CMAKE_BINARY_DIR}")
-    add_test(NAME jukebox-sdk COMMAND "${Python3_EXECUTABLE}"
-        "${CMAKE_SOURCE_DIR}/tests/jukebox_sdk_test.py" "${CMAKE_BINARY_DIR}")
-
-    add_executable(jukebox-midi-test tests/jukebox_midi_driver.c plugins/jukebox/midi.c)
-    target_include_directories(jukebox-midi-test PRIVATE plugins/jukebox)
-    target_compile_definitions(jukebox-midi-test PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(jukebox-midi-test PRIVATE /W4 /WX /utf-8)
-    set_target_properties(jukebox-midi-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME jukebox-midi COMMAND "${Python3_EXECUTABLE}"
-        "${CMAKE_SOURCE_DIR}/tests/jukebox_midi_test.py" "$<TARGET_FILE:jukebox-midi-test>")
-
     add_executable(sv-abi-snapshot tests/abi_snapshot.c)
     set_property(SOURCE tests/abi_snapshot.c APPEND PROPERTY OBJECT_DEPENDS "${SV_PLUGIN_HEADERS}")
     target_include_directories(sv-abi-snapshot PRIVATE src/plugins)
@@ -240,6 +143,8 @@ if(BUILD_TESTING)
         "${CMAKE_SOURCE_DIR}/tests/sdk_trust_test.py" "${CMAKE_BINARY_DIR}")
     add_test(NAME plugin-approved-install COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/sdk_approval_install_test.py" "${CMAKE_BINARY_DIR}")
+    # Package inspection has a 30-second PowerShell deadline. Keep SDK builds out of these checks.
+    set_tests_properties(plugin-inspect plugin-approved-install PROPERTIES RUN_SERIAL TRUE)
     add_test(NAME plugin-development COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tests/sdk_dev_plugins_test.py" "${CMAKE_BINARY_DIR}")
     add_test(NAME manifest-rules COMMAND "${Python3_EXECUTABLE}"
