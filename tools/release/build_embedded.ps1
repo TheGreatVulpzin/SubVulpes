@@ -35,14 +35,16 @@ $sdkZip = Join-Path $sdkOutput "SubVulpes-sdk-$Version.zip"
 Expand-Archive -LiteralPath $sdkZip -DestinationPath $sdkOutput
 $sdk = Join-Path $sdkOutput "SubVulpes-sdk-$Version"
 
-if (-not (Test-Path -LiteralPath $workshop)) {
+$freshClone = -not (Test-Path -LiteralPath $workshop)
+if ($freshClone) {
     & git clone --no-checkout --depth 1 https://github.com/TheGreatVulpzin/SubVulpes-Workshop.git $workshop
     if ($LASTEXITCODE -ne 0) { throw 'Cannot clone the Workshop.' }
 }
 Assert-PlainPath $workshop
 $remote = & git -C $workshop remote get-url origin
 if ($LASTEXITCODE -ne 0 -or $remote -cne 'https://github.com/TheGreatVulpzin/SubVulpes-Workshop.git') { throw 'The Workshop origin does not match.' }
-$changed = & git -C $workshop status --porcelain --untracked-files=no
+# A new clone has no checkout yet, so only an older folder can hold local changes.
+$changed = if ($freshClone) { $null } else { & git -C $workshop status --porcelain --untracked-files=no }
 if ($LASTEXITCODE -ne 0 -or $changed) { throw 'The Workshop checkout has local changes.' }
 & git -C $workshop fetch --depth 1 origin $config.Commit
 if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch the pinned Workshop commit.' }
