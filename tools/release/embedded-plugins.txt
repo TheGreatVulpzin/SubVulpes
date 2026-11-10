@@ -1,5 +1,5 @@
 # Workshop source for the plugins in the server package.
-commit=bb53a4e93eaa80cd1cc5bb9fd1d755194aa5545b
+commit=bd7544ba2bc3d24b95bf8f9302f9448c63dc704f
 sv.permissions=enabled
 sv.patchouli=enabled
 sv.ayalog=enabled

@@ -308,7 +308,7 @@ The core, public API, host tests, SDK, runner, probe and launcher stay here.
 `plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
 
 The server package embeds `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.admcmd`, all enabled by default.
-`tools/release/embedded-plugins.txt` pins Workshop commit `bb53a4e93eaa80cd1cc5bb9fd1d755194aa5545b` and lists their default states.
+`tools/release/embedded-plugins.txt` pins Workshop commit `bd7544ba2bc3d24b95bf8f9302f9448c63dc704f` and lists their default states.
 `build_embedded.ps1` makes the SDK from the current build, fetches that commit and checks the checkout against the full pin.
 It builds the four plugins with that SDK and writes their manifests, DLLs, approvals and profile into `build/embedded`.
 `make_package.ps1` checks the source pin, profile and DLL hashes before it makes the server zip.
