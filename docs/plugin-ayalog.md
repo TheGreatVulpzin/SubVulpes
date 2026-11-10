@@ -1,5 +1,8 @@
 # Aya: Logging System
 
+Source and tests: [SubVulpes Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins/sv.ayalog).
+Build and test this plugin in the Workshop. This page keeps its behavior and settings.
+
 Working ID: `sv.ayalog`. Version: `0.1.0`. This native plugin starts enabled.
 It writes one fixed log line for each action that other plugins record, and it keeps the last 128 lines in memory.
 It needs the read, write, configuration and plugin services. It uses only the public API.

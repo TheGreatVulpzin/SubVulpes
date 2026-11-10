@@ -300,32 +300,30 @@ The owner wants the official plugins to ship and update apart from the launcher 
 - A bad plugin update reaches every server that checks. The seal stops a forged package. It does not stop a bug. Keep the older versions in the index, so a user can go back.
 - The two core plugins in the zip and in the Workshop must not differ in a way that breaks the approval file. The workflow checks the hash of the packed DLL against the approval line, as `make_package.ps1` does now.
 
-## The source of the official plugins moves to the Workshop (plan of 2026-11-09)
+## The source of the official plugins moves to the Workshop (done on 2026-11-09)
 
-The owner chose to take the source and the tests of the official plugins out of this repository. This replaces item 4 of the plan of 2026-11-08, where the source stayed here and the Workshop built it from a pinned commit. Items 1 to 3 (the index with `versions`, the launcher) stand as written.
+The official plugin source and tests now live in the [Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins).
+This replaces item 4 of the plan of 2026-11-08. The index and launcher decisions in items 1 to 3 still apply.
+The core, public API, host tests, SDK, runner, probe and launcher stay here.
+`plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
 
-**Decisions.**
+The server package embeds `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.admcmd`, all enabled by default.
+`tools/release/embedded-plugins.txt` pins Workshop commit `bd7544ba2bc3d24b95bf8f9302f9448c63dc704f` and lists their default states.
+`build_embedded.ps1` makes the SDK from the current build, fetches that commit and checks the checkout against the full pin.
+It builds the four plugins with that SDK and writes their manifests, DLLs, approvals and profile into `build/embedded`.
+`make_package.ps1` checks the source pin, profile and DLL hashes before it makes the server zip.
+The first server start needs no network. The embedded build and the package test need network access to the Workshop.
 
-- **Home.** The Workshop repository holds each plugin in `official/plugins/ID/`: source, `plugin.ini`, `build.ps1` and `tests/`. Code that several plugins share (`official.c`, `permissions.c`) sits in `official/common/`. A header that one plugin offers to another (`sv_permissions.h`, `sv_patchouli.h`, `sv_ayalog.h`) stays with the plugin that offers it.
-- **Which plugins.** `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.admcmd` go in the server zip. `sv.status`, `sv.jukebox` and `sv.testroom` are Workshop only, and the launcher offers `sv.status` at the first visit of the Plugins page.
-- **What stays here.** The core, the public headers `src/plugins/sv_*.h`, the tests of the API and of the plugin host, the SDK, the test runner and the probe plugin, and the launcher. The SDK keeps its own copy of the `status` example.
-- **Tests.** The Workshop CI builds each plugin with the SDK and runs the scenarios of the plugin with the runner of that SDK. The tests of this repository no longer need a plugin of the Workshop. A small fixture plugin takes the place of `sv.status` in them.
-- **The server zip is built from a pinned Workshop commit.** The file `tools/release/embedded-plugins.txt` names the commit and the plugins. `release.yml` builds the server and the SDK from the tag, downloads the source at that commit, checks it against the hashes in the file, builds the four plugins with the new SDK, runs their scenarios with the new runner, and writes `plugins/native-approvals.ini`. The zip therefore matches the server of the same release, the first start needs no network, and the release does not wait for a signed package.
-- **After the first install,** every official plugin is a normal Workshop plugin that the launcher updates. The signed packages in `dist` are for the launcher. The zip does not read them.
+Run `tools\build_hook.bat` first. Then run `tools\release\build_embedded.ps1` before `tools\release\make_package.ps1`.
+The release and CI workflows run the embedded build after the server build.
+The launcher update list carries the same four embedded plugins.
+Installed official plugins still use normal Workshop updates.
 
-**The order, and why.** The newest plugins call API that the published server and SDK do not have yet (for example `account_number` and `human_remove`). The Workshop CI builds with the newest published release, so it fails until a release carries that API.
-
-1. This repository: this plan, then the launcher work (items 1 to 3). Nothing here depends on a release.
-2. This repository: a release candidate of the server and the SDK (a tag, on the owner's request). It still builds the plugins from the local source.
-3. Workshop: a pull request that adds the source and the tests of the plugins. Its CI now passes against the candidate. The merge publishes the first signed packages.
-4. This repository: a pull request that removes `plugins/` and its tests, adds the fixture plugin, and switches `release.yml` to the pinned build. It lands only after step 3.
-5. The release itself (a tag, on the owner's request).
-
-**Risks.**
-
-- The pinned commit is the only link between the two repositories. A wrong commit puts a wrong plugin in the zip. The hashes in `embedded-plugins.txt` and the approval line check it.
-- The Workshop gets the right to change what a server zip holds. Only the owner and Murilo approve a pull request there, and a bump of the pinned commit is a normal pull request here.
-- The tests of the plugins and the tests of the API are in two repositories. A change of the API needs a pull request in each. State this in `CONTRIBUTING.md` of both.
+The Workshop owns the plugin tests. This repository keeps the API, host, runner, SDK and package tests.
+An API change that affects an official plugin needs changes and tests in both repositories.
+The source removal takes eleven CTest groups out of this repository. The remaining 24 groups include the package checks.
+Change the pin with a normal commit here. The owner decides when to move it, publish a release or update the Workshop.
+No Workshop repository change is part of this move.
 
 ## Answers of 2026-11-03
 

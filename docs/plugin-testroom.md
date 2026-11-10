@@ -1,5 +1,8 @@
 # Test room plugin
 
+Source and tests: [SubVulpes Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins/sv.testroom).
+Build and test this plugin in the Workshop. This page keeps its behavior and settings.
+
 Status: version 0.2.18, built on 2026-10-31. It is a tool for developers. The server package does not carry it.
 The plugin `sv.testroom` runs the plugin API against a live server, with a person who watches the result in the game.
 The automatic tests prove the return codes and the game records. They cannot prove what the original client shows. This plugin covers that part.

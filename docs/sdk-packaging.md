@@ -17,7 +17,7 @@ sv_add_plugin(my-plugin ID my.plugin MANIFEST "${CMAKE_SOURCE_DIR}/plugins/my/pl
 It makes a 32-bit DLL with the flags of the server (`/W4 /WX /utf-8`). It exports `sv_plugin_entry`.
 It puts the DLL and `plugin.ini` in `build/server/plugins/ID`. The version and the library name come from the manifest, so no value sits in two places.
 It adds the target `my-plugin-package`. That target makes `build/server/packages/ID-VERSION-native.svplugin`.
-The optional word `OFFICIAL` marks a plugin of the server package. See below.
+The optional word `OFFICIAL` supplies plugin identity macros. The release pin controls package inclusion.
 
 ## Pack a folder
 
@@ -38,14 +38,11 @@ The installer and the launcher accept `.svplugin` and the old `.zip` name. Both 
 
 ## The official plugins
 
-The file `plugins/official.ini` lists the plugins of the server package, with the default state of each one.
-CMake stops when this list and the plugins marked `OFFICIAL` disagree.
-These pieces read the list:
-
-- `tools/plugins/write_official_approvals.ps1` writes the approval file with the SHA-256 of each official DLL.
-- `tools/release/make_package.ps1` takes the files, checks the approval file, and checks that `plugins/plugins.ini` matches the list.
-
-It is the example of a plugin built with the function, and the server package does not carry it.
+The file `tools/release/embedded-plugins.txt` pins Workshop source and lists the embedded plugins and their default states.
+`tools/release/build_embedded.ps1` builds them with the SDK of the current server into `build/embedded`.
+It writes the profile and calls `tools/plugins/write_official_approvals.ps1` to hash the DLLs.
+`make_package.ps1` checks the source pin, profile and DLL hashes before it makes the server zip.
+`plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
 
 ## The SDK package
 
@@ -53,12 +50,12 @@ The target `sdk-package` runs `tools/sdk/make_sdk.ps1`. It makes `SubVulpes-sdk-
 
 | Folder | Content |
 | --- | --- |
-| `include/` | The 15 public headers `sv_*.h`. No other header. |
+| `include/` | The 16 public headers `sv_*.h`. No other header. |
 | `template/` | A small plugin: `hello.c`, `plugin.ini`, `build.bat`, `CMakeLists.txt` and `test.svtest`. |
 | `tools/` | `pack.ps1`, `validate_plugin.ps1`, `install_plugin.ps1`, `sv_plugin.cmake`, the test script, the runner and the probe plugin. |
 | `docs/` | The pages of the API, starting with the first steps, the SDK page, the manifest page and the ABI rules. |
 | `examples/status/` | The source of the status plugin. |
 
 The package has a fixed order and a fixed time stamp, so the same sources give the same hash.
-The script stops when the count of public headers is not 15. A new public header must be a decision.
+The script stops when the count of public headers is not 16. A new public header must be a decision.
 The SDK does not carry the server program. The scripts ask for `-ServerExe`, because the server holds the manifest rules and the author knows which server runs the plugin.

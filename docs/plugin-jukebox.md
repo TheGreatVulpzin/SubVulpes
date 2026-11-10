@@ -1,5 +1,8 @@
 # MIDI jukebox 0.2.0
 
+Source and tests: [SubVulpes Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins/sv.jukebox).
+Build and test this plugin in the Workshop. This page keeps its behavior and settings.
+
 `sv.jukebox` plays MIDI files with the 47 existing game sound IDs.
 It is an optional native SDK example with `read`, `write` and `config` access.
 It adds no core, API or launcher code. It is absent from the official server package.

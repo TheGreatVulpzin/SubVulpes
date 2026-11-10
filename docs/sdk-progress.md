@@ -1,5 +1,21 @@
 # SDK progress
 
+## Workshop source move (2026-11-09)
+
+The official plugin source and tests now live in the [Workshop](https://github.com/TheGreatVulpzin/SubVulpes-Workshop/tree/main/official/plugins).
+The server package embeds `sv.permissions`, `sv.patchouli`, `sv.ayalog` and `sv.admcmd`, all enabled by default.
+`plugins/status` stays here as the core fixture and SDK example. The server package does not carry it.
+`tools/release/embedded-plugins.txt` pins the source and lists the default states.
+The Workshop owns the plugin tests. This repository keeps the API, host, runner, SDK and package tests.
+Validation after the move: the fresh MSVC x86 build and all 24 CTest groups pass.
+The package check passes on repeat after the local Workshop checkout ownership fix.
+Storage, native dependencies and repository checks pass.
+The server zip carries four enabled plugins with matching DLL approvals and no status fixture.
+Eleven plugin groups now run in the Workshop.
+The two inspection groups run alone because their PowerShell process has a 30-second deadline.
+
+The evidence below records the earlier work in this repository.
+
 ## M1: native SDK
 
 WP0 is complete. WAMR passes the x86 build, memory cap and loop-stop checks.
@@ -21,7 +37,7 @@ No visual launcher check, Start/Stop check or client playtest ran for this chang
 WP1 is complete (2026-10-28). The server reads `runtime`, `capabilities`, `name`, `description`, `author` and `homepage`. The capability list is a wall at `get_api`. The command `--plugin-validate-folder` prints every problem, and `tools/plugins/validate_plugin.ps1` checks a folder or a package. The installer asks the server before it copies a file. See [the manifest page](plugin-manifest.md). Three removal proofs hold.
 One change from the plan: the server command checks a folder only. A ZIP needs a reader in C, so the PowerShell script unpacks a package and calls the server.
 
-WP2 is complete (2026-10-28). `sv_add_plugin` builds a plugin, `tools/sdk/pack.ps1` makes `ID-VERSION-RUNTIME.svplugin`, and `plugins/official.ini` drives the approval file and the server package. See [the packaging page](sdk-packaging.md). One removal proof holds.
+WP2 is complete (2026-10-28). `sv_add_plugin` builds a plugin, `tools/sdk/pack.ps1` makes `ID-VERSION-RUNTIME.svplugin`, and `tools/release/embedded-plugins.txt` now drives the embedded approval file and the server package. See [the packaging page](sdk-packaging.md). One removal proof holds.
 
 WP3 is complete (2026-10-28). `make_sdk.ps1` makes the SDK package, and the test builds a plugin from the unpacked package only. See [the packaging page](sdk-packaging.md). One removal proof holds.
 
@@ -160,7 +176,7 @@ The normal build, focused tests, storage generation, native dependencies and rep
 
 Complete on `codex/jukebox`, from `codex/sdk` at `e8c1e7a`.
 The optional plugin uses only `read`, `write` and `config` through the public SDK headers.
-It stays out of `plugins/official.ini`. No launcher or core API changes are part of this work.
+It stays out of the embedded plugin list. No launcher or core API changes are part of this work.
 See [the jukebox guide](plugin-jukebox.md) for installation, commands, instrument edits and the listening method.
 
 ### Result and checks
@@ -297,6 +313,7 @@ The full `ctest --test-dir build/fresh --output-on-failure` run passes 23 of 25 
 `launcher-update-paths` fails because its test expects `build/server/subvulpes_server.exe`.
 `package-contents` fails because the release script expects `build/server/plugins/sv.status/plugin.ini`.
 Both paths are fixed in existing files outside this task's allowed changes. Those files stay unchanged.
+This result predates the Workshop source move. The embedded build now supplies the package inputs.
 After the preset-size message fix, all five jukebox groups pass again.
 The SDK checks build and package the plugin with extracted headers, then run the demo twice through the scenario runner.
 The package remains two files and requests only read, write and config.
@@ -308,6 +325,7 @@ A failed MIDI load leaves the active sound table unchanged.
 
 Removal checks pass for 57 guards: 24 MIDI reader guards, 28 sound or preset bounds, and five control bounds.
 Each proof removes one guard and requires its rejection test to fail. The scripts restore exact source bytes afterward.
+The Workshop now owns these scripts. The commands below record the earlier local checks.
 Run the removal scripts only with no other build active:
 
 ```text

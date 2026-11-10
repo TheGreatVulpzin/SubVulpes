@@ -5,6 +5,7 @@ param([string]$BuildDir = 'build/server')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+& (Join-Path $repo 'tools\release\build_embedded.ps1') -BuildDir $BuildDir | Write-Host
 $script = Join-Path $repo 'tools\release\make_package.ps1'
 $version = 'v0.0.0-package-data-check'
 $fixture = Join-Path $repo 'build\package\data-fixture'
@@ -56,6 +57,30 @@ try {
     foreach ($name in $names) {
         Assert ($null -ne $archive.GetEntry("$prefix$name")) "Missing launcher update file: $name"
     }
+    function Read-ArchiveText([string]$Name) {
+        $entry = $archive.GetEntry("$prefix$Name")
+        Assert ($null -ne $entry) "Missing package file: $Name"
+        $reader = [IO.StreamReader]::new($entry.Open())
+        try { return $reader.ReadToEnd().Replace("`r", '').Trim() } finally { $reader.Dispose() }
+    }
+    $ids = @('sv.permissions', 'sv.patchouli', 'sv.ayalog', 'sv.admcmd')
+    $expectedProfile = (@('[plugins]') + @($ids | ForEach-Object { "$_=enabled" })) -join "`n"
+    Assert ((Read-ArchiveText 'plugins/plugins.ini') -ceq $expectedProfile) 'The four embedded plugins must start enabled.'
+    $approvals = @('[native]')
+    foreach ($id in ($ids | Sort-Object)) {
+        $manifest = Read-ArchiveText "plugins/$id/plugin.ini"
+        Assert ($manifest -match "(?m)^id=$([regex]::Escape($id))$") "Wrong manifest identifier: $id"
+        $library = $id.Substring(3) + '.dll'
+        $entry = $archive.GetEntry("${prefix}plugins/$id/$library")
+        Assert ($null -ne $entry) "Missing embedded DLL: $id"
+        $stream = $entry.Open()
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { $digest = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }
+        finally { $sha.Dispose(); $stream.Dispose() }
+        $approvals += "$id=$digest"
+    }
+    Assert ((Read-ArchiveText 'plugins/native-approvals.ini') -ceq ($approvals -join "`n")) 'Embedded approvals must match the packaged DLLs.'
+    Assert (@($archive.Entries | Where-Object { $_.FullName -match '/plugins/sv\.(status|jukebox|testroom)/' }).Count -eq 0) 'Workshop-only plugins must stay out of the server zip.'
     $entry = $archive.Entries | Where-Object Name -eq 'version.txt'
     $reader = [IO.StreamReader]::new($entry.Open())
     try { $metadata = $reader.ReadToEnd() } finally { $reader.Dispose() }
@@ -69,6 +94,21 @@ $hash = (Get-FileHash -LiteralPath $package.Zip -Algorithm SHA256).Hash.ToLowerI
 Assert ([IO.File]::ReadAllText($package.Checksum).Trim() -eq "$hash  $([IO.Path]::GetFileName($package.Zip))") 'Checksum mismatch.'
 Write-Host 'PASS: zip, launcher names, metadata and checksum'
 $passed++
+
+# Reject stale source pins, changed approvals and changed defaults before copying files.
+$embedded = Join-Path $repo 'build\embedded'
+foreach ($case in @(
+    @('workshop-commit.txt', ('0' * 40), 'The embedded build does not match the pinned Workshop commit.'),
+    @('native-approvals.ini', '[native]', 'The official native approval does not match the built official plugins.'),
+    @('plugins.ini', '[plugins]', 'The embedded profile does not match embedded-plugins.txt.')
+)) {
+    $path = Join-Path $embedded $case[0]
+    $saved = [IO.File]::ReadAllBytes($path)
+    try {
+        [IO.File]::WriteAllText($path, $case[1])
+        Expect-Rejection $case[0] { & $script -Version $version -DataDir $fixture -BuildDir $BuildDir } $case[2]
+    } finally { [IO.File]::WriteAllBytes($path, $saved) }
+}
 
 foreach ($name in @('server.srk', 'sv_snapshot.bin', 'subrosadedicated024d.exe')) {
     $path = Join-Path $package.Package $name

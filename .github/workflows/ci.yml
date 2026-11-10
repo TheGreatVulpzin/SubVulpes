@@ -39,6 +39,9 @@ jobs:
       - name: Build server and launcher
         shell: cmd
         run: tools\build_hook.bat
+      - name: Build embedded Workshop plugins
+        shell: pwsh
+        run: ./tools/release/build_embedded.ps1
       - name: Check native server dependencies
         run: python -I tools/ci/check_native.py
       - name: Run the test suite

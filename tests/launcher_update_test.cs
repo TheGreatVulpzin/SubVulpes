@@ -260,9 +260,11 @@ namespace SubVulpes
         {
             Expect("subvulpes_server.exe", "subvulpes_server.exe");
             Expect("package/subvulpes_launcher.exe", "subvulpes_launcher.exe");
-            Expect("package/plugins/sv.status/status.dll", "plugins/sv.status/status.dll");
+            Expect("package/plugins/sv.permissions/permissions.dll", "plugins/sv.permissions/permissions.dll");
+            Expect("package/plugins/sv.status/status.dll", null);
             Expect("plugins/native-approvals.ini", "plugins/native-approvals.ini");
-            Expect("package/plugins/sv.status/plugin.ini", "plugins/sv.status/plugin.ini");
+            Expect("package/plugins/sv.permissions/plugin.ini", "plugins/sv.permissions/plugin.ini");
+            Expect("package/plugins/sv.status/plugin.ini", null);
             Expect("PACKAGE/PLUGINS/PLUGINS.INI", "plugins/plugins.ini");
             Expect("../subvulpes_server.exe", null);
             Expect("package/../subvulpes_server.exe", null);

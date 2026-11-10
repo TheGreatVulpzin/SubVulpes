@@ -1,2 +1,0 @@
-static const char jb_default_sounds[] =
-"@JB_SOUND_TEXT@";
