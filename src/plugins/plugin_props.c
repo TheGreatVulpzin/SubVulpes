@@ -49,6 +49,8 @@ FIELD(object_health, sr_objects[i].health)
 FIELD(object_color, sr_objects[i].color)
 FIELD(object_key_away, sr_objects[i].key_away)
 FIELD(train_stop, sr_objects[i].stop_ticks)
+FIELD(train_target, sr_objects[i].track_target)
+FIELD(train_last, sr_objects[i].track_last)
 FIELD(account_ban, sr_data_accounts.records[i].ban_time)
 
 static struct {
@@ -334,8 +336,10 @@ static const Prop props[] = {
     { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 50000000, human_bone_mass, NULL, NULL, NULL },
     { "human.despawn", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, human_despawn, despawn_check, NULL, NULL },
     { "world.clock", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 0x3b537f, world_clock, clock_check, NULL, NULL },
-    { "object.color", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 5, object_color, train_check, NULL, NULL },
+    { "object.color", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 5, object_color, NULL, NULL, NULL },
     { "object.key_away", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, object_key_away, train_check, NULL, NULL },
+    { "train.track_target", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET, 0, 0x7fffffff, train_target, NULL, NULL, NULL },
+    { "train.track_last", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET, 0, 0x7fffffff, train_last, NULL, NULL, NULL },
     { "train.stop_ticks", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 0x4b0, train_stop, locomotive_check, NULL, NULL },
     { "item.trigger_ticks", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, item_trigger, NULL, NULL, NULL },
 };

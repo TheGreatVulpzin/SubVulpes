@@ -876,7 +876,7 @@ static int move_checks(SvOwner owner)
     STEP(change->train_speed(owner, train, 0.4f) == SV_OK && change->train_speed(owner, train, -1.0f) == SV_OK);
     /* The stop of a train at a station: only the locomotive takes it. */
     {
-        uint32_t stop_id = 0;
+        uint32_t stop_id = 0, target_id = 0, last_id = 0;
         STEP(props->find(owner, "train.stop_ticks", &stop_id) == SV_OK);
         v.i = 100;
         STEP(props->set(owner, stop_id, train, 0, v) == SV_OK && props->get(owner, stop_id, train, 0, &v) == SV_OK && v.i == 100);
@@ -886,11 +886,16 @@ static int move_checks(SvOwner owner)
         STEP(props->set(owner, stop_id, train, 0, v) == SV_INVALID);
         v.i = 5;
         STEP(props->set(owner, stop_id, car, 0, v) == SV_DENIED && props->add(owner, stop_id, train, 0, v) == SV_DENIED);
+        /* The track pieces of a locomotive are read only. */
+        STEP(props->find(owner, "train.track_target", &target_id) == SV_OK && props->find(owner, "train.track_last", &last_id) == SV_OK);
+        STEP(props->get(owner, target_id, train, 0, &v) == SV_OK && props->get(owner, last_id, train, 0, &v) == SV_OK);
+        v.i = 1;
+        STEP(props->set(owner, target_id, train, 0, v) == SV_DENIED && props->set(owner, last_id, train, 0, v) == SV_DENIED);
     }
     /* The color and the key of a vehicle. A piece of the train is refused. */
     {
         uint32_t color_id = 0, key_id = 0;
-        SvValue saved_color;
+        SvValue saved_color, saved_train_color;
         STEP(props->find(owner, "object.color", &color_id) == SV_OK && props->find(owner, "object.key_away", &key_id) == SV_OK);
         STEP(props->get(owner, color_id, car, 0, &saved_color) == SV_OK);
         v.i = 3;
@@ -900,7 +905,11 @@ static int move_checks(SvOwner owner)
         v.i = -1;
         STEP(props->set(owner, color_id, car, 0, v) == SV_INVALID);
         v.i = 1;
-        STEP(props->set(owner, color_id, train, 0, v) == SV_DENIED && props->add(owner, color_id, car, 0, v) == SV_DENIED);
+        STEP(props->add(owner, color_id, car, 0, v) == SV_DENIED);
+        /* The color does not touch the life or the physics of a train piece, so a train takes it. */
+        STEP(props->get(owner, color_id, train, 0, &saved_train_color) == SV_OK);
+        STEP(props->set(owner, color_id, train, 0, v) == SV_OK && props->get(owner, color_id, train, 0, &v) == SV_OK && v.i == 1);
+        STEP(props->set(owner, color_id, train, 0, saved_train_color) == SV_OK);
         STEP(props->set(owner, key_id, car, 0, v) == SV_OK && props->get(owner, key_id, car, 0, &v) == SV_OK && v.i == 1);
         v.i = 2;
         STEP(props->set(owner, key_id, car, 0, v) == SV_INVALID);
@@ -1216,7 +1225,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 43);
+    STEP(count == 45);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);
