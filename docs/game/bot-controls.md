@@ -111,6 +111,20 @@ A bot that does not drive a car returns `SV_STATE`. A stale reference returns `S
 The setting is part of the bot control lease. Release, plugin stop, slot reuse and world reset clear it.
 The server drives the car, so no client effect is expected.
 
+## Aim noise and sight range (N68)
+
+`accuracy(owner, bot, scale)` and `sight_range(owner, bot, range)` append two methods to `SvGameAi`, capability 3, version 1.
+They work for a bot on foot. The game does not aim at the true position of an enemy.
+It keeps a noisy estimate. The noise shrinks while the bot sees the enemy for longer, and it grows with the distance.
+`scale` multiplies the noise. 1 is the game rule, 0 is a perfect estimate, and 4 is four times as noisy.
+`range` is the distance at which the bot looks for enemies. The game uses 128.
+Both values are any finite number from 0 up, with no upper bound. -1 ends the setting.
+The bot still needs a clear line to the enemy, and the enemy must be in front of the bot.
+The reaction speed, the shot chance and the fire cone do not change. Use `shot_chance` for the hesitation to fire.
+A human returns `SV_DENIED`, a bot with no body returns `SV_STATE`, a stale reference returns `SV_NOT_FOUND`,
+and a bad value returns `SV_INVALID`. Both settings are part of the bot control lease.
+Release, plugin stop, slot reuse and world reset clear them.
+
 ## Open street route (N64)
 
 `street_route_open(owner, bot, points, count, end_action)` appends a method to `SvGameAi`, capability 3, version 1.
@@ -265,7 +279,7 @@ These limits come from the design, not from a defect. Each one has a row in the 
 
 - A driver route can be open (`street_route_open`), and `driver_speed` sets the base speed. A stop at a given point is still open (N64, the rest).
 - Chase mode switches four effects together: a higher target speed, a larger lateral limit, a lane change and no stop at red lights (N65).
-- The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68, the rest).
+- The shot chance sets the hesitation to fire. `accuracy` sets the aim noise, and `sight_range` sets the range. Perception has no field of view or team filter (N68, the rest).
 - A possession has no reverse call (N66).
 - Passenger aim takes a player as the target, in seats 1 to 3 (N61).
 - Most writes return to the first value when the plugin stops. Things that a plugin creates, such as a possession, follow their own rule. Read each section.

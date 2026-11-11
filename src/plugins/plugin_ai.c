@@ -26,6 +26,8 @@ typedef struct {
     int seated;
     float speed;
     int has_speed;
+    float spread, sight;
+    int has_spread, has_sight;
 } Control;
 
 static Control controls[SR_MAX_PLAYER];
@@ -341,6 +343,43 @@ static SvResult SV_CALL set_aim(SvOwner owner, SvEntity bot, int32_t enabled)
 static SvResult SV_CALL set_chance(SvOwner owner, SvEntity bot, uint32_t percent)
 {
     return set_policy(owner, bot, percent <= 100 ? (int32_t)percent : -1, 2);
+}
+
+/* which is 0 for the aim noise and 1 for the sight range. -1 ends the setting. */
+static SvResult scalar_set(SvOwner owner, SvEntity bot, float value, int which)
+{
+    int32_t index;
+    Control *c;
+    SvResult result = resolve(owner, bot, &index);
+    if (result != SV_OK)
+        return result;
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
+    if (!(value - value == 0.0f) || (value != -1.0f && value < 0.0f))
+        return SV_INVALID;
+    if (!installed || body_state(index) != SV_OK)
+        return SV_STATE;
+    if (value == -1.0f && (!live_control(index) || controls[index].owner != owner))
+        return SV_OK;
+    c = claim(owner, bot, index);
+    if (which == 0) {
+        c->has_spread = value != -1.0f;
+        c->spread = c->has_spread ? value : 0.0f;
+    } else {
+        c->has_sight = value != -1.0f;
+        c->sight = c->has_sight ? value : 0.0f;
+    }
+    return SV_OK;
+}
+
+static SvResult SV_CALL set_accuracy(SvOwner owner, SvEntity bot, float scale)
+{
+    return scalar_set(owner, bot, scale, 0);
+}
+
+static SvResult SV_CALL set_sight_range(SvOwner owner, SvEntity bot, float range)
+{
+    return scalar_set(owner, bot, range, 1);
 }
 
 static SvResult SV_CALL set_driver_speed(SvOwner owner, SvEntity bot, float speed)
@@ -1042,6 +1081,16 @@ int32_t sv_ai_perception_part(int32_t index)
     return (uint32_t)index < SR_MAX_PLAYER && live_control(index) ? controls[index].perception : -1;
 }
 
+float sv_ai_spread(int32_t index)
+{
+    return (uint32_t)index < SR_MAX_PLAYER && live_control(index) && controls[index].has_spread ? controls[index].spread : 1.0f;
+}
+
+float sv_ai_sight(int32_t index)
+{
+    return (uint32_t)index < SR_MAX_PLAYER && live_control(index) && controls[index].has_sight ? controls[index].sight : 128.0f;
+}
+
 float sv_ai_speed_base(int32_t index, float k, float base)
 {
     if ((uint32_t)index < SR_MAX_PLAYER && live_control(index) && controls[index].has_speed)
@@ -1194,5 +1243,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list, aim_at, set_street_route_open, set_driver_speed
+    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list, aim_at, set_street_route_open, set_driver_speed, set_accuracy, set_sight_range
 };

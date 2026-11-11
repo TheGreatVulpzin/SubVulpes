@@ -224,6 +224,14 @@ int main(int argc, char **argv)
     CHECK(sr_players[driver].ai_chase == 1);
     command("nbots on");
     sv_ai_after_player(bot);
+    /* The aim noise and the sight range: a plugin sets them, and -1 gives the game values back. */
+    CHECK(sv_ai_spread(bot) == 1.0f && sv_ai_sight(bot) == 128.0f);
+    command("nbots accuracy");
+    CHECK(sv_ai_spread(bot) == 0.0f && sv_ai_sight(bot) == 500.0f);
+    command("nbots accuracy-free");
+    CHECK(sv_ai_spread(bot) == 1.0f && sv_ai_sight(bot) == 128.0f);
+    command("nbots on");
+    sv_ai_after_player(bot);
     sr_humans[h].vehicle_id = 0x40000000;
     command("nbots bad-seat");
     sr_humans[h].vehicle_id = world_object;

@@ -44,7 +44,7 @@ void ai_assessthreats(int player, int human)
         float len, sum, dot;
         if (!enemy->active || enemy->health <= 0 || enemy->player_id == -1 ||
             sr_players[enemy->player_id].team == p->team ||
-            !(vectordistance(&enemy->bones[2].pos, &me->bones[2].pos) < 128.0f))
+            !(vectordistance(&enemy->bones[2].pos, &me->bones[2].pos) < sv_ai_sight(player)))
             continue;
         for (j = 0; j < p->num_threats; ++j)
             if (p->threats[j].human == k)
@@ -85,6 +85,7 @@ void ai_assessthreats(int player, int human)
                 threat->level = 16.0f;
             scalevector(&threat->pos, &threat->pos, 0.875f);
             range = (float)((16.0 - threat->level) * 0.125 * 0.25 + (double)len * 0.25 * 0.125);
+            range = (float)(range * sv_ai_spread(player));
             getrandomvector3d(&v.x, range, 0);
             v.x = (float)((double)v.x + target->x);
             v.y = (float)((double)v.y + target->y);

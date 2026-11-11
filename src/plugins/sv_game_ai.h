@@ -148,6 +148,17 @@ typedef struct {
      * value that is not a finite number or is below 0 (other than -1). The setting is part of the bot control lease: release,
      * plugin stop, slot reuse and world reset clear it. The server drives the car, so no client effect is expected. */
     SvResult (SV_CALL *driver_speed)(SvOwner owner, SvEntity bot, float speed);
+    /* Scales the aim noise of a bot on foot. The game aims at a noisy estimate of the enemy. The noise shrinks as the bot sees
+     * the enemy for longer, and it grows with the distance. scale multiplies that noise. 1 is the game rule, 0 is a perfect
+     * estimate, and 4 is four times as noisy. Any finite number from 0 up is valid, with no upper bound. -1 ends the
+     * setting. The reaction time and the shot chance do not change. The setting is part of the bot control lease. SV_DENIED
+     * for a human, SV_STATE for a bot with no body, SV_INVALID for a value that is not a finite number or is below 0 (other
+     * than -1). */
+    SvResult (SV_CALL *accuracy)(SvOwner owner, SvEntity bot, float scale);
+    /* Sets how far a bot on foot sees an enemy. The game uses 128. range is any finite number from 0 up, with no upper bound.
+     * -1 ends the setting. The bot still needs a clear line to the enemy and the enemy must be in front of it. The rules of
+     * accuracy apply. */
+    SvResult (SV_CALL *sight_range)(SvOwner owner, SvEntity bot, float range);
 } SvGameAi;
 #pragma pack(pop)
 
@@ -163,5 +174,7 @@ int sv_ai_shot(int32_t player, int passenger);
 int sv_ai_route_next(int32_t player);
 int sv_ai_snap(int32_t player);
 float sv_ai_speed_base(int32_t player, float k, float base);
+float sv_ai_spread(int32_t player);
+float sv_ai_sight(int32_t player);
 
 #endif

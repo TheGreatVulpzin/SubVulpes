@@ -251,6 +251,16 @@ static int run(SvOwner owner, const char *text)
         STEP(ai->driver_speed(owner, stale, 0.0f) == SV_NOT_FOUND);
         STEP(ai->driver_speed(owner, normal, 0.0f) != SV_OK);
         STEP(ai->driver_speed(owner, driver, 0.0f) == SV_OK);
+    } else if (!strcmp(text, "accuracy")) {
+        uint32_t scale_bits = 0x7fc00000u;
+        float scale_nan;
+        memcpy(&scale_nan, &scale_bits, sizeof scale_nan);
+        STEP(ai->accuracy(owner, bot, scale_nan) == SV_INVALID && ai->accuracy(owner, bot, -0.5f) == SV_INVALID);
+        STEP(ai->sight_range(owner, bot, scale_nan) == SV_INVALID && ai->sight_range(owner, bot, -2.0f) == SV_INVALID);
+        STEP(ai->accuracy(owner, stale, 0.0f) == SV_NOT_FOUND && ai->sight_range(owner, stale, 10.0f) == SV_NOT_FOUND);
+        STEP(ai->accuracy(owner, bot, 0.0f) == SV_OK && ai->sight_range(owner, bot, 500.0f) == SV_OK);
+    } else if (!strcmp(text, "accuracy-free")) {
+        STEP(ai->accuracy(owner, bot, -1.0f) == SV_OK && ai->sight_range(owner, bot, -1.0f) == SV_OK);
     } else if (!strcmp(text, "speed-fast")) {
         STEP(ai->driver_speed(owner, driver, 10.0f) == SV_OK);
     } else if (!strcmp(text, "speed-free")) {
