@@ -17,7 +17,7 @@ typedef struct {
     uint64_t reset;
     uint32_t ticks, parts, button_mask;
     SvAiInput input;
-    uint32_t aim_kind, aim_ticks;
+    uint32_t aim_kind, aim_ticks, route_open, route_end;
     SvVector aim_point;
     SvEntity aim_entity;
     int32_t perception, aim, chance, snap;
@@ -821,6 +821,40 @@ static void road_copy(AiWaypoint *out, const SvAiStreetPoint *point, uint32_t pr
     if (to == ((from - 1) & 3)) out->turn = 1;
 }
 
+static SvResult SV_CALL set_street_route_open(SvOwner owner, SvEntity bot, const SvAiStreetPoint *points, uint32_t count,
+    uint32_t end_action)
+{
+    int32_t index;
+    uint32_t j;
+    Control *c;
+    SvResult result = resolve(owner, bot, &index);
+    if (result != SV_OK)
+        return result;
+    if (!points || count < 2 || count > SV_AI_WAYPOINTS_MAX ||
+        (end_action != SV_ROUTE_STOP && end_action != SV_ROUTE_RELEASE))
+        return SV_INVALID;
+    for (j = 0; j + 1 < count; ++j)
+        if (!road_pair_valid(&points[j], &points[j + 1]))
+            return SV_INVALID;
+    if (!installed || !seat_state(index, 1))
+        return SV_STATE;
+    c = claim(owner, bot, index);
+    memcpy(c->roads, points, count * sizeof *points);
+    c->road_count = count;
+    c->road_next = 2;
+    c->route_open = 1;
+    c->route_end = end_action;
+    c->target = 0;
+    c->ticks = 0;
+    /* The first point has no road before it, so its turn is straight. */
+    road_copy(&sr_players[index].waypoints[0], &points[0], points[0].road);
+    road_copy(&sr_players[index].waypoints[1], &points[1], points[0].road);
+    sr_players[index].num_path = 2;
+    sr_players[index].ai_waypoint = 0;
+    sr_players[index].wait_isec = -1;
+    return SV_OK;
+}
+
 static SvResult SV_CALL set_street_route(SvOwner owner, SvEntity bot, const SvAiStreetPoint *points, uint32_t count)
 {
     int32_t index;
@@ -840,6 +874,7 @@ static SvResult SV_CALL set_street_route(SvOwner owner, SvEntity bot, const SvAi
     memcpy(c->roads, points, count * sizeof *points);
     c->road_count = count;
     c->road_next = 2 % count;
+    c->route_open = 0;
     c->target = 0;
     c->ticks = 0;
     road_copy(&sr_players[index].waypoints[0], &points[0], points[count - 1].road);
@@ -1088,9 +1123,16 @@ int sv_ai_route_next(int32_t index)
     c = &controls[index];
     current = &sr_players[index].waypoints[0];
     previous = (SvAiStreetPoint){(uint32_t)current->road, current->dir, current->lane};
-    if (seat_state(index, 1) && road_pair_valid(&previous, &c->roads[c->road_next])) {
+    if (c->route_open && c->road_next >= c->road_count) {
+        /* The end of an open route: give the car back, or brake and hold. */
+        if (c->route_end == SV_ROUTE_RELEASE) {
+            clear_control(index);
+            return 0;
+        }
+        current->road = -1;
+    } else if (seat_state(index, 1) && road_pair_valid(&previous, &c->roads[c->road_next])) {
         road_copy(&sr_players[index].waypoints[1], &c->roads[c->road_next], previous.road);
-        c->road_next = (c->road_next + 1) % c->road_count;
+        c->road_next = c->route_open ? c->road_next + 1 : (c->road_next + 1) % c->road_count;
     } else {
         /* A road removed after validation ends the route before the engine reads it. */
         current->road = -1;
@@ -1122,5 +1164,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list, aim_at
+    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list, aim_at, set_street_route_open
 };

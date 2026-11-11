@@ -9,7 +9,7 @@ import tempfile
 build = Path(sys.argv[1]).resolve()
 binary = build / "tests" / "n-bots-fixture.dll"
 for mode in ("normal", "missing-capability", "reuse", "reset"):
-    capabilities = "read,props" if mode == "missing-capability" else "read,ai,props"
+    capabilities = "read,props" if mode == "missing-capability" else "read,ai,props,write"
     with tempfile.TemporaryDirectory(prefix="n-bots-", dir=build / "tests") as folder:
         root = Path(folder)
         module = root / "plugins" / "test.nbots"

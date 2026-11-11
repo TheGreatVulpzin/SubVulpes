@@ -70,6 +70,9 @@ typedef struct {
     int32_t roads[4], extent[4], light[4];
 } SvAiIntersection;
 
+/* What a driver does at the end of an open route (street_route_open). */
+enum { SV_ROUTE_STOP = 1, SV_ROUTE_RELEASE = 2 };
+
 /* The target of aim_at: a point, or an entity (a human, or a vehicle or other object). */
 enum { SV_AIM_POINT = 1, SV_AIM_ENTITY = 2 };
 typedef struct {
@@ -132,6 +135,12 @@ typedef struct {
      * SV_STATE for a driver, a bot with no body or a bot in a vehicle seat that is not a passenger seat. SV_NOT_FOUND for an
      * entity that is gone. SV_INVALID for a bad kind, a point outside the map, or ticks outside 1 to SV_AI_TICKS_MAX. */
     SvResult (SV_CALL *aim_at)(SvOwner owner, SvEntity bot, const SvAiAimTarget *target, uint32_t ticks);
+    /* Like street_route, but the route is open: it has 2 to SV_AI_WAYPOINTS_MAX points, each joined to the next, and the last
+     * does not join the first. At the end of the last road the driver does end_action. SV_ROUTE_STOP brakes and holds until
+     * the plugin gives a new route or calls release. SV_ROUTE_RELEASE gives the car back to the default AI. Every other rule
+     * is the rule of street_route. SV_INVALID for an end action that is not SV_ROUTE_STOP or SV_ROUTE_RELEASE. */
+    SvResult (SV_CALL *street_route_open)(SvOwner owner, SvEntity bot, const SvAiStreetPoint *points, uint32_t count,
+        uint32_t end_action);
 } SvGameAi;
 #pragma pack(pop)
 

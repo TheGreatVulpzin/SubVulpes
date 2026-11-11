@@ -119,7 +119,22 @@ typedef struct {
      * leave them. The player stays and has no body, as after a death. No death tax runs. The body of a bot gives SV_DENIED:
      * use npc_remove. Safe callbacks only. SV_NOT_FOUND for a stale or wrong-kind reference. */
     SvResult (SV_CALL *human_remove)(SvOwner owner, SvEntity human);
+    /* Holds the input of a real player. parts is a mix of SV_INPUT_LOCK_BODY (the movement axes and the buttons stay at 0,
+     * so the body does not walk, jump or shoot) and SV_INPUT_LOCK_VIEW (the view stays at the angles of the moment of the
+     * lock), or 0 to end the lock. The server puts the held values over the input of the client after it reads the packets.
+     * Item and menu actions in the packet still run, because the server reads them first. The lock ends when the plugin
+     * stops, the player leaves or the round resets. A bot gives SV_DENIED: use override_input. A lock of another plugin gives
+     * SV_CONFLICT. SV_INVALID for a bit outside SV_INPUT_LOCK_ALL. Safe callbacks only. Client effect unknown: the client
+     * predicts its own movement and may fight the server. */
+    SvResult (SV_CALL *input_lock)(SvOwner owner, SvEntity player, uint32_t parts);
 } SvGameWrite;
 #pragma pack(pop)
+
+enum { SV_INPUT_LOCK_BODY = 1, SV_INPUT_LOCK_VIEW = 2, SV_INPUT_LOCK_ALL = 3 };
+
+/* The core side of input_lock. The main loop calls sv_input_lock_apply after it reads the packets. */
+SvResult SV_CALL sv_input_lock_set(SvOwner owner, SvEntity player, uint32_t parts);
+void sv_input_lock_apply(void);
+void sv_input_lock_release(SvOwner owner);
 
 #endif

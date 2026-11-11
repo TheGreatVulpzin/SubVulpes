@@ -37,6 +37,7 @@ static void release(SvOwner owner)
     sv_props_release(owner);
     sv_made_release(owner);
     sv_ai_release_owner(owner);
+    sv_input_lock_release(owner);
     sv_engine_release_owner(owner);
     sv_mission_release_owner(owner);
     sv_storage_release_owner(owner);

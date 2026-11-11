@@ -2,10 +2,12 @@
 #include <windows.h>
 #include "systems_plugin.h"
 #include "sv_game_ai.h"
+#include "sv_game_write.h"
 
 static const SvHost *host;
 static const SvGameAi *ai;
 static const SvGameProps *props;
+static const SvGameWrite *change;
 static SvEntity bot, driver, scenario, normal, stale;
 static SvEntity dead, released, living;
 static SvEntity receiver, donor, rider;
@@ -53,6 +55,7 @@ static DWORD WINAPI wrong_thread(void *argument)
     STEP(ai->aim_mode(owner, bot, 1) == SV_STATE);
     STEP(ai->chase_mode(owner, driver, 1) == SV_STATE);
     STEP(ai->unpossess(owner, receiver) == SV_STATE);
+    STEP(change->input_lock(owner, receiver, SV_INPUT_LOCK_ALL) == SV_STATE);
     {
         SvAiStreetPosition out = {sizeof out};
         STEP(ai->street_near(owner, (SvVector){0}, 16, &out) == SV_STATE);
@@ -93,6 +96,8 @@ static int run(SvOwner owner, const char *text)
             if (!strcmp(p.name, "Rider")) rider = list[i];
         }
         if (!strcmp(text, "missing")) return 0;
+        STEP(host->get_api(owner, SV_API_GAME_WRITE, 1, &table) == SV_OK);
+        change = table;
         STEP(bot && driver && scenario && normal && receiver && donor && rider);
         stale = bot ^ ((uint64_t)1 << 32);
         STEP(ai->aim_mode(owner, stale, 1) == SV_NOT_FOUND);
@@ -127,6 +132,13 @@ static int run(SvOwner owner, const char *text)
         SvAiStreetPosition out = {sizeof out};
         STEP(ai->street_near(owner, (SvVector){80, 7.5f, 2}, 1, &out) == SV_OK);
         STEP(out.position.y == 7.5f);
+    } else if (!strcmp(text, "lock")) {
+        STEP(change->input_lock(owner, bot, SV_INPUT_LOCK_BODY) == SV_DENIED);
+        STEP(change->input_lock(owner, receiver, 4) == SV_INVALID);
+        STEP(change->input_lock(owner, receiver ^ ((uint64_t)1 << 32), SV_INPUT_LOCK_BODY) == SV_NOT_FOUND);
+        STEP(change->input_lock(owner, receiver, SV_INPUT_LOCK_ALL) == SV_OK);
+    } else if (!strcmp(text, "unlock")) {
+        STEP(change->input_lock(owner, receiver, 0) == SV_OK);
     } else if (!strcmp(text, "aim-at")) {
         SvAiAimTarget t = {sizeof t, SV_AIM_POINT, {10, 20, 30}, 0};
         STEP(ai->aim_at(owner, bot, NULL, 2) == SV_INVALID);

@@ -38,6 +38,7 @@
 #include "plugin_entities.h"
 #include "sv_game_ai.h"
 #include "sv_game_mission.h"
+#include "sv_game_write.h"
 
 #ifndef SR_STANDALONE
 #include "loop_calls.h"
@@ -117,6 +118,7 @@ static void tick(void)
     }
     servercycle();
     serverrecv();
+    sv_input_lock_apply();
 
     nametimer(g_timerlist.physicssim, "physicssim");
     starttimer(g_timerlist.physicssim);

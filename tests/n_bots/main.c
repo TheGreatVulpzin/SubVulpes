@@ -2,6 +2,7 @@
 #include "sv_game_ai.h"
 #include "city.h"
 #include "ai_car.h"
+#include "sv_game_write.h"
 #include <math.h>
 
 static int make_bot(const char *name)
@@ -143,6 +144,23 @@ int main(int argc, char **argv)
     sv_ai_after_player(rider);
     expect_aim(rider, 10, 20, 30);
     CHECK(sr_players[rider].input_buttons & 1u);
+    /* The input lock: the held values go over what the client sent, until the lock ends. */
+    sr_players[receiver].yaw = 1.0f;
+    sr_players[receiver].input_pitch = 0.5f;
+    command("nbots lock");
+    sr_players[receiver].yaw = 2.0f;
+    sr_players[receiver].input_pitch = 0.25f;
+    sr_players[receiver].input_axes[0] = sr_players[receiver].input_axes[3] = 1.0f;
+    sr_players[receiver].input_buttons = 5;
+    sv_input_lock_apply();
+    CHECK(sr_players[receiver].input_axes[0] == 0 && sr_players[receiver].input_axes[3] == 0 && sr_players[receiver].input_buttons == 0);
+    CHECK(sr_players[receiver].yaw == 1.0f && sr_players[receiver].input_pitch == 0.5f);
+    command("nbots unlock");
+    sr_players[receiver].yaw = 2.0f;
+    sr_players[receiver].input_axes[0] = 1.0f;
+    sr_players[receiver].input_buttons = 5;
+    sv_input_lock_apply();
+    CHECK(sr_players[receiver].input_axes[0] == 1.0f && sr_players[receiver].input_buttons == 5 && sr_players[receiver].yaw == 2.0f);
     /* All parts with all buttons skip the default AI, as override_input does. */
     command("nbots parts-full");
     CHECK(sv_ai_before_player(bot) == 1 && sr_players[bot].input_buttons == 8u);
@@ -229,7 +247,11 @@ int main(int argc, char **argv)
     }
     command("nbots possess");
     CHECK(sr_players[receiver].human_id == donor_body);
+    command("nbots lock");
     sv_plugins_stop();
+    sr_players[receiver].input_buttons = 5;
+    sv_input_lock_apply();
+    CHECK(sr_players[receiver].input_buttons == 5);
     CHECK(sr_players[receiver].human_id == old_body && sr_players[donor].human_id == donor_body);
     CHECK(sr_humans[old_body].player_id == receiver && sr_humans[donor_body].player_id == donor);
     CHECK(sr_players[bot].move_mode == 1);

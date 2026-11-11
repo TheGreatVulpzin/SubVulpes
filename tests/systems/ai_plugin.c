@@ -34,6 +34,18 @@ static SvResult run_command(SvOwner owner, uint64_t actor, const char *arguments
         return control_api->shot_chance(owner, control_policy, 50);
     if (!strcmp(arguments, "route"))
         return control_api->street_route(owner, control_driver, street, 4);
+    if (!strcmp(arguments, "route-open-release"))
+        return control_api->street_route_open(owner, control_driver, street, 4, SV_ROUTE_RELEASE);
+    if (!strcmp(arguments, "route-open-stop"))
+        return control_api->street_route_open(owner, control_driver, street, 4, SV_ROUTE_STOP);
+    if (!strcmp(arguments, "bad-open")) {
+        STEP(control_api->street_route_open(owner, control_driver, street, 4, 0) == SV_INVALID);
+        STEP(control_api->street_route_open(owner, control_driver, street, 4, 3) == SV_INVALID);
+        STEP(control_api->street_route_open(owner, control_driver, street, 1, SV_ROUTE_STOP) == SV_INVALID);
+        STEP(control_api->street_route_open(owner, control_driver, NULL, 4, SV_ROUTE_STOP) == SV_INVALID);
+        STEP(control_api->street_route_open(owner, control_bot, street, 4, SV_ROUTE_STOP) == SV_STATE);
+        return SV_OK;
+    }
     if (!strcmp(arguments, "bad-route")) {
         STEP(control_api->street_route(owner, control_driver, street, 4) == SV_INVALID);
         return SV_OK;

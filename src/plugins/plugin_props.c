@@ -46,6 +46,8 @@ FIELD(item_trigger, sr_items[i].trigger_ticks)
 FIELD(item_ttl, sr_items[i].time_to_live)
 FIELD(object_ttl, sr_objects[i].time_to_live)
 FIELD(object_health, sr_objects[i].health)
+FIELD(object_color, sr_objects[i].color)
+FIELD(object_key_away, sr_objects[i].key_away)
 FIELD(account_ban, sr_data_accounts.records[i].ban_time)
 
 static struct {
@@ -324,6 +326,8 @@ static const Prop props[] = {
     { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 50000000, human_bone_mass, NULL, NULL, NULL },
     { "human.despawn", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, human_despawn, despawn_check, NULL, NULL },
     { "world.clock", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 0x3b537f, world_clock, clock_check, NULL, NULL },
+    { "object.color", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 5, object_color, train_check, NULL, NULL },
+    { "object.key_away", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, object_key_away, train_check, NULL, NULL },
     { "item.trigger_ticks", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, item_trigger, NULL, NULL, NULL },
 };
 

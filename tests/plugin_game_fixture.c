@@ -869,6 +869,28 @@ static int move_checks(SvOwner owner)
     v.i = 65535;
     STEP(props->set(owner, car_life, car, 0, v) == SV_OK && game->object(owner, car, &os) == SV_OK && os.time_to_live == 65535);
     STEP(props->set(owner, car_life, train, 0, v) == SV_DENIED);
+    /* The color and the key of a vehicle. A piece of the train is refused. */
+    {
+        uint32_t color_id = 0, key_id = 0;
+        SvValue saved_color;
+        STEP(props->find(owner, "object.color", &color_id) == SV_OK && props->find(owner, "object.key_away", &key_id) == SV_OK);
+        STEP(props->get(owner, color_id, car, 0, &saved_color) == SV_OK);
+        v.i = 3;
+        STEP(props->set(owner, color_id, car, 0, v) == SV_OK && props->get(owner, color_id, car, 0, &v) == SV_OK && v.i == 3);
+        v.i = 6;
+        STEP(props->set(owner, color_id, car, 0, v) == SV_INVALID);
+        v.i = -1;
+        STEP(props->set(owner, color_id, car, 0, v) == SV_INVALID);
+        v.i = 1;
+        STEP(props->set(owner, color_id, train, 0, v) == SV_DENIED && props->add(owner, color_id, car, 0, v) == SV_DENIED);
+        STEP(props->set(owner, key_id, car, 0, v) == SV_OK && props->get(owner, key_id, car, 0, &v) == SV_OK && v.i == 1);
+        v.i = 2;
+        STEP(props->set(owner, key_id, car, 0, v) == SV_INVALID);
+        v.i = 0;
+        STEP(props->set(owner, key_id, car, 0, v) == SV_OK && props->set(owner, key_id, train, 0, v) == SV_DENIED);
+        /* The host test finds this car by its color, so the color goes back. */
+        STEP(props->set(owner, color_id, car, 0, saved_color) == SV_OK);
+    }
     v.i = 3;
     STEP(props->set(owner, ban, account, 0, v) == SV_OK && props->get(owner, ban, account, 0, &v) == SV_OK && v.i == 3);
     v.i = -1;
@@ -1176,7 +1198,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 40);
+    STEP(count == 42);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);

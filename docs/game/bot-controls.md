@@ -55,6 +55,30 @@ A gap of 0 turns that check off. The other bounds, the sample rule and the failu
 a capacity outside 1 to 8 or an `out` entry with a short size returns `SV_INVALID`. `out` stays unchanged on every error.
 `street_near` now calls the same scan with a capacity of 1, and the `n-roads` test checks that its answers did not change.
 
+## Input lock of a player (N71, N74)
+
+`input_lock(owner, player, parts)` appends a method to `SvGameWrite`, capability 2, version 1.
+It holds the input of a real player. `parts` is a mix of `SV_INPUT_LOCK_BODY` and `SV_INPUT_LOCK_VIEW`, or 0 to end the lock.
+The body part keeps the four movement axes and the buttons at 0, so the body does not walk, jump or shoot.
+The view part keeps the yaw, the pitch and the two arm angles at the values that the player has when the lock starts.
+The main loop calls `sv_input_lock_apply` after `serverrecv`, so the held values replace the input that the client sent in the same tick.
+Item actions and menu choices in the packet still run, because the server reads them before the lock. A plugin cannot cancel them with this call.
+A bot returns `SV_DENIED`: use `override_input`. A player that another plugin locks returns `SV_CONFLICT`. A stale reference returns `SV_NOT_FOUND`.
+`parts` outside 0 to 3 returns `SV_INVALID`. A call outside a safe callback returns `SV_STATE`.
+The lock ends when the plugin stops, when the player leaves, or when the round resets.
+Client effect unknown: the client predicts its own movement and may fight the server, and nobody has seen it with the original client.
+The view part also covers the camera need of N74 for a player. For a bot on foot, `aim_at` and `override_input_partial` with the view part turn the body,
+because the game copies the view to the body on each tick. A one-time write of the body angle would be undone on the next tick, so N74 has no separate property.
+
+## Open street route (N64)
+
+`street_route_open(owner, bot, points, count, end_action)` appends a method to `SvGameAi`, capability 3, version 1.
+It is `street_route` for a route with a start and an end. It has 2 to 64 points, and each point joins the next one. The last point does not join the first.
+At the end of the last road the driver does the end action. `SV_ROUTE_STOP` brakes and holds the car until the plugin gives a new route or calls `release`.
+`SV_ROUTE_RELEASE` gives the car back to the default AI. An end action that is neither returns `SV_INVALID`.
+Every other rule, bound and result is the rule of `street_route`, and the cleanup when the plugin stops is the same.
+The test checks the points that the game reads at each crossing, the end of the route for both actions, and the brake of the stop. It does not drive a car along the route.
+
 ## Aim at a target (N68, N61)
 
 `aim_at(owner, bot, target, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
@@ -198,7 +222,7 @@ The original client was not tested. Client effect unknown.
 
 These limits come from the design, not from a defect. Each one has a row in the need list of [legacy modules](../legacy-modules.md).
 
-- A driver route is a closed loop. A plugin can read the road graph (N63), but it cannot send a driver from A to B and stop there (N64).
+- A driver route can be open (`street_route_open`). A stop at a given point and a bound for the speed of a driver are still open (N64, the rest).
 - Chase mode switches four effects together: a higher target speed, a larger lateral limit, a lane change and no stop at red lights (N65).
 - The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68, the rest).
 - A possession has no reverse call (N66).
