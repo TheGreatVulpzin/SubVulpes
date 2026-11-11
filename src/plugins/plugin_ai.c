@@ -14,7 +14,7 @@ typedef struct {
     SvOwner owner;
     SvEntity bot, target;
     uint64_t reset;
-    uint32_t ticks;
+    uint32_t ticks, parts, button_mask;
     SvAiInput input;
     int32_t perception, aim, chance, snap;
     uint32_t road_count, road_next;
@@ -201,7 +201,8 @@ static SvResult SV_CALL set_target(SvOwner owner, SvEntity bot, SvEntity human)
     return SV_OK;
 }
 
-static SvResult SV_CALL override_input(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t ticks)
+static SvResult override_set(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts, uint32_t button_mask,
+    uint32_t ticks)
 {
     int32_t index;
     int j;
@@ -225,7 +226,22 @@ static SvResult SV_CALL override_input(SvOwner owner, SvEntity bot, const SvAiIn
     c = claim(owner, bot, index);
     c->input = *input;
     c->ticks = ticks;
+    c->parts = parts;
+    c->button_mask = button_mask;
     return SV_OK;
+}
+
+static SvResult SV_CALL override_input(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t ticks)
+{
+    return override_set(owner, bot, input, SV_AI_PART_ALL, SV_AI_BUTTONS_ALL, ticks);
+}
+
+static SvResult SV_CALL override_parts(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
+    uint32_t button_mask, uint32_t ticks)
+{
+    if (!parts || parts > SV_AI_PART_ALL || button_mask > SV_AI_BUTTONS_ALL)
+        return SV_INVALID;
+    return override_set(owner, bot, input, parts, button_mask, ticks);
 }
 
 static SvResult SV_CALL release(SvOwner owner, SvEntity bot)
@@ -807,6 +823,9 @@ int sv_ai_before_player(int32_t index)
     }
     if (!p->is_bot || !c->ticks || writable(index) != SV_OK)
         return 0;
+    /* A partial override lets the default AI run. sv_ai_after_player puts the chosen parts over its result. */
+    if (c->parts != SV_AI_PART_ALL || c->button_mask != SV_AI_BUTTONS_ALL)
+        return 0;
     memcpy(p->input_axes, c->input.axes, sizeof p->input_axes);
     p->input_buttons = c->input.buttons;
     p->yaw = c->input.yaw;
@@ -860,6 +879,20 @@ void sv_ai_after_player(int32_t index)
         return;
     if (!sr_players[index].is_bot)
         return;
+    if (controls[index].ticks && (controls[index].parts != SV_AI_PART_ALL ||
+        controls[index].button_mask != SV_AI_BUTTONS_ALL) && writable(index) == SV_OK) {
+        Control *c = &controls[index];
+        Player *p = &sr_players[index];
+        if (c->parts & SV_AI_PART_AXES)
+            memcpy(p->input_axes, c->input.axes, sizeof p->input_axes);
+        if (c->parts & SV_AI_PART_BUTTONS)
+            p->input_buttons = (p->input_buttons & ~c->button_mask) | (c->input.buttons & c->button_mask);
+        if (c->parts & SV_AI_PART_VIEW) {
+            p->yaw = c->input.yaw;
+            p->input_pitch = c->input.pitch;
+        }
+        --c->ticks;
+    }
     if (controls[index].aim == 1) {
         sr_players[index].input_buttons |= 2u;
         sr_players[index].move_mode = 2;
@@ -924,5 +957,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess, set_chase_parts
+    read_road, read_intersection, set_snap, unpossess, set_chase_parts, override_parts
 };

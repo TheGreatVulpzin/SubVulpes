@@ -92,6 +92,25 @@ int main(int argc, char **argv)
     CHECK(sr_players[bot].move_mode == 1);
     CHECK(sr_humans[sr_players[bot].human_id].move_mode == 1);
     CHECK(sr_players[driver].ai_chase == 0);
+    /* A partial override lets the default AI run, then puts the chosen parts over its result for the given updates. */
+    command("nbots parts-input");
+    CHECK(sv_ai_before_player(bot) == 0);
+    sr_players[bot].input_buttons = 1u | 8u;
+    sr_players[bot].input_axes[1] = 0.0f;
+    sr_players[bot].yaw = 0.25f;
+    sv_ai_after_player(bot);
+    CHECK((sr_players[bot].input_buttons & 4u) && (sr_players[bot].input_buttons & 9u) == 9u);
+    CHECK(sr_players[bot].input_axes[1] == 0.5f && sr_players[bot].yaw == 0.25f);
+    sr_players[bot].input_buttons = 0;
+    sv_ai_after_player(bot);
+    CHECK(sr_players[bot].input_buttons == 4u);
+    sr_players[bot].input_buttons = 0;
+    sr_players[bot].input_axes[1] = 0.0f;
+    sv_ai_after_player(bot);
+    CHECK(sr_players[bot].input_buttons == 0 && sr_players[bot].input_axes[1] == 0.0f);
+    /* All parts with all buttons skip the default AI, as override_input does. */
+    command("nbots parts-full");
+    CHECK(sv_ai_before_player(bot) == 1 && sr_players[bot].input_buttons == 8u);
     sr_objects[world_object].pos = (vec3){80, 5.5f, 2};
     command("nbots street-occupied");
     command("nbots street-blocked");

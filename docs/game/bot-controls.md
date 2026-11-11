@@ -44,6 +44,17 @@ In the game, `Player.ai_chase` is 0, 1 (all four, as the scenario writes it) or 
 The value 1 and the value 0 behave as before. The test checks the stored value of each mix and the full chase,
 and it does not measure the driving of each part alone.
 
+## Partial input override (N76)
+
+`override_parts(owner, bot, input, parts, button_mask, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
+It is `override_input` for some parts of the input. `parts` is a mix of `SV_AI_PART_AXES`, `SV_AI_PART_BUTTONS` and `SV_AI_PART_VIEW` (yaw and pitch).
+For the buttons, `button_mask` says which bits to replace. The other bits stay with the default AI.
+The default AI runs first, and the chosen parts go over its result for each of the `ticks` updates.
+All parts with all button bits (`SV_AI_BUTTONS_ALL`) are the same as `override_input`, which skips the default AI.
+The aim policy of `aim_mode` keeps the last word on button bit 2. A bot in a vehicle returns `SV_CONFLICT`, as for `override_input`.
+`parts` 0, a bit outside `SV_AI_PART_ALL`, a button bit outside `SV_AI_BUTTONS_ALL`, a null input and `ticks` outside 1 to 3600 return `SV_INVALID`.
+The test checks that the default AI runs, that the chosen axes, button bits and yaw go over it, and that the effect ends after the given updates.
+
 ## Death counter (N60)
 
 `human.despawn` appends an integer property with get and set, capability 10, version 1.
