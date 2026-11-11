@@ -8,7 +8,7 @@ static const SvGameAi *ai;
 static const SvGameProps *props;
 static SvEntity bot, driver, scenario, normal, stale;
 static SvEntity dead, released, living;
-static SvEntity receiver, donor;
+static SvEntity receiver, donor, rider;
 
 static int death_and_street(SvOwner owner)
 {
@@ -90,9 +90,10 @@ static int run(SvOwner owner, const char *text)
             if (!strcmp(p.name, "Release")) released = p.human;
             if (!strcmp(p.name, "Receiver")) receiver = list[i];
             if (!strcmp(p.name, "Donor")) donor = list[i];
+            if (!strcmp(p.name, "Rider")) rider = list[i];
         }
         if (!strcmp(text, "missing")) return 0;
-        STEP(bot && driver && scenario && normal && receiver && donor);
+        STEP(bot && driver && scenario && normal && receiver && donor && rider);
         stale = bot ^ ((uint64_t)1 << 32);
         STEP(ai->aim_mode(owner, stale, 1) == SV_NOT_FOUND);
         STEP(ai->chase_mode(owner, stale, 1) == SV_NOT_FOUND);
@@ -126,7 +127,42 @@ static int run(SvOwner owner, const char *text)
         SvAiStreetPosition out = {sizeof out};
         STEP(ai->street_near(owner, (SvVector){80, 7.5f, 2}, 1, &out) == SV_OK);
         STEP(out.position.y == 7.5f);
-    } else if (!strcmp(text, "street-cand")) {
+    } else if (!strcmp(text, "aim-at")) {
+        SvAiAimTarget t = {sizeof t, SV_AIM_POINT, {10, 20, 30}, 0};
+        STEP(ai->aim_at(owner, bot, NULL, 2) == SV_INVALID);
+        t.kind = 0;
+        STEP(ai->aim_at(owner, bot, &t, 2) == SV_INVALID);
+        t.kind = 3;
+        STEP(ai->aim_at(owner, bot, &t, 2) == SV_INVALID);
+        t.kind = SV_AIM_POINT;
+        STEP(ai->aim_at(owner, bot, &t, 0) == SV_INVALID);
+        STEP(ai->aim_at(owner, bot, &t, 3601) == SV_INVALID);
+        t.point.x = 40000;
+        STEP(ai->aim_at(owner, bot, &t, 2) == SV_INVALID);
+        t.point.x = 10;
+        STEP(ai->aim_at(owner, stale, &t, 2) == SV_NOT_FOUND);
+        STEP(ai->aim_at(owner, driver, &t, 2) == SV_STATE);
+        t.kind = SV_AIM_ENTITY;
+        t.entity = 0;
+        STEP(ai->aim_at(owner, bot, &t, 2) == SV_NOT_FOUND);
+        t.size = 0;
+        t.kind = SV_AIM_POINT;
+        STEP(ai->aim_at(owner, bot, &t, 2) == SV_INVALID);
+        t.size = sizeof t;
+        STEP(ai->aim_at(owner, bot, &t, 2) == SV_OK);
+    } else if (!strcmp(text, "aim-entity")) {
+        SvAiAimTarget t = {sizeof t, SV_AIM_ENTITY, {0, 0, 0}, 0};
+        t.entity = dead;
+        STEP(ai->aim_at(owner, bot, &t, 1) == SV_OK);
+    } else if (!strcmp(text, "aim-rider")) {
+        SvAiAimTarget t = {sizeof t, SV_AIM_POINT, {10, 20, 30}, 0};
+        SvAiInput in = {sizeof in};
+        in.buttons = 1;
+        STEP(ai->aim_at(owner, rider, &t, 2) == SV_OK);
+        STEP(ai->override_input_partial(owner, rider, &in, SV_AI_PART_AXES, 0, 1) == SV_CONFLICT);
+        STEP(ai->override_input_partial(owner, rider, &in, SV_AI_PART_ALL, SV_AI_BUTTONS_ALL, 1) == SV_CONFLICT);
+        STEP(ai->override_input_partial(owner, rider, &in, SV_AI_PART_BUTTONS | SV_AI_PART_VIEW, 1, 1) == SV_OK);
+    } else if (!strcmp(text, "street-list")) {
         SvAiStreetPosition cand[8], one = {sizeof one};
         SvAiStreetFilter filter = {sizeof filter, SV_STREET_ANY, 4.0f, 16.0f};
         const SvVector at = {80, 5.5f, 2};

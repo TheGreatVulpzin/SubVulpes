@@ -8,6 +8,7 @@
 #include "plugin_lists.h"
 #include "events.h"
 #include "ai_car.h"
+#include "sr_math.h"
 #include <string.h>
 
 typedef struct {
@@ -16,6 +17,9 @@ typedef struct {
     uint64_t reset;
     uint32_t ticks, parts, button_mask;
     SvAiInput input;
+    uint32_t aim_kind, aim_ticks;
+    SvVector aim_point;
+    SvEntity aim_entity;
     int32_t perception, aim, chance, snap;
     uint32_t road_count, road_next;
     SvAiStreetPoint roads[SV_AI_WAYPOINTS_MAX];
@@ -81,6 +85,14 @@ static SvResult writable(int32_t index)
     if (sr_humans[human].vehicle_id != -1)
         return SV_CONFLICT;
     return SV_OK;
+}
+
+static int seat_state(int32_t index, int driver);
+
+/* True when the bot is on foot or a passenger, so that its view is its own. */
+static int aim_ready(int32_t index)
+{
+    return writable(index) == SV_OK || seat_state(index, 0);
 }
 
 static Control *claim(SvOwner owner, SvEntity bot, int32_t index)
@@ -219,6 +231,9 @@ static SvResult override_set(SvOwner owner, SvEntity bot, const SvAiInput *input
         if (!finite_value(input->axes[j]) || input->axes[j] < -1 || input->axes[j] > 1)
             return SV_INVALID;
     result = writable(index);
+    /* A passenger in seat 1 to 3 takes the buttons and the view, and no axes. */
+    if (result == SV_CONFLICT && !(parts & SV_AI_PART_AXES) && parts != SV_AI_PART_ALL && seat_state(index, 0))
+        result = SV_OK;
     if (result != SV_OK)
         return result;
     if (!installed)
@@ -242,6 +257,32 @@ static SvResult SV_CALL override_input_partial(SvOwner owner, SvEntity bot, cons
     if (!parts || parts > SV_AI_PART_ALL || button_mask > SV_AI_BUTTONS_ALL)
         return SV_INVALID;
     return override_set(owner, bot, input, parts, button_mask, ticks);
+}
+
+static SvResult SV_CALL aim_at(SvOwner owner, SvEntity bot, const SvAiAimTarget *target, uint32_t ticks)
+{
+    int32_t index;
+    Control *c;
+    SvResult result = resolve(owner, bot, &index);
+    if (result != SV_OK)
+        return result;
+    if (!target || target->size < sizeof *target || !ticks || ticks > SV_AI_TICKS_MAX ||
+        (target->kind != SV_AIM_POINT && target->kind != SV_AIM_ENTITY) ||
+        (target->kind == SV_AIM_POINT && !position_valid(target->point)))
+        return SV_INVALID;
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
+    if (!installed || !aim_ready(index))
+        return SV_STATE;
+    if (target->kind == SV_AIM_ENTITY && sv_entity_resolve(SV_ENTITY_HUMAN, target->entity) < 0 &&
+        sv_entity_resolve(SV_ENTITY_OBJECT, target->entity) < 0)
+        return SV_NOT_FOUND;
+    c = claim(owner, bot, index);
+    c->aim_kind = target->kind;
+    c->aim_point = target->point;
+    c->aim_entity = target->entity;
+    c->aim_ticks = ticks;
+    return SV_OK;
 }
 
 static SvResult SV_CALL release(SvOwner owner, SvEntity bot)
@@ -948,6 +989,52 @@ int sv_ai_snap(int32_t index)
     return (uint32_t)index < SR_MAX_PLAYER && live_control(index) && controls[index].snap == 1;
 }
 
+/* The aim point of the target of aim_at. 0 when the entity is gone. */
+static int aim_point_of(const Control *c, SvVector *out)
+{
+    int32_t i;
+    if (c->aim_kind == SV_AIM_POINT) {
+        *out = c->aim_point;
+        return 1;
+    }
+    i = sv_entity_resolve(SV_ENTITY_HUMAN, c->aim_entity);
+    if (i >= 0) {
+        vec3 p = sr_humans[i].bones[c->perception == 1 ? 1 : 2].pos;
+        *out = (SvVector){p.x, p.y, p.z};
+        return 1;
+    }
+    i = sv_entity_resolve(SV_ENTITY_OBJECT, c->aim_entity);
+    if (i >= 0) {
+        vec3 p = sr_objects[i].pos;
+        *out = (SvVector){p.x, p.y, p.z};
+        return 1;
+    }
+    return 0;
+}
+
+/* Turns the view of the bot to the target with the angles of the threat aim in player_ai.c. */
+static void aim_apply(int32_t index)
+{
+    Control *c = &controls[index];
+    Player *p = &sr_players[index];
+    SvVector point;
+    vec3 head, d;
+    if (!aim_ready(index))
+        return;
+    if (!aim_point_of(c, &point)) {
+        c->aim_ticks = 0;
+        return;
+    }
+    head = sr_humans[p->human_id].bones[6].pos;
+    d.x = (float)((double)point.x - head.x);
+    d.y = (float)((double)point.y - head.y);
+    d.z = (float)((double)point.z - head.z);
+    d.y = (float)((double)d.y - 0.5);
+    p->yaw = (float)x87_atan2(d.x, -d.z);
+    p->input_pitch = (float)x87_atan2(-d.y, x87_sqrt((double)d.x * d.x + (double)d.z * d.z));
+    --c->aim_ticks;
+}
+
 void sv_ai_after_player(int32_t index)
 {
     if ((uint32_t)index >= SR_MAX_PLAYER || !live_control(index))
@@ -955,7 +1042,8 @@ void sv_ai_after_player(int32_t index)
     if (!sr_players[index].is_bot)
         return;
     if (controls[index].ticks && (controls[index].parts != SV_AI_PART_ALL ||
-        controls[index].button_mask != SV_AI_BUTTONS_ALL) && writable(index) == SV_OK) {
+        controls[index].button_mask != SV_AI_BUTTONS_ALL) &&
+        (writable(index) == SV_OK || (seat_state(index, 0) && !(controls[index].parts & SV_AI_PART_AXES)))) {
         Control *c = &controls[index];
         Player *p = &sr_players[index];
         if (c->parts & SV_AI_PART_AXES)
@@ -968,6 +1056,8 @@ void sv_ai_after_player(int32_t index)
         }
         --c->ticks;
     }
+    if (controls[index].aim_ticks)
+        aim_apply(index);
     if (controls[index].aim == 1) {
         sr_players[index].input_buttons |= 2u;
         sr_players[index].move_mode = 2;
@@ -1032,5 +1122,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list
+    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list, aim_at
 };

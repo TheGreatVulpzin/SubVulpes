@@ -55,6 +55,19 @@ A gap of 0 turns that check off. The other bounds, the sample rule and the failu
 a capacity outside 1 to 8 or an `out` entry with a short size returns `SV_INVALID`. `out` stays unchanged on every error.
 `street_near` now calls the same scan with a capacity of 1, and the `n-roads` test checks that its answers did not change.
 
+## Aim at a target (N68, N61)
+
+`aim_at(owner, bot, target, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
+The target is a point (`SV_AIM_POINT`) or an entity (`SV_AIM_ENTITY`): a human, or a vehicle or another object.
+For `ticks` updates (1 to 3600), after the default AI has run, the call turns the yaw and the pitch of the bot to the target.
+The angles are the angles that the AI uses for a threat in `player_ai.c`: `atan2(dx, -dz)` for the yaw and `atan2(-dy, sqrt(dx*dx + dz*dz))` for the pitch,
+measured from the head bone of the bot, with 0.5 units taken from the height. For a human target the point is the torso, or the head when the perception is 1.
+The aim ends when the entity is gone, after `ticks` updates, or with `release`. It does not fire. A plugin fires with `override_input_partial`.
+It works for a bot on foot and for a passenger in seat 1 to 3. A driver, a bot with no body, or a seat that is not a passenger seat returns `SV_STATE`.
+An entity that is gone returns `SV_NOT_FOUND`. A bad kind, a point outside the map, a short target and `ticks` outside 1 to 3600 return `SV_INVALID`.
+`override_input_partial` takes the buttons and the view of a passenger in seat 1 to 3, and no axes: the axes of the driver drive the car.
+The test checks the angles of a point, of an entity and of a passenger against the formula, and that the aim ends. It does not show that the game moves the arm of a passenger the same way.
+
 ## Partial input override (N76)
 
 `override_input_partial(owner, bot, input, parts, button_mask, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
@@ -187,7 +200,7 @@ These limits come from the design, not from a defect. Each one has a row in the 
 
 - A driver route is a closed loop. A plugin can read the road graph (N63), but it cannot send a driver from A to B and stop there (N64).
 - Chase mode switches four effects together: a higher target speed, a larger lateral limit, a lane change and no stop at red lights (N65).
-- A bot has no method to aim at a point or an entity. The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68).
+- The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68, the rest).
 - A possession has no reverse call (N66).
 - Passenger aim takes a player as the target, in seats 1 to 3 (N61).
 - Most writes return to the first value when the plugin stops. Things that a plugin creates, such as a possession, follow their own rule. Read each section.

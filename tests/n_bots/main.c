@@ -2,6 +2,7 @@
 #include "sv_game_ai.h"
 #include "city.h"
 #include "ai_car.h"
+#include <math.h>
 
 static int make_bot(const char *name)
 {
@@ -18,6 +19,15 @@ static int make_bot(const char *name)
     return p;
 }
 
+/* The view of a bot must be the view of the threat aim in player_ai.c for a point. */
+static void expect_aim(int p, double x, double y, double z)
+{
+    vec3 head = sr_humans[sr_players[p].human_id].bones[6].pos;
+    double dx = x - head.x, dy = y - head.y - 0.5, dz = z - head.z;
+    double yaw = atan2(dx, -dz), pitch = atan2(-dy, sqrt(dx * dx + dz * dz));
+    CHECK(fabs(sr_players[p].yaw - yaw) < 0.001 && fabs(sr_players[p].input_pitch - pitch) < 0.001);
+}
+
 static void command(const char *text)
 {
     sr_players[world_player].godmode = 0;
@@ -28,7 +38,7 @@ static void command(const char *text)
 int main(int argc, char **argv)
 {
     int bot, driver, scenario, dead, dead_human, released, h;
-    int receiver, donor, old_body, donor_body;
+    int receiver, donor, old_body, donor_body, rider, rider_body;
     float normal_throttle;
     world_start();
     bot = make_bot("Aim");
@@ -48,6 +58,8 @@ int main(int argc, char **argv)
     donor_body = sr_players[donor].human_id;
     sr_humans[old_body].account = sr_humans[donor_body].account = -1;
     sr_humans[old_body].team = sr_humans[donor_body].team = 0;
+    rider = make_bot("Rider");
+    rider_body = sr_players[rider].human_id;
     sr_humans[dead_human].health = -5;
     sr_humans[dead_human].despawn_timer = 3333;
     sr_humans[sr_players[released].human_id].health = -5;
@@ -60,6 +72,8 @@ int main(int argc, char **argv)
     h = sr_players[driver].human_id;
     sr_humans[h].vehicle_id = world_object;
     sr_humans[h].vehicle_seat = 0;
+    sr_humans[rider_body].vehicle_id = world_object;
+    sr_humans[rider_body].vehicle_seat = 1;
     sr_players[scenario].ai_chase = 1;
     sv_systems_install();
     sv_game_ready();
@@ -108,6 +122,27 @@ int main(int argc, char **argv)
     sr_players[bot].input_axes[1] = 0.0f;
     sv_ai_after_player(bot);
     CHECK(sr_players[bot].input_buttons == 0 && sr_players[bot].input_axes[1] == 0.0f);
+    /* aim_at: the exact view for a point, for an entity and for a passenger. It ends after the given updates. */
+    command("nbots aim-at");
+    sv_ai_after_player(bot);
+    expect_aim(bot, 10, 20, 30);
+    sr_players[bot].yaw = 2.0f;
+    sv_ai_after_player(bot);
+    expect_aim(bot, 10, 20, 30);
+    sr_players[bot].yaw = 2.0f;
+    sv_ai_after_player(bot);
+    CHECK(sr_players[bot].yaw == 2.0f);
+    command("nbots aim-entity");
+    sv_ai_after_player(bot);
+    {
+        vec3 torso = sr_humans[dead_human].bones[2].pos;
+        expect_aim(bot, torso.x, torso.y, torso.z);
+    }
+    command("nbots aim-rider");
+    sr_players[rider].input_buttons = 0;
+    sv_ai_after_player(rider);
+    expect_aim(rider, 10, 20, 30);
+    CHECK(sr_players[rider].input_buttons & 1u);
     /* All parts with all buttons skip the default AI, as override_input does. */
     command("nbots parts-full");
     CHECK(sv_ai_before_player(bot) == 1 && sr_players[bot].input_buttons == 8u);

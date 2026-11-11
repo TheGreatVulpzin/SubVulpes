@@ -70,6 +70,14 @@ typedef struct {
     int32_t roads[4], extent[4], light[4];
 } SvAiIntersection;
 
+/* The target of aim_at: a point, or an entity (a human, or a vehicle or other object). */
+enum { SV_AIM_POINT = 1, SV_AIM_ENTITY = 2 };
+typedef struct {
+    uint32_t size, kind;
+    SvVector point;
+    SvEntity entity;
+} SvAiAimTarget;
+
 /* The parts of a bot input that override_input_partial can replace. */
 enum { SV_AI_PART_AXES = 1, SV_AI_PART_BUTTONS = 2, SV_AI_PART_VIEW = 4, SV_AI_PART_ALL = 7 };
 #define SV_AI_BUTTONS_ALL 0x7ffffu
@@ -107,7 +115,8 @@ typedef struct {
      * For the buttons, button_mask says which bits to replace, and the other bits stay with the default AI. The default AI
      * runs first, and the plugin values go over its result. All parts with all button bits are the same as override_input,
      * which skips the default AI. The aim policy of aim_mode keeps the last word on button bit 2. Every other rule is the rule
-     * of override_input. SV_INVALID for parts 0, a bit outside SV_AI_PART_ALL or a button bit outside SV_AI_BUTTONS_ALL. */
+     * of override_input. A passenger in seat 1 to 3 accepts the buttons and the view, and no axes. SV_INVALID for parts 0, a bit
+     * outside SV_AI_PART_ALL or a button bit outside SV_AI_BUTTONS_ALL. */
     SvResult (SV_CALL *override_input_partial)(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
         uint32_t button_mask, uint32_t ticks);
     /* Like street_near, but gives up to capacity candidates (1 to SV_AI_STREET_LIST_MAX), the nearest first, at most one for
@@ -116,6 +125,13 @@ typedef struct {
      * kinds 0 or a bit outside SV_STREET_ANY, a gap outside 0 to 64, or a short out entry. */
     SvResult (SV_CALL *street_list)(SvOwner owner, SvVector position, float radius, const SvAiStreetFilter *filter,
         SvAiStreetPosition *out, uint32_t capacity, uint32_t *count);
+    /* Turns the view of a bot toward a point or an entity on each update, for 1 to SV_AI_TICKS_MAX updates, after the default AI
+     * has run. The bot may be on foot or a passenger in seat 1 to 3. The aim is exact: it uses the angles that the AI itself uses
+     * for a threat, from the head of the bot. For a human the aim point is the torso, or the head when perception is 1. The aim
+     * ends when the entity is gone. release ends it too. It does not fire. A plugin fires with override_input_partial.
+     * SV_STATE for a driver, a bot with no body or a bot in a vehicle seat that is not a passenger seat. SV_NOT_FOUND for an
+     * entity that is gone. SV_INVALID for a bad kind, a point outside the map, or ticks outside 1 to SV_AI_TICKS_MAX. */
+    SvResult (SV_CALL *aim_at)(SvOwner owner, SvEntity bot, const SvAiAimTarget *target, uint32_t ticks);
 } SvGameAi;
 #pragma pack(pop)
 
