@@ -18,6 +18,7 @@
 #include "plugin_damage.h"
 #include "plugin_entities.h"
 #include "plugin_game_events.h"
+#include "plugin_train.h"
 #include "profiler.h"
 #include "sr_math.h"
 #include "sr_os.h"
@@ -379,6 +380,7 @@ static void locomotive(Object *o, int obj)
     if (!stay)
       o->stop_ticks = 0;
   }
+  thr = sv_train_throttle(obj, thr);
   t = (float)((float)(thr - sp) * 8.0);
   if (!(-1.0 <= t))
     t = -1.0f;

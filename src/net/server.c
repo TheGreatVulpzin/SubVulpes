@@ -21,6 +21,7 @@
 #include "sr_math.h"
 #include "sr_os.h"
 #include "sr_server.h"
+#include "sv_game_write.h"
 #include "vectors.h"
 
 #define VOICE_SLOTS 8
@@ -100,14 +101,17 @@ void calculateplayervoice(int conn, int player)
             s->active = 0;
         if (s->item == -1) {
             int h = players[p].human_id;
+            int route = sv_voice_mode(p, player);
             s->human = h;
+            if (route == SV_VOICE_DENY)
+                s->active = 0;
             if (rings[p].voice_off)
                 s->active = 0;
             if (lh != -1 && h == -1)
                 s->active = 0;
             if (h != -1)
                 s->distance = vectordistance(&listener, &sr_humans[h].bones[2].pos);
-            if (256.0f < s->distance)
+            if (256.0f < s->distance && route != SV_VOICE_FORCE)
                 s->active = 0;
         } else {
             const Item *radio = &sr_items[s->item];
@@ -138,7 +142,7 @@ void calculateplayervoice(int conn, int player)
     for (q = 0; q < SR_MAX_PLAYER; q++) {
         int h, k, found = 0;
         float d;
-        if (q == player || !players[q].active || rings[q].voice_off)
+        if (q == player || !players[q].active || rings[q].voice_off || sv_voice_mode(q, player) == SV_VOICE_DENY)
             continue;
         h = players[q].human_id;
         for (k = 0; k < VOICE_SLOTS; k++) {
@@ -155,7 +159,7 @@ void calculateplayervoice(int conn, int player)
             d = 8.0f;
         } else {
             d = distance_to(&sr_humans[h].bones[2].pos, &listener);
-            if (!(d < 256.0f))
+            if (!(d < 256.0f) && sv_voice_mode(q, player) != SV_VOICE_FORCE)
                 continue;
         }
         k = addvoice(conn, d);

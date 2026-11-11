@@ -144,6 +144,15 @@ int main(int argc, char **argv)
     sv_ai_after_player(rider);
     expect_aim(rider, 10, 20, 30);
     CHECK(sr_players[rider].input_buttons & 1u);
+    /* Voice rules: deny and force for a pair, the other direction untouched, and the end of a rule. */
+    CHECK(sv_voice_mode(bot, receiver) == SV_VOICE_DEFAULT);
+    command("nbots voice");
+    CHECK(sv_voice_mode(bot, receiver) == SV_VOICE_DENY && sv_voice_mode(receiver, bot) == SV_VOICE_DEFAULT);
+    command("nbots voice-force");
+    CHECK(sv_voice_mode(bot, receiver) == SV_VOICE_FORCE);
+    command("nbots voice-clear");
+    CHECK(sv_voice_mode(bot, receiver) == SV_VOICE_DEFAULT);
+    command("nbots voice");
     /* The input lock: the held values go over what the client sent, until the lock ends. */
     sr_players[receiver].yaw = 1.0f;
     sr_players[receiver].input_pitch = 0.5f;
@@ -252,6 +261,7 @@ int main(int argc, char **argv)
     sr_players[receiver].input_buttons = 5;
     sv_input_lock_apply();
     CHECK(sr_players[receiver].input_buttons == 5);
+    CHECK(sv_voice_mode(bot, receiver) == SV_VOICE_DEFAULT);
     CHECK(sr_players[receiver].human_id == old_body && sr_players[donor].human_id == donor_body);
     CHECK(sr_humans[old_body].player_id == receiver && sr_humans[donor_body].player_id == donor);
     CHECK(sr_players[bot].move_mode == 1);

@@ -1,4 +1,5 @@
 #include "plugin_host.h"
+#include "plugin_train.h"
 #include "plugin_entities.h"
 #include "plugin_game_internal.h"
 #include "plugin_props.h"
@@ -38,6 +39,8 @@ static void release(SvOwner owner)
     sv_made_release(owner);
     sv_ai_release_owner(owner);
     sv_input_lock_release(owner);
+    sv_voice_release(owner);
+    sv_train_release(owner);
     sv_engine_release_owner(owner);
     sv_mission_release_owner(owner);
     sv_storage_release_owner(owner);

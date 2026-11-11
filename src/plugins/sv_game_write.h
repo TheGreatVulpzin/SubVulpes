@@ -127,14 +127,31 @@ typedef struct {
      * SV_CONFLICT. SV_INVALID for a bit outside SV_INPUT_LOCK_ALL. Safe callbacks only. Client effect unknown: the client
      * predicts its own movement and may fight the server. */
     SvResult (SV_CALL *input_lock)(SvOwner owner, SvEntity player, uint32_t parts);
+    /* Sets who hears whom. mode is SV_VOICE_DENY (the listener never hears the speaker), SV_VOICE_FORCE (the listener hears the
+     * speaker at any distance, in one of its 8 voice slots) or SV_VOICE_DEFAULT (end the rule). The listener must be a real
+     * player, and a bot gives SV_DENIED. A rule of another plugin for the same pair gives SV_CONFLICT. At most 256 rules exist
+     * (SV_LIMIT). A rule ends when the plugin stops, when one of the two players leaves, or when the round resets. Radios are
+     * not changed. Client effect unknown: the client may fade a voice by the distance that it knows. */
+    SvResult (SV_CALL *voice_route)(SvOwner owner, SvEntity speaker, SvEntity listener, uint32_t mode);
+    /* Sets the target speed of a locomotive (a train piece of type 12) between 0 and 1. The game uses 0.4. A target of 0 brakes
+     * the train anywhere, and the door face of the locomotive opens when the train stops, because the game moves the door with
+     * the real speed. -1 gives the control back to the game. The bogies and every other object give SV_DENIED. A locomotive that
+     * another plugin controls gives SV_CONFLICT, and 8 locomotives at most give SV_LIMIT. The setting ends when the plugin stops,
+     * when the locomotive is gone, or when the round resets. Client effect unknown. */
+    SvResult (SV_CALL *train_speed)(SvOwner owner, SvEntity locomotive, float throttle);
 } SvGameWrite;
 #pragma pack(pop)
 
 enum { SV_INPUT_LOCK_BODY = 1, SV_INPUT_LOCK_VIEW = 2, SV_INPUT_LOCK_ALL = 3 };
+enum { SV_VOICE_DEFAULT = 0, SV_VOICE_DENY = 1, SV_VOICE_FORCE = 2 };
 
 /* The core side of input_lock. The main loop calls sv_input_lock_apply after it reads the packets. */
 SvResult SV_CALL sv_input_lock_set(SvOwner owner, SvEntity player, uint32_t parts);
 void sv_input_lock_apply(void);
 void sv_input_lock_release(SvOwner owner);
+SvResult SV_CALL sv_voice_route(SvOwner owner, SvEntity speaker, SvEntity listener, uint32_t mode);
+int sv_voice_mode(int speaker, int listener);
+void sv_voice_release(SvOwner owner);
+SvResult SV_CALL sv_train_speed(SvOwner owner, SvEntity locomotive, float throttle);
 
 #endif

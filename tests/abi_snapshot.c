@@ -100,7 +100,7 @@ int main(void)
     TABLE(SvConfig, get_int, get_text, 3);
     TABLE(SvPlugins, refuse, borrow, 4);
     TABLE(SvGameRead, entities, account_number, 21);
-    TABLE(SvGameWrite, message, input_lock, 31);
+    TABLE(SvGameWrite, message, train_speed, 33);
     TABLE(SvGameProps, find, add, 5);
     TABLE(SvGameAi, threats, street_route_open, 23);
     TABLE(SvGameEconomy, company, add_stocks, 4);

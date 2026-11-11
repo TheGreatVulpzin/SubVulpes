@@ -56,6 +56,7 @@ static DWORD WINAPI wrong_thread(void *argument)
     STEP(ai->chase_mode(owner, driver, 1) == SV_STATE);
     STEP(ai->unpossess(owner, receiver) == SV_STATE);
     STEP(change->input_lock(owner, receiver, SV_INPUT_LOCK_ALL) == SV_STATE);
+    STEP(change->voice_route(owner, bot, receiver, SV_VOICE_DENY) == SV_STATE);
     {
         SvAiStreetPosition out = {sizeof out};
         STEP(ai->street_near(owner, (SvVector){0}, 16, &out) == SV_STATE);
@@ -137,6 +138,16 @@ static int run(SvOwner owner, const char *text)
         STEP(change->input_lock(owner, receiver, 4) == SV_INVALID);
         STEP(change->input_lock(owner, receiver ^ ((uint64_t)1 << 32), SV_INPUT_LOCK_BODY) == SV_NOT_FOUND);
         STEP(change->input_lock(owner, receiver, SV_INPUT_LOCK_ALL) == SV_OK);
+    } else if (!strcmp(text, "voice")) {
+        STEP(change->voice_route(owner, bot, receiver, SV_VOICE_DENY) == SV_OK);
+        STEP(change->voice_route(owner, receiver, receiver, SV_VOICE_DENY) == SV_INVALID);
+        STEP(change->voice_route(owner, bot, receiver, 3) == SV_INVALID);
+        STEP(change->voice_route(owner, bot, donor, SV_VOICE_DENY) == SV_DENIED);
+        STEP(change->voice_route(owner, stale, receiver, SV_VOICE_DENY) == SV_NOT_FOUND);
+    } else if (!strcmp(text, "voice-force")) {
+        STEP(change->voice_route(owner, bot, receiver, SV_VOICE_FORCE) == SV_OK);
+    } else if (!strcmp(text, "voice-clear")) {
+        STEP(change->voice_route(owner, bot, receiver, SV_VOICE_DEFAULT) == SV_OK);
     } else if (!strcmp(text, "unlock")) {
         STEP(change->input_lock(owner, receiver, 0) == SV_OK);
     } else if (!strcmp(text, "aim-at")) {

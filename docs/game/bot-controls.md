@@ -70,6 +70,34 @@ Client effect unknown: the client predicts its own movement and may fight the se
 The view part also covers the camera need of N74 for a player. For a bot on foot, `aim_at` and `override_input_partial` with the view part turn the body,
 because the game copies the view to the body on each tick. A one-time write of the body angle would be undone on the next tick, so N74 has no separate property.
 
+## Voice routing (N48)
+
+`voice_route(owner, speaker, listener, mode)` appends a method to `SvGameWrite`, capability 2, version 1.
+It sets who hears whom. `mode` is `SV_VOICE_DENY`, `SV_VOICE_FORCE` or `SV_VOICE_DEFAULT`.
+- `SV_VOICE_DENY`: the listener never hears the speaker.
+- `SV_VOICE_FORCE`: the listener hears the speaker at any distance, in one of its 8 voice slots.
+- `SV_VOICE_DEFAULT`: the call ends the rule.
+
+The listener must be a real player. A bot listener returns `SV_DENIED`. A rule of another plugin for the same pair returns `SV_CONFLICT`.
+256 rules at most exist, and the next one returns `SV_LIMIT`. A stale reference returns `SV_NOT_FOUND`.
+The server asks `sv_voice_mode` inside `calculateplayervoice`, so the 8 slots and the radio logic do not change. A radio is not changed by a rule.
+A rule ends when the plugin stops, when one of the two players leaves, or when the round resets.
+Client effect unknown: the client may fade a voice by the distance that it knows.
+No automatic test drives `server.c`. A test in `n-bots` checks the results of the call only. Check the sound in the game.
+
+## Train speed (N49, in part)
+
+`train_speed(owner, locomotive, throttle)` appends a method to `SvGameWrite`, capability 2, version 1.
+It sets the target speed of a locomotive (type 12). `throttle` is between 0 and 1. The game uses 0.4.
+A target of 0 brakes the train anywhere. The door face of the locomotive follows the real speed, so a train that stops opens its door.
+A value of -1 gives the control back to the game. A value outside 0 to 1 returns `SV_INVALID`.
+A bogie (type 13) and every other object return `SV_DENIED`. A locomotive that another plugin controls returns `SV_CONFLICT`.
+8 locomotives at most can have a setting, and the next one returns `SV_LIMIT`.
+The code of the locomotive in `objects.c` calls `sv_train_throttle` once for each tick.
+The setting ends when the plugin stops, when the locomotive is gone, or when the round resets.
+Client effect unknown. The test checks the results of the call only, not the movement of the train.
+The property `train.stop_ticks` holds a train at a station or sends it on. See the [property table](../plugin-game-api.md).
+
 ## Open street route (N64)
 
 `street_route_open(owner, bot, points, count, end_action)` appends a method to `SvGameAi`, capability 3, version 1.

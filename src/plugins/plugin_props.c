@@ -48,6 +48,7 @@ FIELD(object_ttl, sr_objects[i].time_to_live)
 FIELD(object_health, sr_objects[i].health)
 FIELD(object_color, sr_objects[i].color)
 FIELD(object_key_away, sr_objects[i].key_away)
+FIELD(train_stop, sr_objects[i].stop_ticks)
 FIELD(account_ban, sr_data_accounts.records[i].ban_time)
 
 static struct {
@@ -135,6 +136,13 @@ static SvResult clock_check(int32_t index, SvValue value)
 {
     (void)index;
     return value.i % 10 == 0 ? SV_OK : SV_INVALID;
+}
+
+/* The stop of a train at a station is the stop_ticks of its locomotive (type 12). The bogies and every other object are refused. */
+static SvResult locomotive_check(int32_t index, SvValue value)
+{
+    (void)value;
+    return sr_objects[index].type == 12 ? SV_OK : SV_DENIED;
 }
 
 static SvResult bone_add(int32_t index, uint32_t slot, SvVector change)
@@ -328,6 +336,7 @@ static const Prop props[] = {
     { "world.clock", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 0x3b537f, world_clock, clock_check, NULL, NULL },
     { "object.color", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 5, object_color, train_check, NULL, NULL },
     { "object.key_away", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, object_key_away, train_check, NULL, NULL },
+    { "train.stop_ticks", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 0x4b0, train_stop, locomotive_check, NULL, NULL },
     { "item.trigger_ticks", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, item_trigger, NULL, NULL, NULL },
 };
 

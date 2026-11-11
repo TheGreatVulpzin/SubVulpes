@@ -869,6 +869,24 @@ static int move_checks(SvOwner owner)
     v.i = 65535;
     STEP(props->set(owner, car_life, car, 0, v) == SV_OK && game->object(owner, car, &os) == SV_OK && os.time_to_live == 65535);
     STEP(props->set(owner, car_life, train, 0, v) == SV_DENIED);
+    /* The speed of a train: only a locomotive, between 0 and 1, and -1 gives it back. */
+    STEP(change->train_speed(owner, train, 0.0f) == SV_OK);
+    STEP(change->train_speed(owner, train, 1.5f) == SV_INVALID && change->train_speed(owner, train, -0.5f) == SV_INVALID);
+    STEP(change->train_speed(owner, car, 0.5f) == SV_DENIED);
+    STEP(change->train_speed(owner, train, 0.4f) == SV_OK && change->train_speed(owner, train, -1.0f) == SV_OK);
+    /* The stop of a train at a station: only the locomotive takes it. */
+    {
+        uint32_t stop_id = 0;
+        STEP(props->find(owner, "train.stop_ticks", &stop_id) == SV_OK);
+        v.i = 100;
+        STEP(props->set(owner, stop_id, train, 0, v) == SV_OK && props->get(owner, stop_id, train, 0, &v) == SV_OK && v.i == 100);
+        v.i = 0x4b1;
+        STEP(props->set(owner, stop_id, train, 0, v) == SV_INVALID);
+        v.i = -1;
+        STEP(props->set(owner, stop_id, train, 0, v) == SV_INVALID);
+        v.i = 5;
+        STEP(props->set(owner, stop_id, car, 0, v) == SV_DENIED && props->add(owner, stop_id, train, 0, v) == SV_DENIED);
+    }
     /* The color and the key of a vehicle. A piece of the train is refused. */
     {
         uint32_t color_id = 0, key_id = 0;
@@ -1198,7 +1216,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 42);
+    STEP(count == 43);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);
