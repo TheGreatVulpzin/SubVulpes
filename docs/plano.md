@@ -184,6 +184,22 @@ Document compatibility, examples and author tools against that tested contract.
 Optional modes, integrations and other custom features use the same extension system.
 See [plugin design](plugins.md).
 
+## Future: permissions and server panel (owner plan, 2026-11-11)
+
+The owner finds the permission commands hard to use. The plan moves the work to text files and a launcher window. It starts after the API work.
+
+1. **Auto reload.** `sv.permissions` checks the date of `user/plugins/sv.permissions.groups.ini` every few seconds. A changed and valid file replaces the groups. An invalid file changes nothing and writes the error to the log. The plugin also writes the file again after each `/group` command, so the file always shows the real state. An edit from outside wins. This needs no channel from the launcher to the server.
+2. **Permissions window in the launcher.** A WinForms window with the groups, the levels, the parents, the prefixes and the nodes. It saves the file with a temporary file and a rename. It uses no server and no port.
+3. **Members.** Who is in which group moves to a text file in the same way, so the window can change it.
+4. **Server panel (`sv.panel`).** An official plugin with a file bridge and no network.
+   - The plugin writes state files each second or two: the players online, all accounts with money and play time, the groups and the bans.
+   - The launcher drops one request file for each action in a spool folder. The plugin runs the command with `SvConsole.execute` and writes the reply.
+   - Only a short list of commands is allowed (`ban`, `unban`, `kick`, `perm set`, `give`). The console runs as an administrator with no player, so this list is the only guard. It needs removal proofs.
+   - The launcher window has four tabs: Players (kick, ban, give money), Accounts (also offline), Bans (unban, reason) and Roles (groups and members, like the roles of Discord).
+5. **Limits.** It works on the machine of the server only. A web panel or a remote console needs the bridge from a worker thread to the server thread and an authentication design first. None of this ran in the original client.
+
+Estimate: step 1 one hour, step 2 half a day, step 4 one day for the plugin and one to two days for the window.
+
 ## Cleanup subplan
 
 Small style cleanups of inherited code are tracked in [cleanup](cleanup.md). They do not block a milestone.
