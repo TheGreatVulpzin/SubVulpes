@@ -6,6 +6,7 @@
 
 static const SvHost *host;
 static const SvGameAi *ai;
+static SvEntity made_train;
 static const SvGameProps *props;
 static const SvGameWrite *change;
 static SvEntity bot, driver, scenario, normal, stale;
@@ -251,6 +252,17 @@ static int run(SvOwner owner, const char *text)
         STEP(ai->driver_speed(owner, stale, 0.0f) == SV_NOT_FOUND);
         STEP(ai->driver_speed(owner, normal, 0.0f) != SV_OK);
         STEP(ai->driver_speed(owner, driver, 0.0f) == SV_OK);
+    } else if (!strcmp(text, "train-make")) {
+        SvEntity none = 0;
+        STEP(change->train_create(owner, 0, 2, &made_train) == SV_INVALID);
+        STEP(change->train_create(owner, 0, 0, NULL) == SV_INVALID);
+        STEP(change->train_create(owner, 5000, 0, &none) == SV_INVALID && none == 0);
+        STEP(change->train_create(owner, 3, SV_TRAIN_STATION_B, &made_train) == SV_OK && made_train);
+    } else if (!strcmp(text, "train-gone")) {
+        STEP(change->train_remove(owner, made_train) == SV_OK);
+    } else if (!strcmp(text, "train-full")) {
+        SvEntity none = 0;
+        STEP(change->train_create(owner, 3, 0, &none) == SV_LIMIT && none == 0);
     } else if (!strcmp(text, "accuracy")) {
         uint32_t scale_bits = 0x7fc00000u;
         float scale_nan;

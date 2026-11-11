@@ -459,9 +459,9 @@ The save includes the account values already held by the core. It does not add a
 The plugin callback returns before shutdown starts. A stop request does not add an account save.
 The normal exit convention remains unchanged.
 
-`SV_SERVER_RESTART` is reserved and gives `SV_STATE`.
-The launcher can restart a server through its own Restart button, but it has no server-originated restart convention.
-The owner must choose that convention and its launcher handling before this request can work.
+`SV_SERVER_RESTART` asks for the same controlled shutdown as `SV_SERVER_STOP`. The server then exits with code 75.
+The launcher starts the server again when it sees code 75 and the user did not press Stop. A service wrapper may start it again on the same code.
+A normal stop exits with code 0, and a failed plugin exits with code 2. A restart request does not add an account save.
 
 ### Console commands
 

@@ -1287,9 +1287,13 @@ namespace SubVulpes
                 DumpNow("freeze");
         }
 
+        // The exit code of a server that a plugin asked to restart (SV_SERVER_RESTART). The launcher starts it again.
+        const int RestartExitCode = 75;
+
         void OnExited()
         {
             if (server == null) return;
+            bool restartAfter = false;
             ReadLog();
             int code = server.ExitCode;
             server.Dispose();
@@ -1301,6 +1305,11 @@ namespace SubVulpes
                 AddLine("[launcher] Server stopped by the user.");
                 SetState("Stopped");
                 result = frozen ? "frozen" : "ok";
+            } else if (code == RestartExitCode) {
+                AddLine("[launcher] A plugin asked for a restart. The server starts again.");
+                SetState("Restarting");
+                result = "ok";
+                restartAfter = true;
             } else {
                 AddLine("[launcher] Server stopped unexpectedly. Exit Code: " + code + ".");
                 SetState(crashed ? "Crashed" : StoppedUnexpectedly);
@@ -1320,6 +1329,7 @@ namespace SubVulpes
 
             AddLine("[launcher] Log saved: " + (int)t.TotalMinutes + " min, " + result + ". It is in Launcher Settings, Past Logs.");
             LoadTests();
+            if (restartAfter) StartServer();
         }
 
         // ------------------------------------------------------------ memory dumps

@@ -18,7 +18,7 @@ SvWorldState size=168
 SvLineHit size=56
 SvConnectionState size=32
 SvGameRead size=92
-SvGameWrite size=140
+SvGameWrite size=148
 SvValue size=12
 SvPropInfo size=72
 SvGameProps size=28
@@ -66,7 +66,7 @@ SvPlugin functions=2 prefix=0 first=enable:84 last=disable:88
 SvConfig functions=3 prefix=0 first=get_int:8 last=get_text:16
 SvPlugins functions=4 prefix=0 first=refuse:8 last=borrow:20
 SvGameRead functions=21 prefix=0 first=entities:8 last=account_number:88
-SvGameWrite functions=33 prefix=0 first=message:8 last=train_speed:136
+SvGameWrite functions=35 prefix=0 first=message:8 last=train_remove:144
 SvGameProps functions=5 prefix=0 first=find:8 last=add:24
 SvGameAi functions=26 prefix=0 first=threats:8 last=sight_range:108
 SvGameEconomy functions=4 prefix=0 first=company:8 last=add_stocks:20

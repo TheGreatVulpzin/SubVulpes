@@ -139,11 +139,23 @@ typedef struct {
      * another plugin controls gives SV_CONFLICT, and 8 locomotives at most give SV_LIMIT. The setting ends when the plugin stops,
      * when the locomotive is gone, or when the round resets. Client effect unknown. */
     SvResult (SV_CALL *train_speed)(SvOwner owner, SvEntity locomotive, float throttle);
+    /* Makes a train: a locomotive and two bogies. It stands on the track piece (an index from 0 up to the number of pieces) and
+     * faces the station (SV_TRAIN_STATION_A or SV_TRAIN_STATION_B), which it then drives to. The game moves a locomotive
+     * between these two stations. The call checks the room for the three objects, their particles and their bonds before it
+     * starts, and gives SV_LIMIT when a piece would be missing. At most 8 locomotives exist (SV_LIMIT). SV_INVALID for a
+     * station other than the two, for a piece outside the track, for a track with no stations, or for a null result
+     * pointer. The train does not end with the plugin: end it with train_remove. A piece that is not a rail lets the train
+     * fall. Client effect unknown: the client reads the object events, and it may not draw a train that it has not seen. */
+    SvResult (SV_CALL *train_create)(SvOwner owner, uint32_t piece, uint32_t station, SvEntity *locomotive);
+    /* Ends a locomotive and its two bogies in the same tick. SV_DENIED for a bogie and for every other object, because one
+     * piece alone would leave a bond to a particle that is gone. SV_NOT_FOUND for an entity that is gone. */
+    SvResult (SV_CALL *train_remove)(SvOwner owner, SvEntity locomotive);
 } SvGameWrite;
 #pragma pack(pop)
 
 enum { SV_INPUT_LOCK_BODY = 1, SV_INPUT_LOCK_VIEW = 2, SV_INPUT_LOCK_ALL = 3 };
 enum { SV_VOICE_DEFAULT = 0, SV_VOICE_DENY = 1, SV_VOICE_FORCE = 2 };
+enum { SV_TRAIN_STATION_A = 0, SV_TRAIN_STATION_B = 1 };
 
 /* The core side of input_lock. The main loop calls sv_input_lock_apply after it reads the packets. */
 SvResult SV_CALL sv_input_lock_set(SvOwner owner, SvEntity player, uint32_t parts);
@@ -153,5 +165,7 @@ SvResult SV_CALL sv_voice_route(SvOwner owner, SvEntity speaker, SvEntity listen
 int sv_voice_mode(int speaker, int listener);
 void sv_voice_release(SvOwner owner);
 SvResult SV_CALL sv_train_speed(SvOwner owner, SvEntity locomotive, float throttle);
+SvResult SV_CALL sv_train_create(SvOwner owner, uint32_t piece, uint32_t station, SvEntity *locomotive);
+SvResult SV_CALL sv_train_remove(SvOwner owner, SvEntity locomotive);
 
 #endif

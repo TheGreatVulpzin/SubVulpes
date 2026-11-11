@@ -36,6 +36,15 @@ static void command(const char *text)
     CHECK(sr_players[world_player].godmode == 1);
 }
 
+static int count_type(int type)
+{
+    int i, n = 0;
+    for (i = 0; i < SR_MAX_OBJECT; ++i)
+        if (sr_objects[i].active && sr_objects[i].type == type)
+            ++n;
+    return n;
+}
+
 int main(int argc, char **argv)
 {
     int bot, driver, scenario, dead, dead_human, released, h;
@@ -230,6 +239,26 @@ int main(int argc, char **argv)
     CHECK(sv_ai_spread(bot) == 0.0f && sv_ai_sight(bot) == 500.0f);
     command("nbots accuracy-free");
     CHECK(sv_ai_spread(bot) == 1.0f && sv_ai_sight(bot) == 128.0f);
+    /* A train: the call makes a locomotive and two bogies, and the removal ends the three in the same tick. */
+    {
+        int ti, loco_before, bogie_before;
+        sr_data_numoftracks = 100;
+        for (ti = 0; ti < 100; ++ti) {
+            sr_data_track[ti].pos.x = (float)(ti * 8);
+            sr_data_track[ti].pos.y = 4.0f;
+            sr_data_track[ti].pos.z = 20.0f;
+        }
+        loco_before = count_type(12);
+        bogie_before = count_type(13);
+        command("nbots train-make");
+        CHECK(count_type(12) == loco_before + 1 && count_type(13) == bogie_before + 2);
+        command("nbots train-gone");
+        objecttimetolive();
+        CHECK(count_type(12) == loco_before && count_type(13) == bogie_before);
+        while (count_type(12) < 8)
+            command("nbots train-make");
+        command("nbots train-full");
+    }
     command("nbots on");
     sv_ai_after_player(bot);
     sr_humans[h].vehicle_id = 0x40000000;

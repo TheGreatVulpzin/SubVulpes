@@ -99,6 +99,23 @@ The setting ends when the plugin stops, when the locomotive is gone, or when the
 Client effect unknown. The test checks the results of the call only, not the movement of the train.
 The property `train.stop_ticks` holds a train at a station or sends it on. See the [property table](../plugin-game-api.md).
 
+## Train create and remove (N49)
+
+`train_create(owner, piece, station, locomotive)` and `train_remove(owner, locomotive)` append two methods to `SvGameWrite`, capability 2, version 1.
+The game moves every locomotive between two station pieces of the track: 74 and 28. A train has no other route.
+`train_create` makes a locomotive (type 12) and two bogies (type 13) tied to it with bonds. The locomotive stands on the track piece `piece`,
+1.625 units above its center, and faces `station`: `SV_TRAIN_STATION_A` (piece 74) or `SV_TRAIN_STATION_B` (piece 28). It then drives to that station.
+The call writes the entity of the locomotive to `locomotive`. It writes 0 when it fails.
+Before the first object exists, the call checks that the room is there: three free object slots, the particles and the bonds of the three objects.
+A missing piece gives `SV_LIMIT`, so no half train is made. At most 8 locomotives exist, and the next one gives `SV_LIMIT`.
+`SV_INVALID` is for a station other than the two, a piece outside the track, a track with fewer than 75 pieces, or a null result pointer.
+A piece that is not a rail lets the train fall. The call does not check the kind of the piece.
+A train does not end when the plugin stops. End it with `train_remove` or let the round reset.
+`train_remove` sets the life of the locomotive and of its two bogies to 0 in the same call, so no bond points to a particle that is gone.
+A bogie and every other object give `SV_DENIED`: one piece alone would leave a broken train. A stale reference gives `SV_NOT_FOUND`.
+Client effect unknown: the client reads the object events, and it may not draw a train that it has not seen.
+A test in `n-bots` makes a train, counts the three objects, removes it, and fills the 8 places. The movement of the train is not tested.
+
 ## Driver speed (N64)
 
 `driver_speed(owner, bot, speed)` appends a method to `SvGameAi`, capability 3, version 1.

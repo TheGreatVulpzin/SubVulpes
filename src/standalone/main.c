@@ -309,7 +309,7 @@ static DWORD WINAPI test_crash(void *arg)
 int main(int argc, char **argv)
 {
     unsigned cw;
-    int cli, argument, native_bypass = 0;
+    int cli, argument, native_bypass = 0, restart;
     const char *dev_folder = NULL;
     const char *stop_name = getenv("SV_STOP_EVENT");
     for (argument = 1; argument < argc; ++argument) {
@@ -385,6 +385,7 @@ int main(int argc, char **argv)
     if (getenv("SV_TEST_CRASH"))
         CreateThread(NULL, 0, test_crash, (void *)(uintptr_t)atoi(getenv("SV_TEST_CRASH")), 0, NULL);
     sr_getpaths();
+    restart = sv_game_control_restarting();
     sv_control_stop();
     sv_plugins_stop();
     if (dev_folder)
@@ -405,5 +406,6 @@ int main(int argc, char **argv)
         fclose(g_log);
     if (g_stop_event)
         CloseHandle(g_stop_event);
-    return sv_plugins_failed() ? 2 : 0;
+    /* Exit code 75 asks the launcher or a service wrapper to start the server again. */
+    return sv_plugins_failed() ? 2 : restart ? 75 : 0;
 }
