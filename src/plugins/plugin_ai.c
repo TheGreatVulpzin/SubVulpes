@@ -236,7 +236,7 @@ static SvResult SV_CALL override_input(SvOwner owner, SvEntity bot, const SvAiIn
     return override_set(owner, bot, input, SV_AI_PART_ALL, SV_AI_BUTTONS_ALL, ticks);
 }
 
-static SvResult SV_CALL override_input_parts(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
+static SvResult SV_CALL override_input_partial(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
     uint32_t button_mask, uint32_t ticks)
 {
     if (!parts || parts > SV_AI_PART_ALL || button_mask > SV_AI_BUTTONS_ALL)
@@ -957,5 +957,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_parts
+    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial
 };

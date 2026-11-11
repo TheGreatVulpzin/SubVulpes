@@ -46,7 +46,7 @@ and it does not measure the driving of each part alone.
 
 ## Partial input override (N76)
 
-`override_input_parts(owner, bot, input, parts, button_mask, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
+`override_input_partial(owner, bot, input, parts, button_mask, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
 It is `override_input` for some parts of the input. `parts` is a mix of `SV_AI_PART_AXES`, `SV_AI_PART_BUTTONS` and `SV_AI_PART_VIEW` (yaw and pitch).
 For the buttons, `button_mask` says which bits to replace. The other bits stay with the default AI.
 The default AI runs first, and the chosen parts go over its result for each of the `ticks` updates.

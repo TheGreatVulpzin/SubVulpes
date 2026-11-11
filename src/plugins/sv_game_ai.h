@@ -60,7 +60,7 @@ typedef struct {
     int32_t roads[4], extent[4], light[4];
 } SvAiIntersection;
 
-/* The parts of a bot input that override_input_parts can replace. */
+/* The parts of a bot input that override_input_partial can replace. */
 enum { SV_AI_PART_AXES = 1, SV_AI_PART_BUTTONS = 2, SV_AI_PART_VIEW = 4, SV_AI_PART_ALL = 7 };
 #define SV_AI_BUTTONS_ALL 0x7ffffu
 
@@ -98,7 +98,7 @@ typedef struct {
      * runs first, and the plugin values go over its result. All parts with all button bits are the same as override_input,
      * which skips the default AI. The aim policy of aim_mode keeps the last word on button bit 2. Every other rule is the rule
      * of override_input. SV_INVALID for parts 0, a bit outside SV_AI_PART_ALL or a button bit outside SV_AI_BUTTONS_ALL. */
-    SvResult (SV_CALL *override_input_parts)(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
+    SvResult (SV_CALL *override_input_partial)(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
         uint32_t button_mask, uint32_t ticks);
 } SvGameAi;
 #pragma pack(pop)
