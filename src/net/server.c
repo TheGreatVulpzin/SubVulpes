@@ -97,6 +97,18 @@ void calculateplayervoice(int conn, int player)
         if (!s->active)
             continue;
         p = s->player;
+        if (p >= SR_MAX_PLAYER) {
+            /* A clip that a plugin plays from an item. */
+            int e = p - SR_MAX_PLAYER, item = sv_voice_emitter_item(e);
+            if (item < 0 || item != s->item || !sv_voice_emitter_hears(e, player)) {
+                s->active = 0;
+            } else {
+                s->distance = distance_to(&sr_items[item].pos, &listener);
+                if (s->distance > sv_voice_emitter_range(e))
+                    s->active = 0;
+            }
+            continue;
+        }
         if (!players[p].active)
             s->active = 0;
         if (s->item == -1) {
@@ -188,6 +200,22 @@ void calculateplayervoice(int conn, int player)
         d = radio_distance(&sr_items[linked].pos, &listener);
         if (d < 256.0f && (k = addvoice(conn, d)) != -1)
             set_voice(&slots[k], d, sr_humans[ph].player_id, -1, linked);
+    }
+
+    /* The clips that plugins play from items: the item is the radio, and the distance is the range of the clip. */
+    for (i = 0; i < 8; i++) {
+        int item = sv_voice_emitter_item(i), k, found = 0;
+        float d;
+        if (item < 0 || !sv_voice_emitter_hears(i, player))
+            continue;
+        for (k = 0; k < VOICE_SLOTS; k++)
+            if (slots[k].active && slots[k].player == SR_MAX_PLAYER + i)
+                found = 1;
+        if (found)
+            continue;
+        d = distance_to(&sr_items[item].pos, &listener);
+        if (d < sv_voice_emitter_range(i) && (k = addvoice(conn, d)) != -1)
+            set_voice(&slots[k], d, SR_MAX_PLAYER + i, -1, item);
     }
 }
 
@@ -720,7 +748,8 @@ static void send_voice(Connection *c, int conn)
         const VoiceSlot *slot = &c->voice[s];
         pbitwrite((const uint32_t *)&slot->active, 1);
         if (slot->active != 0) {
-            const VoiceRing *ring = &sr_speex.voice_ring[slot->player];
+            const VoiceRing *ring = slot->player >= SR_MAX_PLAYER ? (const VoiceRing *)sv_voice_emitter_ring(slot->player - SR_MAX_PLAYER)
+                                                                 : &sr_speex.voice_ring[slot->player];
             uint32_t k = (uint32_t)(ring->head - 4) & 0x3f;
             pbitwrite((const uint32_t *)&slot->human, 8);
             pbitwrite((const uint32_t *)&slot->item, 8);

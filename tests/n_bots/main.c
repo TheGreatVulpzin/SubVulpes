@@ -3,6 +3,8 @@
 #include "city.h"
 #include "ai_car.h"
 #include "sv_game_write.h"
+#include "voice_encode.h"
+#include "sr_os.h"
 #include <math.h>
 
 static int make_bot(const char *name)
@@ -258,6 +260,54 @@ int main(int argc, char **argv)
         while (count_type(12) < 8)
             command("nbots train-make");
         command("nbots train-full");
+    }
+    /* A WAV file of three frames plays from a bot. The server encodes it in a worker thread. Then it sends one frame for each 20 ms,
+     * so three ticks of 16 ms send three frames. Every frame has what the client sends: 38 bytes, mode 1, Speex narrowband mode 5. */
+    {
+        int head = sr_speex.voice_ring[bot].head & 0x3f, t, f;
+        command("nbots voice-play");
+        if (sv_voice_available()) {
+            for (t = 0; t < 4000 && sr_speex.voice_ring[bot].head == head; ++t) {
+                sv_voice_tick();
+                os_sleep(1);
+            }
+            sv_voice_tick();
+            sv_voice_tick();
+            CHECK(sr_speex.voice_ring[bot].head == ((head + 3) & 0x3f));
+            for (f = 0; f < 3; ++f) {
+                int k = (head + f) & 0x3f;
+                CHECK(sr_speex.voice_ring[bot].size[k] == 38 && sr_speex.voice_ring[bot].mode[k] == 1);
+                CHECK((sr_speex.voice_ring[bot].data[k][0] >> 7) == 0 && ((sr_speex.voice_ring[bot].data[k][0] >> 3) & 15) == 5);
+            }
+            sv_voice_tick();
+            CHECK(sr_speex.voice_ring[bot].head == ((head + 3) & 0x3f));
+            CHECK(!sv_voice_busy(sv_entity_at(SV_ENTITY_PLAYER, (uint32_t)bot)));
+        }
+    }
+    /* A looping WAV file plays from an item. The emitter holds the item, the range and the listener. */
+    {
+        vec3 at = {10, 1, 10}, turn[3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+        int item = createitem(0, &at, NULL, turn), t;
+        char text[64];
+        SvEntity entity;
+        CHECK(item >= 0);
+        entity = sv_entity_at(SV_ENTITY_ITEM, (uint32_t)item);
+        sprintf(text, "nbots voice-item %llu", (unsigned long long)entity);
+        command(text);
+        if (sv_voice_available()) {
+            for (t = 0; t < 4000 && sv_voice_emitter_item(0) != item; ++t) {
+                sv_voice_tick();
+                os_sleep(1);
+            }
+            CHECK(sv_voice_emitter_item(0) == item && sv_voice_emitter_range(0) == 100.0f);
+            CHECK(sv_voice_emitter_hears(0, receiver) && !sv_voice_emitter_hears(0, bot));
+            for (t = 0; t < 5; ++t)
+                sv_voice_tick();
+            CHECK(((const VoiceRing *)sv_voice_emitter_ring(0))->head > 0);
+        }
+        sprintf(text, "nbots voice-stop %llu", (unsigned long long)entity);
+        command(text);
+        CHECK(sv_voice_emitter_item(0) == -1);
     }
     command("nbots on");
     sv_ai_after_player(bot);

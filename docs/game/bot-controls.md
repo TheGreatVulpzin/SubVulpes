@@ -85,6 +85,46 @@ A rule ends when the plugin stops, when one of the two players leaves, or when t
 Client effect unknown: the client may fade a voice by the distance that it knows.
 No automatic test drives `server.c`. A test in `n-bots` checks the results of the call only. Check the sound in the game.
 
+## Voice sounds (N47)
+
+`voice_play(owner, source, file, size, flags, range, listener)` and `voice_stop(owner, source)` append two methods to `SvGameWrite`, capability 2, version 1.
+A plugin plays a sound as a voice. `file` is the content of a WAV file. The plugin reads the file from its own folder and gives the bytes.
+A server owner who wants a custom sound puts a WAV file in the folder of a plugin. No tool and no conversion step is needed.
+
+**The file.** PCM of 8, 16, 24 or 32 bits, or float of 32 or 64 bits. 1 to 8 channels, 1000 to 384000 Hz, at most 30 minutes and 64 MB.
+The server mixes the channels to one, resamples to 8000 Hz with a low-pass filter at 3600 Hz, and encodes with Speex narrowband at 15 kbps.
+This is the format that the client sends. The recordings of a real session show it: every frame with sound has 38 bytes, mode 1, and starts with the bits of Speex narrowband mode 5.
+Other file types (MP3, Ogg) are not read. Convert them to WAV first, for example with `ffmpeg -i sound.mp3 sound.wav`.
+
+**The work.** A worker thread makes the frames, so a long file does not stop the game. The sound starts when the work is done.
+The server keeps the result of the last 8 sounds in a cache (16 MB at most), so a sound that plays again starts at once.
+The host copies the file, so the plugin may free its own copy. The host sends one frame every 20 ms. The server tick is 16 ms, so a tick sends 0, 1 or 2 frames.
+A plugin does not keep time. The sound ends when it is done, or it starts again when `flags` has `SV_VOICE_LOOP`.
+
+**A bot as the source.** The sound comes from the body of the bot. The normal distance of 256 units and the rules of `voice_route` decide who hears it.
+`range` and `listener` must be 0, or the call returns `SV_INVALID`. A real player as the source returns `SV_DENIED`, because the frames of the client use the same ring.
+
+**An item as the source.** The sound comes from the position of the item, so a plugin puts a sound at any place when it puts an item there.
+The item is the radio of the voice slot. `range` is the distance at which the sound is heard. 0 gives 256, and any finite number from 0 up is valid, with no upper bound.
+`listener` is one real player that hears it, or 0 for every player. The rules of `voice_route` do not apply to an item.
+If the item moves, or a human holds it, the sound follows the item.
+
+A second sound on the same source replaces the first one. A source that another plugin plays on returns `SV_CONFLICT`.
+8 sounds at most play together, and the next one returns `SV_LIMIT`. A source or a listener that is gone returns `SV_NOT_FOUND`.
+A file that is not a usable WAV file, a bad flag or a bad range returns `SV_INVALID`. `voice_stop` returns `SV_OK` also when no sound plays.
+A sound ends when it is done, on `voice_stop`, when the plugin stops, when the source is gone or when the round resets.
+A listener has 8 voice slots, and a sound takes one while it is heard. Near players take the other slots first.
+
+**The Speex source.** The encoder is the Speex library (BSD license, Xiph.org). Its source is not in the repository. Run `tools/voice/fetch_speex.ps1` once.
+It downloads Speex 1.2.1 from the `xiph/speex` repository, checks the SHA-256 and puts the files in `third_party/speex`. CMake finds them and builds the encoder.
+A server that was built without them still works, and `voice_play` returns `SV_INCOMPATIBLE`. The official builds in CI and in the release have the encoder.
+
+**Tests.** `voice-encode` encodes tones in nine WAV forms (8 kHz mono, CD stereo, 48 kHz, 8, 24 and 32 bits, both float widths), decodes the frames with the Speex decoder
+and checks the pitch and the loudness, the frame size and mode bits, a tone above the voice band, and bad files. `n-bots` checks the pacing (three frames in three ticks),
+the frame bytes, the end of the sound, the loop, the cache path and the item emitter. No test runs the packets to a client.
+Client effect unknown: nobody has played a sound of a plugin with the original client,
+and nobody has seen how the client plays the voice of an item that is not part of a linked phone pair.
+
 ## Train speed (N49, in part)
 
 `train_speed(owner, locomotive, throttle)` appends a method to `SvGameWrite`, capability 2, version 1.

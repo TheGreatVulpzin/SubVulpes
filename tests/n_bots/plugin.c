@@ -1,5 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
 #include "systems_plugin.h"
 #include "sv_game_ai.h"
 #include "sv_game_write.h"
@@ -7,6 +10,25 @@
 static const SvHost *host;
 static const SvGameAi *ai;
 static SvEntity made_train;
+
+/* A WAV file of a tone: mono, 16 bits. The result is the size in bytes. */
+static size_t make_wav(unsigned char *out, int samples, int rate)
+{
+    uint32_t data = (uint32_t)samples * 2u, v;
+    int i;
+    memcpy(out, "RIFF", 4); v = 36u + data; memcpy(out + 4, &v, 4);
+    memcpy(out + 8, "WAVEfmt ", 8); v = 16; memcpy(out + 16, &v, 4);
+    out[20] = 1; out[21] = 0; out[22] = 1; out[23] = 0;
+    v = (uint32_t)rate; memcpy(out + 24, &v, 4); v = (uint32_t)rate * 2u; memcpy(out + 28, &v, 4);
+    out[32] = 2; out[33] = 0; out[34] = 16; out[35] = 0;
+    memcpy(out + 36, "data", 4); memcpy(out + 40, &data, 4);
+    for (i = 0; i < samples; ++i) {
+        short x = (short)(12000.0 * sin(6.283185307179586 * 440.0 * i / rate));
+        memcpy(out + 44 + 2 * i, &x, 2);
+    }
+    return 44u + data;
+}
+
 static const SvGameProps *props;
 static const SvGameWrite *change;
 static SvEntity bot, driver, scenario, normal, stale;
@@ -252,6 +274,34 @@ static int run(SvOwner owner, const char *text)
         STEP(ai->driver_speed(owner, stale, 0.0f) == SV_NOT_FOUND);
         STEP(ai->driver_speed(owner, normal, 0.0f) != SV_OK);
         STEP(ai->driver_speed(owner, driver, 0.0f) == SV_OK);
+    } else if (!strcmp(text, "voice-play")) {
+        unsigned char wav[44 + 960];
+        size_t n = make_wav(wav, 480, 8000);
+        STEP(change->voice_play(owner, bot, NULL, 10, 0, 0.0f, 0) == SV_INVALID);
+        STEP(change->voice_play(owner, bot, wav, 10, 0, 0.0f, 0) == SV_INVALID);
+        STEP(change->voice_play(owner, bot, wav, (uint32_t)n, 2, 0.0f, 0) == SV_INVALID);
+        STEP(change->voice_play(owner, bot, wav, (uint32_t)n, 0, 5.0f, 0) == SV_INVALID);
+        STEP(change->voice_play(owner, bot, wav, (uint32_t)n, 0, 0.0f, receiver) == SV_INVALID);
+        STEP(change->voice_play(owner, stale, wav, (uint32_t)n, 0, 0.0f, 0) == SV_NOT_FOUND);
+        STEP(change->voice_play(owner, receiver, wav, (uint32_t)n, 0, 0.0f, 0) == SV_DENIED);
+        {
+            SvResult r = change->voice_play(owner, bot, wav, (uint32_t)n, 0, 0.0f, 0);
+            STEP(r == SV_OK || r == SV_INCOMPATIBLE);
+        }
+    } else if (!strncmp(text, "voice-item ", 11)) {
+        unsigned char wav[44 + 320];
+        size_t n = make_wav(wav, 160, 8000);
+        SvEntity item = (SvEntity)strtoull(text + 11, NULL, 10);
+        STEP(change->voice_play(owner, item, wav, (uint32_t)n, SV_VOICE_LOOP, -1.0f, 0) == SV_INVALID);
+        STEP(change->voice_play(owner, item, wav, (uint32_t)n, 0, 100.0f, bot) == SV_DENIED);
+        {
+            SvResult r = change->voice_play(owner, item, wav, (uint32_t)n, SV_VOICE_LOOP, 100.0f, receiver);
+            STEP(r == SV_OK || r == SV_INCOMPATIBLE);
+        }
+    } else if (!strncmp(text, "voice-stop ", 11)) {
+        SvEntity item = (SvEntity)strtoull(text + 11, NULL, 10);
+        STEP(change->voice_stop(owner, item) == SV_OK);
+        STEP(change->voice_stop(owner, stale) == SV_NOT_FOUND);
     } else if (!strcmp(text, "train-make")) {
         SvEntity none = 0;
         STEP(change->train_create(owner, 0, 2, &made_train) == SV_INVALID);

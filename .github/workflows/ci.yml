@@ -36,6 +36,9 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x86
+      - name: Fetch the Speex source for the voice encoder
+        shell: pwsh
+        run: ./tools/voice/fetch_speex.ps1
       - name: Build server and launcher
         shell: cmd
         run: tools\build_hook.bat

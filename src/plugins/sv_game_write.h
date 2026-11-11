@@ -150,11 +150,31 @@ typedef struct {
     /* Ends a locomotive and its two bogies in the same tick. SV_DENIED for a bogie and for every other object, because one
      * piece alone would leave a bond to a particle that is gone. SV_NOT_FOUND for an entity that is gone. */
     SvResult (SV_CALL *train_remove)(SvOwner owner, SvEntity locomotive);
+    /* Plays a sound as a voice. file is the content of a WAV file: PCM of 8, 16, 24 or 32 bits or float of 32 or 64 bits, 1 to 8
+     * channels, 1000 to 384000 Hz, at most 30 minutes and 64 MB. The server turns it into the voice format of the client (Speex
+     * narrowband, 15 kbps, 20 ms for each frame) in a worker thread, and keeps the result in a cache of 8 sounds, so a sound that
+     * plays again starts at once. The sound starts when the work is done. The host copies the file, so the plugin may free its own
+     * copy. The source is a bot (the sound comes from its body) or an item (the sound comes from the item, so a plugin can put a
+     * sound at any place by putting an item there). The host sends one frame every 20 ms. flags is 0 or SV_VOICE_LOOP. For an item,
+     * range is the distance at which the sound is heard (0 gives 256, and any finite number from 0 up is valid, with no upper
+     * bound), and listener is one real player that hears it, or 0 for every player. For a bot, range and listener must be 0: the bot
+     * is heard by the normal distance rule and by voice_route. A second sound on the same source replaces the first one. Another
+     * plugin's sound on the source gives SV_CONFLICT. 8 sounds at most play together (SV_LIMIT). A real player as the source gives
+     * SV_DENIED. SV_NOT_FOUND for a source or listener that is gone. SV_INVALID for a file that is not a usable WAV file, or a bad
+     * flag or range. SV_INCOMPATIBLE when this server was built without the Speex encoder (tools/voice/fetch_speex.ps1). The sound
+     * ends when it is done, when voice_stop is called, when the plugin stops, when the source is gone or when the round resets.
+     * Client effect unknown: nobody has played a sound of a plugin with the original client. */
+    SvResult (SV_CALL *voice_play)(SvOwner owner, SvEntity source, const void *file, uint32_t size, uint32_t flags, float range,
+        SvEntity listener);
+    /* Ends the sound on a source. SV_OK also when no sound plays. SV_CONFLICT for the sound of another plugin. SV_NOT_FOUND for a
+     * source that is gone. */
+    SvResult (SV_CALL *voice_stop)(SvOwner owner, SvEntity source);
 } SvGameWrite;
 #pragma pack(pop)
 
 enum { SV_INPUT_LOCK_BODY = 1, SV_INPUT_LOCK_VIEW = 2, SV_INPUT_LOCK_ALL = 3 };
 enum { SV_VOICE_DEFAULT = 0, SV_VOICE_DENY = 1, SV_VOICE_FORCE = 2 };
+enum { SV_VOICE_LOOP = 1 };
 enum { SV_TRAIN_STATION_A = 0, SV_TRAIN_STATION_B = 1 };
 
 /* The core side of input_lock. The main loop calls sv_input_lock_apply after it reads the packets. */
@@ -167,5 +187,17 @@ void sv_voice_release(SvOwner owner);
 SvResult SV_CALL sv_train_speed(SvOwner owner, SvEntity locomotive, float throttle);
 SvResult SV_CALL sv_train_create(SvOwner owner, uint32_t piece, uint32_t station, SvEntity *locomotive);
 SvResult SV_CALL sv_train_remove(SvOwner owner, SvEntity locomotive);
+SvResult SV_CALL sv_voice_play(SvOwner owner, SvEntity source, const void *file, uint32_t size, uint32_t flags, float range,
+    SvEntity listener);
+SvResult SV_CALL sv_voice_stop(SvOwner owner, SvEntity source);
+
+/* The sound player. sv_voice_tick runs once for each server tick. The emitter calls give the voice code the clips that play from
+ * an item: e is 0 to 7, the item is -1 when the emitter is free, and the ring holds its frames. */
+void sv_voice_tick(void);
+int sv_voice_busy(SvEntity source);
+int sv_voice_emitter_item(int e);
+float sv_voice_emitter_range(int e);
+int sv_voice_emitter_hears(int e, int player);
+const void *sv_voice_emitter_ring(int e);
 
 #endif

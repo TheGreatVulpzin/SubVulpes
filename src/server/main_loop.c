@@ -119,6 +119,7 @@ static void tick(void)
     servercycle();
     serverrecv();
     sv_input_lock_apply();
+    sv_voice_tick();
 
     nametimer(g_timerlist.physicssim, "physicssim");
     starttimer(g_timerlist.physicssim);

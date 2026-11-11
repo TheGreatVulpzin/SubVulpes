@@ -10,6 +10,18 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 file(GLOB SV_GAME_SOURCES CONFIGURE_DEPENDS src/common/*.c src/net/*.c src/game/*.c src/server/*.c src/plugins/*.c)
 list(APPEND SV_GAME_SOURCES src/platform/os_calls.c)
+# Speex gives the voice encoder of voice_play. tools/voice/fetch_speex.ps1 fetches it into third_party/speex. Without it the server builds
+# and voice_play answers SV_INCOMPATIBLE.
+set(SV_SPEEX_DIR "${CMAKE_SOURCE_DIR}/third_party/speex")
+set(SV_SPEEX_GEN "${CMAKE_BINARY_DIR}/speex_gen")
+set(SV_SPEEX_SOURCES)
+if(EXISTS "${SV_SPEEX_DIR}/libspeex/speex.c")
+    file(GLOB SV_SPEEX_SOURCES CONFIGURE_DEPENDS "${SV_SPEEX_DIR}/libspeex/*.c")
+    file(WRITE "${SV_SPEEX_GEN}/speex/speex_config_types.h"
+        "#ifndef SV_SPEEX_CONFIG_TYPES_H\n#define SV_SPEEX_CONFIG_TYPES_H\n#include <stdint.h>\n"
+        "typedef int16_t spx_int16_t;\ntypedef uint16_t spx_uint16_t;\ntypedef int32_t spx_int32_t;\ntypedef uint32_t spx_uint32_t;\n#endif\n")
+    list(APPEND SV_GAME_SOURCES ${SV_SPEEX_SOURCES})
+endif()
 add_executable(subvulpes-server
     src/standalone/main.c src/platform/x87_math.c
     src/platform/plat_imports.c ${SV_GAME_SOURCES})
@@ -24,6 +36,16 @@ target_compile_options(subvulpes-server PRIVATE /W4 /WX /utf-8)
 set_source_files_properties(${SV_GAME_SOURCES} PROPERTIES COMPILE_OPTIONS "/arch:IA32;/Z7")
 set_source_files_properties(src/game/ai_car.c
     PROPERTIES COMPILE_OPTIONS "/arch:IA32;/W0;/WX-;/we4013;/Z7")
+if(SV_SPEEX_SOURCES)
+    # The Speex files are not our code: no warning stops the build.
+    set_source_files_properties(${SV_SPEEX_SOURCES} PROPERTIES
+        COMPILE_DEFINITIONS "FLOATING_POINT;USE_KISS_FFT;USE_ALLOCA;EXPORT=;_CRT_SECURE_NO_WARNINGS"
+        INCLUDE_DIRECTORIES "${SV_SPEEX_DIR}/include;${SV_SPEEX_DIR}/libspeex;${SV_SPEEX_GEN}"
+        COMPILE_OPTIONS "/arch:IA32;/W0;/WX-;/Z7")
+    set_source_files_properties(src/plugins/voice_encode.c PROPERTIES
+        COMPILE_DEFINITIONS "SV_HAVE_SPEEX;EXPORT="
+        INCLUDE_DIRECTORIES "${SV_SPEEX_DIR}/include;${SV_SPEEX_GEN}")
+endif()
 
 set(SV_STORAGE_HEADERS)
 foreach(header sr_types.h sr_runtime.h sr_storage.h sr_storage_types.h sr_limits.h)
@@ -200,6 +222,14 @@ if(BUILD_TESTING)
     target_compile_options(sv-handle-test PRIVATE /W4 /WX /utf-8)
     set_target_properties(sv-handle-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME entity-handles COMMAND sv-handle-test)
+    if(SV_SPEEX_SOURCES)
+        add_executable(sv-voice-test tests/voice_encode_test.c src/plugins/voice_encode.c ${SV_SPEEX_SOURCES})
+        target_include_directories(sv-voice-test PRIVATE src/plugins "${SV_SPEEX_DIR}/include" "${SV_SPEEX_GEN}")
+        target_compile_definitions(sv-voice-test PRIVATE _CRT_SECURE_NO_WARNINGS)
+        set_source_files_properties(tests/voice_encode_test.c src/plugins/voice_encode.c APPEND PROPERTY COMPILE_OPTIONS "/W4;/WX;/utf-8")
+        set_target_properties(sv-voice-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+        add_test(NAME voice-encode COMMAND sv-voice-test)
+    endif()
     set(SV_LAUNCHER_TEST "${CMAKE_SOURCE_DIR}/build/launcher/launcher-update-tests.exe")
     add_custom_command(OUTPUT "${SV_LAUNCHER_TEST}"
         COMMAND cmd /c "${CMAKE_SOURCE_DIR}/tools/launcher/build.bat" test

@@ -54,6 +54,9 @@ jobs:
           arch: x86
       - name: Check repository rules
         run: python -I tools/ci/check_repo.py
+      - name: Fetch the Speex source for the voice encoder
+        shell: pwsh
+        run: ./tools/voice/fetch_speex.ps1
       - name: Build server and launcher
         shell: cmd
         run: |

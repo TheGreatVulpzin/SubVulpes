@@ -679,5 +679,5 @@ const SvGameWrite sv_game_write = {
     write_object_create, write_object_remove, write_npc_create, write_npc_remove,
     write_vehicle_exit, write_sound, write_headline, write_vehicle_enter, write_set_name, write_speak, write_bullet, write_bullet_hit,
     write_disown, sv_game_request_reset, write_kicked_count, write_kicked_remove, write_kicked_clear, sv_level_block_set,
-    write_human_remove, sv_input_lock_set, sv_voice_route, sv_train_speed, sv_train_create, sv_train_remove
+    write_human_remove, sv_input_lock_set, sv_voice_route, sv_train_speed, sv_train_create, sv_train_remove, sv_voice_play, sv_voice_stop
 };
