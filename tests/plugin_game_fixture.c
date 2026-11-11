@@ -703,6 +703,23 @@ static int world_checks(SvOwner owner)
     v.i = 120;
     STEP(props->set(owner, wait_time, 0, 0, v) == SV_OK && props->set(owner, end_time, 0, 0, v) == SV_OK);
     STEP(game->world(owner, &world) == SV_OK && world.wait_ticks == 120 && world.end_ticks == 120);
+    /* The clock: a multiple of 10 inside the range. Other values change nothing. */
+    {
+        uint32_t clock_id = 0;
+        STEP(props->find(owner, "world.clock", &clock_id) == SV_OK);
+        v.i = 1728005;
+        STEP(props->set(owner, clock_id, 0, 0, v) == SV_INVALID);
+        v.i = -10;
+        STEP(props->set(owner, clock_id, 0, 0, v) == SV_INVALID);
+        v.i = 0x3b5380;
+        STEP(props->set(owner, clock_id, 0, 0, v) == SV_INVALID);
+        v.i = 1728000;
+        STEP(props->set(owner, clock_id, 0, 0, v) == SV_OK);
+        STEP(game->world(owner, &world) == SV_OK && world.world_clock_raw == 1728000);
+        STEP(props->get(owner, clock_id, 0, 0, &v) == SV_OK && v.i == 1728000);
+        STEP(props->add(owner, clock_id, 0, 0, v) == SV_DENIED);
+        STEP(props->set(owner, clock_id, human, 0, v) == SV_INVALID);
+    }
     return 0;
 }
 
@@ -1159,7 +1176,7 @@ static int props_checks(SvOwner owner)
         STEP(info.id == id);
         ++count;
     }
-    STEP(count == 39);
+    STEP(count == 40);
     /* Read. */
     STEP(props->get(owner, pid_health, human, 0, &v) == SV_OK && v.i == 80);
     STEP(props->get(owner, pid_health, player, 0, &v) == SV_NOT_FOUND && props->get(owner, pid_health, human, 1, &v) == SV_INVALID);

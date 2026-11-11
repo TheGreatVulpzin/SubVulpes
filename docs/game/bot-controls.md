@@ -33,12 +33,12 @@ The method allocates no memory and needs no restart.
 It changes the existing driver behavior without a new packet.
 The original client was not tested. Client effect unknown.
 
-## Chase parts (N65)
+## Chase effects (N65)
 
-`chase_parts(owner, bot, parts)` appends a method to `SvGameAi`, capability 3, version 1.
+`chase_effects(owner, bot, parts)` appends a method to `SvGameAi`, capability 3, version 1.
 It switches the four effects of a chase one by one: `SV_CHASE_SPEED` (a higher target speed and a shorter gap to the car ahead),
 `SV_CHASE_LATERAL` (a lateral limit of 32 in place of 16), `SV_CHASE_LANE` (a lane change when a car is ahead) and
-`SV_CHASE_LIGHTS` (no stop at a red light). `SV_CHASE_ALL` is the same as `chase_mode` 1. Parts 0 switches the chase off.
+`SV_CHASE_LIGHTS` (no stop at a red light). `SV_CHASE_ALL` is the same as `chase_mode` 1. Effects 0 switches the chase off.
 A bit outside `SV_CHASE_ALL` returns `SV_INVALID`. Every other rule, result and cleanup is the rule of `chase_mode`.
 In the game, `Player.ai_chase` is 0, 1 (all four, as the scenario writes it) or a mix of the bits in `src/game/ai_car.h`.
 The value 1 and the value 0 behave as before. The test checks the stored value of each mix and the full chase,
@@ -46,7 +46,7 @@ and it does not measure the driving of each part alone.
 
 ## Partial input override (N76)
 
-`override_parts(owner, bot, input, parts, button_mask, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
+`override_input_parts(owner, bot, input, parts, button_mask, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
 It is `override_input` for some parts of the input. `parts` is a mix of `SV_AI_PART_AXES`, `SV_AI_PART_BUTTONS` and `SV_AI_PART_VIEW` (yaw and pitch).
 For the buttons, `button_mask` says which bits to replace. The other bits stay with the default AI.
 The default AI runs first, and the chosen parts go over its result for each of the `ticks` updates.

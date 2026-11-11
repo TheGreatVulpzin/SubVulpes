@@ -140,28 +140,28 @@ static int run(SvOwner owner, const char *text)
         STEP(ai->unpossess(owner, receiver) == SV_OK);
         STEP(ai->unpossess(owner, receiver) == SV_NOT_FOUND);
     } else if (!strcmp(text, "parts-lights")) {
-        STEP(ai->chase_parts(owner, driver, 16) == SV_INVALID);
-        STEP(ai->chase_parts(owner, stale, SV_CHASE_LIGHTS) == SV_NOT_FOUND);
-        STEP(ai->chase_parts(owner, normal, SV_CHASE_LIGHTS) == SV_DENIED);
-        STEP(ai->chase_parts(owner, driver, SV_CHASE_LIGHTS) == SV_OK);
+        STEP(ai->chase_effects(owner, driver, 16) == SV_INVALID);
+        STEP(ai->chase_effects(owner, stale, SV_CHASE_LIGHTS) == SV_NOT_FOUND);
+        STEP(ai->chase_effects(owner, normal, SV_CHASE_LIGHTS) == SV_DENIED);
+        STEP(ai->chase_effects(owner, driver, SV_CHASE_LIGHTS) == SV_OK);
     } else if (!strcmp(text, "parts-speed")) {
-        STEP(ai->chase_parts(owner, driver, SV_CHASE_SPEED | SV_CHASE_LANE) == SV_OK);
+        STEP(ai->chase_effects(owner, driver, SV_CHASE_SPEED | SV_CHASE_LANE) == SV_OK);
     } else if (!strcmp(text, "parts-all")) {
-        STEP(ai->chase_parts(owner, driver, SV_CHASE_ALL) == SV_OK);
+        STEP(ai->chase_effects(owner, driver, SV_CHASE_ALL) == SV_OK);
     } else if (!strcmp(text, "parts-input")) {
         SvAiInput in = {sizeof in};
         in.buttons = 4; in.axes[1] = 0.5f; in.yaw = 1.0f;
-        STEP(ai->override_parts(owner, bot, &in, 0, 4, 2) == SV_INVALID);
-        STEP(ai->override_parts(owner, bot, &in, 8, 4, 2) == SV_INVALID);
-        STEP(ai->override_parts(owner, bot, &in, SV_AI_PART_BUTTONS, 0x80000u, 2) == SV_INVALID);
-        STEP(ai->override_parts(owner, bot, &in, SV_AI_PART_BUTTONS, 4, 0) == SV_INVALID);
-        STEP(ai->override_parts(owner, stale, &in, SV_AI_PART_BUTTONS, 4, 2) == SV_NOT_FOUND);
-        STEP(ai->override_parts(owner, bot, NULL, SV_AI_PART_BUTTONS, 4, 2) == SV_INVALID);
-        STEP(ai->override_parts(owner, bot, &in, SV_AI_PART_BUTTONS | SV_AI_PART_AXES, 4, 2) == SV_OK);
+        STEP(ai->override_input_parts(owner, bot, &in, 0, 4, 2) == SV_INVALID);
+        STEP(ai->override_input_parts(owner, bot, &in, 8, 4, 2) == SV_INVALID);
+        STEP(ai->override_input_parts(owner, bot, &in, SV_AI_PART_BUTTONS, 0x80000u, 2) == SV_INVALID);
+        STEP(ai->override_input_parts(owner, bot, &in, SV_AI_PART_BUTTONS, 4, 0) == SV_INVALID);
+        STEP(ai->override_input_parts(owner, stale, &in, SV_AI_PART_BUTTONS, 4, 2) == SV_NOT_FOUND);
+        STEP(ai->override_input_parts(owner, bot, NULL, SV_AI_PART_BUTTONS, 4, 2) == SV_INVALID);
+        STEP(ai->override_input_parts(owner, bot, &in, SV_AI_PART_BUTTONS | SV_AI_PART_AXES, 4, 2) == SV_OK);
     } else if (!strcmp(text, "parts-full")) {
         SvAiInput in = {sizeof in};
         in.buttons = 8;
-        STEP(ai->override_parts(owner, bot, &in, SV_AI_PART_ALL, 0x7ffffu, 3) == SV_OK);
+        STEP(ai->override_input_parts(owner, bot, &in, SV_AI_PART_ALL, 0x7ffffu, 3) == SV_OK);
     } else if (!strcmp(text, "scenario")) {
         STEP(ai->chase_mode(owner, scenario, 0) == SV_DENIED);
         STEP(ai->chase_mode(owner, scenario, 1) == SV_OK);

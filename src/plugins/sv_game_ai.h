@@ -60,11 +60,11 @@ typedef struct {
     int32_t roads[4], extent[4], light[4];
 } SvAiIntersection;
 
-/* The parts of a bot input that override_parts can replace. */
+/* The parts of a bot input that override_input_parts can replace. */
 enum { SV_AI_PART_AXES = 1, SV_AI_PART_BUTTONS = 2, SV_AI_PART_VIEW = 4, SV_AI_PART_ALL = 7 };
 #define SV_AI_BUTTONS_ALL 0x7ffffu
 
-/* The parts of a chase. chase_mode switches all four together. chase_parts switches any mix. */
+/* The parts of a chase. chase_mode switches all four together. chase_effects switches any mix. */
 enum { SV_CHASE_SPEED = 1, SV_CHASE_LATERAL = 2, SV_CHASE_LANE = 4, SV_CHASE_LIGHTS = 8, SV_CHASE_ALL = 15 };
 
 typedef struct {
@@ -92,13 +92,13 @@ typedef struct {
     SvResult (SV_CALL *unpossess)(SvOwner owner, SvEntity player);
     /* Switches the parts of a chase for a car driver: a mix of SV_CHASE_ bits, or 0 for none. SV_CHASE_ALL is the same
      * as chase_mode 1. Every other rule is the rule of chase_mode. SV_INVALID for a bit outside SV_CHASE_ALL. */
-    SvResult (SV_CALL *chase_parts)(SvOwner owner, SvEntity bot, uint32_t parts);
+    SvResult (SV_CALL *chase_effects)(SvOwner owner, SvEntity bot, uint32_t parts);
     /* Like override_input, but only for the parts in the mask SV_AI_PART_: the axes, the buttons and the view (yaw and pitch).
      * For the buttons, button_mask says which bits to replace, and the other bits stay with the default AI. The default AI
      * runs first, and the plugin values go over its result. All parts with all button bits are the same as override_input,
      * which skips the default AI. The aim policy of aim_mode keeps the last word on button bit 2. Every other rule is the rule
      * of override_input. SV_INVALID for parts 0, a bit outside SV_AI_PART_ALL or a button bit outside SV_AI_BUTTONS_ALL. */
-    SvResult (SV_CALL *override_parts)(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
+    SvResult (SV_CALL *override_input_parts)(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
         uint32_t button_mask, uint32_t ticks);
 } SvGameAi;
 #pragma pack(pop)

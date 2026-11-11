@@ -94,6 +94,7 @@ WORLD_FIELD(world_timer, sr_game.timer)
 WORLD_FIELD(world_round_time, sr_game.round_time)
 WORLD_FIELD(world_wait_time, sr_game.wait_time)
 WORLD_FIELD(world_end_time, sr_game.end_time)
+WORLD_FIELD(world_clock, sr_data_game_world.clock)
 
 /* A bot cannot be an admin. */
 static SvResult admin_check(int32_t index, SvValue value)
@@ -124,6 +125,14 @@ static SvResult train_check(int32_t index, SvValue value)
 {
     (void)value;
     return sr_objects[index].type >= 12 ? SV_DENIED : SV_OK;
+}
+
+/* The world clock grows by 10 on each tick, and the periodic jobs run when it is a multiple of 36000, 18000 or 54000. */
+/* A value that is not a multiple of 10 would skip all of them. */
+static SvResult clock_check(int32_t index, SvValue value)
+{
+    (void)index;
+    return value.i % 10 == 0 ? SV_OK : SV_INVALID;
 }
 
 static SvResult bone_add(int32_t index, uint32_t slot, SvVector change)
@@ -314,6 +323,7 @@ static const Prop props[] = {
     { "item.frozen", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 1, item_frozen, frozen_check, frozen_after, NULL },
     { "human.bone_mass", SV_ENTITY_HUMAN, SV_PROP_FLOAT, 15, SV_PROP_GET | SV_PROP_SET | SV_PROP_ADD, 0.5, 50000000, human_bone_mass, NULL, NULL, NULL },
     { "human.despawn", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, human_despawn, despawn_check, NULL, NULL },
+    { "world.clock", SV_ENTITY_WORLD, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 0x3b537f, world_clock, clock_check, NULL, NULL },
     { "item.trigger_ticks", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, item_trigger, NULL, NULL, NULL },
 };
 

@@ -8,7 +8,7 @@ The bounds, errors and cleanup of each operation are in [bot API additions](../g
 | Need | Status | Notes |
 | --- | --- | --- |
 | N58 | Done | `aim_mode` sets player `move_mode` 2 and clears it again. A bot that aims walks at half speed. The owner must accept this. |
-| N59 | Done | `chase_mode` switches four effects together. `chase_parts` switches the parts alone (N65, done). |
+| N59 | Done | `chase_mode` switches four effects together. `chase_effects` switches the parts alone (N65, done). |
 | N60 | Done | The property `human.despawn`. The plugin author has not confirmed that this field is what the need means. |
 | N27 | Done | `street_near` gives one position. N67 asks for candidates and filters. |
 | N45 | Done | `possess` gives a player the body of a bot. The old body stays without an owner. `unpossess` is the reverse call (N66, done). |
