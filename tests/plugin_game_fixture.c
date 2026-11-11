@@ -869,9 +869,15 @@ static int move_checks(SvOwner owner)
     v.i = 65535;
     STEP(props->set(owner, car_life, car, 0, v) == SV_OK && game->object(owner, car, &os) == SV_OK && os.time_to_live == 65535);
     STEP(props->set(owner, car_life, train, 0, v) == SV_DENIED);
-    /* The speed of a train: only a locomotive, between 0 and 1, and -1 gives it back. */
+    /* The speed of a train: only a locomotive, from 0 up with no upper bound, and -1 gives it back. */
     STEP(change->train_speed(owner, train, 0.0f) == SV_OK);
-    STEP(change->train_speed(owner, train, 1.5f) == SV_INVALID && change->train_speed(owner, train, -0.5f) == SV_INVALID);
+    {
+        uint32_t speed_bits = 0x7fc00000u;
+        float nan_speed;
+        memcpy(&nan_speed, &speed_bits, sizeof nan_speed);
+        STEP(change->train_speed(owner, train, nan_speed) == SV_INVALID && change->train_speed(owner, train, -0.5f) == SV_INVALID);
+    }
+    STEP(change->train_speed(owner, train, 3.0f) == SV_OK);
     STEP(change->train_speed(owner, car, 0.5f) == SV_DENIED);
     STEP(change->train_speed(owner, train, 0.4f) == SV_OK && change->train_speed(owner, train, -1.0f) == SV_OK);
     /* The stop of a train at a station: only the locomotive takes it. */

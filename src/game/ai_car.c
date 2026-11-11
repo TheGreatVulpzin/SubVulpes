@@ -313,6 +313,7 @@ void ai_playercar(int player, int object)
       if (nx->turn == 0)
         target = (float)(k * 40.0 / 60.0);
     }
+    target = sv_ai_speed_base(player, k, target);
     lim = (float)((ahead * 0.5) / 60.0);
     if (ahead < 2.0f)
       lim = 0.0f;

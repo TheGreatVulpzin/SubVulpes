@@ -133,7 +133,7 @@ typedef struct {
      * (SV_LIMIT). A rule ends when the plugin stops, when one of the two players leaves, or when the round resets. Radios are
      * not changed. Client effect unknown: the client may fade a voice by the distance that it knows. */
     SvResult (SV_CALL *voice_route)(SvOwner owner, SvEntity speaker, SvEntity listener, uint32_t mode);
-    /* Sets the target speed of a locomotive (a train piece of type 12) between 0 and 1. The game uses 0.4. A target of 0 brakes
+    /* Sets the target speed of a locomotive (a train piece of type 12). The game uses 0.4. Any finite number from 0 up is valid, with no upper bound, and a high speed is not tested. A target of 0 brakes
      * the train anywhere, and the door face of the locomotive opens when the train stops, because the game moves the door with
      * the real speed. -1 gives the control back to the game. The bogies and every other object give SV_DENIED. A locomotive that
      * another plugin controls gives SV_CONFLICT, and 8 locomotives at most give SV_LIMIT. The setting ends when the plugin stops,

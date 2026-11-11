@@ -141,6 +141,13 @@ typedef struct {
      * is the rule of street_route. SV_INVALID for an end action that is not SV_ROUTE_STOP or SV_ROUTE_RELEASE. */
     SvResult (SV_CALL *street_route_open)(SvOwner owner, SvEntity bot, const SvAiStreetPoint *points, uint32_t count,
         uint32_t end_action);
+    /* Sets the base target speed of a driver, in the unit of the game (the distance in one tick). The default is 0.33, and a
+     * chase car uses 0.5 or 0.67. The game scales the value by the turn of the road. Any finite number from 0 up is valid, with
+     * no upper bound, and a high value is not tested. -1 ends the setting. The brake before a crossing and the cars ahead still
+     * lower the speed, and the stuck logic does not change. The bot must drive a car (SV_STATE otherwise). SV_INVALID for a
+     * value that is not a finite number or is below 0 (other than -1). The setting is part of the bot control lease: release,
+     * plugin stop, slot reuse and world reset clear it. The server drives the car, so no client effect is expected. */
+    SvResult (SV_CALL *driver_speed)(SvOwner owner, SvEntity bot, float speed);
 } SvGameAi;
 #pragma pack(pop)
 
@@ -155,5 +162,6 @@ void sv_ai_after_player(int32_t player);
 int sv_ai_shot(int32_t player, int passenger);
 int sv_ai_route_next(int32_t player);
 int sv_ai_snap(int32_t player);
+float sv_ai_speed_base(int32_t player, float k, float base);
 
 #endif

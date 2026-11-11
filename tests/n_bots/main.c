@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 {
     int bot, driver, scenario, dead, dead_human, released, h;
     int receiver, donor, old_body, donor_body, rider, rider_body;
-    float normal_throttle;
+    float normal_throttle, chase_throttle;
     world_start();
     bot = make_bot("Aim");
     driver = make_bot("Driver");
@@ -202,6 +202,19 @@ int main(int argc, char **argv)
     command("nbots on");
     ai_playercar(driver, world_object);
     CHECK(sr_players[driver].input_axes[3] > normal_throttle);
+    chase_throttle = sr_players[driver].input_axes[3];
+    /* A base speed of 0 lowers the throttle. -1 gives the speed back. */
+    command("nbots speed-cap");
+    ai_playercar(driver, world_object);
+    CHECK(sr_players[driver].input_axes[3] < chase_throttle);
+    command("nbots speed-free");
+    ai_playercar(driver, world_object);
+    CHECK(sr_players[driver].input_axes[3] == chase_throttle);
+    /* A high base speed has no upper bound. The value scales with the turn factor k. */
+    command("nbots speed-fast");
+    CHECK(sv_ai_speed_base(driver, 0.5f, 9.0f) == 5.0f);
+    command("nbots speed-free");
+    CHECK(sv_ai_speed_base(driver, 0.5f, 9.0f) == 9.0f);
     /* The parts: lights alone keep the normal speed. Speed with lane change drives faster. All four are the value 1. */
     command("nbots parts-lights");
     CHECK(sr_players[driver].ai_chase == AI_CHASE_LIGHTS);

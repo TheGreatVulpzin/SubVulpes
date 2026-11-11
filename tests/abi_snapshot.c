@@ -102,7 +102,7 @@ int main(void)
     TABLE(SvGameRead, entities, account_number, 21);
     TABLE(SvGameWrite, message, train_speed, 33);
     TABLE(SvGameProps, find, add, 5);
-    TABLE(SvGameAi, threats, street_route_open, 23);
+    TABLE(SvGameAi, threats, driver_speed, 24);
     TABLE(SvGameEconomy, company, add_stocks, 4);
     TABLE(SvGameEngine, describe, set, 3);
     TABLE(SvGameMission, slots, cancel, 3);

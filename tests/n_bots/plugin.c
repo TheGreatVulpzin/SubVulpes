@@ -243,6 +243,18 @@ static int run(SvOwner owner, const char *text)
     } else if (!strcmp(text, "unpossess")) {
         STEP(ai->unpossess(owner, receiver) == SV_OK);
         STEP(ai->unpossess(owner, receiver) == SV_NOT_FOUND);
+    } else if (!strcmp(text, "speed-cap")) {
+        uint32_t speed_bits = 0x7fc00000u;
+        float nan_speed;
+        memcpy(&nan_speed, &speed_bits, sizeof nan_speed);
+        STEP(ai->driver_speed(owner, driver, nan_speed) == SV_INVALID && ai->driver_speed(owner, driver, -0.5f) == SV_INVALID);
+        STEP(ai->driver_speed(owner, stale, 0.0f) == SV_NOT_FOUND);
+        STEP(ai->driver_speed(owner, normal, 0.0f) != SV_OK);
+        STEP(ai->driver_speed(owner, driver, 0.0f) == SV_OK);
+    } else if (!strcmp(text, "speed-fast")) {
+        STEP(ai->driver_speed(owner, driver, 10.0f) == SV_OK);
+    } else if (!strcmp(text, "speed-free")) {
+        STEP(ai->driver_speed(owner, driver, -1.0f) == SV_OK);
     } else if (!strcmp(text, "parts-lights")) {
         STEP(ai->chase_effects(owner, driver, 16) == SV_INVALID);
         STEP(ai->chase_effects(owner, stale, SV_CHASE_LIGHTS) == SV_NOT_FOUND);

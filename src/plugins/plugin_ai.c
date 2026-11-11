@@ -24,6 +24,8 @@ typedef struct {
     uint32_t road_count, road_next;
     SvAiStreetPoint roads[SV_AI_WAYPOINTS_MAX];
     int seated;
+    float speed;
+    int has_speed;
 } Control;
 
 static Control controls[SR_MAX_PLAYER];
@@ -339,6 +341,27 @@ static SvResult SV_CALL set_aim(SvOwner owner, SvEntity bot, int32_t enabled)
 static SvResult SV_CALL set_chance(SvOwner owner, SvEntity bot, uint32_t percent)
 {
     return set_policy(owner, bot, percent <= 100 ? (int32_t)percent : -1, 2);
+}
+
+static SvResult SV_CALL set_driver_speed(SvOwner owner, SvEntity bot, float speed)
+{
+    int32_t index;
+    Control *c;
+    SvResult result = resolve(owner, bot, &index);
+    if (result != SV_OK)
+        return result;
+    if (!sv_plugins_write_context(owner))
+        return SV_STATE;
+    if (!(speed - speed == 0.0f) || (speed != -1.0f && speed < 0.0f))
+        return SV_INVALID;
+    if (!installed || !seat_state(index, 1))
+        return SV_STATE;
+    if (speed == -1.0f && (!live_control(index) || controls[index].owner != owner))
+        return SV_OK;
+    c = claim(owner, bot, index);
+    c->has_speed = speed != -1.0f;
+    c->speed = c->has_speed ? speed : 0.0f;
+    return SV_OK;
 }
 
 static SvResult SV_CALL set_snap(SvOwner owner, SvEntity bot, int32_t enabled)
@@ -1019,6 +1042,13 @@ int32_t sv_ai_perception_part(int32_t index)
     return (uint32_t)index < SR_MAX_PLAYER && live_control(index) ? controls[index].perception : -1;
 }
 
+float sv_ai_speed_base(int32_t index, float k, float base)
+{
+    if ((uint32_t)index < SR_MAX_PLAYER && live_control(index) && controls[index].has_speed)
+        return (float)(k * controls[index].speed);
+    return base;
+}
+
 int sv_ai_snap(int32_t index)
 {
     return (uint32_t)index < SR_MAX_PLAYER && live_control(index) && controls[index].snap == 1;
@@ -1164,5 +1194,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list, aim_at, set_street_route_open
+    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list, aim_at, set_street_route_open, set_driver_speed
 };

@@ -40,7 +40,7 @@ SvResult SV_CALL sv_train_speed(SvOwner owner, SvEntity locomotive, float thrott
     index = sv_entity_resolve(SV_ENTITY_OBJECT, locomotive);
     if (index < 0)
         return SV_NOT_FOUND;
-    if (!finite_number(throttle) || (throttle != -1.0f && (throttle < 0.0f || throttle > 1.0f)))
+    if (!finite_number(throttle) || (throttle != -1.0f && throttle < 0.0f))
         return SV_INVALID;
     if (sr_objects[index].type != 12)
         return SV_DENIED;

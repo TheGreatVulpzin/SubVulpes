@@ -88,15 +88,28 @@ No automatic test drives `server.c`. A test in `n-bots` checks the results of th
 ## Train speed (N49, in part)
 
 `train_speed(owner, locomotive, throttle)` appends a method to `SvGameWrite`, capability 2, version 1.
-It sets the target speed of a locomotive (type 12). `throttle` is between 0 and 1. The game uses 0.4.
+It sets the target speed of a locomotive (type 12). `throttle` is any finite number from 0 up, with no upper bound. The game uses 0.4.
+A high value is not tested: the train is a box held by bonds, and a high speed may break a bond or leave the track.
 A target of 0 brakes the train anywhere. The door face of the locomotive follows the real speed, so a train that stops opens its door.
-A value of -1 gives the control back to the game. A value outside 0 to 1 returns `SV_INVALID`.
+A value of -1 gives the control back to the game. A value that is not a finite number, or is below 0 (other than -1), returns `SV_INVALID`.
 A bogie (type 13) and every other object return `SV_DENIED`. A locomotive that another plugin controls returns `SV_CONFLICT`.
 8 locomotives at most can have a setting, and the next one returns `SV_LIMIT`.
 The code of the locomotive in `objects.c` calls `sv_train_throttle` once for each tick.
 The setting ends when the plugin stops, when the locomotive is gone, or when the round resets.
 Client effect unknown. The test checks the results of the call only, not the movement of the train.
 The property `train.stop_ticks` holds a train at a station or sends it on. See the [property table](../plugin-game-api.md).
+
+## Driver speed (N64)
+
+`driver_speed(owner, bot, speed)` appends a method to `SvGameAi`, capability 3, version 1.
+It sets the base target speed of a bot that drives a car. The unit is the distance in one tick.
+The default is 0.33, and a chase car uses 0.5 or 0.67. The game scales the base by the turn of the road, so the car slows in curves.
+`speed` is any finite number from 0 up, with no upper bound. A high value is not tested. -1 gives the control back to the game.
+The brake before a crossing, the red light and the cars ahead still lower the speed. The stuck logic does not change.
+The call works with chase mode: the value replaces the base of both modes, and the chase effects for lanes and lights stay.
+A bot that does not drive a car returns `SV_STATE`. A stale reference returns `SV_NOT_FOUND`. A bad value returns `SV_INVALID`.
+The setting is part of the bot control lease. Release, plugin stop, slot reuse and world reset clear it.
+The server drives the car, so no client effect is expected.
 
 ## Open street route (N64)
 
@@ -250,7 +263,7 @@ The original client was not tested. Client effect unknown.
 
 These limits come from the design, not from a defect. Each one has a row in the need list of [legacy modules](../legacy-modules.md).
 
-- A driver route can be open (`street_route_open`). A stop at a given point and a bound for the speed of a driver are still open (N64, the rest).
+- A driver route can be open (`street_route_open`), and `driver_speed` sets the base speed. A stop at a given point is still open (N64, the rest).
 - Chase mode switches four effects together: a higher target speed, a larger lateral limit, a lane change and no stop at red lights (N65).
 - The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68, the rest).
 - A possession has no reverse call (N66).
