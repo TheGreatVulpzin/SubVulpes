@@ -126,6 +126,51 @@ static int run(SvOwner owner, const char *text)
         SvAiStreetPosition out = {sizeof out};
         STEP(ai->street_near(owner, (SvVector){80, 7.5f, 2}, 1, &out) == SV_OK);
         STEP(out.position.y == 7.5f);
+    } else if (!strcmp(text, "street-cand")) {
+        SvAiStreetPosition cand[8], one = {sizeof one};
+        SvAiStreetFilter filter = {sizeof filter, SV_STREET_ANY, 4.0f, 16.0f};
+        const SvVector at = {80, 5.5f, 2};
+        uint32_t got = 99, k;
+        double previous = 0;
+        for (k = 0; k < 8; ++k) cand[k].size = sizeof cand[k];
+        /* The object at this place keeps every candidate 16 units away, the cand is sorted, and the first one is street_near. */
+        STEP(ai->street_list(owner, at, 40, NULL, cand, 8, &got) == SV_OK);
+        STEP(got >= 1 && got <= 8);
+        STEP(ai->street_near(owner, at, 40, &one) == SV_OK);
+        STEP(!memcmp(&cand[0], &one, sizeof one));
+        for (k = 0; k < got; ++k) {
+            double dx = cand[k].position.x - at.x, dy = cand[k].position.y - at.y, dz = cand[k].position.z - at.z;
+            double d = dx * dx + dy * dy + dz * dz;
+            STEP(d >= 256.0 && d >= previous);
+            previous = d;
+        }
+        /* The road of the test runs along x. */
+        filter.kinds = SV_STREET_ALONG_Z;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_NOT_FOUND && got == 0);
+        filter.kinds = SV_STREET_ALONG_X;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_OK && got >= 1);
+        /* Gaps of 0 turn the checks off. The default filter finds nothing within 1 unit of the object. */
+        STEP(ai->street_list(owner, at, 1, NULL, cand, 1, &got) == SV_NOT_FOUND && got == 0);
+        filter.kinds = SV_STREET_ANY; filter.human_gap = 0; filter.object_gap = 0;
+        STEP(ai->street_list(owner, at, 1, &filter, cand, 1, &got) == SV_OK && got == 1);
+        filter.human_gap = 4.0f; filter.object_gap = 16.0f;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 0, &got) == SV_INVALID);
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 9, &got) == SV_INVALID);
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, NULL) == SV_INVALID);
+        STEP(ai->street_list(owner, at, 40, &filter, NULL, 8, &got) == SV_INVALID);
+        STEP(ai->street_list(owner, at, 0, &filter, cand, 8, &got) == SV_INVALID);
+        filter.kinds = 0;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_INVALID);
+        filter.kinds = 4;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_INVALID);
+        filter.kinds = SV_STREET_ANY; filter.human_gap = -1;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_INVALID);
+        filter.human_gap = 4.0f; filter.object_gap = 65;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_INVALID);
+        filter.object_gap = 16.0f; filter.size = 0;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_INVALID);
+        filter.size = sizeof filter; cand[1].size = 0;
+        STEP(ai->street_list(owner, at, 40, &filter, cand, 8, &got) == SV_INVALID);
     } else if (!strcmp(text, "bad-seat")) {
         STEP(ai->chase_mode(owner, driver, 1) == SV_STATE);
     } else if (!strcmp(text, "bad-graph")) {

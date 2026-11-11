@@ -42,6 +42,16 @@ typedef struct {
     uint32_t next_node;
 } SvAiStreetPosition;
 
+/* The filter of street_list. kinds is a mix of SV_STREET_ALONG_X and SV_STREET_ALONG_Z (the direction of the road).
+ * human_gap and object_gap are the least distance from a candidate to any human and to any object, from 0 to 64 units.
+ * A gap of 0 turns that check off. street_near uses all kinds, a human gap of 4 and an object gap of 16. */
+#define SV_AI_STREET_LIST_MAX 8u
+enum { SV_STREET_ALONG_X = 1, SV_STREET_ALONG_Z = 2, SV_STREET_ANY = 3 };
+typedef struct {
+    uint32_t size, kinds;
+    float human_gap, object_gap;
+} SvAiStreetFilter;
+
 /* A road of the street map. count is the number of roads. ends are the intersections at the two ends; a street point
  * with direction 0 runs from ends[0] to ends[1]. kind is 0 for a road along x and 1 along z. lanes are the lanes on
  * the two sides. direction is the unit vector from ends[0] to ends[1] and side the unit vector across the road. */
@@ -100,6 +110,12 @@ typedef struct {
      * of override_input. SV_INVALID for parts 0, a bit outside SV_AI_PART_ALL or a button bit outside SV_AI_BUTTONS_ALL. */
     SvResult (SV_CALL *override_input_partial)(SvOwner owner, SvEntity bot, const SvAiInput *input, uint32_t parts,
         uint32_t button_mask, uint32_t ticks);
+    /* Like street_near, but gives up to capacity candidates (1 to SV_AI_STREET_LIST_MAX), the nearest first, at most one for
+     * each lane. The filter may be NULL for the defaults of street_near. Each out entry needs its size set. *count gets the
+     * number of candidates. SV_NOT_FOUND when there is none. Every other bound is the bound of street_near. SV_INVALID for
+     * kinds 0 or a bit outside SV_STREET_ANY, a gap outside 0 to 64, or a short out entry. */
+    SvResult (SV_CALL *street_list)(SvOwner owner, SvVector position, float radius, const SvAiStreetFilter *filter,
+        SvAiStreetPosition *out, uint32_t capacity, uint32_t *count);
 } SvGameAi;
 #pragma pack(pop)
 

@@ -114,6 +114,7 @@ int main(int argc, char **argv)
     sr_objects[world_object].pos = (vec3){80, 5.5f, 2};
     command("nbots street-occupied");
     command("nbots street-blocked");
+    command("nbots street-list");
     sr_objects[world_object].pos = (vec3){10, 20, 30};
     g_city.intersections[1].pos.y = 8;
     g_city.intersections[1].y = 1;

@@ -44,6 +44,17 @@ In the game, `Player.ai_chase` is 0, 1 (all four, as the scenario writes it) or 
 The value 1 and the value 0 behave as before. The test checks the stored value of each mix and the full chase,
 and it does not measure the driving of each part alone.
 
+## Street list (N67)
+
+`street_list(owner, position, radius, filter, out, capacity, count)` appends a read to `SvGameAi`, capability 3, version 1.
+It is `street_near` with more than one answer. It gives up to `capacity` candidates (1 to 8), the nearest first, at most one for each lane.
+The filter may be NULL. Then it is the filter of `street_near`: both road directions, a human gap of 4 units and an object gap of 16 units.
+`kinds` is a mix of `SV_STREET_ALONG_X` and `SV_STREET_ALONG_Z`. `human_gap` and `object_gap` are the least distance from a candidate to any human and to any object, from 0 to 64 units.
+A gap of 0 turns that check off. The other bounds, the sample rule and the failure results are the rules of `street_near`.
+`*count` gets the number of candidates. With none, the call returns `SV_NOT_FOUND` and `*count` is 0. A kind of 0, a bit outside `SV_STREET_ANY`, a gap outside 0 to 64,
+a capacity outside 1 to 8 or an `out` entry with a short size returns `SV_INVALID`. `out` stays unchanged on every error.
+`street_near` now calls the same scan with a capacity of 1, and the `n-roads` test checks that its answers did not change.
+
 ## Partial input override (N76)
 
 `override_input_partial(owner, bot, input, parts, button_mask, ticks)` appends a method to `SvGameAi`, capability 3, version 1.
@@ -176,7 +187,6 @@ These limits come from the design, not from a defect. Each one has a row in the 
 
 - A driver route is a closed loop. A plugin can read the road graph (N63), but it cannot send a driver from A to B and stop there (N64).
 - Chase mode switches four effects together: a higher target speed, a larger lateral limit, a lane change and no stop at red lights (N65).
-- `street_near` gives one position and has no filter (N67).
 - A bot has no method to aim at a point or an entity. The shot chance sets the hesitation to fire and does not set accuracy. Perception has no range, field of view or team filter (N68).
 - A possession has no reverse call (N66).
 - Passenger aim takes a player as the target, in seats 1 to 3 (N61).

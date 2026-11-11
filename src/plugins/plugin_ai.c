@@ -343,38 +343,55 @@ static double distance_squared(SvVector a, SvVector b)
     return x * x + y * y + z * z;
 }
 
-static int street_free(SvVector position)
+/* A candidate is clear when no object is within object_gap2 and no human is within human_gap2 (squared distances). */
+static int street_clear(SvVector position, double human_gap2, double object_gap2)
 {
     int i;
     for (i = 0; i < SR_MAX_OBJECT; ++i)
         if (sr_objects[i].active) {
             vec3 p = sr_objects[i].pos;
-            if (distance_squared(position, (SvVector){p.x, p.y, p.z}) < 256.0)
+            if (distance_squared(position, (SvVector){p.x, p.y, p.z}) < object_gap2)
                 return 0;
         }
     for (i = 0; i < SR_MAX_HUMAN; ++i)
         if (sr_humans[i].active) {
             vec3 p = sr_humans[i].pos;
-            if (distance_squared(position, (SvVector){p.x, p.y, p.z}) < 16.0)
+            if (distance_squared(position, (SvVector){p.x, p.y, p.z}) < human_gap2)
                 return 0;
         }
     return 1;
 }
 
-static SvResult SV_CALL street_near(SvOwner owner, SvVector position, float radius, SvAiStreetPosition *out)
+/* Puts one candidate in the list, which is sorted by distance. A candidate at the same distance goes before the old ones. */
+static void insert_street(SvVector position, SvAiStreetPosition *list, uint32_t capacity, uint32_t *used,
+    const SvAiStreetPosition *item)
+{
+    double d = distance_squared(position, item->position);
+    uint32_t i = 0, j;
+    while (i < *used && distance_squared(position, list[i].position) < d)
+        ++i;
+    if (i >= capacity)
+        return;
+    if (*used == capacity)
+        --*used;
+    for (j = *used; j > i; --j)
+        list[j] = list[j - 1];
+    list[i] = *item;
+    ++*used;
+}
+
+/* Finds the best candidate of each lane inside the radius and keeps the nearest capacity of them. */
+static SvResult street_scan(SvVector position, float radius, uint32_t kinds, double human_gap2, double object_gap2,
+    SvAiStreetPosition *list, uint32_t capacity, uint32_t *found_count)
 {
     SvAiStreetPosition best = {sizeof best};
-    double best_distance;
+    double best_distance, radius_squared = (double)radius * radius;
     int road, direction, lane, sample, found = 0;
-    if (!sv_plugins_context(owner) || !sv_game_is_ready())
-        return SV_STATE;
-    if (!position_valid(position) || !finite_value(radius) || radius <= 0 || radius > 512 ||
-        !out || out->size < sizeof *out)
-        return SV_INVALID;
+    uint32_t used = 0;
+    *found_count = 0;
     if (g_city.num_roads < 0 || g_city.num_roads > 512 ||
         g_city.num_intersections < 0 || g_city.num_intersections > 1024)
         return SV_FAILED;
-    best_distance = (double)radius * radius;
     for (road = 0; road < g_city.num_roads; ++road) {
         const CityRoad *r = &g_city.roads[road];
         SvAiStreetPoint point = {(uint32_t)road, 0, 0};
@@ -413,10 +430,15 @@ static SvResult SV_CALL street_near(SvOwner owner, SvVector position, float radi
         finish -= 8.0;
         if (finish < begin)
             continue;
+        if (!(kinds & (1u << r->kind)))
+            continue;
         for (direction = 0; direction < 2; ++direction)
             for (lane = 0; lane < r->width[direction]; ++lane) {
                 double shift = (2.0 + lane * 4.0) * (direction ? -1 : 1);
-                double along = ((double)position.x - start.x - shift * r->side.x) * r->dir.x +
+                double along;
+                best_distance = radius_squared;
+                found = 0;
+                along = ((double)position.x - start.x - shift * r->side.x) * r->dir.x +
                     ((double)position.y - start.y - shift * r->side.y) * r->dir.y +
                     ((double)position.z - start.z - shift * r->side.z) * r->dir.z;
                 for (sample = 0; sample < 17; ++sample) {
@@ -433,7 +455,8 @@ static SvResult SV_CALL street_near(SvOwner owner, SvVector position, float radi
                         (float)(height + 1.5),
                         (float)(start.z + shift * r->side.z + at * r->dir.z)};
                     distance = distance_squared(position, candidate);
-                    if (!position_valid(candidate) || distance > best_distance || !street_free(candidate))
+                    if (!position_valid(candidate) || distance > best_distance ||
+                        !street_clear(candidate, human_gap2, object_gap2))
                         continue;
                     best_distance = distance;
                     best.point = (SvAiStreetPoint){(uint32_t)road, direction, lane};
@@ -443,12 +466,64 @@ static SvResult SV_CALL street_near(SvOwner owner, SvVector position, float radi
                     best.next_node = (uint32_t)r->ends[direction ^ 1];
                     found = 1;
                 }
+                if (found)
+                    insert_street(position, list, capacity, &used, &best);
             }
     }
-    if (!found)
-        return SV_NOT_FOUND;
-    *out = best;
-    return SV_OK;
+    *found_count = used;
+    return used ? SV_OK : SV_NOT_FOUND;
+}
+
+static SvResult SV_CALL street_near(SvOwner owner, SvVector position, float radius, SvAiStreetPosition *out)
+{
+    SvAiStreetPosition best = {sizeof best};
+    uint32_t count = 0;
+    SvResult result;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!position_valid(position) || !finite_value(radius) || radius <= 0 || radius > 512 ||
+        !out || out->size < sizeof *out)
+        return SV_INVALID;
+    result = street_scan(position, radius, SV_STREET_ANY, 16.0, 256.0, &best, 1, &count);
+    if (result == SV_OK)
+        *out = best;
+    return result;
+}
+
+static SvResult SV_CALL street_list(SvOwner owner, SvVector position, float radius, const SvAiStreetFilter *filter,
+    SvAiStreetPosition *out, uint32_t capacity, uint32_t *count)
+{
+    SvAiStreetPosition found[SV_AI_STREET_LIST_MAX];
+    uint32_t kinds = SV_STREET_ANY, n = 0, i;
+    double human_gap = 4.0, object_gap = 16.0;
+    SvResult result;
+    if (!sv_plugins_context(owner) || !sv_game_is_ready())
+        return SV_STATE;
+    if (!position_valid(position) || !finite_value(radius) || radius <= 0 || radius > 512 || !out || !count ||
+        capacity < 1 || capacity > SV_AI_STREET_LIST_MAX)
+        return SV_INVALID;
+    for (i = 0; i < capacity; ++i)
+        if (out[i].size < sizeof out[i])
+            return SV_INVALID;
+    if (filter) {
+        if (filter->size < sizeof *filter || !filter->kinds || filter->kinds > SV_STREET_ANY ||
+            !finite_value(filter->human_gap) || filter->human_gap < 0 || filter->human_gap > 64 ||
+            !finite_value(filter->object_gap) || filter->object_gap < 0 || filter->object_gap > 64)
+            return SV_INVALID;
+        kinds = filter->kinds;
+        human_gap = filter->human_gap;
+        object_gap = filter->object_gap;
+    }
+    for (i = 0; i < capacity; ++i)
+        found[i].size = sizeof found[i];
+    result = street_scan(position, radius, kinds, human_gap * human_gap, object_gap * object_gap, found, capacity, &n);
+    if (result == SV_OK) {
+        for (i = 0; i < n; ++i)
+            out[i] = found[i];
+    }
+    if (result == SV_OK || result == SV_NOT_FOUND)
+        *count = n;
+    return result;
 }
 
 static int seat_state(int32_t index, int driver)
@@ -957,5 +1032,5 @@ const SvGameAi sv_game_ai = {
     sizeof(SvGameAi), SV_GAME_AI_VERSION,
     read_threats, set_destination, set_waypoints, set_target, override_input, release,
     set_perception, set_aim, set_chance, set_street_route, set_seated_target, set_chase, street_near, possess,
-    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial
+    read_road, read_intersection, set_snap, unpossess, set_chase_effects, override_input_partial, street_list
 };
