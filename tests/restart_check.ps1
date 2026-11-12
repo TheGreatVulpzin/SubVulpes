@@ -38,6 +38,7 @@ try {
     $failed = 0
     foreach ($case in @(@{ request = 'restart'; code = 75 }, @{ request = 'stop'; code = 0 })) {
         $env:SV_TEST_EXIT_REQUEST = $case.request
+        Remove-Item -LiteralPath (Join-Path $work 'user/restart-once.flag') -ErrorAction SilentlyContinue
         $process = Start-Process -FilePath (Join-Path $work 'subvulpes_server.exe') -WorkingDirectory $work -PassThru -WindowStyle Hidden
         if (-not $process.WaitForExit(60000)) { $process.Kill(); Write-Output "FAIL $($case.request): the server did not end in 60 seconds."; $failed++; continue }
         if ($process.ExitCode -eq $case.code) { Write-Output "PASS $($case.request): exit code $($process.ExitCode)." }
