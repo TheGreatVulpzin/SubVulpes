@@ -462,6 +462,7 @@ The normal exit convention remains unchanged.
 `SV_SERVER_RESTART` asks for the same controlled shutdown as `SV_SERVER_STOP`. The server then exits with code 75.
 The launcher starts the server again when it sees code 75 and the user did not press Stop. A service wrapper may start it again on the same code.
 A normal stop exits with code 0, and a failed plugin exits with code 2. A restart request does not add an account save.
+`tests/restart_check.ps1 -DataFolder DIR` runs the real server with a plugin that asks for each request and checks the codes 75 and 0. The server needs the game data from `DIR\data`, so ctest does not run the check.
 
 ### Console commands
 
