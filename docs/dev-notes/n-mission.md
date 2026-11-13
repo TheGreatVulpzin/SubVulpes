@@ -1,6 +1,6 @@
 # Shared acquisition notes
 
-Branch `feature/mission-acquisition`, from `main` at `e71f61c` (release 0.3.0 plus N65 and N66).
+Branch `feature/mission-and-arms`, from `main` at `ca4ecb2`.
 The bounds, errors and cleanup are in [mission API](../plugin-mission.md). This page records status and evidence.
 
 ## Needs status
@@ -33,11 +33,11 @@ Each check was taken out, the test was built again, and `n-mission-api` failed.
 
 | Check | Result |
 | --- | --- |
-| Full CTest suite after a fresh rebuild (MSVC 14.44, `/wd4127`) | 25 of 25 passed after the rebase on `main`, with `n-mission-api`, `n-roads-api` and `abi-additive`. The tests of the official plugins left with their source. |
+| Full CTest suite after a fresh rebuild (MSVC 14.44, `/wd4127`) | 26 of 26 passed on `ca4ecb2` plus N78 and N79, with `n-mission-api` and `n-arms-api`. |
 | `python -I tools/ci/check_abi_additive.py` against the snapshot of `main` | The snapshot only adds. |
 | `python -I tools/ci/check_repo.py` | Clean. |
 
 ## Limits
 
-The original client was not tested. Client effect unknown.
-No in-game test ran.
+The original client was not tested. A short playtest in round mode ran the shared limo acquisition. The
+client screens were not checked one by one. The removal proofs above were taken on `e71f61c`, before the rebase.
