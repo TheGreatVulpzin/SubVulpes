@@ -286,7 +286,7 @@ the other one; a punch is about (0.2, 0.2, -1.0).
 
 A get of `human.arm_target` gives the last value that a plugin set for that human, or zero. A set needs a safe callback
 on the server thread. The write changes no packet: the clients see the arm through the bones as for any move of the
-game. The original client was not tested. Client effect unknown.
+game. A playtest on the 0.24 client showed the guard and the punch pose. Other clients were not tested.
 
 ### Type rows
 

@@ -73,7 +73,8 @@ The reward, the expiry and the price growth are the native values. The mission h
 The completion guard of plugin missions does not apply, because the reward and the growth are the ones of the game.
 When the plugin stops, the host ends the slots of its scenarios that are still active in the same world.
 The guards, the chase car and its driver stay until their native despawn time, as on expiry.
-The original client was not tested. It receives the existing mission events. Client effect unknown.
+The client receives the existing mission events. A short playtest in round mode ran a shared limo acquisition; the
+client screens were not checked one by one.
 
 ## Original client and limits
 
