@@ -37,4 +37,9 @@ SvResult sv_props_add_group(const Prop *rows, size_t count);
 /* Puts back the first value of every slot of a restore row that this owner changed last. Called when a plugin stops. */
 void sv_props_release(SvOwner owner);
 
+/* The arm code asks for the hand target that a plugin set with human.arm_pose and human.arm_target. Side 0 is the arm
+ * of bones 3 to 5, side 1 the arm of bones 6 to 8. Writes the target (x, y, z in the frame of the chest, from the
+ * shoulder) and returns 1 when the pose of that side is on, or returns 0 and leaves the target. */
+int sv_props_arm_target(int32_t human, int32_t side, float target[3]);
+
 #endif

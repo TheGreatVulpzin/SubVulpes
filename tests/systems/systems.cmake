@@ -85,3 +85,18 @@ target_link_options(sv-n-mission-fixture PRIVATE /EXPORT:sv_plugin_entry)
 set_target_properties(sv-n-mission-fixture PROPERTIES PREFIX "" OUTPUT_NAME n-mission-fixture
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 add_test(NAME n-mission-api COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_n_mission.py" "${CMAKE_BINARY_DIR}")
+add_executable(sv-n-arms-test tests/n_arms/main.c tests/systems/world.c
+    tests/platform_support.c src/platform/x87_math.c src/platform/plat_imports.c ${SV_GAME_SOURCES})
+target_include_directories(sv-n-arms-test PRIVATE src/include src/platform src/common src/net src/game src/plugins tests/systems)
+target_compile_definitions(sv-n-arms-test PRIVATE _CRT_SECURE_NO_WARNINGS SR_STANDALONE)
+target_compile_options(sv-n-arms-test PRIVATE /W4 /WX /utf-8)
+target_link_options(sv-n-arms-test PRIVATE /LARGEADDRESSAWARE)
+set_target_properties(sv-n-arms-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+add_library(sv-n-arms-fixture MODULE tests/n_arms/plugin.c)
+target_include_directories(sv-n-arms-fixture PRIVATE src/plugins tests/systems)
+target_compile_definitions(sv-n-arms-fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_options(sv-n-arms-fixture PRIVATE /W4 /WX /utf-8)
+target_link_options(sv-n-arms-fixture PRIVATE /EXPORT:sv_plugin_entry)
+set_target_properties(sv-n-arms-fixture PROPERTIES PREFIX "" OUTPUT_NAME n-arms-fixture
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+add_test(NAME n-arms-api COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/test_n_arms.py" "${CMAKE_BINARY_DIR}")

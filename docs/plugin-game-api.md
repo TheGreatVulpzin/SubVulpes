@@ -270,7 +270,23 @@ Rows. The range is the range that a `set` or an `add` may leave in the field:
 | `world.clock` | world | int | get, set | 0 to 3887999, multiples of 10 | The world clock (N72). A round starts at 1728000 and the clock grows by 10 each tick. The light of the day, the expiry of missions, the fall of account bans, the reset of purchase limits and the end of the round follow it. When the clock goes above 3887999 the game saves the accounts and resets the round. A write forward expires the missions that end before the new value. A value that is not a multiple of 10 returns `SV_INVALID`, because the periodic jobs run at multiples of 18000, 36000 and 54000. Client effect unknown: the clock goes to the client, and nobody has seen the new light |
 | `account.ban_time` | account | int | get, set, add | 0 to 1000000 | Above 0 the game drops the player of the account at the join and during play. The count falls by 1 for each 36,000 ticks. The value is not saved on disk |
 | `item.trigger_ticks` | item | int | get, set | 0 to 3600 | The ticks that the trigger of a held gun is down. The gun fires when it equals 2 (6 for the Magnum). A released trigger sets it to 0, so stop restores nothing. See [bot API additions](game/bot-controls.md). |
+| `human.arm_pose` | human | int | get, set | 0 to 3 | The arms that follow `human.arm_target`: bit 1 the arm of bones 3 to 5, bit 2 the arm of bones 6 to 8. 0 gives both arms back to the game. The last plugin that sets it owns the pose, and its stop ends the pose. A new human in the slot or a world reset starts with no pose. See [arm pose](#arm-pose). |
+| `human.arm_target` | human | vector, 2 slots | get, set | length up to 1.5 | The target of the hand of each arm (slot 0 bones 3 to 5, slot 1 bones 6 to 8), in the frame of the chest, from the shoulder. It moves the hand only while the bit of the arm is on in `human.arm_pose`. |
 | `human.despawn` | human | int | get, set | 0 to 3600 | Require health at most -4. Below 2700, the next dead-body tick releases the player. Stop restores the first timer for the same human. See [bot API additions](game/bot-controls.md). |
+
+### Arm pose
+
+The arm code of the game (`human_calcarmtorque`) moves each hand toward a target in the frame of the chest, from the
+shoulder: x to the side, y up, z to the front (negative is forward). It moves the hand at most 0.125 across and 0.0625
+up or down in each tick, and the elbow bends so that the arm (two parts of 0.375) reaches the target. An empty hand
+hangs; a gun points forward. With `human.arm_pose` a plugin replaces that target with `human.arm_target`, with or
+without an item in the hand. The steps, the muscles and the limits stay the ones of the game, so a target farther than
+0.75 gives a straight arm. A guard is about (0.15, 0.1, -0.3) for the arm of bones 3 to 5 and (-0.15, 0.1, -0.3) for
+the other one; a punch is about (0.2, 0.2, -1.0).
+
+A get of `human.arm_target` gives the last value that a plugin set for that human, or zero. A set needs a safe callback
+on the server thread. The write changes no packet: the clients see the arm through the bones as for any move of the
+game. The original client was not tested. Client effect unknown.
 
 ### Type rows
 

@@ -77,6 +77,61 @@ static void despawn_note(int32_t index, SvOwner owner)
     despawn_restore[index].reset = sv_game_reset_sequence();
 }
 
+/* The arm pose of a human: a plugin turns on the pose of each arm (mask bit 1 << side) and sets its hand target.
+ * The entry belongs to one human reference in one world. The last plugin that writes the mask owns the cleanup. */
+static struct {
+    SvOwner owner;
+    SvEntity human;
+    uint64_t reset;
+    int32_t mask;
+    vec3 target[2];
+} arms[SR_MAX_HUMAN];
+
+/* Forgets an entry of another human or of an older world, so a reused slot starts with no pose. */
+static void arm_fresh(int32_t index)
+{
+    SvEntity human = sv_entity_at(SV_ENTITY_HUMAN, index);
+    if (arms[index].human != human || arms[index].reset != sv_game_reset_sequence()) {
+        memset(&arms[index], 0, sizeof arms[index]);
+        arms[index].human = human;
+        arms[index].reset = sv_game_reset_sequence();
+    }
+}
+
+static void *human_arm_pose(int32_t i, uint32_t s)
+{
+    (void)s;
+    arm_fresh(i);
+    return &arms[i].mask;
+}
+
+static void *human_arm_target(int32_t i, uint32_t s)
+{
+    arm_fresh(i);
+    return &arms[i].target[s];
+}
+
+static SvResult arm_target_set(int32_t index, uint32_t slot, SvVector value)
+{
+    arm_fresh(index);
+    arms[index].target[slot].x = value.x;
+    arms[index].target[slot].y = value.y;
+    arms[index].target[slot].z = value.z;
+    return SV_OK;
+}
+
+int sv_props_arm_target(int32_t human, int32_t side, float target[3])
+{
+    if ((uint32_t)human >= SR_MAX_HUMAN || (uint32_t)side > 1 || !arms[human].owner ||
+        !(arms[human].mask & (1 << side)) || arms[human].reset != sv_game_reset_sequence() ||
+        sv_entity_resolve(SV_ENTITY_HUMAN, arms[human].human) != human)
+        return 0;
+    target[0] = arms[human].target[side].x;
+    target[1] = arms[human].target[side].y;
+    target[2] = arms[human].target[side].z;
+    return 1;
+}
+
 /* A row of a table with one value for each type: the record is 0 and the slot is the type. */
 #define TYPE_FIELD(function, expression) \
     static void *function(int32_t i, uint32_t s) { (void)i; return &(expression); }
@@ -342,6 +397,8 @@ static const Prop props[] = {
     { "train.track_last", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET, 0, 0x7fffffff, train_last, NULL, NULL, NULL },
     { "train.stop_ticks", SV_ENTITY_OBJECT, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 0x4b0, train_stop, locomotive_check, NULL, NULL },
     { "item.trigger_ticks", SV_ENTITY_ITEM, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3600, item_trigger, NULL, NULL, NULL },
+    { "human.arm_pose", SV_ENTITY_HUMAN, SV_PROP_INT, 1, SV_PROP_GET | SV_PROP_SET, 0, 3, human_arm_pose, NULL, NULL, NULL },
+    { "human.arm_target", SV_ENTITY_HUMAN, SV_PROP_VECTOR, 2, SV_PROP_GET | SV_PROP_SET, 0, 1.5, human_arm_target, NULL, NULL, NULL, 0, arm_target_set },
 };
 
 enum { GROUP_MAX = 8, ROW_MAX = 256 };
@@ -569,6 +626,8 @@ static SvResult SV_CALL props_set(SvOwner owner, uint32_t id, SvEntity entity, u
     field = p->field(record, slot);
     if (p->field == human_despawn)
         despawn_note(record, owner);
+    if (p->field == human_arm_pose)
+        arms[record].owner = owner;
     restore_note(p, id, slot, owner, field);
     if (p->type == SV_PROP_INT)
         *(int32_t *)field = value.i;
@@ -619,6 +678,10 @@ void sv_props_release(SvOwner owner)
 {
     uint32_t id, slot;
     int i;
+    /* The arms of the humans of a stopped plugin go back to the targets of the game. */
+    for (i = 0; i < SR_MAX_HUMAN; ++i)
+        if (arms[i].owner == owner)
+            memset(&arms[i], 0, sizeof arms[i]);
     for (i = 0; i < SR_MAX_HUMAN; ++i) {
         if (despawn_restore[i].owner != owner)
             continue;
