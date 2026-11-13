@@ -43,6 +43,7 @@ typedef struct {
     SvResult (SV_CALL *slots)(SvOwner owner, uint32_t team, SvMissionSlots *out);
     SvResult (SV_CALL *start)(SvOwner owner, uint32_t team, const SvMissionStart *input, SvMissionRef *out);
     SvResult (SV_CALL *cancel)(SvOwner owner, const SvMissionRef *mission);
+    SvResult (SV_CALL *acquisition)(SvOwner owner, uint32_t kind, uint32_t team_mask, SvMissionRef *out);
 } SvGameMission;
 #pragma pack(pop)
 

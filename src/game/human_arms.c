@@ -2,6 +2,7 @@
  * bonds that hold an item in each hand, and the turn that moves each arm toward its target. */
 #include "humans.h"
 #include "plugin_collapse.h"
+#include "plugin_props.h"
 
 #include <stdint.h>
 
@@ -473,6 +474,9 @@ static void hand_target(vec3 *t, const Human *hu, int side, int type, float swin
             t->z = -0.0f;
         }
     }
+    /* A plugin can set the target of each hand (human.arm_pose and human.arm_target). The arm moves there with the
+     * same steps and muscles as for the targets of the game. */
+    sv_props_arm_target((int32_t)(hu - sr_humans), side, &t->x);
 }
 
 /* Moves the hand of each arm a step toward its target, and sets the muscles (Bone.bond) of the

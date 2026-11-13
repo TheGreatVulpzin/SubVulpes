@@ -47,7 +47,7 @@ SvMissionRef size=32
 SvMissionState size=72
 SvMissionSlots size=1168
 SvMissionStart size=32
-SvGameMission size=20
+SvGameMission size=24
 SvSettingValue size=12
 SvSettingInfo size=56
 SvSettingEvent size=60
@@ -71,7 +71,7 @@ SvGameProps functions=5 prefix=0 first=find:8 last=add:24
 SvGameAi functions=26 prefix=0 first=threats:8 last=sight_range:108
 SvGameEconomy functions=4 prefix=0 first=company:8 last=add_stocks:20
 SvGameEngine functions=3 prefix=0 first=describe:8 last=set:16
-SvGameMission functions=3 prefix=0 first=slots:8 last=cancel:16
+SvGameMission functions=4 prefix=0 first=slots:8 last=acquisition:20
 SvGameSettings functions=3 prefix=0 first=describe:8 last=set:16
 SvGameShop functions=4 prefix=0 first=phone:8 last=catalog_replace:20
 SvGameStorage functions=3 prefix=0 first=get:8 last=erase:16
